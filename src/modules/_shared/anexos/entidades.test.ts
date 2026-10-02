@@ -60,6 +60,12 @@ describe("entidades de anexo", () => {
     expect(rotuloDaEntidade("mc_lancamento")).toBe("lançamento da medição");
   });
 
+  it("relatório de reajuste anexa pelo recurso de reajuste", () => {
+    expect(ehEntidadeAnexo("mc_reajuste")).toBe(true);
+    expect(recursoDaEntidade("mc_reajuste")).toBe("medicao.reajuste");
+    expect(rotuloDaEntidade("mc_reajuste")).toBe("relatório de reajuste");
+  });
+
   it("linha de controle: tipo desconhecido não é entidade", () => {
     expect(ehEntidadeAnexo("equipamento")).toBe(false);
     expect(ehEntidadeAnexo("")).toBe(false);

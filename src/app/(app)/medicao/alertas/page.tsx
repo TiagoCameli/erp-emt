@@ -39,7 +39,7 @@ export default async function PaginaAlertas({
       <PageHeader
         modulo="Medição"
         titulo="Alertas"
-        descricao="O que pede atenção nos contratos: acumulado acima do previsto, prazo, valor e diferença de planilha"
+        descricao="O que pede atenção nos contratos: acumulado acima do previsto, prazo, valor, diferença de planilha e reajuste"
       />
       <AlertasFiltros
         contratos={contratos.map((c) => ({ id: c.id, codigo: c.codigo, nomeObra: c.nomeObra }))}

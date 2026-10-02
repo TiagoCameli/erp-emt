@@ -16,6 +16,7 @@ describe("catálogo da Medição de Contratos", () => {
       ["medicao.planilha", ["ver", "criar", "excluir", "aprovar", "desaprovar"]],
       ["medicao.lancamentos", ["ver", "criar", "editar", "excluir"]],
       ["medicao.medicoes", ["ver", "criar", "editar", "aprovar", "desaprovar"]],
+      ["medicao.reajuste", ["ver", "editar"]],
       ["medicao.boletim", ["ver"]],
       ["medicao.alertas", ["ver"]],
     ]);

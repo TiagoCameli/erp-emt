@@ -5654,6 +5654,7 @@ export type Database = {
           data_base: string | null;
           defasagem_meses: number;
           formula: string;
+          indice_descricao: string | null;
           indice_padrao_id: string | null;
           modo_indice_i: string | null;
           periodicidade_meses: number;
@@ -5668,6 +5669,7 @@ export type Database = {
           data_base?: string | null;
           defasagem_meses?: number;
           formula?: string;
+          indice_descricao?: string | null;
           indice_padrao_id?: string | null;
           modo_indice_i?: string | null;
           periodicidade_meses?: number;
@@ -5682,6 +5684,7 @@ export type Database = {
           data_base?: string | null;
           defasagem_meses?: number;
           formula?: string;
+          indice_descricao?: string | null;
           indice_padrao_id?: string | null;
           modo_indice_i?: string | null;
           periodicidade_meses?: number;
@@ -5703,6 +5706,355 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "mc_indices";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      mc_reajuste_de_para: {
+        Row: {
+          codigo: string;
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          grupo: string;
+          item_id: string;
+        };
+        Insert: {
+          codigo: string;
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          grupo: string;
+          item_id: string;
+        };
+        Update: {
+          codigo?: string;
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          grupo?: string;
+          item_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_de_para_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_contratos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_de_para_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_de_para_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+        ];
+      };
+      mc_reajuste_linhas: {
+        Row: {
+          codigo: string;
+          contrato_id: string;
+          descricao: string;
+          fator: number;
+          grupo: string;
+          grupo_descricao: string | null;
+          id: string;
+          ordem: number;
+          preco_unitario: number;
+          reajuste: number;
+          relatorio_id: string;
+          unidade: string;
+          valor_pi: number;
+        };
+        Insert: {
+          codigo: string;
+          contrato_id: string;
+          descricao: string;
+          fator: number;
+          grupo: string;
+          grupo_descricao?: string | null;
+          id?: string;
+          ordem: number;
+          preco_unitario: number;
+          reajuste: number;
+          relatorio_id: string;
+          unidade: string;
+          valor_pi: number;
+        };
+        Update: {
+          codigo?: string;
+          contrato_id?: string;
+          descricao?: string;
+          fator?: number;
+          grupo?: string;
+          grupo_descricao?: string | null;
+          id?: string;
+          ordem?: number;
+          preco_unitario?: number;
+          reajuste?: number;
+          relatorio_id?: string;
+          unidade?: string;
+          valor_pi?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_linhas_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_reajuste_relatorios";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_linhas_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["anterior_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_linhas_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["relatorio_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_reajuste_rateio: {
+        Row: {
+          contrato_id: string;
+          item_id: string;
+          linha_id: string;
+          relatorio_id: string;
+          valor: number;
+          valor_base: number;
+        };
+        Insert: {
+          contrato_id: string;
+          item_id: string;
+          linha_id: string;
+          relatorio_id: string;
+          valor: number;
+          valor_base: number;
+        };
+        Update: {
+          contrato_id?: string;
+          item_id?: string;
+          linha_id?: string;
+          relatorio_id?: string;
+          valor?: number;
+          valor_base?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_rateio_item_id_contrato_id_fkey";
+            columns: ["item_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_itens";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_rateio_linha_id_relatorio_id_fkey";
+            columns: ["linha_id", "relatorio_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_reajuste_linhas";
+            referencedColumns: ["id", "relatorio_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_rateio_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_reajuste_relatorios";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_rateio_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["anterior_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_rateio_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["relatorio_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_reajuste_relatorio_indices: {
+        Row: {
+          contrato_id: string;
+          i0: number;
+          i1: number;
+          k: number;
+          relatorio_id: string;
+          sigla: string;
+        };
+        Insert: {
+          contrato_id: string;
+          i0: number;
+          i1: number;
+          k: number;
+          relatorio_id: string;
+          sigla: string;
+        };
+        Update: {
+          contrato_id?: string;
+          i0?: number;
+          i1?: number;
+          k?: number;
+          relatorio_id?: string;
+          sigla?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_relatorio_indices_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_reajuste_relatorios";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorio_indices_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["anterior_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorio_indices_relatorio_id_contrato_id_fkey";
+            columns: ["relatorio_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_reajuste_medicao";
+            referencedColumns: ["relatorio_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_reajuste_relatorios: {
+        Row: {
+          arquivo_hash: string | null;
+          arquivo_id: string | null;
+          contrato_id: string;
+          contrato_texto: string | null;
+          created_at: string;
+          created_by: string | null;
+          data_base: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          medicao_id: string;
+          medicao_tipo: string | null;
+          motivo_exclusao: string | null;
+          observacao: string | null;
+          origem: string;
+          periodo_fim: string | null;
+          periodo_inicio: string | null;
+          processado_em: string | null;
+          sequencia: number;
+          situacao: string;
+          total: number;
+          valor_pi: number | null;
+        };
+        Insert: {
+          arquivo_hash?: string | null;
+          arquivo_id?: string | null;
+          contrato_id: string;
+          contrato_texto?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data_base?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          medicao_id: string;
+          medicao_tipo?: string | null;
+          motivo_exclusao?: string | null;
+          observacao?: string | null;
+          origem: string;
+          periodo_fim?: string | null;
+          periodo_inicio?: string | null;
+          processado_em?: string | null;
+          sequencia: number;
+          situacao: string;
+          total: number;
+          valor_pi?: number | null;
+        };
+        Update: {
+          arquivo_hash?: string | null;
+          arquivo_id?: string | null;
+          contrato_id?: string;
+          contrato_texto?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          data_base?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          medicao_id?: string;
+          medicao_tipo?: string | null;
+          motivo_exclusao?: string | null;
+          observacao?: string | null;
+          origem?: string;
+          periodo_fim?: string | null;
+          periodo_inicio?: string | null;
+          processado_em?: string | null;
+          sequencia?: number;
+          situacao?: string;
+          total?: number;
+          valor_pi?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_relatorios_arquivo_id_fkey";
+            columns: ["arquivo_id"];
+            isOneToOne: false;
+            referencedRelation: "arquivos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
           },
         ];
       };
@@ -8536,6 +8888,77 @@ export type Database = {
         };
         Relationships: [];
       };
+      mc_v_reajuste_itens: {
+        Row: {
+          contrato_id: string | null;
+          item_id: string | null;
+          medicao_id: string | null;
+          numero: number | null;
+          valor: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+        ];
+      };
+      mc_v_reajuste_medicao: {
+        Row: {
+          anterior_id: string | null;
+          anterior_total: number | null;
+          contrato_id: string | null;
+          diferenca: number | null;
+          medicao_id: string | null;
+          numero: number | null;
+          origem: string | null;
+          relatorio_id: string | null;
+          relatorios: number | null;
+          sequencia: number | null;
+          situacao: string | null;
+          total: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_medicoes";
+            referencedColumns: ["id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_itens";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+          {
+            foreignKeyName: "mc_reajuste_relatorios_medicao_id_contrato_id_fkey";
+            columns: ["medicao_id", "contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "mc_v_medicao_totais";
+            referencedColumns: ["medicao_id", "contrato_id"];
+          },
+        ];
+      };
       mc_v_versao_totais: {
         Row: {
           contrato_id: string | null;
@@ -9608,6 +10031,22 @@ export type Database = {
           p_versao: string;
         };
         Returns: number;
+      };
+      fn_mc_reajuste_config_salvar: {
+        Args: { p_contrato: string; p_dados: Json };
+        Returns: undefined;
+      };
+      fn_mc_reajuste_excluir: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_mc_reajuste_importar: {
+        Args: { p_gravar?: boolean; p_medicao: string; p_relatorio: Json };
+        Returns: Json;
+      };
+      fn_mc_reajuste_manual: {
+        Args: { p_dados: Json; p_medicao: string };
+        Returns: string;
       };
       fn_mc_recurso_da_tabela: { Args: { p_tabela: string }; Returns: string };
       fn_mc_restaurar: {

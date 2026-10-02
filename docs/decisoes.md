@@ -4931,6 +4931,77 @@ contrato.
 
 **Ajuste (02/10/2026, pedido do Tiago): tabelas feitas à mão também.** As tabelas que não são DataTable (`ui/table` ou `<table>`) nos painéis, relatórios e telas de detalhe viraram cards de grade personalizável: Carretas EMT (`frete.carretas-emt.tabelas`), painel do Frete (`frete.painel.tabelas`, `frete.painel.rotas`), Combustível (últimos abastecimentos no `combustivel.painel.graficos`; rankings em `combustivel.{fornecedores,equipamentos,obras}.tabelas`), Manutenção, os oito relatórios do Financeiro e os detalhes de folha, rescisão e ponto do RH. Card com altura escolhida agora ROLA por dentro (`[&>*]:overflow-auto`) em vez de cortar. Tabela que some sem dado fica fora da grade, para não deixar card vazio. Drawer, diálogo, importação e documento impresso continuam fixos.
 
+## 2026-10-02 - Medição de Contratos: Fase 6, reajuste do DNIT
+
+**Pedido do Tiago:** registrar o reajuste de cada medição. Na conversa de 02/10 ele decidiu que o módulo
+**não calcula** reajuste: só registra o que o DNIT calculou, rateado nos nossos itens. Lotes 09 e 10
+importam o relatório SIAC; a Obra 012 (INCC da Prefeitura) lança o total à mão. O histórico ele
+importa pela tela.
+
+**Fatos que levaram a isso:**
+- Os contratos do L09 (data-base SICRO jan/2025) e do L10 (abr/2025) aplicam um índice FGV/DNIT por
+  item.
+- O relatório SIAC "Resumo da Medição" da 4ª do L09 reproduz ao centavo:
+  - K = arred(I1/I0 − 1; 4);
+  - reajuste do item = TRUNC(valor a PI líquido × K; 2);
+  - total −40.021,28 sobre 2.616.306,26 a PI.
+- A EMT só recebe os índices dentro desse relatório.
+- O SIAC agrupa por classe de serviço (2,2 reparo profundo, 4,0 preventiva...), e a nossa planilha
+  divide por trecho. Por isso uma linha do DNIT pode cobrir mais de um item nosso.
+
+**Decisões:**
+
+1. **Importar o PDF do SIAC** no detalhe da medição, enviada ou aprovada.
+   - O servidor lê o texto do PDF com `unpdf` (dependência nova): o cabeçalho, a tabela I0/I1/K e as
+     linhas.
+   - Linha com valor a PI zero não entra.
+   - É recusado, com o motivo, se o contrato ou o número da medição não batem, ou se as linhas não
+     somam os SUBTOTAIS e a SOMA.
+   - O banco confere tudo de novo, na RPC `fn_mc_reajuste_importar`.
+   - Período diferente é só aviso.
+2. **De-para por contrato** (grupo SIAC + código SICRO → itens nossos).
+   - Sugerido por unidade, preço a até 0,5% e grupo correspondente.
+   - Confirmado na prévia e guardado; o import seguinte só pergunta as linhas novas.
+   - Na 4ª do L09, 34 linhas casaram com 34 itens, e só a 2,2/51269 (imprimação) ficou em "Conferir".
+3. **Rateio** no banco (`fn_mc_ratear`).
+   - O reajuste da linha é dividido na proporção do valor de cada item na medição. O centavo que sobra
+     vai para o maior item, e a soma é exatamente a do DNIT.
+   - Se só um item casado não tem valor, ele recebe a linha inteira; com dois ou mais sem valor, o
+     usuário escolhe.
+   - **O rateio é gravado no import** (exceção consciente à D6): revisão ou de-para mudados depois não
+     reescrevem um rateio aceito. Para refazer, importa-se de novo.
+4. **Provisório e definitivo.**
+   - Vale o último relatório não excluído.
+   - A diferença para o anterior aparece só no que vale, como a receber ou a devolver.
+   - Os anteriores ficam no histórico com o PDF.
+   - Excluir pede motivo de pelo menos 3 letras.
+   - Relatório, linhas, índices e rateio são imutáveis. A única exceção é o `arquivo_id` virar nulo
+     quando a faxina apaga o PDF de um relatório excluído.
+   - Um PDF que já está num relatório que vale não entra de novo; o banco recusa. Depois de excluir o
+     relatório, o mesmo PDF volta à lista e pode ser lido outra vez, para refazer um rateio errado.
+5. **Sem relatório** (Obra 012 e outros): total, sentido (positivo/negativo), situação, PDF enviado ali mesmo e
+   observação, sem rateio por item. O manual conta no total e no cartão, não nas linhas do boletim.
+6. **Onde aparece:**
+   - Seção Reajuste no detalhe da medição.
+   - Boletim: colunas "Reajuste na Nª" e "Reajuste acumulado" por item e grupo, cartão Reajuste
+     acumulado e as duas colunas no fim do xlsx.
+   - Painel: reajuste acumulado por contrato e no total.
+   - Alertas: "medição aprovada sem reajuste" (contrato com reajuste, depois do aniversário da
+     data-base) e "reajuste provisório".
+   - Seção Reajuste no contrato: tem reajuste, data-base em mês, periodicidade e índice em texto.
+   - Aba Reajuste com todas as medições enviadas e aprovadas.
+7. **Recurso `medicao.reajuste`** (ver e editar) para os 4 Admins. As telas exigem a permissão; a RLS
+   sozinha não basta. O PDF é anexo `mc_reajuste` da medição.
+8. **Relatório que continua valendo:** se a medição voltar a em conferência, o relatório não cai; o
+   DNIT manda outro e ele é importado.
+
+**Fora desta fase:**
+- Cálculo do reajuste pelo módulo: as tabelas da seção 5.5 (`mc_indices`, `mc_indice_valores`,
+  `mc_item_indices`, `mc_reajuste_aplicado`, `mc_reajuste_aplicado_itens`) ficam vazias.
+- A tela Índices.
+- O demonstrativo de reajuste em xlsx.
+- A data-base da Obra 012, que nenhum documento traz.
+
 ## 2026-10-02 - Conciliação bancária por conta, com casamento automático
 
 **Pedido do Tiago (02/10/2026)**, com o OFX e o PDF do BB 102.124-9 de 09/2026: conciliar uma conta por vez, o app casa sozinho e a pessoa pode trocar, o app mostra o que falta no app e o que está no app e não no banco, o que falta é lançado ali com centro de custo, mês de referência e etapa, e o que sobra no app muda de conta ou sai.

@@ -2,6 +2,7 @@ import { GradeKpis, KPICard, MoneyText } from "@/components/canonicos";
 import { percentualExibicao, periodoMedicao } from "@/modules/medicao/boletim/formato";
 import type { Boletim } from "@/modules/medicao/boletim/tipos";
 import { SeloMedicao } from "@/modules/medicao/_shared/selo-medicao";
+import { SeloSituacaoReajuste } from "@/modules/medicao/reajuste/components/selo-situacao-reajuste";
 
 /** Dinheiro do cartão: nulo é contrato sem regra de arredondamento, nunca "R$ 0,00". */
 function Valor({ texto }: { texto: string | null }) {
@@ -53,6 +54,21 @@ export function BoletimCartoes({ boletim }: { boletim: Boletim }) {
           }
         />
       )}
+      <KPICard
+        idCard="reajuste"
+        titulo="Reajuste acumulado"
+        valor={<Valor texto={t.reajuste_acumulado} />}
+        detalhe={
+          n === null || t.reajuste_medicao === null ? undefined : (
+            <span className="flex flex-wrap items-center gap-2">
+              <span>
+                na {n}ª: <MoneyText valor={t.reajuste_medicao} />
+              </span>
+              {medicaoN?.reajuste_situacao === "provisorio" ? <SeloSituacaoReajuste situacao="provisorio" /> : null}
+            </span>
+          )
+        }
+      />
     </GradeKpis>
   );
 }

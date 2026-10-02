@@ -1,0 +1,1717 @@
+[
+  {
+    "itemId": "64172376-cd92-49ea-958f-3acde6d28cf2",
+    "codigo": "01.01",
+    "unidade": "mês",
+    "preco": "21154.63583333333",
+    "valor": "4759.79306249999925"
+  },
+  {
+    "itemId": "688cb4c0-36d2-481c-ae81-e0c4dac6a922",
+    "codigo": "02.01",
+    "unidade": "m³",
+    "preco": "414.9693",
+    "valor": "0"
+  },
+  {
+    "itemId": "2618fe5d-7787-43c8-a380-99eac7e49d03",
+    "codigo": "02.02",
+    "unidade": "t",
+    "preco": "326.4402",
+    "valor": "0"
+  },
+  {
+    "itemId": "35114bf0-4797-43f9-8c58-3d60dc9d5bc0",
+    "codigo": "02.02.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "82c10cdf-04ff-4e02-bed3-3353b21c1db5",
+    "codigo": "02.02.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "4414d09f-1176-4ee1-80ba-6d4013c4f09e",
+    "codigo": "02.02.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "86d25165-2ef2-4ff0-ba19-52bee6562b89",
+    "codigo": "02.02.04",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "5301b60b-f5aa-4a0b-a469-67cc7a80f38f",
+    "codigo": "02.02.05",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "a6fa2256-f72e-4d91-97b0-c5b360034690",
+    "codigo": "02.03",
+    "unidade": "m³",
+    "preco": "265.5757",
+    "valor": "0"
+  },
+  {
+    "itemId": "e69c0e90-2606-44b7-b074-b05bf95542fe",
+    "codigo": "02.04",
+    "unidade": "m³",
+    "preco": "561.1089",
+    "valor": "0"
+  },
+  {
+    "itemId": "04d9d21f-d65a-4771-a223-c3a28752397d",
+    "codigo": "02.05",
+    "unidade": "t",
+    "preco": "326.4402",
+    "valor": "0"
+  },
+  {
+    "itemId": "10408154-5304-4946-99a2-c64383b25e3a",
+    "codigo": "02.05.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "cca222da-d23a-47a5-a3fd-e052b739b33c",
+    "codigo": "02.05.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "23e814ef-d1d4-4942-b59b-896f6794f0c3",
+    "codigo": "02.05.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "b72af23c-da8d-4568-aec9-5ad0524209f1",
+    "codigo": "02.05.04",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "fc17fd9a-ddd3-436b-822d-a4ac47e9509f",
+    "codigo": "02.05.05",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "271d4867-9f72-4824-a243-74517f7ea21b",
+    "codigo": "02.06",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "71663164-f52b-45ff-a8cd-27c575c957eb",
+    "codigo": "02.06.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "23a23668-0f11-49d2-bccc-16ea6288f4a8",
+    "codigo": "02.06.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "a2df0164-1638-49d3-9c23-024130bcd648",
+    "codigo": "02.07.01",
+    "unidade": "m³",
+    "preco": "14.4634",
+    "valor": "136.8526908"
+  },
+  {
+    "itemId": "c9e38f1d-32e3-4db3-8517-e4c8550690a7",
+    "codigo": "02.07.02",
+    "unidade": "m³",
+    "preco": "7.7817",
+    "valor": "1202.555514795"
+  },
+  {
+    "itemId": "4c5543cd-7f4b-4913-9b40-0fd4a1740d0a",
+    "codigo": "02.07.03",
+    "unidade": "m³",
+    "preco": "212.3887",
+    "valor": "2954.5392057"
+  },
+  {
+    "itemId": "a9dde5f6-7382-4cf1-ac7a-48916fbcdea9",
+    "codigo": "02.07.04",
+    "unidade": "m³",
+    "preco": "580.8643",
+    "valor": "21984.5520264"
+  },
+  {
+    "itemId": "b4058504-4c78-4d0e-a7a7-34d781e9ce59",
+    "codigo": "02.07.05",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "bea68270-2e49-4d5e-a3c1-9888380edd36",
+    "codigo": "02.07.05.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "b0eb8713-cb5f-4889-be60-f20b852d431e",
+    "codigo": "02.07.05.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "dafe40c3-f2f2-40bc-a1b8-2304a514231d",
+    "codigo": "02.07.06",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "63.547127799999996642"
+  },
+  {
+    "itemId": "06fd082d-08c4-45e7-a034-caedc643c123",
+    "codigo": "02.07.06.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "321.170614840530"
+  },
+  {
+    "itemId": "f85a3399-ea11-46c3-b851-869ce6497cf6",
+    "codigo": "02.07.06.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "212.040444378555"
+  },
+  {
+    "itemId": "d13a7866-4e75-4878-91a7-fd515c988fd2",
+    "codigo": "02.07.07",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "7682.1210655800010148595"
+  },
+  {
+    "itemId": "b934929d-d89e-48b7-ac92-d0ccdc003703",
+    "codigo": "02.07.07.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "24.8356439672016"
+  },
+  {
+    "itemId": "d02ebfaf-6917-4e13-ba49-01c560a5cdc6",
+    "codigo": "02.07.07.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "6149.62811169158456417149"
+  },
+  {
+    "itemId": "ef3206d9-24c5-495c-b158-381780c8cd02",
+    "codigo": "02.07.07.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "2721.32626227321624965651"
+  },
+  {
+    "itemId": "f8d8570f-0321-4522-a424-9378ca299a9e",
+    "codigo": "02.07.08",
+    "unidade": "m³",
+    "preco": "465.516",
+    "valor": "47137.099955904"
+  },
+  {
+    "itemId": "5ac041b7-b2fc-4e7a-9047-a4d6daf027c5",
+    "codigo": "02.07.09",
+    "unidade": "m³",
+    "preco": "460.1313",
+    "valor": "7099.987004955"
+  },
+  {
+    "itemId": "3e677dbc-59d9-41a7-8ab4-15a727d40533",
+    "codigo": "02.08.01",
+    "unidade": "m²",
+    "preco": "0.6832",
+    "valor": "0"
+  },
+  {
+    "itemId": "b6d4e0a7-65ca-464d-8900-1be0569d6453",
+    "codigo": "02.08.02",
+    "unidade": "m²",
+    "preco": "0.6369",
+    "valor": "0"
+  },
+  {
+    "itemId": "c24a07d6-eb45-4d2c-ad7e-315c6cad350c",
+    "codigo": "02.08.03",
+    "unidade": "m³",
+    "preco": "2.397",
+    "valor": "0"
+  },
+  {
+    "itemId": "2b879472-30b3-4a37-9282-298f69baf024",
+    "codigo": "02.08.04",
+    "unidade": "m³",
+    "preco": "3.4045",
+    "valor": "0"
+  },
+  {
+    "itemId": "58383359-ad9a-4655-b284-98bdea362aa9",
+    "codigo": "02.08.05",
+    "unidade": "m³",
+    "preco": "6.589",
+    "valor": "0"
+  },
+  {
+    "itemId": "99230b51-5998-48f3-a92b-d53725c00f65",
+    "codigo": "02.08.06",
+    "unidade": "m³",
+    "preco": "1.6559",
+    "valor": "0"
+  },
+  {
+    "itemId": "5825712e-d554-4fce-89dd-e5a28c303f38",
+    "codigo": "02.08.07",
+    "unidade": "m³",
+    "preco": "7.0059",
+    "valor": "0"
+  },
+  {
+    "itemId": "3cdcf855-0fa1-4fe5-b2f9-49760f3df050",
+    "codigo": "02.08.08",
+    "unidade": "m³",
+    "preco": "532.8884",
+    "valor": "0"
+  },
+  {
+    "itemId": "c9b42780-72ce-4b84-baad-d4302e73b3fc",
+    "codigo": "02.08.09",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "cda978bc-5a1a-4e01-93da-463e53727d6b",
+    "codigo": "02.08.09.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "9edf1dd6-13d2-44d5-8ff3-70166b04a11b",
+    "codigo": "02.08.09.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "89785e0b-ea37-4301-9818-746c4dbccc62",
+    "codigo": "02.08.10",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "169dc3d3-931b-4f41-a111-df3c9895b82d",
+    "codigo": "02.08.10.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "1a9d07a5-aa4a-45b7-9541-39752d41da10",
+    "codigo": "02.08.10.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "adbb8d88-268b-4dab-aef6-c151b8919753",
+    "codigo": "02.08.11",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "0"
+  },
+  {
+    "itemId": "f9fdfa24-3f53-4194-abda-0c3859d3a731",
+    "codigo": "02.08.11.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "1e12ed54-5217-4c66-9caa-1f76ec59ae91",
+    "codigo": "02.08.11.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "dcf67e8a-3dd8-430c-9ce5-be443f12fc6b",
+    "codigo": "02.08.11.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "ffba5048-2e26-42ca-a194-718ae8c25917",
+    "codigo": "02.08.12",
+    "unidade": "m³",
+    "preco": "460.1313",
+    "valor": "0"
+  },
+  {
+    "itemId": "dc645323-06ae-45ca-be0f-90eeb86462df",
+    "codigo": "02.08.13",
+    "unidade": "m²",
+    "preco": "53.4764",
+    "valor": "0"
+  },
+  {
+    "itemId": "129bb6d5-e827-4a42-826c-1d8fb719073d",
+    "codigo": "02.09.01",
+    "unidade": "m³",
+    "preco": "14.4634",
+    "valor": "0"
+  },
+  {
+    "itemId": "6ef70db0-70e1-415c-8a2e-24013947c6b6",
+    "codigo": "02.09.02",
+    "unidade": "m³",
+    "preco": "9.0324",
+    "valor": "0"
+  },
+  {
+    "itemId": "a84a7172-842c-49f2-b471-dce2fc796c4a",
+    "codigo": "02.09.03",
+    "unidade": "m²",
+    "preco": "1.8643",
+    "valor": "0"
+  },
+  {
+    "itemId": "ebab551d-f96a-417b-b813-90514eae010c",
+    "codigo": "02.09.04",
+    "unidade": "m³",
+    "preco": "436.9249",
+    "valor": "0"
+  },
+  {
+    "itemId": "08de8e54-eee5-4e2c-8726-04e1893c82c0",
+    "codigo": "02.09.05",
+    "unidade": "m²",
+    "preco": "0.6832",
+    "valor": "0"
+  },
+  {
+    "itemId": "13787bac-add1-4f2a-bb19-420445ab4ddf",
+    "codigo": "02.09.06",
+    "unidade": "m³",
+    "preco": "1.6559",
+    "valor": "0"
+  },
+  {
+    "itemId": "8f9d50ce-719e-4c05-994e-a35d43098d21",
+    "codigo": "02.09.07",
+    "unidade": "m³",
+    "preco": "6.589",
+    "valor": "0"
+  },
+  {
+    "itemId": "a2a6de06-bedc-4f2f-9bcd-2c8d23e9fc33",
+    "codigo": "02.09.08",
+    "unidade": "m³",
+    "preco": "7.0059",
+    "valor": "0"
+  },
+  {
+    "itemId": "28cb6957-e39c-4541-97ec-94859f5a525f",
+    "codigo": "02.09.09",
+    "unidade": "m³",
+    "preco": "46.7832",
+    "valor": "0"
+  },
+  {
+    "itemId": "4f3d09d4-9eae-4ee1-a583-fcaa4364ca2e",
+    "codigo": "02.09.10",
+    "unidade": "m³",
+    "preco": "532.8884",
+    "valor": "0"
+  },
+  {
+    "itemId": "d453a081-428a-4470-a306-d9db360a0a3a",
+    "codigo": "02.09.12",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "17cdfaff-f6fb-4c53-bf41-4bb953e25e61",
+    "codigo": "02.09.12.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "41b2304e-ae78-461c-b9c8-8bacb26da625",
+    "codigo": "02.09.12.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "b6c547c1-550e-4458-a157-bc5dea9d9291",
+    "codigo": "02.09.13",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "c45695d2-0152-4942-a970-1b7d944009e1",
+    "codigo": "02.09.13.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "2153e61d-bdd3-4598-865d-55bf083c011e",
+    "codigo": "02.09.13.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "977f9432-822e-4f05-bdd9-588253b5fd7c",
+    "codigo": "02.09.14",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "0"
+  },
+  {
+    "itemId": "aa98f6ee-3138-41f1-ab19-364c7b836ea5",
+    "codigo": "02.09.14.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "5384bb4f-d219-4139-a108-d154ef6af675",
+    "codigo": "02.09.14.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "51f30861-008c-40a6-bdf2-b556481c47d8",
+    "codigo": "02.09.14.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "9120c229-5f4c-47cd-8aea-512c5208ea1b",
+    "codigo": "02.09.15",
+    "unidade": "m",
+    "preco": "141.6234",
+    "valor": "0"
+  },
+  {
+    "itemId": "bf55f642-2743-473f-8227-0b25d5a597d1",
+    "codigo": "02.09.16",
+    "unidade": "un",
+    "preco": "331.628",
+    "valor": "0"
+  },
+  {
+    "itemId": "d2394380-5699-4107-b44b-3bfae9c77017",
+    "codigo": "02.09.17",
+    "unidade": "m",
+    "preco": "345.883",
+    "valor": "0"
+  },
+  {
+    "itemId": "1b882c22-543a-4fe1-b18e-1f31ad69732d",
+    "codigo": "02.09.18",
+    "unidade": "m",
+    "preco": "852.4038",
+    "valor": "0"
+  },
+  {
+    "itemId": "1f195cd1-8349-482e-b431-737c6bf2be2e",
+    "codigo": "02.09.19",
+    "unidade": "un",
+    "preco": "148.5019",
+    "valor": "0"
+  },
+  {
+    "itemId": "714b1ca9-fefc-4a76-85cc-8977cf3e8f4f",
+    "codigo": "02.09.20",
+    "unidade": "un",
+    "preco": "2807.6752",
+    "valor": "0"
+  },
+  {
+    "itemId": "8c05ebfb-f093-4a9e-896d-f1e43d462859",
+    "codigo": "02.09.21",
+    "unidade": "un",
+    "preco": "1155.4408",
+    "valor": "0"
+  },
+  {
+    "itemId": "d1c653cd-9944-467c-9bff-4f18c3ca055d",
+    "codigo": "02.10.01",
+    "unidade": "tkm",
+    "preco": "0.9958",
+    "valor": "170.041458715895019916"
+  },
+  {
+    "itemId": "eecf74d5-0c15-440c-831c-de69fb5292cb",
+    "codigo": "02.10.02",
+    "unidade": "tkm",
+    "preco": "1.019",
+    "valor": "2420.1338060467940546"
+  },
+  {
+    "itemId": "9c31d90c-b70f-4537-ae6a-601bd457e82f",
+    "codigo": "02.10.03",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "115567.65054865426676"
+  },
+  {
+    "itemId": "8fb661fe-7386-4c18-9072-4f3ee805249d",
+    "codigo": "03.01",
+    "unidade": "m³",
+    "preco": "414.9693",
+    "valor": "0"
+  },
+  {
+    "itemId": "6c7c8767-4871-4ce5-b523-905ab91cf4ad",
+    "codigo": "03.02",
+    "unidade": "t",
+    "preco": "326.4402",
+    "valor": "0"
+  },
+  {
+    "itemId": "c1f5d458-5127-40ed-a20f-f9b7501d6fd1",
+    "codigo": "03.02.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "1b66288e-bd87-4bef-87b8-1b5762650e30",
+    "codigo": "03.02.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "7040e670-a4f9-46ac-9e0d-2ed275d0f630",
+    "codigo": "03.02.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "a4810ec9-5a42-4e2e-a699-6406b035e334",
+    "codigo": "03.02.04",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "75b3c2f3-d90d-4721-8472-3735d5ac46c9",
+    "codigo": "03.02.05",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "c937d6ea-b022-4a15-80c1-8b66cbc34fdc",
+    "codigo": "03.03",
+    "unidade": "m³",
+    "preco": "265.5757",
+    "valor": "0"
+  },
+  {
+    "itemId": "d8a6f531-f9a5-424b-932b-1bae8157e59e",
+    "codigo": "03.04",
+    "unidade": "m³",
+    "preco": "561.1089",
+    "valor": "0"
+  },
+  {
+    "itemId": "6e5dd508-ac15-4657-aaa3-65e465ae2e07",
+    "codigo": "03.05",
+    "unidade": "t",
+    "preco": "326.4402",
+    "valor": "0"
+  },
+  {
+    "itemId": "dc17b8cb-2709-4cdf-b133-0b864e462f86",
+    "codigo": "03.05.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "5e043aa2-5fd8-4639-8a96-a8519c27dbfc",
+    "codigo": "03.05.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "e21bc20a-f722-4d3b-9dbb-1968f917bf63",
+    "codigo": "03.05.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "117f3627-c529-4f99-a4c6-54418b696d6b",
+    "codigo": "03.05.04",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "bb72c171-9ced-471e-a1aa-f9a4088c20de",
+    "codigo": "03.05.05",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "d8d40745-226e-4a7d-abbd-2919d8270acf",
+    "codigo": "03.06",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "eed88702-f1a4-48f5-983e-2e9bde330253",
+    "codigo": "03.06.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "e207aff2-5b7b-4e2e-8961-e2d13315bee6",
+    "codigo": "03.06.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "9d358ace-65bd-4bfd-ad75-3a181af768a2",
+    "codigo": "03.07",
+    "unidade": "m",
+    "preco": "2.3623",
+    "valor": "0"
+  },
+  {
+    "itemId": "b517fa06-a2f6-4c5a-ad6d-3ede93d1e502",
+    "codigo": "03.07.01",
+    "unidade": "t",
+    "preco": "4817.7061",
+    "valor": "0"
+  },
+  {
+    "itemId": "08affd7e-6575-4c6b-92fd-46a2311023c7",
+    "codigo": "03.07.02",
+    "unidade": "t",
+    "preco": "1443.4757",
+    "valor": "0"
+  },
+  {
+    "itemId": "cd0c2429-78be-4e86-9088-5d9473df7197",
+    "codigo": "03.08",
+    "unidade": "m²",
+    "preco": "0.081",
+    "valor": "0"
+  },
+  {
+    "itemId": "e59bdf6b-8585-4237-87bd-b2a9e26ac057",
+    "codigo": "03.09",
+    "unidade": "m³",
+    "preco": "7.4227",
+    "valor": "0"
+  },
+  {
+    "itemId": "70f6b39c-aee8-41ff-a103-b21355cc07d3",
+    "codigo": "03.10",
+    "unidade": "m",
+    "preco": "376.7553",
+    "valor": "0"
+  },
+  {
+    "itemId": "8b92c0aa-79cb-4beb-b509-697516f68e4f",
+    "codigo": "03.11",
+    "unidade": "m",
+    "preco": "306.8584",
+    "valor": "0"
+  },
+  {
+    "itemId": "0d652f2f-6ea5-4548-8ec0-300fa99e2f95",
+    "codigo": "03.12",
+    "unidade": "m³",
+    "preco": "23.16",
+    "valor": "0"
+  },
+  {
+    "itemId": "18b3973d-e123-414d-96e7-6c4596e0f223",
+    "codigo": "03.13",
+    "unidade": "m³",
+    "preco": "69.48",
+    "valor": "0"
+  },
+  {
+    "itemId": "ab65e20a-6dc4-4de5-9b32-aeb42ddff317",
+    "codigo": "03.14.01",
+    "unidade": "kg",
+    "preco": "14.6371",
+    "valor": "0"
+  },
+  {
+    "itemId": "46907676-86b8-4b50-a763-c3cb98a523b2",
+    "codigo": "03.14.02",
+    "unidade": "m³",
+    "preco": "786.1083",
+    "valor": "0"
+  },
+  {
+    "itemId": "2b48be7e-bfc3-494a-a34b-8364f0c81ee7",
+    "codigo": "03.14.03",
+    "unidade": "m²",
+    "preco": "85.8888",
+    "valor": "0"
+  },
+  {
+    "itemId": "61b2ef63-54d3-4330-8d2e-7c56a0a2d767",
+    "codigo": "03.14.04",
+    "unidade": "m³",
+    "preco": "636.1588",
+    "valor": "0"
+  },
+  {
+    "itemId": "81338856-a248-4d5c-9a7a-c0be49877027",
+    "codigo": "03.14.05",
+    "unidade": "m³",
+    "preco": "754.6801",
+    "valor": "0"
+  },
+  {
+    "itemId": "3213f990-3929-43ce-b00b-50cfe00cd8f4",
+    "codigo": "03.14.06",
+    "unidade": "m³",
+    "preco": "47.9643",
+    "valor": "0"
+  },
+  {
+    "itemId": "51fdf0b1-1602-450c-9bad-af9b73adcf60",
+    "codigo": "03.14.07",
+    "unidade": "m",
+    "preco": "1155.4408",
+    "valor": "0"
+  },
+  {
+    "itemId": "5271cdea-f8d0-45a1-af15-9295c48ba77b",
+    "codigo": "03.14.08",
+    "unidade": "m",
+    "preco": "1547.7943",
+    "valor": "0"
+  },
+  {
+    "itemId": "5ea2827d-a31e-4cf7-9e6a-1a0ee85c4371",
+    "codigo": "03.14.09",
+    "unidade": "m",
+    "preco": "2257.2546",
+    "valor": "0"
+  },
+  {
+    "itemId": "01d0d92d-fcf6-4721-9a80-3f92f99ca50c",
+    "codigo": "03.14.10",
+    "unidade": "m",
+    "preco": "3053.0091",
+    "valor": "0"
+  },
+  {
+    "itemId": "ff99541d-6657-412a-ab02-ac3aa4522b3a",
+    "codigo": "03.14.11",
+    "unidade": "m",
+    "preco": "3359.08",
+    "valor": "0"
+  },
+  {
+    "itemId": "ed536162-de6d-401b-8245-c8ac1e39f414",
+    "codigo": "03.14.12",
+    "unidade": "m",
+    "preco": "4557.4595",
+    "valor": "0"
+  },
+  {
+    "itemId": "e3fa3fb4-9ba2-4efc-9134-5da01944f99c",
+    "codigo": "03.14.13",
+    "unidade": "m",
+    "preco": "3936.8873",
+    "valor": "0"
+  },
+  {
+    "itemId": "7ab9a04a-cf40-426c-8a92-b98eb7cb0a19",
+    "codigo": "03.14.14",
+    "unidade": "m",
+    "preco": "5691.1183",
+    "valor": "0"
+  },
+  {
+    "itemId": "0d66ed6f-eba8-4e06-b597-17ffbda2fcc8",
+    "codigo": "03.14.15",
+    "unidade": "m",
+    "preco": "7651.786",
+    "valor": "0"
+  },
+  {
+    "itemId": "4d4ade2f-a5ef-45a1-bd87-405c5c54d37d",
+    "codigo": "03.14.16",
+    "unidade": "m",
+    "preco": "6681.9379",
+    "valor": "0"
+  },
+  {
+    "itemId": "11f7dbfb-21f5-4e16-a4ca-5a6fe9f8290f",
+    "codigo": "03.14.17",
+    "unidade": "m",
+    "preco": "11732.5896",
+    "valor": "0"
+  },
+  {
+    "itemId": "2039b9e3-8975-4317-b2bf-7804494fd11a",
+    "codigo": "03.14.18",
+    "unidade": "un",
+    "preco": "2807.6752",
+    "valor": "0"
+  },
+  {
+    "itemId": "38971d40-986d-45ba-9f8f-65fd06985d5d",
+    "codigo": "03.14.19",
+    "unidade": "un",
+    "preco": "3942.9205",
+    "valor": "0"
+  },
+  {
+    "itemId": "56a1c0e9-50e7-4693-ab20-9ec77a43e4e8",
+    "codigo": "03.14.20",
+    "unidade": "un",
+    "preco": "3375.9868",
+    "valor": "0"
+  },
+  {
+    "itemId": "19faf43e-eaaa-4582-91a8-b0b9dcf5e420",
+    "codigo": "03.14.21",
+    "unidade": "un",
+    "preco": "4746.6304",
+    "valor": "0"
+  },
+  {
+    "itemId": "fcc70d38-8e0f-4f85-88d2-e7f8739d02c3",
+    "codigo": "03.14.22",
+    "unidade": "un",
+    "preco": "4141.6217",
+    "valor": "0"
+  },
+  {
+    "itemId": "1428f2ab-7119-466d-974d-6e7be14f347a",
+    "codigo": "03.14.23",
+    "unidade": "un",
+    "preco": "5752.1449",
+    "valor": "0"
+  },
+  {
+    "itemId": "b4ca51d7-5391-4931-af15-640d94ac098d",
+    "codigo": "03.14.24",
+    "unidade": "un",
+    "preco": "23990.0544",
+    "valor": "0"
+  },
+  {
+    "itemId": "dbf7ad40-545f-4864-91aa-3143f6f43a63",
+    "codigo": "03.14.25",
+    "unidade": "un",
+    "preco": "32508.7308",
+    "valor": "0"
+  },
+  {
+    "itemId": "5aef7004-fa95-4001-b205-a74bb39e4b37",
+    "codigo": "03.14.26",
+    "unidade": "un",
+    "preco": "46361.8501",
+    "valor": "0"
+  },
+  {
+    "itemId": "45b5dca3-ff3b-4edb-9910-a135dc628f6a",
+    "codigo": "03.14.27",
+    "unidade": "un",
+    "preco": "27799.828",
+    "valor": "0"
+  },
+  {
+    "itemId": "47ebcefc-f5c7-45d9-b4cc-6d531142707b",
+    "codigo": "03.14.28",
+    "unidade": "un",
+    "preco": "58252.7962",
+    "valor": "0"
+  },
+  {
+    "itemId": "555a0778-11b7-4df7-a962-eb22e5a8d3c9",
+    "codigo": "03.14.29",
+    "unidade": "m",
+    "preco": "71.3443",
+    "valor": "0"
+  },
+  {
+    "itemId": "3d4b7e23-db67-461a-939e-1d01a2f91c29",
+    "codigo": "03.14.30",
+    "unidade": "un",
+    "preco": "1141.0121",
+    "valor": "0"
+  },
+  {
+    "itemId": "f9976c0b-ce3b-4d88-be43-37c6ecdb14b6",
+    "codigo": "03.14.31",
+    "unidade": "m",
+    "preco": "837.454",
+    "valor": "0"
+  },
+  {
+    "itemId": "3f66763d-774e-4357-b8fd-1966cdfafd88",
+    "codigo": "03.14.32",
+    "unidade": "un",
+    "preco": "5545.8588",
+    "valor": "0"
+  },
+  {
+    "itemId": "24297fa9-9b6b-43c6-8a7f-71827e1e187c",
+    "codigo": "03.14.33",
+    "unidade": "un",
+    "preco": "7224.3103",
+    "valor": "0"
+  },
+  {
+    "itemId": "836a6fbd-4bb7-4794-b72e-10462356cb9f",
+    "codigo": "03.14.34",
+    "unidade": "m²",
+    "preco": "7.6891",
+    "valor": "0"
+  },
+  {
+    "itemId": "29ca7486-c701-44e7-ae7c-a64457cc43c1",
+    "codigo": "03.15.01",
+    "unidade": "un.dia",
+    "preco": "4.4004",
+    "valor": "0"
+  },
+  {
+    "itemId": "24a586e8-878e-414f-9bb9-c23cb2fa45ec",
+    "codigo": "03.15.02",
+    "unidade": "un.dia",
+    "preco": "4.3425",
+    "valor": "0"
+  },
+  {
+    "itemId": "a1cd90ba-0fde-413e-ba88-87cccee42666",
+    "codigo": "03.15.03",
+    "unidade": "un.dia",
+    "preco": "4.6204",
+    "valor": "147.8528"
+  },
+  {
+    "itemId": "8a7b7717-99ff-4d0b-b4aa-0a5d63d8fb14",
+    "codigo": "03.15.04",
+    "unidade": "un.dia",
+    "preco": "2.2812",
+    "valor": "0"
+  },
+  {
+    "itemId": "a8737fe0-5d05-465e-9f3e-4f578f485874",
+    "codigo": "03.15.05",
+    "unidade": "un.dia",
+    "preco": "0.9032",
+    "valor": "289.0240"
+  },
+  {
+    "itemId": "6547c75c-f590-4d87-b4ff-3cb7050fde0c",
+    "codigo": "03.15.06",
+    "unidade": "un.dia",
+    "preco": "5.4657",
+    "valor": "0"
+  },
+  {
+    "itemId": "e1a888f5-0c1b-42be-ba3f-07015037b811",
+    "codigo": "03.15.07",
+    "unidade": "un.dia",
+    "preco": "0.9379",
+    "valor": "0"
+  },
+  {
+    "itemId": "459a87a6-8816-4805-b490-8d03877f1477",
+    "codigo": "03.15.08",
+    "unidade": "h",
+    "preco": "23.16",
+    "valor": "5928.96"
+  },
+  {
+    "itemId": "307f5562-9828-40af-ac74-5adeb0a64885",
+    "codigo": "03.15.09",
+    "unidade": "m²",
+    "preco": "38.0982",
+    "valor": "0"
+  },
+  {
+    "itemId": "a611858d-fb15-4ee7-9e52-a298da3cedcb",
+    "codigo": "03.15.10",
+    "unidade": "un",
+    "preco": "130.8308",
+    "valor": "0"
+  },
+  {
+    "itemId": "8a11c20f-0137-4173-88ce-75eaa6e9e287",
+    "codigo": "03.15.11",
+    "unidade": "m²",
+    "preco": "16.3162",
+    "valor": "0"
+  },
+  {
+    "itemId": "be2bddf6-e9ca-4339-bf4a-5c08a1fc1040",
+    "codigo": "03.15.12",
+    "unidade": "un",
+    "preco": "200.8782",
+    "valor": "0"
+  },
+  {
+    "itemId": "07399994-774d-46ec-9b42-92b02dac921b",
+    "codigo": "03.15.13",
+    "unidade": "m²",
+    "preco": "510.2727",
+    "valor": "9797.23584"
+  },
+  {
+    "itemId": "afd6e7e7-9f0b-43cd-9277-3493b10104eb",
+    "codigo": "03.16.01",
+    "unidade": "m³",
+    "preco": "14.4634",
+    "valor": "0"
+  },
+  {
+    "itemId": "ad6fd071-fb08-4618-acff-4da8b2bc0684",
+    "codigo": "03.16.02",
+    "unidade": "m³",
+    "preco": "7.7817",
+    "valor": "0"
+  },
+  {
+    "itemId": "3637aa16-fa83-4bfd-82e7-fdd9eb30dfc7",
+    "codigo": "03.16.03",
+    "unidade": "m³",
+    "preco": "212.3887",
+    "valor": "0"
+  },
+  {
+    "itemId": "65abb718-29b3-48cf-9c7b-165d29f0077d",
+    "codigo": "03.16.04",
+    "unidade": "m³",
+    "preco": "580.8643",
+    "valor": "0"
+  },
+  {
+    "itemId": "bd57e748-94f7-4ecf-bc20-0d9748618756",
+    "codigo": "03.16.05",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "be381c3c-9325-4e10-baec-f945f7ab5e1a",
+    "codigo": "03.16.05.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "c6fbd253-e679-40ab-8da3-eb8153500f0c",
+    "codigo": "03.16.05.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "52bb0df9-246e-4725-9e35-fadaf9c75f20",
+    "codigo": "03.16.06",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "cc4be266-63fa-4bfb-a4ff-bd48906e482a",
+    "codigo": "03.16.06.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "51a554dd-c2a9-4363-9eb3-7c380b236e5c",
+    "codigo": "03.16.06.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "8f5ecd52-582a-456e-81dc-9ea49004d06f",
+    "codigo": "03.16.07",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "0"
+  },
+  {
+    "itemId": "c96441d0-dc89-4374-b1ba-0df64581e015",
+    "codigo": "03.16.07.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "89649903-2fd8-4a7a-83dc-4f8c65baf231",
+    "codigo": "03.16.07.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "ca9e66a4-c1cd-4636-a8c9-c55c2e2bef56",
+    "codigo": "03.16.07.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "179a91cc-413e-496c-8f9f-3dce6444cb93",
+    "codigo": "03.16.08",
+    "unidade": "m³",
+    "preco": "465.516",
+    "valor": "0"
+  },
+  {
+    "itemId": "a3fd0470-aac7-43a3-9e14-4ffb6f320149",
+    "codigo": "03.16.09",
+    "unidade": "m³",
+    "preco": "460.1313",
+    "valor": "0"
+  },
+  {
+    "itemId": "87c31976-7e96-4d78-b55e-4bdbf1393694",
+    "codigo": "03.17.01",
+    "unidade": "tkm",
+    "preco": "0.9958",
+    "valor": "0"
+  },
+  {
+    "itemId": "3cd059b9-c9d0-47fa-bd90-e5d9b40e8752",
+    "codigo": "03.17.02",
+    "unidade": "tkm",
+    "preco": "1.019",
+    "valor": "0"
+  },
+  {
+    "itemId": "c8568740-4b44-4730-b8b6-3f6d30fb9e44",
+    "codigo": "03.17.04",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "0"
+  },
+  {
+    "itemId": "f50cc7ba-496b-4b0c-9a38-143ddff969e7",
+    "codigo": "04.01",
+    "unidade": "m³",
+    "preco": "532.8884",
+    "valor": "0"
+  },
+  {
+    "itemId": "684c08fd-8eca-4125-affa-df28b770995c",
+    "codigo": "04.02",
+    "unidade": "m³",
+    "preco": "129.2675",
+    "valor": "107705.64724184647344875"
+  },
+  {
+    "itemId": "0fded0c8-56d3-4ef2-853f-1cd35493dc33",
+    "codigo": "04.03",
+    "unidade": "t",
+    "preco": "326.4402",
+    "valor": "648424.49127000003264402"
+  },
+  {
+    "itemId": "dcd8865b-48c0-4190-aeea-dcde870f6fcf",
+    "codigo": "04.03.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "2119.4951632710488923720"
+  },
+  {
+    "itemId": "1c086b48-50b6-469c-87e2-b4f61cfda9b7",
+    "codigo": "04.03.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "539028.266066112320575723"
+  },
+  {
+    "itemId": "41062296-cc1a-402b-af5a-6dba71882fc5",
+    "codigo": "04.03.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "238530.159858693021199877"
+  },
+  {
+    "itemId": "79ac4069-de3c-409f-93f2-75855aea711b",
+    "codigo": "04.04",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "5595.7694461194096386"
+  },
+  {
+    "itemId": "0971085f-8dc7-4861-a780-e9ae779236cc",
+    "codigo": "04.04.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "28281.3208989128029094610"
+  },
+  {
+    "itemId": "2690548b-034a-4fdf-8dca-a033c0c614dc",
+    "codigo": "04.04.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "18671.6454554709265039035"
+  },
+  {
+    "itemId": "472f8654-3639-46b0-9424-3c32f1f94c2d",
+    "codigo": "04.05.01",
+    "unidade": "tkm",
+    "preco": "1.019",
+    "valor": "45666.55883352928385"
+  },
+  {
+    "itemId": "2372d217-98b3-4716-aa65-566d39b29476",
+    "codigo": "04.05.02",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "676664.24272994859242"
+  },
+  {
+    "itemId": "473a3e0b-42c4-4122-b530-fe4f3d5351b9",
+    "codigo": "05.01",
+    "unidade": "m²",
+    "preco": "0.6832",
+    "valor": "0"
+  },
+  {
+    "itemId": "b2cdd51b-497a-41ab-928d-4e26c5488af6",
+    "codigo": "05.02",
+    "unidade": "m²",
+    "preco": "0.6369",
+    "valor": "0"
+  },
+  {
+    "itemId": "41afad09-6509-4d6a-b317-e5bde894d66b",
+    "codigo": "05.03",
+    "unidade": "m³",
+    "preco": "3.4045",
+    "valor": "0"
+  },
+  {
+    "itemId": "01c93300-aeb7-4a96-a186-1c69cff4caae",
+    "codigo": "05.04",
+    "unidade": "m³",
+    "preco": "6.589",
+    "valor": "0"
+  },
+  {
+    "itemId": "3d017f47-4cc3-4bd2-b86a-8eb414bfdb68",
+    "codigo": "05.05",
+    "unidade": "m³",
+    "preco": "11.441",
+    "valor": "0"
+  },
+  {
+    "itemId": "c7a42b3b-349d-4830-b39b-8c0f09d22b61",
+    "codigo": "05.06",
+    "unidade": "m³",
+    "preco": "1.6559",
+    "valor": "0"
+  },
+  {
+    "itemId": "3170f23d-f566-4af7-a839-e2178b6928a9",
+    "codigo": "05.07",
+    "unidade": "m³",
+    "preco": "6.1026",
+    "valor": "0"
+  },
+  {
+    "itemId": "13dcd38d-e3f5-4d76-895c-e3b1cbf210f2",
+    "codigo": "05.08",
+    "unidade": "m³",
+    "preco": "7.0059",
+    "valor": "0"
+  },
+  {
+    "itemId": "727ac43d-da1d-4791-87bd-be104162d187",
+    "codigo": "05.09",
+    "unidade": "m³",
+    "preco": "580.8643",
+    "valor": "0"
+  },
+  {
+    "itemId": "6017d49b-48cc-4d97-97e8-6dca48e2b571",
+    "codigo": "05.10",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "8e798aa8-1266-4932-8ae2-05707b200660",
+    "codigo": "05.10.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "d417b4cf-25e7-4995-9efc-952dc23960e0",
+    "codigo": "05.10.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "0fc88d47-5965-4823-b7ef-f2655b181e05",
+    "codigo": "05.11",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "ead187d3-03c1-4ace-bcdc-5f92fa7ee023",
+    "codigo": "05.11.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "a00017db-d0eb-4039-9de2-327f672f2f59",
+    "codigo": "05.11.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "797a50cc-6565-440e-b985-ceaee56ac6e4",
+    "codigo": "05.12",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "0"
+  },
+  {
+    "itemId": "493cba57-cf22-4b2a-a581-4150431f1f93",
+    "codigo": "05.12.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "b1dd5592-f137-4e1e-a083-01aaffa1066a",
+    "codigo": "05.12.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "47cfb84d-0066-417d-a125-76ebff3f7a03",
+    "codigo": "05.12.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "4a1d7e98-442b-4c16-ae96-319bcefab7f2",
+    "codigo": "05.13",
+    "unidade": "m",
+    "preco": "304.6003",
+    "valor": "0"
+  },
+  {
+    "itemId": "f1ea8e4f-3457-4845-84d8-6d2dc18a0458",
+    "codigo": "05.14",
+    "unidade": "m",
+    "preco": "483.2218",
+    "valor": "0"
+  },
+  {
+    "itemId": "4ae74355-96f0-4cef-8f0b-7afda598304d",
+    "codigo": "05.15",
+    "unidade": "m",
+    "preco": "679.8618",
+    "valor": "0"
+  },
+  {
+    "itemId": "ef287eab-bbe9-4654-97d3-0294d064e924",
+    "codigo": "05.16",
+    "unidade": "m",
+    "preco": "75.8721",
+    "valor": "0"
+  },
+  {
+    "itemId": "303a678d-acd4-4832-a30d-f5fc71d5d64e",
+    "codigo": "05.17",
+    "unidade": "m",
+    "preco": "3335.26",
+    "valor": "0"
+  },
+  {
+    "itemId": "eacc2b3f-033c-4302-a65e-037391ec9189",
+    "codigo": "05.18",
+    "unidade": "un",
+    "preco": "23990.0544",
+    "valor": "0"
+  },
+  {
+    "itemId": "8c1e6cb1-420a-4821-94da-60b009dcd2cc",
+    "codigo": "05.19",
+    "unidade": "m³",
+    "preco": "212.3887",
+    "valor": "0"
+  },
+  {
+    "itemId": "20ed4668-6847-4817-8bb5-b16cc74dddbc",
+    "codigo": "05.21",
+    "unidade": "m³",
+    "preco": "5.7205",
+    "valor": "0"
+  },
+  {
+    "itemId": "8e5cd33e-088e-4f2f-893c-075460b9f1a4",
+    "codigo": "05.22",
+    "unidade": "m³",
+    "preco": "14.3939",
+    "valor": "0"
+  },
+  {
+    "itemId": "faf80aca-e32b-4d2d-ae19-478db8efa8aa",
+    "codigo": "05.23",
+    "unidade": "m³",
+    "preco": "489.1276",
+    "valor": "0"
+  },
+  {
+    "itemId": "9ea6f38b-d3e7-4891-b7a2-ac44494baf4a",
+    "codigo": "05.24",
+    "unidade": "m³",
+    "preco": "418.0032",
+    "valor": "0"
+  },
+  {
+    "itemId": "9a48893e-f6a6-41bc-b931-7e84c44e5ce1",
+    "codigo": "05.25",
+    "unidade": "m³",
+    "preco": "460.1313",
+    "valor": "0"
+  },
+  {
+    "itemId": "09b5ac64-7350-4806-ba40-40c5883a1b34",
+    "codigo": "05.26.01",
+    "unidade": "tkm",
+    "preco": "0.9958",
+    "valor": "0"
+  },
+  {
+    "itemId": "745d741f-5d8e-4ec2-8520-47f84e7f6627",
+    "codigo": "05.26.02",
+    "unidade": "tkm",
+    "preco": "1.019",
+    "valor": "0"
+  },
+  {
+    "itemId": "25115743-2346-4035-9015-f75adc0fb186",
+    "codigo": "05.26.04",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "0"
+  },
+  {
+    "itemId": "a2b6eea1-272e-4d3b-8a52-9f567083a79e",
+    "codigo": "05.26.05",
+    "unidade": "tkm",
+    "preco": "0.88",
+    "valor": "0"
+  },
+  {
+    "itemId": "27b1e363-7bd5-414a-9087-5128bc63487f",
+    "codigo": "05.26.06",
+    "unidade": "tkm",
+    "preco": "0.8569",
+    "valor": "0"
+  },
+  {
+    "itemId": "b3105dc8-854e-41fa-a341-7521a8d6b979",
+    "codigo": "06.01",
+    "unidade": "m²",
+    "preco": "0.4516",
+    "valor": "0"
+  },
+  {
+    "itemId": "376daa98-a7d4-4d97-87db-7b1b9b92976e",
+    "codigo": "06.01.01",
+    "unidade": "t",
+    "preco": "8560.3077",
+    "valor": "0"
+  },
+  {
+    "itemId": "dad1600d-2ce9-45f2-9c48-b99f8a68db6c",
+    "codigo": "06.01.02",
+    "unidade": "t",
+    "preco": "1443.1059",
+    "valor": "0"
+  },
+  {
+    "itemId": "17a55755-7b08-45d4-9774-9d036aa8ba3b",
+    "codigo": "06.02",
+    "unidade": "m²",
+    "preco": "0.3358",
+    "valor": "0"
+  },
+  {
+    "itemId": "1a59b010-9536-4366-b83e-63d2fea2680f",
+    "codigo": "06.02.01",
+    "unidade": "t",
+    "preco": "3771.4474",
+    "valor": "0"
+  },
+  {
+    "itemId": "63e8a222-9a13-4d57-8b03-5e48701e5094",
+    "codigo": "06.02.02",
+    "unidade": "t",
+    "preco": "2489.9519",
+    "valor": "0"
+  },
+  {
+    "itemId": "261e91cf-b05e-4e41-bf80-4ae80816d69c",
+    "codigo": "06.03",
+    "unidade": "t",
+    "preco": "338.2865",
+    "valor": "0"
+  },
+  {
+    "itemId": "c62b09bf-9934-43e9-8c4c-1a97aa1d209f",
+    "codigo": "06.03.01",
+    "unidade": "l",
+    "preco": "44.3672",
+    "valor": "0"
+  },
+  {
+    "itemId": "327e139e-a592-43f7-89e7-8ea1c799ba0a",
+    "codigo": "06.03.02",
+    "unidade": "t",
+    "preco": "5641.7149",
+    "valor": "0"
+  },
+  {
+    "itemId": "69578ecd-8e5e-41d1-b425-a93142ecbf11",
+    "codigo": "06.03.03",
+    "unidade": "t",
+    "preco": "2496.5651",
+    "valor": "0"
+  },
+  {
+    "itemId": "87a78fe8-a65b-4676-a939-1a5161895946",
+    "codigo": "06.04.01",
+    "unidade": "tkm",
+    "preco": "1.019",
+    "valor": "0"
+  },
+  {
+    "itemId": "82bc7aab-d3f6-4d38-a4bf-01ad67107755",
+    "codigo": "06.04.02",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "0"
+  },
+  {
+    "itemId": "6cf2f307-42d1-4eda-969b-c508fdf02767",
+    "codigo": "07.01",
+    "unidade": "m²",
+    "preco": "959.3411",
+    "valor": "0"
+  },
+  {
+    "itemId": "a526c1c1-2628-4ace-9350-9afe7eb7a0c4",
+    "codigo": "07.01.01",
+    "unidade": "m²",
+    "preco": "275.7188",
+    "valor": "0"
+  },
+  {
+    "itemId": "2d276d24-6f5d-4697-88eb-db8c0155c9f5",
+    "codigo": "07.02",
+    "unidade": "un",
+    "preco": "659996.6468000001",
+    "valor": "3959.9798808000006"
+  },
+  {
+    "itemId": "153f29c8-7f55-4078-b1a5-1d089e33e10f",
+    "codigo": "07.03",
+    "unidade": "un",
+    "preco": "279283.545",
+    "valor": "0"
+  },
+  {
+    "itemId": "27631a1d-1d47-4af9-8f23-2541b08a814d",
+    "codigo": "07.04",
+    "unidade": "un",
+    "preco": "167564.8928",
+    "valor": "0"
+  },
+  {
+    "itemId": "dc84f2cf-e9dc-4626-8618-71666f5b80dc",
+    "codigo": "07.05.01",
+    "unidade": "tkm",
+    "preco": "0.9958",
+    "valor": "0"
+  },
+  {
+    "itemId": "5e9665c0-8bad-442c-a0ec-ecbfbf2982eb",
+    "codigo": "07.05.04",
+    "unidade": "tkm",
+    "preco": "0.7063",
+    "valor": "0"
+  },
+  {
+    "itemId": "cb4416d8-e4e2-417e-8eb5-8eb53b9b4193",
+    "codigo": "08.01",
+    "unidade": "%",
+    "preco": "6083764.6",
+    "valor": "63634.6076073624594873412"
+  }
+]

@@ -4,7 +4,11 @@ export type TipoAlerta =
   | "acumulado_acima_previsto"
   | "prazo_perto_do_fim"
   | "valor_perto_do_previsto"
-  | "valor_contrato_diferente";
+  | "valor_contrato_diferente"
+  /** Fase 6: medição aprovada depois do aniversário da data-base sem relatório de reajuste. */
+  | "medicao_sem_reajuste"
+  /** Fase 6: o relatório de reajuste que vale na medição está com índices provisórios. */
+  | "reajuste_provisorio";
 
 export type GravidadeAlerta = "alta" | "media" | "baixa";
 

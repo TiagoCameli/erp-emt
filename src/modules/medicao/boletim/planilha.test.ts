@@ -26,6 +26,7 @@ function linha(
     id, ordem, codigo, pai_id, nivel: codigo.split(".").length, descricao: `Serviço número ${ordem}`,
     unidade: tipo === "servico" ? "m3" : null, tipo, item_id: `i${id}`, preco_unitario: preco, quantidade_prevista: qtd,
     qtds, previsto, valor_medicao: valor, acumulado, saldo, pct_executado: pct, pct_a_medir: pctAMedir,
+    reajuste_medicao: "0", reajuste_acumulado: "0",
   };
 }
 
@@ -35,8 +36,8 @@ function boletimK(over: Partial<Boletim> = {}): Boletim {
     versao: { id: "v0", numero: 0, vigente_desde: "2026-01-01" },
     ate: 2,
     medicoes: [
-      { id: "m1", numero: 1, periodo_inicio: "2026-01-01", periodo_fim: "2026-01-31", status: "aberta", valor: "50.51" },
-      { id: "m2", numero: 2, periodo_inicio: "2026-02-01", periodo_fim: "2026-02-28", status: "aberta", valor: "10.51" },
+      { id: "m1", numero: 1, periodo_inicio: "2026-01-01", periodo_fim: "2026-01-31", status: "aberta", valor: "50.51", reajuste: null, reajuste_situacao: null },
+      { id: "m2", numero: 2, periodo_inicio: "2026-02-01", periodo_fim: "2026-02-28", status: "aberta", valor: "10.51", reajuste: null, reajuste_situacao: null },
     ],
     linhas: [
       linha("1", 1, "01", null, "titulo", null, null, {}, "22.02", "10.51", "11.01", "11.01", "0.5000", "0.5000"),
@@ -51,6 +52,7 @@ function boletimK(over: Partial<Boletim> = {}): Boletim {
     total: {
       previsto: "123.02", valor_medicao: "10.51", acumulado: "61.01", saldo: "62.01",
       pct_executado: "0.49593561981791578605", pct_a_medir: "0.50406438018208421395",
+      reajuste_medicao: "0", reajuste_acumulado: "0",
     },
     ...over,
   };
@@ -130,6 +132,7 @@ describe("montarPlanilhaBoletim, arquivo relido", () => {
       "1ª Medição", "2ª Medição",
       "Valor (R$) Executado na 2ª Medição", "Valor (R$) Executado Acumulado", "Porcentagem Executada (%)",
       "Saldo a Medir (R$)", "Porcentagem a Medir (%)",
+      "Reajuste na 2ª", "Reajuste acumulado",
     ]);
   });
 
@@ -138,7 +141,7 @@ describe("montarPlanilhaBoletim, arquivo relido", () => {
     expect(cabecalhos(aba)).toContain("1ª Medição");
     expect(cabecalhos(aba)).not.toContain("2ª Medição");
     expect(cabecalhos(aba)).toContain("Valor (R$) Executado na 1ª Medição");
-    expect(cabecalhos(aba)).toHaveLength(COLUNAS_FIXAS_BOLETIM + 1 + 5);
+    expect(cabecalhos(aba)).toHaveLength(COLUNAS_FIXAS_BOLETIM + 1 + 7);
     expect(aba.getRow(LINHAS_CABECALHO_MARCA + 1).getCell(1).value).toContain("Até a 1ª medição (01/01 a 31/01/2026)");
   });
 
@@ -227,8 +230,8 @@ describe("montarPlanilhaBoletim, arquivo relido", () => {
 
   it("sem regra de arredondamento: dinheiro e % em branco, quantidades continuam", async () => {
     const b = boletimK({ contrato: { ...boletimK().contrato, regra_arredondamento: null } });
-    b.linhas = b.linhas.map((l) => ({ ...l, previsto: null, valor_medicao: null, acumulado: null, saldo: null, pct_executado: null, pct_a_medir: null }));
-    b.total = { previsto: null, valor_medicao: null, acumulado: null, saldo: null, pct_executado: null, pct_a_medir: null };
+    b.linhas = b.linhas.map((l) => ({ ...l, previsto: null, valor_medicao: null, acumulado: null, saldo: null, pct_executado: null, pct_a_medir: null, reajuste_medicao: null, reajuste_acumulado: null }));
+    b.total = { previsto: null, valor_medicao: null, acumulado: null, saldo: null, pct_executado: null, pct_a_medir: null, reajuste_medicao: null, reajuste_acumulado: null };
     const aba = await relerPlanilha(b);
     const r = linhaDoCodigo(aba, "01.01");
     expect(r.getCell(coluna(aba, "Valor (R$) Previsto Total")).value).toBeNull();
@@ -253,7 +256,7 @@ describe("montarPlanilhaBoletim, arquivo relido", () => {
   it("itens fora da versão vêm depois do total, sob o título do bloco", async () => {
     const b = boletimK({
       fora_da_versao: [
-        { item_id: "x", codigo: "03.01", descricao: "Serviço que saiu no aditivo", unidade: "m2", qtds: { "2": "4" }, valor_medicao: "8.00", acumulado: "8.00" },
+        { item_id: "x", codigo: "03.01", descricao: "Serviço que saiu no aditivo", unidade: "m2", qtds: { "2": "4" }, valor_medicao: "8.00", acumulado: "8.00", reajuste_medicao: "1.25", reajuste_acumulado: "3.75" },
       ],
     });
     const aba = await relerPlanilha(b);
@@ -271,17 +274,73 @@ describe("montarPlanilhaBoletim, arquivo relido", () => {
     expect(item.getCell(coluna(aba, "Valor (R$) Executado na 2ª Medição")).value).toBe(8);
     expect(item.getCell(coluna(aba, "Valor (R$) Executado Acumulado")).value).toBe(8);
     expect(item.getCell(coluna(aba, "Valor (R$) Previsto Total")).value).toBeNull();
+    expect(item.getCell(coluna(aba, "Reajuste na 2ª")).value).toBe(1.25);
+    expect(item.getCell(coluna(aba, "Reajuste acumulado")).value).toBe(3.75);
   });
 
   it("contrato sem medição: nenhuma coluna de medição e contexto sem Nª", async () => {
     const b = boletimK({ ate: null, medicoes: [] });
     b.linhas = b.linhas.map((l) => ({ ...l, qtds: {}, valor_medicao: null, acumulado: "0.00" }));
     const aba = await relerPlanilha(b);
-    expect(cabecalhos(aba)).toHaveLength(COLUNAS_FIXAS_BOLETIM + 5);
+    expect(cabecalhos(aba)).toHaveLength(COLUNAS_FIXAS_BOLETIM + 7);
     expect(cabecalhos(aba)).toContain("Valor (R$) Executado na Medição");
+    expect(cabecalhos(aba)).toContain("Reajuste na medição");
     expect(aba.getRow(LINHAS_CABECALHO_MARCA + 1).getCell(1).value).toBe(
       "Contrato K · CT 1/2026 · Obra K · Sem medição · Planilha v0",
     );
+  });
+});
+
+describe("montarPlanilhaBoletim, reajuste (Fase 6)", () => {
+  /** L09 até a 4ª com o SIAC da 4ª: grupo 04 = -48.781,32 e total -40.021,28 (prova 6h). */
+  function boletimL09(): Boletim {
+    const b = boletimK({ ate: 4 });
+    b.medicoes = [1, 2, 3, 4].map((n) => ({
+      id: `m${n}`, numero: n, periodo_inicio: "2026-02-01", periodo_fim: "2026-02-28", status: "aprovada", valor: "1.00",
+      reajuste: n === 4 ? "-40021.28" : null, reajuste_situacao: n === 4 ? "definitivo" : null,
+    }));
+    b.linhas = [
+      { ...linha("40", 1, "04", null, "titulo", null, null, {}, "100.00", "10.00", "50.00", "50.00", "0.5", "0.5"), reajuste_medicao: "-48781.32", reajuste_acumulado: "-48781.32" },
+      { ...linha("41", 2, "04.03.02", "40", "servico", "95.54", "10", { "4": "1" }, "100.00", "10.00", "50.00", "50.00", "0.5", "0.5"), reajuste_medicao: "-95030.34", reajuste_acumulado: "-95030.34" },
+    ];
+    b.total = { ...b.total, reajuste_medicao: "-40021.28", reajuste_acumulado: "-40021.28" };
+    return b;
+  }
+
+  it("as duas colunas novas ficam no fim, depois de % a Medir, em formato de dinheiro", async () => {
+    const aba = await relerPlanilha(boletimL09());
+    const titulos = cabecalhos(aba);
+    expect(titulos.slice(-3)).toEqual(["Porcentagem a Medir (%)", "Reajuste na 4ª", "Reajuste acumulado"]);
+    expect(titulos).toHaveLength(COLUNAS_FIXAS_BOLETIM + 4 + 7);
+    const r = linhaDoCodigo(aba, "04");
+    expect(r.getCell(coluna(aba, "Reajuste na 4ª")).value).toBe(-48781.32);
+    expect(r.getCell(coluna(aba, "Reajuste acumulado")).value).toBe(-48781.32);
+    expect(r.getCell(coluna(aba, "Reajuste acumulado")).numFmt).toBe('"R$" #,##0.00');
+    expect(linhaDoCodigo(aba, "04.03.02").getCell(coluna(aba, "Reajuste na 4ª")).value).toBe(-95030.34);
+  });
+
+  it("o total é o do jsonb (-40021.28), não a soma das linhas", async () => {
+    const aba = await relerPlanilha(boletimL09());
+    const total = aba.getRow(linhaDoCabecalho(aba) + 3);
+    expect(total.getCell(1).value).toBe("Total:");
+    expect(total.getCell(coluna(aba, "Reajuste na 4ª")).value).toBe(-40021.28);
+    expect(total.getCell(coluna(aba, "Reajuste acumulado")).value).toBe(-40021.28);
+  });
+
+  it("as colunas antigas continuam no mesmo lugar", async () => {
+    const aba = await relerPlanilha(boletimL09());
+    expect(coluna(aba, "Valor (R$) Executado na 4ª Medição")).toBe(COLUNAS_FIXAS_BOLETIM + 4 + 1);
+    expect(coluna(aba, "Porcentagem a Medir (%)")).toBe(COLUNAS_FIXAS_BOLETIM + 4 + 5);
+  });
+
+  it("contrato sem regra de arredondamento: reajuste nulo vira célula vazia", async () => {
+    const b = boletimL09();
+    b.linhas = b.linhas.map((l) => ({ ...l, reajuste_medicao: null, reajuste_acumulado: null }));
+    b.total = { ...b.total, reajuste_medicao: null, reajuste_acumulado: null };
+    const aba = await relerPlanilha(b);
+    expect(linhaDoCodigo(aba, "04").getCell(coluna(aba, "Reajuste acumulado")).value).toBeNull();
+    const total = aba.getRow(linhaDoCabecalho(aba) + 3);
+    expect(total.getCell(coluna(aba, "Reajuste na 4ª")).value).toBeNull();
   });
 });
 

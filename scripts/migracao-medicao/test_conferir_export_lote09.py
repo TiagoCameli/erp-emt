@@ -138,6 +138,8 @@ CABECALHO_EXPORT = (
     + [f'{n}ª Medição' for n in range(1, MEDICOES + 1)]
     + [f'Valor (R$) Executado na {MEDICOES}ª Medição', 'Valor (R$) Executado Acumulado',
        'Porcentagem Executada (%)', 'Saldo a Medir (R$)', 'Porcentagem a Medir (%)']
+    # Fase 6: o reajuste do DNIT entra no fim; a conferência acha cada coluna pelo título e ignora estas.
+    + [f'Reajuste na {MEDICOES}ª', 'Reajuste acumulado']
 )
 
 
@@ -159,6 +161,7 @@ def montar_exportado(caminho, linhas=LINHAS, total=TOTAL, mexer=None):
                    0 if (l['qtd'] is None and l['preco'] is not None) else l['qtd'], prev]
         valores += [q if q not in (0,) else None for q in l['qtds']]  # 0 da oficial = chave ausente
         valores += [_r2(l['decima']), acum, acum / prev, saldo, saldo / prev]
+        valores += [0, -1.25]  # reajuste na 10ª e acumulado: fora da conferência
         for c, v in enumerate(valores, start=1):
             ws.cell(r, c, v)
         r += 1
@@ -172,6 +175,8 @@ def montar_exportado(caminho, linhas=LINHAS, total=TOTAL, mexer=None):
     ws.cell(r, 6 + MEDICOES + 3, acum / prev)
     ws.cell(r, 6 + MEDICOES + 4, saldo)
     ws.cell(r, 6 + MEDICOES + 5, saldo / prev)
+    ws.cell(r, 6 + MEDICOES + 6, 0)
+    ws.cell(r, 6 + MEDICOES + 7, -40021.28)
     if mexer:
         mexer(ws)
     wb.save(caminho)
