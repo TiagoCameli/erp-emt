@@ -81,6 +81,15 @@ export const LARGURA_FILTRO_MAXIMA = 640;
  */
 export const ID_BUSCA_TABELA = "__busca";
 
+/** Altura mínima da área da tabela redimensionada, em px: cabeçalho e três linhas. */
+export const ALTURA_TABELA_MINIMA = 160;
+
+/** Altura máxima da área da tabela, em px. */
+export const ALTURA_TABELA_MAXIMA = 4000;
+
+/** Largura mínima da tabela, em % do espaço da tela. */
+export const LARGURA_TABELA_MINIMA = 20;
+
 export interface PreferenciasTabela {
   versao: number;
   /** id da coluna -> visível. Coluna ausente segue o padrão definido na tela. */
@@ -113,6 +122,13 @@ export interface PreferenciasTabela {
   ordemFiltros: string[];
   /** id do filtro -> largura em px. Ausente = a largura do trilho do filtro. */
   largurasFiltros: Record<string, number>;
+  /**
+   * Altura da área da tabela, em px, com rolagem própria e cabeçalho fixo.
+   * `null` = a da tela. Campo que só acrescenta, sem versão nova.
+   */
+  alturaTabela: number | null;
+  /** Largura da tabela em % do espaço. `null` = a largura toda. */
+  larguraTabela: number | null;
 }
 
 /** Preferência neutra: nada escondido, nada reordenado, nada redimensionado. */
@@ -128,6 +144,8 @@ export function preferenciasVazias(): PreferenciasTabela {
     pesoCabecalho: null,
     ordemFiltros: [],
     largurasFiltros: {},
+    alturaTabela: null,
+    larguraTabela: null,
   };
 }
 
@@ -264,7 +282,16 @@ export function lerPreferenciasTabela(
       LARGURA_FILTRO_MINIMA,
       LARGURA_FILTRO_MAXIMA,
     ),
+    alturaTabela: saneiaNumero(dados.alturaTabela, ALTURA_TABELA_MINIMA, ALTURA_TABELA_MAXIMA),
+    larguraTabela: saneiaNumero(dados.larguraTabela, LARGURA_TABELA_MINIMA, 100, 2),
   };
+}
+
+/** Número travado entre os limites, ou `null` (o padrão da tela) se não servir. */
+function saneiaNumero(bruto: unknown, minimo: number, maximo: number, casas = 0): number | null {
+  if (typeof bruto !== "number" || !Number.isFinite(bruto)) return null;
+  const fator = 10 ** casas;
+  return Math.round(Math.min(maximo, Math.max(minimo, bruto)) * fator) / fator;
 }
 
 /** Serializa para gravar. */
