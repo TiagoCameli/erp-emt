@@ -2,7 +2,7 @@ import "server-only";
 
 import { getDocumentProxy } from "unpdf";
 
-import type { PedacoTexto } from "./ler-relatorio";
+import { ErroRelatorioSiac, type PedacoTexto } from "./ler-relatorio";
 
 /**
  * Texto do PDF com a posição de cada pedaço, página a página (unpdf = pdf.js para servidor, roda na
@@ -11,6 +11,23 @@ import type { PedacoTexto } from "./ler-relatorio";
  * alguns pedaços (a sigla da tabela de índices sai duas vezes): o repetido no mesmo lugar é descartado.
  */
 export async function extrairTextoPdf(bytes: Uint8Array): Promise<PedacoTexto[][]> {
+  try {
+    return await extrair(bytes);
+  } catch (e) {
+    throw traduzirErroPdf(e);
+  }
+}
+
+/** Erro do pdf.js (em inglês) vira ErroRelatorioSiac em pt-BR. */
+export function traduzirErroPdf(e: unknown): ErroRelatorioSiac {
+  if (e instanceof ErroRelatorioSiac) return e;
+  if (e instanceof Error && e.name === "PasswordException") {
+    return new ErroRelatorioSiac("O PDF está protegido por senha; envie o relatório sem senha.");
+  }
+  return new ErroRelatorioSiac("O arquivo não é um PDF válido ou está corrompido.");
+}
+
+async function extrair(bytes: Uint8Array): Promise<PedacoTexto[][]> {
   const pdf = await getDocumentProxy(bytes);
   try {
     const paginas: PedacoTexto[][] = [];

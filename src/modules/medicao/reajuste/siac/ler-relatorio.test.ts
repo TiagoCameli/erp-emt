@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { extrairTextoPdf } from "./extrair";
+import { extrairTextoPdf, traduzirErroPdf } from "./extrair";
 import { conferirRelatorio, ErroRelatorioSiac, lerRelatorioSiac, numeroSiac, type PedacoTexto, type RelatorioSiac } from "./ler-relatorio";
 
 /** PDF real do SIAC: 4ª medição do L09 (CT 00615/2025), processado em 19/03/2026. */
@@ -162,5 +162,30 @@ describe("numeroSiac e recusas", () => {
     expect(() => lerRelatorioSiac([[{ texto: "NOTA FISCAL", x: 30, y: 30 }]])).toThrow(
       "A página 1 não tem a tabela do Resumo da Medição. Este PDF é o relatório SIAC?",
     );
+  });
+});
+
+describe("PDF ilegível e páginas sem tabela", () => {
+  it("troca o erro do pdf.js por mensagem em pt-BR", async () => {
+    const bytes = new Uint8Array(await readFile(PDF));
+    await expect(extrairTextoPdf(bytes.slice(0, 5000))).rejects.toThrow("O arquivo não é um PDF válido ou está corrompido.");
+    await expect(extrairTextoPdf(new Uint8Array([1, 2, 3, 4]))).rejects.toBeInstanceOf(ErroRelatorioSiac);
+    const senha = Object.assign(new Error("No password given"), { name: "PasswordException" });
+    expect(traduzirErroPdf(senha).message).toBe("O PDF está protegido por senha; envie o relatório sem senha.");
+  });
+
+  it("ignora página em branco e lê a SOMA que veio sozinha na última página", () => {
+    const linhaSoma = (p: PedacoTexto[]) => p.filter((x) => Math.abs(x.y - ySoma(p)) <= 2.5);
+    const ySoma = (p: PedacoTexto[]) => p.find((x) => x.texto === "SOMA")!.y;
+    const ultima = paginas[paginas.length - 1];
+    const soma = linhaSoma(ultima);
+    const semSoma = ultima.filter((x) => !soma.includes(x));
+    const sozinha = soma.map((x) => ({ ...x, y: 100 }));
+    const base = paginas.slice(0, -1);
+    const esperado = lerRelatorioSiac(paginas);
+
+    expect(lerRelatorioSiac([...paginas, []])).toEqual(esperado);
+    expect(lerRelatorioSiac([...base, semSoma, sozinha])).toEqual(esperado);
+    expect(lerRelatorioSiac([...base, semSoma, [], sozinha])).toEqual(esperado);
   });
 });

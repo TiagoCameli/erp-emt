@@ -138,16 +138,27 @@ export function lerRelatorioSiac(paginas: PedacoTexto[][]): RelatorioSiac {
   let grupo: GrupoSiac | null = null;
   let ultima: LinhaSiac | null = null;
   let somaFinal: SomaSiac | null = null;
+  let temTabela = false;
 
   paginas.forEach((pedacos, p) => {
     const ls = agruparLinhas(pedacos);
     const inicio = ls.findIndex((l) => l.pedacos.some((x) => x.texto === "Serviço"));
-    if (inicio < 0) throw new ErroRelatorioSiac(`A página ${p + 1} não tem a tabela do Resumo da Medição. Este PDF é o relatório SIAC?`);
+    if (inicio < 0) {
+      // Página sem a tabela (em branco ou só com a SOMA): não tem linha de serviço, mas SUBTOTAL e SOMA valem.
+      for (const l of ls) {
+        const t = l.pedacos.map((x) => x.texto);
+        if (t[0] === "SUBTOTAL" && grupo) grupo.subtotal = soma(t.slice(1), `SUBTOTAL do grupo ${grupo.grupo}`);
+        if (t[0] === "SOMA") somaFinal = soma(t.slice(1), "SOMA");
+      }
+      return;
+    }
+    const primeiraComTabela = !temTabela;
+    temTabela = true;
 
     for (const l of ls.slice(0, inicio)) {
       const t = l.pedacos.map((x) => x.texto);
       for (let k = 0; k < t.length; k++) {
-        if (p === 0) {
+        if (primeiraComTabela) {
           if (t[k] === "CONTRATO:") cab.contratoTexto = t[k + 1];
           if (t[k] === "Data Base:") cab.dataBase = dataIso(t[k + 1]);
           if (t[k] === "Processado") cab.processadoEm = dataIso(t[k + 1]);
@@ -226,6 +237,7 @@ export function lerRelatorioSiac(paginas: PedacoTexto[][]): RelatorioSiac {
     }
   });
 
+  if (!temTabela) throw new ErroRelatorioSiac("A página 1 não tem a tabela do Resumo da Medição. Este PDF é o relatório SIAC?");
   if (!cab.contratoTexto || !cab.medicaoNumero || !cab.situacao || !cab.periodoInicio || !cab.periodoFim || !cab.dataBase) {
     throw new ErroRelatorioSiac("Cabeçalho do relatório incompleto: contrato, medição, situação dos índices, período ou data-base");
   }
