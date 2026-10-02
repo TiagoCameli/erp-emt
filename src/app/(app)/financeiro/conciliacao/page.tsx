@@ -50,6 +50,10 @@ export default async function PaginaConciliacao({
       (temPermissao(usuario, "financeiro.lancamentos", "criar") ||
         temPermissao(usuario, "financeiro.recebimentos", "criar")),
     transferir: conciliar && temPermissao(usuario, "financeiro.transferencias", "criar"),
+    mexerNoPago:
+      conciliar &&
+      (temPermissao(usuario, "financeiro.pagamentos", "criar") ||
+        temPermissao(usuario, "financeiro.recebimentos", "editar")),
     excluir: conciliar && temPermissao(usuario, "financeiro.lancamentos", "excluir"),
   };
 

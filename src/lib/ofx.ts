@@ -91,6 +91,29 @@ export function conferirMesFechado(
   return null;
 }
 
+/**
+ * Converte os bytes do arquivo em texto respeitando o charset que o OFX declara.
+ *
+ * O BB manda OFX 1.x com `CHARSET:1252` (Windows-1252). Lido como UTF-8, todo
+ * acento do histórico vira "�": "BB RENDE F�CIL", "TRANSFER�NCIA RECEBIDA" (foi
+ * assim que os extratos importados até 02/10/2026 ficaram gravados). Regra:
+ * cabeçalho dizendo 1252/ISO-8859-1 decodifica assim; sem declaração, tenta
+ * UTF-8 estrito e, se o arquivo não for UTF-8 válido, cai para Windows-1252.
+ */
+export function decodificarOfx(bytes: ArrayBuffer | Uint8Array): string {
+  const dados = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const cabecalho = new TextDecoder("latin1").decode(dados.subarray(0, 600));
+  const declarado =
+    /CHARSET:\s*(1252|ISO-?8859-?1|WINDOWS-?1252)/i.test(cabecalho) ||
+    /encoding=["']?(windows-1252|iso-8859-1)/i.test(cabecalho);
+  if (declarado) return new TextDecoder("windows-1252").decode(dados);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(dados);
+  } catch {
+    return new TextDecoder("windows-1252").decode(dados);
+  }
+}
+
 /** Extrai o conteúdo de uma tag OFX (SGML ou XML): valor até a próxima tag. */
 function campo(bloco: string, tag: string): string | null {
   const re = new RegExp(`<${tag}>\\s*([^<\\r\\n]+)`, "i");

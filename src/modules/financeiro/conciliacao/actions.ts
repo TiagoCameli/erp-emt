@@ -6,7 +6,12 @@ import { z } from "zod";
 import type { Json } from "@/lib/database.types";
 import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
-import { contaDoArquivoConfere, conferirMesFechado, parseOfx } from "@/lib/ofx";
+import {
+  contaDoArquivoConfere,
+  conferirMesFechado,
+  decodificarOfx,
+  parseOfx,
+} from "@/lib/ofx";
 import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { casarAutomaticamente } from "@/modules/financeiro/conciliacao/casamento";
@@ -126,7 +131,7 @@ export async function importarOfx(
 
   let texto: string;
   try {
-    texto = await arquivo.text();
+    texto = decodificarOfx(await arquivo.arrayBuffer());
   } catch (e) {
     return erroAcao(
       "financeiro.conciliacao.importarOfx",

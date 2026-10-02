@@ -74,6 +74,8 @@ export interface PermissoesConciliacao {
   conciliar: boolean;
   lancar: boolean;
   transferir: boolean;
+  /** Mudar conta ou valor de pagamento já registrado (pagamentos/recebimentos). */
+  mexerNoPago: boolean;
   excluir: boolean;
 }
 
@@ -224,16 +226,16 @@ export function ConciliacaoCliente({
           onValorChange={(valor) => valor && trocarConta_(valor)}
           opcoes={contasConciliaveis.map((c) => ({ valor: c.id, rotulo: c.nome }))}
           placeholder="Conta"
-          className="max-w-72"
+          className="max-w-72 max-md:max-w-full max-md:basis-full"
         />
         <FiltroSelect
           valor={mes}
           onValorChange={(valor) => valor && trocarMes(valor)}
           opcoes={meses.map((m) => ({ valor: m, rotulo: formatarMesAno(`${m}-01`) }))}
           placeholder="Mês"
-          className="max-w-48"
+          className="max-w-48 max-md:max-w-full max-md:basis-full"
         />
-        <div className="ml-auto flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 md:ml-auto">
           {permissoes.conciliar && paresAutomaticos.length > 0 ? (
             <Button type="button" size="sm" onClick={() => void rodarAutomatico()} disabled={casando}>
               {casando ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
@@ -512,17 +514,17 @@ function TabelaFaltam({
           const t = row.original;
           const aplicacao = pareceAplicacaoAutomatica(t.memo);
           return (
-            <div className="flex justify-end gap-1">
+            <div className="flex flex-wrap justify-end gap-1">
               {permissoes.conciliar ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => onCasar(t.id)}>
+                <Button type="button" size="sm" variant="outline" onClick={() => onCasar(t.id)} title="Casar">
                   <Link2 />
-                  Casar
+                  <span className="max-md:sr-only">Casar</span>
                 </Button>
               ) : null}
               {permissoes.conciliar && permissoes.lancar && !aplicacao ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => onLancar([t.id])}>
+                <Button type="button" size="sm" variant="outline" onClick={() => onLancar([t.id])} title="Lançar">
                   <FilePlus2 />
-                  Lançar
+                  <span className="max-md:sr-only">Lançar</span>
                 </Button>
               ) : null}
               {permissoes.conciliar && permissoes.transferir ? (
@@ -535,7 +537,7 @@ function TabelaFaltam({
                   title="Lançar como transferência"
                 >
                   <ArrowLeftRight />
-                  {aplicacao ? "Transferência" : null}
+                  {aplicacao ? <span className="max-md:sr-only">Transferência</span> : null}
                 </Button>
               ) : null}
             </div>
@@ -740,16 +742,23 @@ function TabelaForaDoBanco({
           }
           if (!permissoes.conciliar) return null;
           const manual = item.parcela.origem === "manual";
+          const umaParcela = item.parcela.qtdParcelas <= 1;
           return (
-            <div className="flex justify-end gap-1">
-              <Button type="button" size="sm" variant="outline" onClick={() => onTrocarConta(item.parcela)}>
-                <Pencil />
-                Mudar conta
-              </Button>
-              {permissoes.excluir && manual ? (
-                <Button type="button" size="sm" variant="ghost" onClick={() => onExcluir(item.parcela)}>
+            <div className="flex flex-wrap justify-end gap-1">
+              {permissoes.mexerNoPago ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => onTrocarConta(item.parcela)} title="Mudar conta">
+                  <Pencil />
+                  <span className="max-md:sr-only">Mudar conta</span>
+                </Button>
+              ) : null}
+              {!umaParcela ? (
+                <span className="self-center text-legenda text-muted-foreground">
+                  Parcela {item.parcela.numeroParcela}/{item.parcela.qtdParcelas}: corrija em Lançamentos
+                </span>
+              ) : permissoes.excluir && manual ? (
+                <Button type="button" size="sm" variant="ghost" onClick={() => onExcluir(item.parcela)} title="Excluir">
                   <Trash2 />
-                  Excluir
+                  <span className="max-md:sr-only">Excluir</span>
                 </Button>
               ) : !manual ? (
                 <span className="self-center text-legenda text-muted-foreground">Exclui na origem</span>
@@ -864,9 +873,9 @@ function TabelaCasados({
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) =>
           permissoes.conciliar ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => onDesfazer(row.original)}>
+            <Button type="button" size="sm" variant="ghost" onClick={() => onDesfazer(row.original)} title="Desfazer">
               <X />
-              Desfazer
+              <span className="max-md:sr-only">Desfazer</span>
             </Button>
           ) : null,
       },

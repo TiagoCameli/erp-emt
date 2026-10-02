@@ -112,7 +112,8 @@ export function CasarDialog({
         const alvo = `${tituloCandidato(c)} ${detalheCandidato(c)} ${formatarBRL(c.valor)}`.toLowerCase();
         return alvo.includes(texto);
       }),
-      { janelaDias: 400, janelaAbertaDias: 400, tolerancia: Number.POSITIVE_INFINITY },
+      // A diferença continua limitada a R$ 1,00: o banco recusa mais que isso.
+      { janelaDias: 400, janelaAbertaDias: 400 },
     ).slice(0, 50);
   }, [transacao, candidatos, busca]);
 

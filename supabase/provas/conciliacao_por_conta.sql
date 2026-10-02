@@ -136,6 +136,36 @@ begin
   end if;
   raise notice 'OK 5 aberta: baixa em 01/10 no BB, lancamento pago';
 
+  -- 5b. Controles das travas: a pagar nao aprovada nao baixa; diferenca acima
+  -- de R$ 1,00 nao casa nem com ajuste; lancamento de varias parcelas nao se
+  -- exclui por aqui.
+  perform public.fn_desconciliar_transacao(t_aberta);
+  update public.lancamento_parcelas set status = 'pendente', data_pagamento = null, pago_por = null, pago_em = null where id = v_aberta_parc;
+  begin
+    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, false);
+    raise exception 'FALHA 5b: deu baixa em parcela a pagar nao aprovada';
+  exception when others then
+    if sqlerrm like 'FALHA%' then raise; end if;
+  end;
+  begin
+    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_parc2, false, true);
+    raise exception 'FALHA 5b: casou com diferenca acima de R$ 1,00';
+  exception when others then
+    if sqlerrm like 'FALHA%' then raise; end if;
+  end;
+  insert into public.lancamento_parcelas (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id)
+  values (v_lanc2, 2, 1, v_dia, 'pendente', v_bb);
+  begin
+    perform public.fn_conciliacao_excluir_lancamento(v_parc2, 'prova');
+    raise exception 'FALHA 5b: excluiu lancamento de duas parcelas';
+  exception when others then
+    if sqlerrm like 'FALHA%' then raise; end if;
+  end;
+  delete from public.lancamento_parcelas where lancamento_id = v_lanc2 and numero_parcela = 2;
+  update public.lancamento_parcelas set status = 'aprovado', data_programada = v_dia where id = v_aberta_parc;
+  perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, false);
+  raise notice 'OK 5b travas: nao aprovada, diferenca grande e varias parcelas recusadas';
+
   -- 6. Transferencia: debito do BB para a Caixa.
   v_trf := public.fn_conciliacao_lancar_transferencia(t_trf, v_caixa, null, null);
   if not exists (select 1 from public.transferencias_contas where id = v_trf and conta_origem_id = v_bb and conta_destino_id = v_caixa and valor = 999.99)
@@ -186,7 +216,13 @@ begin
   exception when others then
     if sqlerrm like 'FALHA%' then raise; end if;
   end;
-  raise notice 'OK 9 permissao: painel le, lancar recusa (%)', v_erro;
+  begin
+    perform public.fn_conciliacao_trocar_conta(v_parc, v_caixa, 'prova');
+    raise exception 'FALHA 9: so com Conciliacao trocou a conta de pagamento';
+  exception when others then
+    if sqlerrm like 'FALHA%' then raise; end if;
+  end;
+  raise notice 'OK 9 permissao: painel le, lancar e trocar conta recusam (%)', v_erro;
 end;
 $prova$;
 

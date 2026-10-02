@@ -144,3 +144,19 @@ describe("contaDoArquivoConfere", () => {
     expect(contaDoArquivoConfere("102124-9", null)).toBe(true);
   });
 });
+
+describe("decodificarOfx", () => {
+  it("lê o OFX do BB em Windows-1252 sem estragar o acento", async () => {
+    const { decodificarOfx, parseOfx } = await import("@/lib/ofx");
+    // "BB RENDE FÁCIL" com o Á em 1252 (0xC1), como vem do banco.
+    const texto = "OFXHEADER:100\r\nCHARSET:1252\r\n<OFX><STMTTRN><TRNTYPE>DEP<DTPOSTED>20260901<TRNAMT>15706.31<FITID>1<MEMO>BB RENDE FÁCIL</STMTTRN></OFX>";
+    const bytes = Uint8Array.from(texto, (c) => c.charCodeAt(0));
+    expect(parseOfx(decodificarOfx(bytes)).transacoes[0]?.memo).toBe("BB RENDE FÁCIL");
+  });
+
+  it("lê UTF-8 quando o arquivo é UTF-8 e não declara charset", async () => {
+    const { decodificarOfx } = await import("@/lib/ofx");
+    const bytes = new TextEncoder().encode("<OFX><MEMO>TRANSFERÊNCIA</OFX>");
+    expect(decodificarOfx(bytes)).toContain("TRANSFERÊNCIA");
+  });
+});
