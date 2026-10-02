@@ -350,7 +350,10 @@ export function GradePersonalizavel({
                 inert={editando}
                 className={cn(
                   "flex min-h-0 flex-1 flex-col [&>*]:flex-1",
-                  altura !== undefined && "overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden",
+                  // Com altura escolhida o conteúdo ROLA por dentro do card em vez de
+                  // ser cortado: tabela comprida num card baixo continua inteira, só
+                  // que com barra de rolagem. O card (o filho) mantém a moldura.
+                  altura !== undefined && "overflow-hidden [&>*]:min-h-0 [&>*]:overflow-auto",
                   editando && "select-none",
                 )}
               >

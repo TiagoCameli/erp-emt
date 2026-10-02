@@ -19,6 +19,7 @@ import {
   ConfirmDialog,
   GradeKpis,
   InputMoeda,
+  ItemGrade,
   KPICard,
   LinhaCampos,
   MoneyText,
@@ -309,49 +310,55 @@ export function RescisaoDetalhe({
         />
       </GradeKpis>
 
-      <div className="border-border overflow-hidden rounded-lg border">
-        <table className="w-full text-sm">
-          <thead className="bg-surface text-muted-foreground text-left text-[12px] uppercase">
-            <tr>
-              <th className="px-3 py-2 font-medium">Verba</th>
-              <th className="px-3 py-2 font-medium">Referência</th>
-              <th className="px-3 py-2 text-right font-medium">Valor</th>
-              {podeMexer ? <th className="px-3 py-2" /> : null}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="bg-surface/60">
-              <td
-                colSpan={podeMexer ? 4 : 3}
-                className="px-3 py-1.5 text-[12px] font-semibold uppercase"
-              >
-                Proventos
-              </td>
-            </tr>
-            {linhasDaSecao(proventos)}
-            <tr className="bg-surface/60 border-border border-t">
-              <td
-                colSpan={podeMexer ? 4 : 3}
-                className="px-3 py-1.5 text-[12px] font-semibold uppercase"
-              >
-                Descontos
-              </td>
-            </tr>
-            {linhasDaSecao(descontos)}
-          </tbody>
-          <tfoot className="border-border bg-surface border-t-2">
-            <tr>
-              <td colSpan={2} className="px-3 py-2 font-semibold">
-                Líquido a pagar
-              </td>
-              <td className="px-3 py-2 text-right font-semibold">
-                <MoneyText valor={rescisao.valorLiquido} />
-              </td>
-              {podeMexer ? <td /> : null}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      {/* A tabela de verbas é card da grade: tamanho, ordem e tirar da tela por
+          pessoa; com altura escolhida ela rola por dentro. */}
+      <GradeKpis id="rh.rescisoes.detalhe.tabelas" titulo="Tabelas" vao="amplo">
+        <ItemGrade titulo="Verbas" larguraPadrao={12}>
+          <div className="border-border overflow-hidden rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-muted-foreground text-left text-[12px] uppercase">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Verba</th>
+                  <th className="px-3 py-2 font-medium">Referência</th>
+                  <th className="px-3 py-2 text-right font-medium">Valor</th>
+                  {podeMexer ? <th className="px-3 py-2" /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-surface/60">
+                  <td
+                    colSpan={podeMexer ? 4 : 3}
+                    className="px-3 py-1.5 text-[12px] font-semibold uppercase"
+                  >
+                    Proventos
+                  </td>
+                </tr>
+                {linhasDaSecao(proventos)}
+                <tr className="bg-surface/60 border-border border-t">
+                  <td
+                    colSpan={podeMexer ? 4 : 3}
+                    className="px-3 py-1.5 text-[12px] font-semibold uppercase"
+                  >
+                    Descontos
+                  </td>
+                </tr>
+                {linhasDaSecao(descontos)}
+              </tbody>
+              <tfoot className="border-border bg-surface border-t-2">
+                <tr>
+                  <td colSpan={2} className="px-3 py-2 font-semibold">
+                    Líquido a pagar
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold">
+                    <MoneyText valor={rescisao.valorLiquido} />
+                  </td>
+                  {podeMexer ? <td /> : null}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </ItemGrade>
+      </GradeKpis>
 
       {podeMexer ? (
         <div className="border-border rounded-lg border p-3">

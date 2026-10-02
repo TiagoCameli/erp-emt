@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { EmptyState, GradeKpis, MoneyText } from "@/components/canonicos";
+import { EmptyState, GradeKpis, ItemGrade, MoneyText } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
@@ -126,34 +126,38 @@ export default async function PaginaFornecedoresCombustivel({
           {linhas.length === 0 ? (
             <EmptyState titulo="Nenhuma entrada com fornecedor no período" descricao="As entradas do período estão sem fornecedor" />
           ) : (
-            <TabelaRanking
-              titulo="Ranking de fornecedores"
-              subtitulo={`${plural(linhas.length, "fornecedor", "fornecedores")} no período`}
-              linhas={linhas}
-              chave={(l) => l.id}
-              cabecalhoNome="Fornecedor"
-              nome={(l) => nomeFornecedor(l.id)}
-              colunas={[
-                { cabecalho: "Compras", celula: (l) => l.qtdCompras },
-                { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
-                { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
-                { cabecalho: "R$/L mín", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorLMin) },
-                { cabecalho: "R$/L médio", className: "font-semibold", celula: (l) => formatarRPorL(l.rPorLMedio) },
-                { cabecalho: "R$/L máx", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorLMax) },
-                {
-                  cabecalho: "% do total",
-                  alinhar: "esquerda",
-                  className: "w-40",
-                  celula: (l) => <BarraPercentual pct={l.pctTotal} />,
-                },
-                {
-                  cabecalho: "Tend. R$/L",
-                  alinhar: "esquerda",
-                  className: "w-20",
-                  celula: (l) => <CelulaTendencia serie={l.spark} suficiente={l.spark.length >= MINIMO_PONTOS_TENDENCIA} />,
-                },
-              ]}
-            />
+            <GradeKpis id="combustivel.fornecedores.tabelas" titulo="Tabelas" vao="amplo">
+              <ItemGrade titulo="Ranking de fornecedores" idCard="ranking" larguraPadrao={12}>
+                <TabelaRanking
+                  titulo="Ranking de fornecedores"
+                  subtitulo={`${plural(linhas.length, "fornecedor", "fornecedores")} no período`}
+                  linhas={linhas}
+                  chave={(l) => l.id}
+                  cabecalhoNome="Fornecedor"
+                  nome={(l) => nomeFornecedor(l.id)}
+                  colunas={[
+                    { cabecalho: "Compras", celula: (l) => l.qtdCompras },
+                    { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
+                    { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
+                    { cabecalho: "R$/L mín", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorLMin) },
+                    { cabecalho: "R$/L médio", className: "font-semibold", celula: (l) => formatarRPorL(l.rPorLMedio) },
+                    { cabecalho: "R$/L máx", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorLMax) },
+                    {
+                      cabecalho: "% do total",
+                      alinhar: "esquerda",
+                      className: "w-40",
+                      celula: (l) => <BarraPercentual pct={l.pctTotal} />,
+                    },
+                    {
+                      cabecalho: "Tend. R$/L",
+                      alinhar: "esquerda",
+                      className: "w-20",
+                      celula: (l) => <CelulaTendencia serie={l.spark} suficiente={l.spark.length >= MINIMO_PONTOS_TENDENCIA} />,
+                    },
+                  ]}
+                />
+              </ItemGrade>
+            </GradeKpis>
           )}
         </>
       )}
