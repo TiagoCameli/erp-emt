@@ -29,6 +29,7 @@ import {
   STATUS_OBRA,
   STATUS_OBRA_CONFIG,
 } from "@/modules/cadastros/obras/schemas";
+import { filtrarObras } from "@/modules/cadastros/obras/filtros";
 import { ObrasFormDrawer } from "./obras-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -180,54 +181,38 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
     [obras],
   );
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return obras.filter((obra) => {
-      if (status === "ativos" && !obra.ativo) return false;
-      if (status === "inativos" && obra.ativo) return false;
-      if (situacao !== "" && obra.status !== situacao) return false;
-      if (clienteId !== "" && obra.clienteId !== clienteId) return false;
-      if (uf !== "" && obra.uf !== uf) return false;
-      if (rodovia !== "" && obra.rodovia !== rodovia) return false;
-      if (lote !== "" && obra.lote !== lote) return false;
-      // Datas em "YYYY-MM-DD": comparação de string já é cronológica. Obra sem
-      // data sai quando o período está preenchido, senão a linha entraria sem
-      // ninguém saber se ela cabe na janela pedida.
-      if (inicioDe !== "" && (!obra.dataInicio || obra.dataInicio < inicioDe)) {
-        return false;
-      }
-      if (
-        inicioAte !== "" &&
-        (!obra.dataInicio || obra.dataInicio > inicioAte)
-      ) {
-        return false;
-      }
-      if (fimDe !== "" && (!obra.dataFimPrevista || obra.dataFimPrevista < fimDe)) {
-        return false;
-      }
-      if (
-        fimAte !== "" &&
-        (!obra.dataFimPrevista || obra.dataFimPrevista > fimAte)
-      ) {
-        return false;
-      }
-      if (termo && !obra.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
-  }, [
-    obras,
-    busca,
-    status,
-    situacao,
-    clienteId,
-    uf,
-    rodovia,
-    lote,
-    inicioDe,
-    inicioAte,
-    fimDe,
-    fimAte,
-  ]);
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `filtrarObras`).
+  const { linhas: dados, opcoes } = React.useMemo(
+    () =>
+      filtrarObras(obras, {
+        busca,
+        status,
+        situacao,
+        clienteId,
+        uf,
+        rodovia,
+        lote,
+        inicioDe,
+        inicioAte,
+        fimDe,
+        fimAte,
+      }),
+    [
+      obras,
+      busca,
+      status,
+      situacao,
+      clienteId,
+      uf,
+      rodovia,
+      lote,
+      inicioDe,
+      inicioAte,
+      fimDe,
+      fimAte,
+    ],
+  );
 
   const abrirEdicao = React.useCallback(
     (obra: ObraLista) => {
@@ -327,7 +312,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : valor)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -343,7 +328,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />
@@ -359,7 +344,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroSelect
                 valor={clienteId}
                 onValorChange={setClienteId}
-                opcoes={opcoesCliente}
+                opcoes={opcoes("cliente", opcoesCliente)}
                 placeholder="Cliente"
                 todosRotulo="Todos os clientes"
                 className="max-w-56"
@@ -376,7 +361,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroSelect
                 valor={uf}
                 onValorChange={setUf}
-                opcoes={opcoesUf}
+                opcoes={opcoes("uf", opcoesUf)}
                 placeholder="UF"
                 todosRotulo="Todas as UFs"
               />
@@ -392,7 +377,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroSelect
                 valor={rodovia}
                 onValorChange={setRodovia}
-                opcoes={opcoesRodovia}
+                opcoes={opcoes("rodovia", opcoesRodovia)}
                 placeholder="Rodovia"
                 todosRotulo="Todas as rodovias"
               />
@@ -408,7 +393,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroSelect
                 valor={lote}
                 onValorChange={setLote}
-                opcoes={opcoesLote}
+                opcoes={opcoes("lote", opcoesLote)}
                 placeholder="Lote"
                 todosRotulo="Todos os lotes"
               />

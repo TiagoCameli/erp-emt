@@ -33,9 +33,15 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
 import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { criarCotacao } from "@/modules/compras/cotacoes/actions";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import type {
   CategoriaOpcao,
   CotacaoLista,
+  FacetaCotacoes,
   FornecedorOpcao,
   InsumoOpcao,
 } from "@/modules/compras/cotacoes/queries";
@@ -193,6 +199,8 @@ export interface CotacoesTabelaProps {
   insumos: InsumoOpcao[];
   /** Usuário logado: a personalização da tabela é lembrada por pessoa. */
   idUsuario: string;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaCotacoes>;
 }
 
 /**
@@ -225,6 +233,7 @@ export function CotacoesTabela({
   fornecedores,
   insumos,
   idUsuario,
+  facetas,
 }: CotacoesTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
@@ -251,6 +260,22 @@ export function CotacoesTabela({
       toast.error("O navegador não deixou copiar");
     }
   }
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasCotacoes`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaCotacoes,
+    base: readonly O[],
+    valor: string,
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
+
+  const opcoesFornecedor = fornecedores.map((fornecedor) => ({
+    valor: fornecedor.id,
+    rotulo: fornecedor.nome,
+  }));
 
   /** Troca um filtro de uma chave só e volta para a primeira página. */
   function trocarFiltro(chave: string, valor: string) {
@@ -290,7 +315,7 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={status}
           onValorChange={(valor) => trocarFiltro("status", valor)}
-          opcoes={OPCOES_STATUS}
+          opcoes={facetar("status", OPCOES_STATUS, status)}
           placeholder="Status"
           todosRotulo="Todos os status"
         />
@@ -326,10 +351,14 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={categoriaId}
           onValorChange={(valor) => trocarFiltro("categoria", valor)}
-          opcoes={categorias.map((categoria) => ({
-            valor: categoria.id,
-            rotulo: categoria.nome,
-          }))}
+          opcoes={facetar(
+            "categoria",
+            categorias.map((categoria) => ({
+              valor: categoria.id,
+              rotulo: categoria.nome,
+            })),
+            categoriaId,
+          )}
           placeholder="Categoria do custo"
           todosRotulo="Todas as categorias"
           className="max-w-56"
@@ -346,10 +375,7 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={fornecedorId}
           onValorChange={(valor) => trocarFiltro("fornecedor", valor)}
-          opcoes={fornecedores.map((fornecedor) => ({
-            valor: fornecedor.id,
-            rotulo: fornecedor.nome,
-          }))}
+          opcoes={facetar("fornecedor", opcoesFornecedor, fornecedorId)}
           placeholder="Fornecedor que cotou"
           todosRotulo="Qualquer fornecedor"
           className="max-w-56"
@@ -366,10 +392,7 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={vencedorId}
           onValorChange={(valor) => trocarFiltro("vencedor", valor)}
-          opcoes={fornecedores.map((fornecedor) => ({
-            valor: fornecedor.id,
-            rotulo: fornecedor.nome,
-          }))}
+          opcoes={facetar("vencedor", opcoesFornecedor, vencedorId)}
           placeholder="Vencedor"
           todosRotulo="Qualquer vencedor"
           className="max-w-56"
@@ -386,10 +409,14 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={insumoId}
           onValorChange={(valor) => trocarFiltro("insumo", valor)}
-          opcoes={insumos.map((insumo) => ({
-            valor: insumo.id,
-            rotulo: rotuloInsumo(insumo.nome, insumo.unidadeSigla),
-          }))}
+          opcoes={facetar(
+            "insumo",
+            insumos.map((insumo) => ({
+              valor: insumo.id,
+              rotulo: rotuloInsumo(insumo.nome, insumo.unidadeSigla),
+            })),
+            insumoId,
+          )}
           placeholder="Insumo cotado"
           todosRotulo="Qualquer insumo"
           className="max-w-56"
@@ -409,7 +436,7 @@ export function CotacoesTabela({
               <FiltroSelect
                 valor={ocGerada}
                 onValorChange={(valor) => trocarFiltro("oc", valor)}
-                opcoes={OPCOES_OC_GERADA}
+                opcoes={facetar("oc", OPCOES_OC_GERADA, ocGerada)}
                 placeholder="OC gerada"
                 todosRotulo="Com ou sem OC"
               />
@@ -427,7 +454,7 @@ export function CotacoesTabela({
         <FiltroSelect
           valor={autoria}
           onValorChange={(valor) => trocarFiltro("autor", valor)}
-          opcoes={OPCOES_AUTORIA}
+          opcoes={facetar("autoria", OPCOES_AUTORIA, autoria)}
           placeholder="Autoria"
           todosRotulo="De qualquer pessoa"
         />

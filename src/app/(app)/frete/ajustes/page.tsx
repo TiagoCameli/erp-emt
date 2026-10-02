@@ -6,7 +6,12 @@ import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { AjustesTabela } from "@/modules/frete/ajustes/components/ajustes-tabela";
 import { NovoAjusteBotao } from "@/modules/frete/ajustes/components/novo-ajuste-botao";
 import { lerFiltrosAjustes } from "@/modules/frete/ajustes/filtros";
-import { listarAjustes, listarObrasAjuste, listarTransportadorasAjuste } from "@/modules/frete/ajustes/queries";
+import {
+  facetasAjustes,
+  listarAjustes,
+  listarObrasAjuste,
+  listarTransportadorasAjuste,
+} from "@/modules/frete/ajustes/queries";
 
 const RECURSO = "frete.ajustes" as const;
 
@@ -21,8 +26,9 @@ export default async function PaginaAjustesFrete({
   const filtros = lerFiltrosAjustes(await searchParams);
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
 
-  const [ajustes, transportadoras, obras] = await Promise.all([
+  const [ajustes, facetas, transportadoras, obras] = await Promise.all([
     listarAjustes(filtros),
+    facetasAjustes(filtros),
     listarTransportadorasAjuste(),
     podeCriar ? listarObrasAjuste() : Promise.resolve<CentroCustoOpcao[]>([]),
   ]);
@@ -47,6 +53,7 @@ export default async function PaginaAjustesFrete({
         sinal={filtros.sinal ?? ""}
         de={filtros.de ?? ""}
         ate={filtros.ate ?? ""}
+        facetas={facetas}
       />
     </>
   );

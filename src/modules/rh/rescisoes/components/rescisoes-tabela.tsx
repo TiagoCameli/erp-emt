@@ -19,6 +19,7 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   ROTULO_TIPO_RESCISAO,
   STATUS_RESCISAO,
@@ -120,25 +121,23 @@ export function RescisoesTabela({
   const [liquidoDe, setLiquidoDe] = useFiltroSessao("liquidoDe", "");
   const [liquidoAte, setLiquidoAte] = useFiltroSessao("liquidoAte", "");
 
-  const dados = React.useMemo(
+  // Facetado: situação e tipo só oferecem o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(
     () =>
-      rescisoes.filter((rescisao) => {
-        if (status !== "" && rescisao.status !== status) return false;
-        if (tipo !== "" && rescisao.tipo !== tipo) return false;
-        // `data_desligamento` é DATE, não timestamptz: o dia já é o dia, e
-        // converter para fuso local aqui deslocaria a data em um dia.
-        if (
-          !noPeriodo(
-            rescisao.dataDesligamento,
-            desligamentoDe,
-            desligamentoAte,
-          )
-        ) {
-          return false;
-        }
-        if (!naFaixa(rescisao.valorLiquido, liquidoDe, liquidoAte)) return false;
-        return true;
-      }),
+      filtrarFacetado(
+        rescisoes,
+        {
+          status: { selecionados: selecao(status), chave: (r) => r.status },
+          tipo: { selecionados: selecao(tipo), chave: (r) => r.tipo },
+        },
+        [
+          // `data_desligamento` é DATE, não timestamptz: o dia já é o dia, e
+          // converter para fuso local aqui deslocaria a data em um dia.
+          (r) => noPeriodo(r.dataDesligamento, desligamentoDe, desligamentoAte),
+          (r) => naFaixa(r.valorLiquido, liquidoDe, liquidoAte),
+        ],
+      ),
     [
       rescisoes,
       status,
@@ -166,7 +165,7 @@ export function RescisoesTabela({
               <FiltroSelect
                 valor={status}
                 onValorChange={setStatus}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />
@@ -181,7 +180,7 @@ export function RescisoesTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />

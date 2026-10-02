@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  facetarFilaAPagar,
   filtrarFilaAPagar,
   valoresFiltrosAPagarSchema,
   VALORES_FILTROS_A_PAGAR_VAZIOS,
@@ -161,5 +162,59 @@ describe("valoresFiltrosAPagarSchema", () => {
     const doSchema = Object.keys(valoresFiltrosAPagarSchema.shape).sort();
     const daInterface = Object.keys(VAZIO).sort();
     expect(doSchema).toEqual(daInterface);
+  });
+});
+
+describe("facetarFilaAPagar (filtros facetados)", () => {
+  const fila = [
+    parcela({ id: "a", fornecedorId: "f1", contaBancariaId: "c1", centroCustoIds: [CARRETA] }),
+    parcela({ id: "b", fornecedorId: "f2", contaBancariaId: "c2", centroCustoIds: [ESCRITORIO] }),
+    parcela({ id: "c", fornecedorId: "f2", contaBancariaId: "c1", status: "pendente" }),
+  ];
+  const opcoes = (...valores: string[]) => valores.map((valor) => ({ valor, rotulo: valor }));
+  const valores = (lista: { valor: string }[]) => lista.map((opcao) => opcao.valor);
+
+  it("as linhas são as mesmas de filtrarFilaAPagar", () => {
+    const filtro = com({ fornecedorIds: ["f2"], situacoes: ["aprovado"] });
+    expect(facetarFilaAPagar(fila, filtro, null).linhas).toEqual(
+      filtrarFilaAPagar(fila, filtro, null),
+    );
+  });
+
+  it("escolher o fornecedor restringe as contas e as situações; ele mesmo não", () => {
+    const { opcoes: de } = facetarFilaAPagar(fila, com({ fornecedorIds: ["f1"] }), null);
+    expect(valores(de("conta", opcoes("c1", "c2")))).toEqual(["c1"]);
+    expect(valores(de("situacao", opcoes("aprovado", "pendente")))).toEqual(["aprovado"]);
+    expect(valores(de("fornecedor", opcoes("f1", "f2")))).toEqual(["f1", "f2"]);
+  });
+
+  it("o escolhido nunca some, mesmo sem linha", () => {
+    const { opcoes: de } = facetarFilaAPagar(
+      fila,
+      com({ fornecedorIds: ["f1"], contaIds: ["c2"] }),
+      null,
+    );
+    expect(valores(de("conta", opcoes("c1", "c2")))).toEqual(["c1", "c2"]);
+  });
+
+  it("busca e valor restringem as opções sem serem restringidos", () => {
+    const { opcoes: de } = facetarFilaAPagar(
+      [parcela({ id: "x", fornecedorId: "f1", valor: 10 }), parcela({ id: "y", fornecedorId: "f2", valor: 500 })],
+      com({ valorDe: "100" }),
+      null,
+    );
+    expect(valores(de("fornecedor", opcoes("f1", "f2")))).toEqual(["f2"]);
+  });
+
+  it("o centro oferece a opção pela SUBÁRVORE dela", () => {
+    const subarvoreDe = (id: string) =>
+      id === CARRETA ? new Set([CARRETA, ETAPA_CARRETA]) : new Set([id]);
+    const { opcoes: de } = facetarFilaAPagar(
+      [parcela({ id: "e", fornecedorId: "f1", centroCustoIds: [ETAPA_CARRETA] })],
+      com({ fornecedorIds: ["f1"] }),
+      null,
+      subarvoreDe,
+    );
+    expect(valores(de("centro", opcoes(CARRETA, ESCRITORIO)))).toEqual([CARRETA]);
   });
 });

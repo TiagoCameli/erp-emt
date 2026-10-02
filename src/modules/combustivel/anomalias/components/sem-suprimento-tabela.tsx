@@ -18,6 +18,7 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { revisarSemSuprimento } from "@/modules/combustivel/anomalias/actions";
 import { linkDaSaida } from "@/modules/combustivel/anomalias/links";
@@ -48,11 +49,18 @@ export function SemSuprimentoTabela({ linhas, revisao, podeEditar, veAbastecimen
   const [desfazendo, setDesfazendo] = React.useState<SemSuprimentoLista | null>(null);
   const [observacao, setObservacao] = React.useState("");
 
-  const visiveis = React.useMemo(() => {
-    if (revisao === "conferidas") return linhas.filter((l) => l.revisao !== null);
-    if (revisao === "pendentes") return linhas.filter((l) => l.revisao === null);
-    return linhas;
-  }, [linhas, revisao]);
+  // Facetado (ver `_shared/filtros-facetados`): a revisão só oferece o que existe
+  // na lista. A lista vem inteira do servidor; o filtro é em memória.
+  const { linhas: visiveis, opcoes } = React.useMemo(
+    () =>
+      filtrarFacetado(linhas, {
+        revisao: {
+          selecionados: revisao === "todas" ? [] : [revisao],
+          casa: (l, valor) => (valor === "conferidas" ? l.revisao !== null : l.revisao === null),
+        },
+      }),
+    [linhas, revisao],
+  );
 
   async function aoConfirmarRevisao() {
     if (!revisando) return;
@@ -192,7 +200,7 @@ export function SemSuprimentoTabela({ linhas, revisao, podeEditar, veAbastecimen
               <FiltroSelect
                 valor={revisao === "todas" ? "" : revisao}
                 onValorChange={(valor) => setMuitos({ revisao: valor === "" ? "todas" : valor === "pendentes" ? null : valor })}
-                opcoes={OPCOES_REVISAO}
+                opcoes={opcoes("revisao", OPCOES_REVISAO)}
                 todosRotulo="Todas"
               />
             ),

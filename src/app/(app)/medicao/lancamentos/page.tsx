@@ -7,7 +7,7 @@ import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { carregarContrato, listarContratos } from "@/modules/medicao/contratos/queries";
 import { LancamentosTabela } from "@/modules/medicao/lancamentos/components/lancamentos-tabela";
-import { listarLancamentos, servicosParaLancar } from "@/modules/medicao/lancamentos/queries";
+import { facetasLancamentos, listarLancamentos, servicosParaLancar } from "@/modules/medicao/lancamentos/queries";
 import { carregarMedicoes } from "@/modules/medicao/medicoes/queries";
 import { FiltroContrato } from "@/modules/medicao/_shared/seletor-contrato";
 
@@ -69,10 +69,12 @@ export default async function PaginaLancamentos({
   const itemId = idSchema.safeParse(itemParam).success ? itemParam : undefined;
   const busca = primeiro(params.busca) || undefined;
 
-  const [medicoes, servicos, lancamentos] = await Promise.all([
+  const filtrosLista = { contratoId, medicao: medicaoNumero, de, ate, itemId, busca };
+  const [medicoes, servicos, lancamentos, facetas] = await Promise.all([
     carregarMedicoes(contratoId),
     servicosParaLancar(contratoId),
-    listarLancamentos({ contratoId, medicao: medicaoNumero, de, ate, itemId, busca }),
+    listarLancamentos(filtrosLista),
+    facetasLancamentos(filtrosLista),
   ]);
 
   const podeVerMedicoes = temPermissao(usuario, "medicao.medicoes", "ver");
@@ -132,6 +134,7 @@ export default async function PaginaLancamentos({
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}
+        facetas={facetas}
       />
     </>
   );

@@ -180,3 +180,56 @@ export function restringirOpcoes<O extends OpcaoFacetavel>(
     (opcao) => escolhidos.has(opcao.valor) || presentes.has(opcao.valor),
   );
 }
+
+/** A faceta vista pela consulta do servidor: está aplicada? de onde sai o valor? */
+export interface FacetaServidor<L> {
+  ativo: boolean;
+  chave: (linha: L) => string | null | undefined | readonly (string | null | undefined)[];
+}
+
+/** Valores presentes por filtro, pronto para atravessar a fronteira até o cliente. */
+export type FacetasPresentes<K extends string> = Record<K, string[]>;
+
+/**
+ * As facetas de uma tela que filtra no BANCO (com paginação): o cliente só vê
+ * uma página, então quem sabe o que existe na tabela filtrada é o servidor.
+ *
+ * `consultar(exceto)` roda a consulta da tela com todos os filtros MENOS
+ * `exceto` (null = todos), sem paginação, trazendo só as colunas das chaves.
+ * Uma consulta com tudo aplicado serve os filtros vazios (filtro vazio não se
+ * exclui de nada); cada filtro preenchido pede a sua, sem ele. Na tela típica
+ * são uma ou duas consultas leves.
+ */
+export async function facetasNoServidor<L, K extends string>(
+  facetas: Record<K, FacetaServidor<L>>,
+  consultar: (exceto: K | null) => Promise<readonly L[]>,
+): Promise<FacetasPresentes<K>> {
+  const ids = Object.keys(facetas) as K[];
+  const ativos = ids.filter((id) => facetas[id].ativo);
+  const inativos = ids.filter((id) => !facetas[id].ativo);
+
+  function distintos(linhas: readonly L[], id: K): string[] {
+    const presentes = new Set<string>();
+    for (const linha of linhas) {
+      const chave = facetas[id].chave(linha);
+      if (Array.isArray(chave)) {
+        for (const valor of chave) if (valor != null) presentes.add(valor);
+      } else if (chave != null) {
+        presentes.add(chave as string);
+      }
+    }
+    return [...presentes];
+  }
+
+  const [todas, ...semCada] = await Promise.all([
+    inativos.length > 0 ? consultar(null) : Promise.resolve([] as readonly L[]),
+    ...ativos.map((id) => consultar(id)),
+  ]);
+
+  const resultado = {} as FacetasPresentes<K>;
+  for (const id of inativos) resultado[id] = distintos(todas, id);
+  ativos.forEach((id, i) => {
+    resultado[id] = distintos(semCada[i], id);
+  });
+  return resultado;
+}

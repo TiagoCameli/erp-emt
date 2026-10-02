@@ -137,3 +137,20 @@ export function aplicarFiltrosServicos<T extends ConsultaFiltravelOs<T>>(
   }
   return consulta;
 }
+
+/** Os filtros de seleção da barra, na chave que a tabela usa nas facetas. */
+export type FacetaServicos = "status" | "equipamento" | "tipo";
+
+/**
+ * Os filtros sem o da faceta: é com eles que o servidor descobre o que aquela
+ * faceta pode oferecer (ver `_shared/filtros-facetados`). Período e busca nunca
+ * saem: restringem as outras, mas não têm lista.
+ */
+export function soltarFacetaServicos(
+  filtros: Omit<FiltrosServicos, "pagina" | "tamanho">,
+  faceta: FacetaServicos,
+): Omit<FiltrosServicos, "pagina" | "tamanho"> {
+  if (faceta === "status") return { ...filtros, status: [] };
+  if (faceta === "equipamento") return { ...filtros, equipamentoId: undefined };
+  return { ...filtros, tipo: undefined };
+}

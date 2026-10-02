@@ -15,6 +15,7 @@ import {
   StatusBadge,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { formatarLitros, formatarDataHoraRioBranco } from "@/modules/combustivel/_shared/rotulos";
 import {
   ROTULO_MOVIMENTO_TANQUE,
@@ -111,8 +112,10 @@ export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
   const router = useRouter();
   const [tipo, setTipo] = useFiltroSessao<string>("tipo", "", ["", ...TIPOS]);
 
-  const filtrados = React.useMemo(
-    () => (tipo === "" ? movimentos : movimentos.filter((m) => m.tipo === tipo)),
+  // Facetado (ver `_shared/filtros-facetados`): o movimento só oferece os tipos
+  // que o tanque tem.
+  const { linhas: filtrados, opcoes } = React.useMemo(
+    () => filtrarFacetado(movimentos, { tipo: { selecionados: selecao(tipo), chave: (m) => m.tipo } }),
     [movimentos, tipo],
   );
 
@@ -204,7 +207,7 @@ export function TanqueDetalhe({ tanque, movimentos }: TanqueDetalheProps) {
                 <FiltroSelect
                   valor={tipo}
                   onValorChange={setTipo}
-                  opcoes={OPCOES_TIPO}
+                  opcoes={opcoes("tipo", OPCOES_TIPO)}
                   placeholder="Movimento"
                   todosRotulo="Todos os movimentos"
                 />

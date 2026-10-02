@@ -10,11 +10,22 @@ import {
 import type { Canal, OrigemSaida, TipoConsumidor, TipoMovimento } from "@/modules/combustivel/_shared/rotulos";
 import {
   aplicarFiltrosAbastecimentos,
+  CHAVE_DA_FACETA_ABASTECIMENTO,
+  FACETAS_ABASTECIMENTOS,
+  facetaAtiva,
+  filtrosSemFaceta,
   ORDENS_SAIDA,
   type ContextoFiltro,
+  type FacetaAbastecimentos,
   type FiltrosAbastecimentos,
+  type LinhaFacetaAbastecimentos,
   type VisaoSaida,
 } from "@/modules/combustivel/abastecimentos/filtros";
+import {
+  facetasNoServidor,
+  type FacetaServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { ehEquipamentoSentinela } from "@/modules/combustivel/anomalias/base";
 import type { AlocacaoOriginal } from "@/modules/combustivel/abastecimentos/schemas";
 import { rotuloTanque } from "@/modules/combustivel/entradas/queries";
@@ -216,6 +227,46 @@ export async function listarAbastecimentos(
     valorDoFiltro: somarValoresOperacionais(resultadoSoma.linhas.map((l) => paraNumeroDoBanco(l.valor_total))),
     contagens: { todas: todas.count ?? 0, internas: internas.count ?? 0, externas: externas.count ?? 0 },
   };
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver `_shared/filtros-facetados`):
+ * a tabela é paginada no banco, então só o servidor sabe quais tanques, placas e operadores
+ * sobram depois dos outros filtros. Mesmo `aplicarFiltrosAbastecimentos` e mesma lixeira
+ * da lista, sem paginação, só as colunas das chaves (são ~3.100 saídas).
+ */
+export async function facetasAbastecimentos(
+  filtros: FiltrosAbastecimentos,
+  contexto: ContextoFiltro,
+): Promise<FacetasPresentes<FacetaAbastecimentos>> {
+  const supabase = await createClient();
+  const lixeira = filtros.excluidos ? "not.is" : "is";
+  const facetas = Object.fromEntries(
+    FACETAS_ABASTECIMENTOS.map((id) => [
+      id,
+      { ativo: facetaAtiva(filtros, id), chave: CHAVE_DA_FACETA_ABASTECIMENTO[id] },
+    ]),
+  ) as Record<FacetaAbastecimentos, FacetaServidor<LinhaFacetaAbastecimentos>>;
+
+  return facetasNoServidor(facetas, async (exceto) => {
+    const recorte = exceto === null ? filtros : filtrosSemFaceta(filtros, exceto);
+    const { linhas, erro } = await todasAsLinhas((de, ate) =>
+      aplicarFiltrosAbastecimentos(
+        supabase
+          .from("combustivel_saidas")
+          .select(
+            "id, tanque_id, equipamento_id, transportadora_id, insumo_id, placa, motorista, origem, canal, filtro_obra:abastecimento_alocacoes(centro_custo_id)",
+          )
+          .filter("excluido_em", lixeira, null),
+        recorte,
+        contexto,
+      )
+        .order("id")
+        .range(de, ate),
+    );
+    if (erro) throw new Error("Não foi possível carregar os filtros dos abastecimentos");
+    return linhas;
+  });
 }
 
 // ---------------------------------------------------------------------------

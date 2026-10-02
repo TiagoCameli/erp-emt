@@ -2,6 +2,8 @@
 
 import { BlocoFiltros, FilterBar, FiltroSelectMulti, useFiltrosUrl, type CampoDaBarra } from "@/components/canonicos";
 import { escreverListaNaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+import { restringirOpcoes, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
+import type { FacetaContratos } from "@/modules/medicao/contratos/queries";
 import {
   ROTULO_STATUS_CONTRATO,
   ROTULO_TIPO_CONTRATANTE,
@@ -17,6 +19,8 @@ export interface PainelFiltrosProps {
   status: string[];
   /** Tipos de contratante escolhidos (`?tipo=`), na URL. Vazio = todos. */
   tipos: string[];
+  /** Valores que existem no recorte, por filtro (ver `facetasContratos`). */
+  facetas?: FacetasPresentes<FacetaContratos>;
 }
 
 /**
@@ -24,8 +28,14 @@ export interface PainelFiltrosProps {
  * URL. Lista vazia é "todos" tanto aqui quanto na RPC (ver `queries.ts`), então o mesmo vazio que
  * a barra grava é o que a consulta manda.
  */
-export function PainelFiltros({ status, tipos }: PainelFiltrosProps) {
+export function PainelFiltros({ status, tipos, facetas }: PainelFiltrosProps) {
   const { setMuitos } = useFiltrosUrl();
+
+  // Cada filtro só oferece o que existe com o outro aplicado (ver `_shared/filtros-facetados`).
+  function facetar(id: FacetaContratos, base: { valor: string; rotulo: string }[], selecionados: string[]) {
+    if (!facetas) return base;
+    return restringirOpcoes(base, new Set(facetas[id]), selecionados);
+  }
 
   const campos: CampoDaBarra[] = [
     {
@@ -35,7 +45,7 @@ export function PainelFiltros({ status, tipos }: PainelFiltrosProps) {
         <FiltroSelectMulti
           valores={status}
           onValoresChange={(novos) => setMuitos({ status: escreverListaNaUrl(novos) })}
-          opcoes={OPCOES_STATUS}
+          opcoes={facetar("status", OPCOES_STATUS, status)}
           todosRotulo="Todos os status"
         />
       ),
@@ -47,7 +57,7 @@ export function PainelFiltros({ status, tipos }: PainelFiltrosProps) {
         <FiltroSelectMulti
           valores={tipos}
           onValoresChange={(novos) => setMuitos({ tipo: escreverListaNaUrl(novos) })}
-          opcoes={OPCOES_TIPO}
+          opcoes={facetar("tipo", OPCOES_TIPO, tipos)}
           todosRotulo="Todos os tipos"
         />
       ),

@@ -13,6 +13,7 @@ import {
 import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 import { RecebimentosCliente } from "@/modules/financeiro/recebimentos/components/recebimentos-cliente";
 import {
+  facetasRecebidas,
   listarCategoriasReceita,
   listarParcelasAReceber,
   listarParcelasRecebidas,
@@ -184,6 +185,7 @@ export default async function PaginaRecebimentos({
   const [
     aReceber,
     recebidas,
+    facetasRecebidos,
     recebidoNoMes,
     contas,
     clientes,
@@ -200,6 +202,8 @@ export default async function PaginaRecebimentos({
       tamanho: TAMANHO_PAGINA,
       filtros: filtrosRecebidas,
     }),
+    // O que cada filtro do histórico ainda acha com os outros aplicados.
+    facetasRecebidas(filtrosRecebidas),
     somarRecebidoNoPeriodo(primeiro, ultimo),
     listarContasBancarias(),
     listarClientes(),
@@ -243,6 +247,7 @@ export default async function PaginaRecebimentos({
         recAte: texto(filtrosRecebidas.recebimentoAte),
       }}
       filtrosRecebidas={filtrosRecebidas}
+      facetasRecebidos={facetasRecebidos}
       categorias={categorias}
       fornecedores={fornecedores}
       centrosCusto={centrosCusto}

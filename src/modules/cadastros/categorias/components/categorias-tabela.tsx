@@ -32,6 +32,8 @@ import type {
   GrupoComCategorias,
   GrupoOpcao,
 } from "@/modules/cadastros/categorias/queries";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -119,27 +121,47 @@ export function CategoriasTabela({
 
   const termo = busca.trim().toLowerCase();
 
-  const filtrados = React.useMemo(
-    () =>
-      grupos
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). A faceta roda sobre as
+  // subcategorias achatadas, cada uma com o grupo dela.
+  const { filtrados, opcoes } = React.useMemo(() => {
+    const achatadas = grupos.flatMap((grupo) =>
+      grupo.categorias.map((categoria) => ({ grupoId: grupo.id, categoria })),
+    );
+    const resultado = filtrarFacetado(
+      achatadas,
+      {
+        status: facetaAtivo(status, (linha: { categoria: { ativo: boolean } }) =>
+          linha.categoria.ativo,
+        ),
+        grupo: { selecionados: selecao(grupoId), chave: (linha) => linha.grupoId },
+        insumos: {
+          selecionados: selecao(comInsumos),
+          casa: ({ categoria }, valor) =>
+            valor === "com"
+              ? categoria.insumos > 0
+              : valor === "sem"
+                ? categoria.insumos === 0
+                : true,
+        },
+      },
+      [({ categoria }) => !termo || categoria.nome.toLowerCase().includes(termo)],
+    );
+    const visiveis = new Set(resultado.linhas.map((linha) => linha.categoria.id));
+    return {
+      opcoes: resultado.opcoes,
+      filtrados: grupos
         // Filtrar por grupo esconde a seção inteira: é o jeito de olhar um grupo
         // sem as outras três seções no caminho.
         .filter((grupo) => grupoId === "" || grupo.id === grupoId)
         .map((grupo) => ({
           ...grupo,
-          categorias: grupo.categorias.filter((categoria) => {
-            if (status === "ativos" && !categoria.ativo) return false;
-            if (status === "inativos" && categoria.ativo) return false;
-            if (comInsumos === "com" && categoria.insumos === 0) return false;
-            if (comInsumos === "sem" && categoria.insumos > 0) return false;
-            if (termo && !categoria.nome.toLowerCase().includes(termo)) {
-              return false;
-            }
-            return true;
-          }),
+          categorias: grupo.categorias.filter((categoria) =>
+            visiveis.has(categoria.id),
+          ),
         })),
-    [grupos, status, termo, grupoId, comInsumos],
-  );
+    };
+  }, [grupos, status, termo, grupoId, comInsumos]);
 
   const colunas = React.useMemo<ColumnDef<CategoriaLista, unknown>[]>(() => {
     const base: ColumnDef<CategoriaLista, unknown>[] = [
@@ -268,7 +290,7 @@ export function CategoriasTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : valor)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todas"
               />
@@ -284,10 +306,13 @@ export function CategoriasTabela({
               <FiltroSelect
                 valor={grupoId}
                 onValorChange={setGrupoId}
-                opcoes={opcoesGrupo.map((grupo) => ({
-                  valor: grupo.id,
-                  rotulo: grupo.nome,
-                }))}
+                opcoes={opcoes(
+                  "grupo",
+                  opcoesGrupo.map((grupo) => ({
+                    valor: grupo.id,
+                    rotulo: grupo.nome,
+                  })),
+                )}
                 placeholder="Grupo"
                 todosRotulo="Todos os grupos"
               />
@@ -303,7 +328,7 @@ export function CategoriasTabela({
               <FiltroSelect
                 valor={comInsumos}
                 onValorChange={setComInsumos}
-                opcoes={OPCOES_INSUMOS}
+                opcoes={opcoes("insumos", OPCOES_INSUMOS)}
                 placeholder="Insumos"
                 todosRotulo="Com e sem insumos"
               />

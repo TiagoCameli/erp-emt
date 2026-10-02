@@ -26,6 +26,7 @@ import {
   dentroDaFaixaValor,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";
@@ -229,38 +230,44 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }, [contas]);
 
-  const dados = React.useMemo(() => {
+  // Facetado: status, banco e tipo só oferecem o que existe nas contas
+  // filtradas pelos outros (ver `_shared/filtros-facetados`). Busca e saldo
+  // entram livres.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return contas.filter((conta) => {
-      if (status === "ativos" && !conta.ativo) return false;
-      if (status === "inativos" && conta.ativo) return false;
-      if (banco !== "" && conta.banco !== banco) return false;
-      if (tipo !== "" && conta.tipo !== tipo) return false;
-      // Faixa de saldo: conta sem permissão fica de fora quando existe alguma
-      // ponta preenchida, e entra quando não existe. É a mesma regra de
-      // `dentroDoPeriodo` para registro sem data — dizer que um saldo
-      // desconhecido cabe na faixa pedida seria mentira, e pior: filtrar
-      // "de 1 milhão" e ver quais contas escondidas sobram DIRIA o saldo delas.
-      const temFaixa = saldoDe.trim() !== "" || saldoAte.trim() !== "";
-      if (temFaixa && !conta.podeVerSaldo) return false;
-      if (
-        conta.saldoAtual !== null &&
-        !dentroDaFaixaValor(conta.saldoAtual, saldoDe, saldoAte)
-      ) {
-        return false;
-      }
-      // A busca cobre nome, agência e conta: quem procura "1234" está com o
-      // extrato na mão, não lembrando o apelido da conta.
-      if (
-        termo &&
-        !`${conta.nome} ${conta.agencia ?? ""} ${conta.conta ?? ""}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      contas,
+      {
+        status: {
+          selecionados: status === "ativos" || status === "inativos" ? [status] : [],
+          chave: (conta) => (conta.ativo ? "ativos" : "inativos"),
+        },
+        banco: { selecionados: selecao(banco), chave: (conta) => conta.banco },
+        tipo: { selecionados: selecao(tipo), chave: (conta) => conta.tipo },
+      },
+      [
+        (conta) => {
+          // Faixa de saldo: conta sem permissão fica de fora quando existe
+          // alguma ponta preenchida, e entra quando não existe. É a mesma regra
+          // de `dentroDoPeriodo` para registro sem data: dizer que um saldo
+          // desconhecido cabe na faixa pedida seria mentira, e pior: filtrar
+          // "de 1 milhão" e ver quais contas escondidas sobram DIRIA o saldo delas.
+          const temFaixa = saldoDe.trim() !== "" || saldoAte.trim() !== "";
+          if (temFaixa && !conta.podeVerSaldo) return false;
+          return (
+            conta.saldoAtual === null ||
+            dentroDaFaixaValor(conta.saldoAtual, saldoDe, saldoAte)
+          );
+        },
+        // A busca cobre nome, agência e conta: quem procura "1234" está com o
+        // extrato na mão, não lembrando o apelido da conta.
+        (conta) =>
+          !termo ||
+          `${conta.nome} ${conta.agencia ?? ""} ${conta.conta ?? ""}`
+            .toLowerCase()
+            .includes(termo),
+      ],
+    );
   }, [contas, busca, status, banco, tipo, saldoDe, saldoAte]);
 
   function abrirEdicao(conta: ContaLista) {
@@ -309,7 +316,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         <FiltroSelect
           valor={status === "todos" ? "" : status}
           onValorChange={mudarStatus}
-          opcoes={OPCOES_STATUS}
+          opcoes={opcoes("status", OPCOES_STATUS)}
           placeholder="Status"
           todosRotulo="Todas"
         />
@@ -325,7 +332,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         <FiltroSelect
           valor={banco}
           onValorChange={mudarBanco}
-          opcoes={opcoesBanco}
+          opcoes={opcoes("banco", opcoesBanco)}
           placeholder="Banco"
           todosRotulo="Todos os bancos"
         />
@@ -341,7 +348,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         <FiltroSelect
           valor={tipo}
           onValorChange={mudarTipo}
-          opcoes={opcoesTipo}
+          opcoes={opcoes("tipo", opcoesTipo)}
           placeholder="Tipo de conta"
           todosRotulo="Todos os tipos"
         />

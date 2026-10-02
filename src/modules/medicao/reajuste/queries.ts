@@ -2,8 +2,10 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { facetasNoServidor, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 
 import type { CasamentoSalvo, ItemCandidato } from "./de-para";
+import { situacaoDaLinhaReajuste } from "./formato";
 import type {
   ConfigReajuste,
   IndiceSiac,
@@ -413,8 +415,7 @@ export async function listarReajustes(filtro: { contratoId?: string; situacao?: 
     if (!c) continue;
     const v = vigentes.get(m.id) ?? null;
     const situacao = v?.situacao ?? null;
-    if (filtro.situacao === "sem_relatorio" && v) continue;
-    if ((filtro.situacao === "provisorio" || filtro.situacao === "definitivo") && situacao !== filtro.situacao) continue;
+    if (filtro.situacao && situacaoDaLinhaReajuste({ relatorioId: v?.relatorio_id ?? null, situacao }) !== filtro.situacao) continue;
     linhas.push({
       medicaoId: m.id,
       contratoId: m.contrato_id,
@@ -434,6 +435,33 @@ export async function listarReajustes(filtro: { contratoId?: string; situacao?: 
     });
   }
   return linhas.sort((a, b) => a.contratoCodigo.localeCompare(b.contratoCodigo) || b.numero - a.numero);
+}
+
+/** Os filtros de seleção da aba Reajuste. */
+export type FacetaReajustes = "contrato" | "situacao";
+
+/**
+ * O que existe na aba filtrada, por filtro de seleção (ver `_shared/filtros-facetados`): os
+ * contratos oferecidos são os que têm medição na situação escolhida, e as situações, as que o
+ * contrato escolhido tem. A situação é decidida em memória (cruza a medição com o reajuste que
+ * vale), então a consulta é a própria `listarReajustes` sem o filtro da faceta: são algumas
+ * centenas de medições enviadas ou aprovadas, no máximo duas leituras a mais.
+ */
+export async function facetasReajustes(filtro: {
+  contratoId?: string;
+  situacao?: SituacaoFiltroReajuste;
+}): Promise<FacetasPresentes<FacetaReajustes>> {
+  return facetasNoServidor<LinhaListaReajuste, FacetaReajustes>(
+    {
+      contrato: { ativo: !!filtro.contratoId, chave: (l) => l.contratoId },
+      situacao: { ativo: !!filtro.situacao, chave: (l) => situacaoDaLinhaReajuste(l) },
+    },
+    (exceto) =>
+      listarReajustes({
+        contratoId: exceto === "contrato" ? undefined : filtro.contratoId,
+        situacao: exceto === "situacao" ? undefined : filtro.situacao,
+      }),
+  );
 }
 
 /** O mínimo da medição para importar o reajuste (contrato, número, período, status), ou null (RLS). */

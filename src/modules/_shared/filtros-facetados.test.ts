@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  facetasNoServidor,
   filtrarFacetado,
   restringirOpcoes,
   selecao,
@@ -135,5 +136,39 @@ describe("restringirOpcoes", () => {
     expect(
       valores(restringirOpcoes(FORNECEDORES, new Set(["f3", "f1"]), ["f4"])),
     ).toEqual(["f1", "f3", "f4"]);
+  });
+});
+
+describe("facetasNoServidor", () => {
+  it("uma consulta para os vazios e uma por filtro preenchido, sem ele", async () => {
+    const chamadas: (string | null)[] = [];
+    const facetas = await facetasNoServidor(
+      {
+        fornecedor: { ativo: true, chave: (o: Ordem) => o.fornecedor },
+        status: { ativo: false, chave: (o: Ordem) => o.status },
+        categoria: { ativo: false, chave: (o: Ordem) => o.categorias },
+      },
+      async (exceto) => {
+        chamadas.push(exceto);
+        // Simula o banco: fornecedor = f1 aplicado, exceto quando excluído.
+        return ORDENS.filter((o) => exceto === "fornecedor" || o.fornecedor === "f1");
+      },
+    );
+    expect(chamadas.sort()).toEqual(["fornecedor", null].sort());
+    expect(facetas.fornecedor.sort()).toEqual(["f1", "f2", "f3"]);
+    expect(facetas.status.sort()).toEqual(["aprovado", "pendente"]);
+    expect(facetas.categoria.sort()).toEqual(["material", "pecas"]);
+  });
+
+  it("sem filtro vazio, não roda a consulta com tudo", async () => {
+    const chamadas: (string | null)[] = [];
+    await facetasNoServidor(
+      { status: { ativo: true, chave: (o: Ordem) => o.status } },
+      async (exceto) => {
+        chamadas.push(exceto);
+        return ORDENS;
+      },
+    );
+    expect(chamadas).toEqual(["status"]);
   });
 });

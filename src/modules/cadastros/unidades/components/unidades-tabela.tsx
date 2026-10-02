@@ -27,6 +27,8 @@ import {
   ROTULO_TIPO_UNIDADE,
   TIPOS_UNIDADE,
 } from "@/modules/cadastros/unidades/schemas";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -67,15 +69,18 @@ export function UnidadesTabela({
   const [tipo, setTipo] = useFiltroSessao("tipo", "");
   const [excluindo, setExcluindo] = React.useState<UnidadeLista | null>(null);
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return unidades.filter((unidade) => {
-      if (status === "ativos" && !unidade.ativo) return false;
-      if (status === "inativos" && unidade.ativo) return false;
-      if (tipo !== "" && unidade.tipo !== tipo) return false;
-      if (termo && !unidade.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      unidades,
+      {
+        status: facetaAtivo<UnidadeLista>(status),
+        tipo: { selecionados: selecao(tipo), chave: (unidade) => unidade.tipo },
+      },
+      [(unidade) => !termo || unidade.nome.toLowerCase().includes(termo)],
+    );
   }, [unidades, busca, status, tipo]);
 
   async function aoAlternarAtivo(unidade: UnidadeLista) {
@@ -226,7 +231,7 @@ export function UnidadesTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -242,7 +247,7 @@ export function UnidadesTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />

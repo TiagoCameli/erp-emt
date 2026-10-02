@@ -5,6 +5,7 @@ import { totaisDosFretes } from "@/modules/frete/fretes/calculo";
 import {
   FILTROS_VAZIOS,
   filtrarFretes,
+  filtrarFretesFacetado,
   lerFiltrosFretes,
   normalizarPlaca,
   periodoEsteMes,
@@ -129,6 +130,36 @@ describe("filtrarFretes (FreteListV2)", () => {
     expect(ids({ insumoId: "i2" })).toEqual(["c"]);
     expect(ids({ origemId: "o2" })).toEqual(["c"]);
     expect(ids({ destinoId: "d2" })).toEqual(["c"]);
+  });
+});
+
+describe("filtrarFretesFacetado (pedido de 02/10/2026)", () => {
+  const lista = [
+    frete({ id: "a", transportadoraId: "t1", insumoId: "i1", data: "2026-09-01" }),
+    frete({ id: "b", transportadoraId: "t2", insumoId: "i2", data: "2026-09-05" }),
+    frete({ id: "c", transportadoraId: "t2", insumoId: "i3", data: "2026-09-09" }),
+  ];
+  const transportadoras = [
+    { valor: "t1", rotulo: "T1" },
+    { valor: "t2", rotulo: "T2" },
+  ];
+  const materiais = [
+    { valor: "i1", rotulo: "I1" },
+    { valor: "i2", rotulo: "I2" },
+    { valor: "i3", rotulo: "I3" },
+  ];
+
+  it("escolher a transportadora restringe os materiais; o próprio filtro continua com todas", () => {
+    const { linhas, opcoes } = filtrarFretesFacetado(lista, { ...FILTROS_VAZIOS, transportadoraId: "t2" });
+    expect(linhas.map((f) => f.id)).toEqual(["b", "c"]);
+    expect(opcoes("material", materiais).map((o) => o.valor)).toEqual(["i2", "i3"]);
+    expect(opcoes("transportadora", transportadoras).map((o) => o.valor)).toEqual(["t1", "t2"]);
+  });
+
+  it("o período restringe as opções, e o escolhido sem linha não some", () => {
+    const { opcoes } = filtrarFretesFacetado(lista, { ...FILTROS_VAZIOS, de: "2026-09-05", insumoId: "i1" });
+    expect(opcoes("transportadora", transportadoras)).toEqual([]);
+    expect(opcoes("material", materiais).map((o) => o.valor)).toEqual(["i1", "i2", "i3"]);
   });
 });
 

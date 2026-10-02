@@ -31,6 +31,14 @@ export function situacaoFiltroReajuste(valor: string): SituacaoFiltroReajuste | 
   return Object.prototype.hasOwnProperty.call(ROTULO_FILTRO_SITUACAO_REAJUSTE, valor) ? (valor as SituacaoFiltroReajuste) : undefined;
 }
 
+/**
+ * Em qual opção do filtro de situação a linha da aba cai: sem relatório que valha, ou a situação
+ * dele. É o predicado do filtro (`listarReajustes`) e a chave da faceta (`facetasReajustes`).
+ */
+export function situacaoDaLinhaReajuste(linha: { relatorioId: string | null; situacao: string | null }): string {
+  return linha.relatorioId === null ? "sem_relatorio" : (linha.situacao ?? "");
+}
+
 /** O reajuste entra só em medição enviada ou aprovada (a RPC confere de novo). */
 export function medicaoRecebeReajuste(status: string): boolean {
   return status === "enviada" || status === "aprovada";

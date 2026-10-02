@@ -5,9 +5,19 @@ import { createClient } from "@/lib/supabase/server";
 import {
   aplicarCentroDaSubarvore,
   aplicarFiltrosPagas,
+  facetasDasPagas,
+  filtrosPagasSemFaceta,
   padraoBusca,
   type ConsultaFiltravel,
+  type FacetaPagas,
+  type LinhaFacetaPagas,
 } from "@/modules/financeiro/pagamentos/filtros-pagas";
+import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { separarRaizesEEtapas } from "@/modules/_shared/centro-custo/filtro";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import {
   nomesDoRateio,
   rotuloCentroCusto,
@@ -692,6 +702,71 @@ async function recortarLinhas<
       outras_despesas: 0,
     };
   });
+}
+
+/**
+ * O que existe no histórico filtrado, por filtro de seleção da aba "Pagas"
+ * (ver `_shared/filtros-facetados`). A aba é paginada no banco, então só o
+ * servidor sabe quais fornecedores, contas e centros sobram depois dos outros
+ * filtros.
+ *
+ * Mesmo recorte da lista (`aplicarFiltrosPagas` + `aplicarCentroCusto`), só
+ * com as colunas das chaves e sem paginação: ~9 mil parcelas no pior caso.
+ */
+export async function facetasParcelasPagas(
+  filtros: FiltrosParcelasPagas = {},
+): Promise<FacetasPresentes<FacetaPagas>> {
+  const supabase = await createClient();
+  const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
+
+  // As raízes escolhidas saem da lista efetiva com o cadastro: é delas que a
+  // faceta de etapa precisa (ela solta as etapas, não a raiz).
+  const { raizes, etapas } = filtros.centroCustoIds?.length
+    ? separarRaizesEEtapas(await listarCentrosCusto(), filtros.centroCustoIds)
+    : { raizes: [], etapas: [] };
+
+  return facetasNoServidor<LinhaFacetaPagas, FacetaPagas>(
+    facetasDasPagas(filtros, etapas.length > 0),
+    async (exceto) => {
+      const recorte =
+        exceto === null
+          ? filtros
+          : filtrosPagasSemFaceta(filtros, exceto, raizes);
+      const centro = await aplicarCentroCusto(
+        supabase,
+        aplicarFiltrosPagas(
+          supabase
+            .from("lancamento_parcelas")
+            .select(
+              `conta_bancaria_id,
+               lancamento_formas(forma_pagamento_id),
+               lancamentos!inner(
+                 fornecedor_id, categoria_id, origem,
+                 lancamento_rateios(centro_custo_id)
+               )`,
+            )
+            .eq("status", "pago")
+            .eq("lancamentos.tipo", "a_pagar")
+            .neq("lancamentos.status", "cancelado"),
+          recorte,
+          idsFornecedores,
+        ),
+        recorte.centroCustoIds,
+      );
+      if (centro.vazio) return [];
+      const { linhas, erro } = await todasAsLinhas<LinhaFacetaPagas>(
+        (de, ate) =>
+          centro.consulta
+            .order("id", { ascending: true })
+            .range(de, ate)
+            .returns<LinhaFacetaPagas[]>(),
+      );
+      if (erro) {
+        throw new Error("Não foi possível carregar os filtros do histórico");
+      }
+      return linhas;
+    },
+  );
 }
 
 /**

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { LixeiraTabela } from "@/modules/administracao/lixeira/components/lixeira-tabela";
 import {
+  facetasLixeira,
   listarLixeira,
   listarTabelasLixeira,
   listarUsuariosParaFiltro,
@@ -67,17 +68,17 @@ export default async function LixeiraPage({ searchParams }: LixeiraPageProps) {
   if (de && ate && de > ate) [de, ate] = [ate, de];
   const motivo = textoDe(params.motivo)?.slice(0, MAX_MOTIVO);
 
-  const [{ itens, total }, tabelas, usuarios] = await Promise.all([
-    listarLixeira({
-      pagina,
-      tamanho,
-      somenteAtivos: !mostrarRestaurados,
-      tabela,
-      excluidoPor,
-      de,
-      ate,
-      motivo,
-    }),
+  const filtrosLista = {
+    somenteAtivos: !mostrarRestaurados,
+    tabela,
+    excluidoPor,
+    de,
+    ate,
+    motivo,
+  };
+  const [{ itens, total }, facetas, tabelas, usuarios] = await Promise.all([
+    listarLixeira({ pagina, tamanho, ...filtrosLista }),
+    facetasLixeira(filtrosLista),
     listarTabelasLixeira(),
     listarUsuariosParaFiltro(),
   ]);
@@ -103,6 +104,7 @@ export default async function LixeiraPage({ searchParams }: LixeiraPageProps) {
         tabelas={tabelas}
         usuarios={usuarios}
         podeEditar={temPermissao(usuario, "administracao.lixeira", "editar")}
+        facetas={facetas}
       />
     </div>
   );

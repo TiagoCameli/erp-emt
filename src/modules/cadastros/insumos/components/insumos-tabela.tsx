@@ -41,9 +41,15 @@ import {
 } from "@/modules/cadastros/insumos/actions";
 import type {
   CategoriaOpcao,
+  FacetaInsumos,
   InsumoLista,
   UnidadeOpcao,
 } from "@/modules/cadastros/insumos/queries";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { InsumosFormDrawer } from "./insumos-form-drawer";
 import { ReclassificarDialog } from "./reclassificar-dialog";
 
@@ -71,6 +77,8 @@ export interface InsumosTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaInsumos>;
 }
 
 /**
@@ -98,7 +106,18 @@ export function InsumosTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  facetas,
 }: InsumosTabelaProps) {
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasInsumos`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaInsumos,
+    base: readonly O[],
+    valor: string,
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
   const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaInicial);
 
@@ -462,7 +481,11 @@ export function InsumosTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={facetar(
+                  "status",
+                  OPCOES_STATUS,
+                  status === "todos" ? "" : status,
+                )}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -486,7 +509,11 @@ export function InsumosTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={grupos.map((g) => ({ valor: g.id, rotulo: g.nome }))}
+                opcoes={facetar(
+                  "grupo",
+                  grupos.map((g) => ({ valor: g.id, rotulo: g.nome })),
+                  grupo,
+                )}
                 placeholder="Grupo"
                 todosRotulo="Todos os grupos"
               />
@@ -506,9 +533,13 @@ export function InsumosTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={categorias
-                  .filter((c) => grupo === "" || c.grupoId === grupo)
-                  .map((c) => ({ valor: c.id, rotulo: c.nome }))}
+                opcoes={facetar(
+                  "categoria",
+                  categorias
+                    .filter((c) => grupo === "" || c.grupoId === grupo)
+                    .map((c) => ({ valor: c.id, rotulo: c.nome })),
+                  categoria,
+                )}
                 placeholder="Subcategoria"
                 todosRotulo="Todas as subcategorias"
                 className="max-w-60"
@@ -530,10 +561,14 @@ export function InsumosTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={unidades.map((u) => ({
-                  valor: u.id,
-                  rotulo: `${u.sigla} - ${u.nome}`,
-                }))}
+                opcoes={facetar(
+                  "unidade",
+                  unidades.map((u) => ({
+                    valor: u.id,
+                    rotulo: `${u.sigla} - ${u.nome}`,
+                  })),
+                  unidade,
+                )}
                 placeholder="Unidade"
                 todosRotulo="Todas as unidades"
                 className="max-w-60"

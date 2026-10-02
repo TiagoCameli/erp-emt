@@ -12,6 +12,7 @@ import {
   CotacoesTabela,
 } from "@/modules/compras/cotacoes/components/cotacoes-tabela";
 import {
+  facetasCotacoes,
   listarCategoriasCusto,
   listarCotacoes,
   listarFornecedores,
@@ -48,23 +49,24 @@ export default async function PaginaCotacoes({
     ? parametroValido(params.oc, OC_GERADA_COTACAO)
     : undefined;
 
-  const [{ itens, total }, categorias, fornecedores, insumos] =
+  const filtrosLista = {
+    status,
+    busca,
+    de,
+    ate,
+    categoriaId,
+    fornecedorId,
+    vencedorId,
+    insumoId,
+    ocGerada,
+    autoria,
+    usuarioId: usuario.id,
+  };
+
+  const [{ itens, total }, facetas, categorias, fornecedores, insumos] =
     await Promise.all([
-      listarCotacoes({
-        pagina,
-        tamanho,
-        status,
-        busca,
-        de,
-        ate,
-        categoriaId,
-        fornecedorId,
-        vencedorId,
-        insumoId,
-        ocGerada,
-        autoria,
-        usuarioId: usuario.id,
-      }),
+      listarCotacoes({ pagina, tamanho, ...filtrosLista }),
+      facetasCotacoes(filtrosLista, { podeVerOrdens }),
       listarCategoriasCusto(),
       listarFornecedores(),
       listarInsumos(),
@@ -106,6 +108,7 @@ export default async function PaginaCotacoes({
         fornecedores={fornecedores}
         insumos={insumos}
         idUsuario={usuario.id}
+        facetas={facetas}
       />
     </>
   );

@@ -28,6 +28,7 @@ import {
   TIPOS_MOVIMENTO,
 } from "@/modules/rh/banco-horas/schemas";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { MovimentoFormDrawer } from "./movimento-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -79,20 +80,36 @@ export function MovimentosTabela({
     [],
   );
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todos os movimentos (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
+  // server-side), então o total exibido continua sendo o total real. Facetado:
+  // tipo e colaborador só oferecem o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return movimentos.filter((item) => {
-      if (tipo && item.tipo !== tipo) return false;
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      if (!noPeriodo(item.data, dataDe, dataAte)) return false;
-      if (!naFaixa(item.horas, horasDe, horasAte)) return false;
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      movimentos,
+      {
+        tipo: { selecionados: selecao(tipo), chave: (item) => item.tipo },
+        colaborador: {
+          selecionados: selecao(colaboradorId),
+          chave: (item) => item.colaboradorId,
+        },
+      },
+      [
+        (item) => noPeriodo(item.data, dataDe, dataAte),
+        (item) => naFaixa(item.horas, horasDe, horasAte),
+        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      ],
+    );
   }, [
     movimentos,
     busca,
@@ -215,7 +232,7 @@ export function MovimentosTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={opcoesTipo}
+                opcoes={opcoes("tipo", opcoesTipo)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />
@@ -231,10 +248,7 @@ export function MovimentosTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"

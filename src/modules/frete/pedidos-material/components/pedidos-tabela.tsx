@@ -22,7 +22,7 @@ import { formatarData, formatarDataHora } from "@/lib/formatadores";
 import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
 import { excluirPedido, restaurarPedido } from "@/modules/frete/pedidos-material/actions";
 import type { FornecedorOpcao, InsumoOpcao, PedidoLinha } from "@/modules/frete/pedidos-material/queries";
-import { filtrarPedidos, rotuloTotalPedidos } from "@/modules/frete/pedidos-material/regras";
+import { filtrarPedidosFacetado, rotuloTotalPedidos } from "@/modules/frete/pedidos-material/regras";
 import { PedidoDetalhe } from "./pedido-detalhe";
 import { PedidoFormDrawer } from "./pedido-form-drawer";
 import { PedidoItens } from "./pedido-itens";
@@ -161,8 +161,10 @@ export function PedidosTabela({
     return vendoExcluidos ? [...base, colunaExclusao] : base;
   }, [expandidos, alternar, vendoExcluidos]);
 
-  const filtrados = React.useMemo(
-    () => filtrarPedidos(pedidos, { fornecedorId, materialId, de, ate }),
+  // Facetado: fornecedor e material só oferecem o que existe na lista filtrada
+  // pelo outro e pelo período (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(
+    () => filtrarPedidosFacetado(pedidos, { fornecedorId, materialId, de, ate }),
     [pedidos, fornecedorId, materialId, de, ate],
   );
   const total = filtrados.reduce((s, p) => s + p.valorTotal, 0);
@@ -238,7 +240,7 @@ export function PedidosTabela({
               <FiltroSelect
                 valor={fornecedorId}
                 onValorChange={setFornecedorId}
-                opcoes={opcoesFornecedor}
+                opcoes={opcoes("fornecedor", opcoesFornecedor)}
                 placeholder="Fornecedor"
                 todosRotulo="Todos os fornecedores"
               />
@@ -253,7 +255,7 @@ export function PedidosTabela({
               <FiltroSelect
                 valor={materialId}
                 onValorChange={setMaterialId}
-                opcoes={opcoesMaterial}
+                opcoes={opcoes("material", opcoesMaterial)}
                 placeholder="Material"
                 todosRotulo="Todos os materiais"
               />

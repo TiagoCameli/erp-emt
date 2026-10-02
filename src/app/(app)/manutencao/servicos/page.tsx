@@ -7,6 +7,7 @@ import { NovaOsBotao } from "@/modules/manutencao/servicos/components/nova-os-bo
 import { ServicosTabela } from "@/modules/manutencao/servicos/components/servicos-tabela";
 import { lerFiltrosServicos } from "@/modules/manutencao/servicos/filtros";
 import {
+  facetasServicos,
   listarEquipamentosParaFiltro,
   listarEquipamentosParaOs,
   listarServicos,
@@ -27,8 +28,9 @@ export default async function PaginaServicos({
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const filtros = lerFiltrosServicos(await searchParams);
 
-  const [lista, equipamentosFiltro, equipamentosOs, centros] = await Promise.all([
+  const [lista, facetas, equipamentosFiltro, equipamentosOs, centros] = await Promise.all([
     listarServicos(filtros),
+    facetasServicos(filtros),
     listarEquipamentosParaFiltro(),
     podeCriar ? listarEquipamentosParaOs() : Promise.resolve([]),
     podeCriar ? listarCentrosCusto() : Promise.resolve([]),
@@ -56,6 +58,7 @@ export default async function PaginaServicos({
         busca={filtros.busca ?? ""}
         equipamentos={equipamentosFiltro}
         idUsuario={usuario.id}
+        facetas={facetas}
       />
     </>
   );

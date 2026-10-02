@@ -15,7 +15,16 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
-import type { EquipamentoMedicaoOpcao, MedicaoLista } from "@/modules/manutencao/medicoes/queries";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import type {
+  EquipamentoMedicaoOpcao,
+  FacetaMedicoes,
+  MedicaoLista,
+} from "@/modules/manutencao/medicoes/queries";
 import {
   ROTULO_ORIGEM_MEDICAO,
   ROTULO_TIPO_MEDICAO,
@@ -35,6 +44,8 @@ export interface MedicoesTabelaProps {
   ate: string;
   equipamentos: EquipamentoMedicaoOpcao[];
   podeEditar: boolean;
+  /** Equipamentos com leitura no recorte do período (ver `facetasMedicoes`). */
+  facetas?: FacetasPresentes<FacetaMedicoes>;
 }
 
 /**
@@ -52,19 +63,22 @@ export function MedicoesTabela({
   ate,
   equipamentos,
   podeEditar,
+  facetas,
 }: MedicoesTabelaProps) {
   const { setMuitos, limparTodos } = useFiltrosUrl();
   const [editando, setEditando] = React.useState<MedicaoLista | null>(null);
   const [aberto, setAberto] = React.useState(false);
 
-  const opcoesEquipamento = React.useMemo(
-    () =>
-      equipamentos.map((equipamento) => ({
-        valor: equipamento.id,
-        rotulo: equipamento.ativo ? equipamento.rotulo : `${equipamento.rotulo} (inativo)`,
-      })),
-    [equipamentos],
-  );
+  // Só os equipamentos com leitura no período escolhido; quem sabe é o servidor,
+  // porque a tabela só tem a página (ver `_shared/filtros-facetados`).
+  const opcoesEquipamento = React.useMemo(() => {
+    const base = equipamentos.map((equipamento) => ({
+      valor: equipamento.id,
+      rotulo: equipamento.ativo ? equipamento.rotulo : `${equipamento.rotulo} (inativo)`,
+    }));
+    if (!facetas) return base;
+    return restringirOpcoes(base, new Set(facetas.equipamento), selecao(equipamentoId));
+  }, [equipamentos, facetas, equipamentoId]);
 
   function aoMudarPaginacao(paginacao: PaginationState) {
     setMuitos({ pagina: String(paginacao.pageIndex + 1), tamanho: String(paginacao.pageSize) });

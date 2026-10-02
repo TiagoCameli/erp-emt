@@ -2,6 +2,11 @@ import "server-only";
 
 import type { Json } from "@/lib/database.types";
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { inicioDoDiaISO } from "@/modules/compras/_shared/lista";
 
 // As opções de usuário do filtro são as mesmas da auditoria: ficam no _shared de
@@ -57,6 +62,93 @@ function padraoContem(termo: string): string | null {
   return limpo === "" ? null : `%${limpo}%`;
 }
 
+/** Os filtros da listagem, sem a paginação. */
+export type FiltrosLixeira = Omit<ListarLixeiraParams, "pagina" | "tamanho">;
+
+/** O pedaço do builder do PostgREST que os filtros da lixeira usam. */
+interface ConsultaFiltravelLixeira<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string) => T;
+  lt: (coluna: string, valor: string) => T;
+  is: (coluna: string, valor: null) => T;
+  ilike: (coluna: string, padrao: string) => T;
+}
+
+/**
+ * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
+ * MESMO recorte. Síncrona: o builder é thenable (ver `aplicarFiltrosPagas`).
+ */
+function aplicarFiltrosLixeira<T extends ConsultaFiltravelLixeira<T>>(
+  consultaInicial: T,
+  filtros: FiltrosLixeira,
+): T {
+  let consulta = consultaInicial;
+  if (filtros.somenteAtivos) {
+    consulta = consulta.is("restaurado_em", null);
+  }
+  if (filtros.tabela) consulta = consulta.eq("tabela", filtros.tabela);
+  if (filtros.excluidoPor) {
+    consulta = consulta.eq("excluido_por", filtros.excluidoPor);
+  }
+  // `excluido_em` é timestamptz: o dia do usuário começa 05:00 UTC (Rio Branco),
+  // e o fim do período entra pelo início do dia seguinte para pegar o dia todo.
+  if (filtros.de) {
+    consulta = consulta.gte("excluido_em", inicioDoDiaISO(filtros.de));
+  }
+  if (filtros.ate) {
+    consulta = consulta.lt("excluido_em", inicioDoDiaISO(filtros.ate, 1));
+  }
+  const padraoMotivo = filtros.motivo ? padraoContem(filtros.motivo) : null;
+  if (padraoMotivo) consulta = consulta.ilike("motivo", padraoMotivo);
+  return consulta;
+}
+
+/**
+ * Os filtros de seleção da barra. "Mostrar restaurados", período e motivo
+ * restringem estes, mas não têm lista.
+ */
+export type FacetaLixeira = "tabela" | "por";
+
+/**
+ * Tabelas e autores que existem na lixeira filtrada pelos outros filtros (ver
+ * `_shared/filtros-facetados`): a tabela é paginada no banco, então só o
+ * servidor sabe. A lixeira é pequena (só exclusão com motivo), e a consulta
+ * traz só as duas colunas das chaves.
+ */
+export async function facetasLixeira(
+  filtros: FiltrosLixeira,
+): Promise<FacetasPresentes<FacetaLixeira>> {
+  const supabase = await createClient();
+
+  return facetasNoServidor<
+    { tabela: string; excluido_por: string },
+    FacetaLixeira
+  >(
+    {
+      tabela: { ativo: !!filtros.tabela, chave: (linha) => linha.tabela },
+      por: { ativo: !!filtros.excluidoPor, chave: (linha) => linha.excluido_por },
+    },
+    async (exceto) => {
+      const recorte =
+        exceto === "tabela"
+          ? { ...filtros, tabela: undefined }
+          : exceto === "por"
+            ? { ...filtros, excluidoPor: undefined }
+            : filtros;
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosLixeira(
+          supabase.from("lixeira").select("id, tabela, excluido_por"),
+          recorte,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros da lixeira");
+      return linhas;
+    },
+  );
+}
+
 /**
  * Lista a lixeira paginada no servidor, mais recente primeiro.
  * Faz o join manual dos nomes de quem excluiu e de quem restaurou.
@@ -86,17 +178,14 @@ export async function listarLixeira({
     .order("excluido_em", { ascending: false })
     .range(inicio, inicio + tamanho - 1);
 
-  if (somenteAtivos) {
-    consulta = consulta.is("restaurado_em", null);
-  }
-  if (tabela) consulta = consulta.eq("tabela", tabela);
-  if (excluidoPor) consulta = consulta.eq("excluido_por", excluidoPor);
-  // `excluido_em` é timestamptz: o dia do usuário começa 05:00 UTC (Rio Branco),
-  // e o fim do período entra pelo início do dia seguinte para pegar o dia todo.
-  if (de) consulta = consulta.gte("excluido_em", inicioDoDiaISO(de));
-  if (ate) consulta = consulta.lt("excluido_em", inicioDoDiaISO(ate, 1));
-  const padraoMotivo = motivo ? padraoContem(motivo) : null;
-  if (padraoMotivo) consulta = consulta.ilike("motivo", padraoMotivo);
+  consulta = aplicarFiltrosLixeira(consulta, {
+    somenteAtivos,
+    tabela,
+    excluidoPor,
+    de,
+    ate,
+    motivo,
+  });
 
   const { data, count, error } = await consulta;
   if (error) {

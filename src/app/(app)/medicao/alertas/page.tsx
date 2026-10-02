@@ -6,7 +6,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { AlertasFiltros } from "@/modules/medicao/alertas/components/alertas-filtros";
 import { AlertasTabela } from "@/modules/medicao/alertas/components/alertas-tabela";
 import { ROTULO_GRAVIDADE } from "@/modules/medicao/alertas/formato";
-import { carregarAlertas } from "@/modules/medicao/alertas/queries";
+import { carregarAlertas, facetasAlertas } from "@/modules/medicao/alertas/queries";
 import { listarContratos } from "@/modules/medicao/contratos/queries";
 
 const RECURSO = "medicao.alertas" as const;
@@ -29,9 +29,11 @@ export default async function PaginaAlertas({
   const gravidadeParam = primeiro(params.gravidade);
   const gravidade = Object.prototype.hasOwnProperty.call(ROTULO_GRAVIDADE, gravidadeParam) ? gravidadeParam : "";
 
-  const [contratos, alertas] = await Promise.all([
+  const filtros = { contratoId: contratoId || undefined, gravidade: gravidade || undefined };
+  const [contratos, alertas, facetas] = await Promise.all([
     listarContratos({}),
-    carregarAlertas({ contratoId: contratoId || undefined, gravidade: gravidade || undefined }),
+    carregarAlertas(filtros),
+    facetasAlertas(filtros),
   ]);
 
   return (
@@ -45,6 +47,7 @@ export default async function PaginaAlertas({
         contratos={contratos.map((c) => ({ id: c.id, codigo: c.codigo, nomeObra: c.nomeObra }))}
         contratoId={contratoId}
         gravidade={gravidade}
+        facetas={facetas}
       />
       <AlertasTabela alertas={alertas} />
     </>

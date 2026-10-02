@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { filtrarEntradas, lerFiltrosEntradas } from "@/modules/combustivel/entradas/filtros";
+import { facetarEntradas, filtrarEntradas, lerFiltrosEntradas } from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha } from "@/modules/combustivel/entradas/queries";
 import {
   conflitoCombustivel,
@@ -207,6 +207,27 @@ describe("filtrarEntradas", () => {
     ];
     expect(filtrarEntradas(lista, { ...vazio, tanqueIds: [TANQUE, outro] }).map((e) => e.id)).toEqual(["a", "b"]);
     expect(filtrarEntradas(lista, { ...vazio, fornecedorIds: [FORNECEDOR] }).map((e) => e.id)).toEqual(["a"]);
+  });
+
+  it("facetado: escolher o tanque restringe o combustível e o fornecedor, não o próprio tanque", () => {
+    const outro = "44444444-4444-4444-8444-444444444444";
+    const lista = [
+      entrada("a", "2026-09-20T12:00:00Z", { fornecedorId: FORNECEDOR }),
+      entrada("b", "2026-09-20T12:00:00Z", { tanqueId: outro, insumoId: outro }),
+    ];
+    const { opcoes } = facetarEntradas(lista, { ...vazio, tanqueIds: [outro] });
+    const base = (...ids: string[]) => ids.map((valor) => ({ valor, rotulo: valor }));
+    expect(opcoes("combustivel", base(DIESEL, outro)).map((o) => o.valor)).toEqual([outro]);
+    expect(opcoes("fornecedor", base(FORNECEDOR))).toEqual([]);
+    expect(opcoes("tanque", base(TANQUE, outro)).map((o) => o.valor)).toEqual([TANQUE, outro]);
+  });
+
+  it("facetado: o período corta as opções, mas o escolhido fica", () => {
+    const lista = [entrada("a", "2026-09-20T12:00:00Z"), entrada("b", "2026-09-25T12:00:00Z", { fornecedorId: FORNECEDOR })];
+    const { opcoes } = facetarEntradas(lista, { ...vazio, de: "2026-09-20", ate: "2026-09-20" });
+    expect(opcoes("fornecedor", [{ valor: FORNECEDOR, rotulo: "F" }])).toEqual([]);
+    const comEscolha = facetarEntradas(lista, { ...vazio, de: "2026-09-20", ate: "2026-09-20", fornecedorIds: [FORNECEDOR] });
+    expect(comEscolha.opcoes("fornecedor", [{ valor: FORNECEDOR, rotulo: "F" }])).toHaveLength(1);
   });
 });
 

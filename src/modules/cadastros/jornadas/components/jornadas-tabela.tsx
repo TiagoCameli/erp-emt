@@ -27,6 +27,8 @@ import {
 } from "@/modules/cadastros/jornadas/formato";
 import { removerJornada } from "@/modules/cadastros/jornadas/actions";
 import type { JornadaLista } from "@/modules/cadastros/jornadas/queries";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -78,27 +80,41 @@ export function JornadasTabela({
   const [domingo, setDomingo] = useFiltroSessao("domingo", "");
   const [excluindo, setExcluindo] = React.useState<JornadaLista | null>(null);
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). A faixa de horas restringe os
+  // outros sem ser restringida.
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const minimo = horasDe === "" ? null : Number(horasDe);
     const maximo = horasAte === "" ? null : Number(horasAte);
-    return jornadas.filter((jornada) => {
-      if (status === "ativos" && !jornada.ativo) return false;
-      if (status === "inativos" && jornada.ativo) return false;
-      if (!casaDiaTrabalhado(sabado, jornada.horasSabado)) return false;
-      if (!casaDiaTrabalhado(domingo, jornada.horasDomingo)) return false;
-      if (minimo !== null || maximo !== null) {
-        const semana = horasSemanais(jornada);
-        if (minimo !== null && Number.isFinite(minimo) && semana < minimo) {
-          return false;
-        }
-        if (maximo !== null && Number.isFinite(maximo) && semana > maximo) {
-          return false;
-        }
-      }
-      if (termo && !jornada.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      jornadas,
+      {
+        status: facetaAtivo<JornadaLista>(status),
+        sabado: {
+          selecionados: selecao(sabado),
+          casa: (jornada, valor) => casaDiaTrabalhado(valor, jornada.horasSabado),
+        },
+        domingo: {
+          selecionados: selecao(domingo),
+          casa: (jornada, valor) => casaDiaTrabalhado(valor, jornada.horasDomingo),
+        },
+      },
+      [
+        (jornada) => {
+          if (minimo === null && maximo === null) return true;
+          const semana = horasSemanais(jornada);
+          if (minimo !== null && Number.isFinite(minimo) && semana < minimo) {
+            return false;
+          }
+          if (maximo !== null && Number.isFinite(maximo) && semana > maximo) {
+            return false;
+          }
+          return true;
+        },
+        (jornada) => !termo || jornada.nome.toLowerCase().includes(termo),
+      ],
+    );
   }, [jornadas, busca, status, horasDe, horasAte, sabado, domingo]);
 
   async function aoConfirmarExclusao(motivo?: string) {
@@ -221,7 +237,7 @@ export function JornadasTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -258,7 +274,7 @@ export function JornadasTabela({
               <FiltroSelect
                 valor={sabado}
                 onValorChange={setSabado}
-                opcoes={OPCOES_SIM_NAO}
+                opcoes={opcoes("sabado", OPCOES_SIM_NAO)}
                 placeholder="Sábado"
                 todosRotulo="Sábado: tanto faz"
               />
@@ -274,7 +290,7 @@ export function JornadasTabela({
               <FiltroSelect
                 valor={domingo}
                 onValorChange={setDomingo}
-                opcoes={OPCOES_SIM_NAO}
+                opcoes={opcoes("domingo", OPCOES_SIM_NAO)}
                 placeholder="Domingo"
                 todosRotulo="Domingo: tanto faz"
               />

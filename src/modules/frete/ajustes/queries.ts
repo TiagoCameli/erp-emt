@@ -4,8 +4,14 @@ import type { EventoTrilha } from "@/components/canonicos/trilha";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { listarCentrosCusto, type CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { facetasNoServidor, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
-import { limitesDoPeriodo, type FiltrosAjustes } from "@/modules/frete/ajustes/filtros";
+import {
+  aplicarFiltrosAjustes,
+  filtrosSemFaceta,
+  type FacetaAjustes,
+  type FiltrosAjustes,
+} from "@/modules/frete/ajustes/filtros";
 import {
   eventosDoAuditLog,
   eventosDoRegistro,
@@ -129,22 +135,45 @@ async function completar(supabase: Supabase, linhas: LinhaAjuste[]): Promise<Aju
 /** Todos os ajustes do filtro, do mais novo para o mais velho. */
 export async function listarAjustes(filtros: FiltrosAjustes): Promise<AjusteLista[]> {
   const supabase = await createClient();
-  const { desde, antes } = limitesDoPeriodo(filtros);
-  const { linhas, erro } = await todasAsLinhas((de, ate) => {
-    let consulta = supabase.from("frete_ajustes").select(COLUNAS);
-    if (filtros.transportadoraId) consulta = consulta.eq("transportadora_id", filtros.transportadoraId);
-    if (filtros.status) consulta = consulta.eq("status", filtros.status);
-    if (filtros.sinal) consulta = consulta.eq("sinal", filtros.sinal);
-    if (desde) consulta = consulta.gte("data", desde);
-    if (antes) consulta = consulta.lt("data", antes);
-    return consulta
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    aplicarFiltrosAjustes(supabase.from("frete_ajustes").select(COLUNAS), filtros)
       .order("data", { ascending: false })
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .range(de, ate);
-  });
+      .range(de, ate),
+  );
   if (erro) throw new Error("Não foi possível carregar os ajustes");
   return completar(supabase, linhas);
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`): transportadoras, status e sinais que sobram com
+ * os outros filtros (período inclusive). Só as três colunas das chaves; são
+ * poucas centenas de ajustes.
+ */
+export async function facetasAjustes(filtros: FiltrosAjustes): Promise<FacetasPresentes<FacetaAjustes>> {
+  const supabase = await createClient();
+  type Linha = { transportadora_id: string; status: string; sinal: string };
+  return facetasNoServidor<Linha, FacetaAjustes>(
+    {
+      transportadora: { ativo: !!filtros.transportadoraId, chave: (a) => a.transportadora_id },
+      status: { ativo: !!filtros.status, chave: (a) => a.status },
+      sinal: { ativo: !!filtros.sinal, chave: (a) => a.sinal },
+    },
+    async (exceto) => {
+      const { linhas, erro } = await todasAsLinhas<Linha>((de, ate) =>
+        aplicarFiltrosAjustes(
+          supabase.from("frete_ajustes").select("transportadora_id, status, sinal"),
+          filtrosSemFaceta(filtros, exceto),
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros dos ajustes");
+      return linhas;
+    },
+  );
 }
 
 export async function buscarAjuste(id: string): Promise<AjusteLista | null> {

@@ -28,6 +28,7 @@ import {
   dentroDaJanelaDeMeses,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   STATUS_LANCAMENTO,
   type StatusLancamento,
@@ -187,38 +188,39 @@ export function ExtratoFornecedorTabela({
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }, [lancamentos]);
 
-  const dados = React.useMemo(() => {
+  // Facetado: o status só oferece o que existe nos lançamentos filtrados pelos
+  // outros (ver `_shared/filtros-facetados`). Busca, mês, valor e vencimento
+  // entram livres.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return lancamentos.filter((lancamento) => {
-      // "A pagar" é situação do dinheiro, não status exato do documento: traz
-      // tudo que ainda tem saldo, incluindo o que já foi aprovado. Mesma regra
-      // da listagem de Lançamentos (ver `comSaldoAberto` em filtros.ts), senão o
-      // mesmo filtro traria conjuntos diferentes nas duas telas.
-      if (status === "a_pagar") {
-        if (lancamento.aberto.total <= 0) return false;
-      } else if (status !== "" && lancamento.status !== status) {
-        return false;
-      }
-      if (!dentroDaJanelaDeMeses(lancamento.mesCompetencia, mesDe, mesAte)) {
-        return false;
-      }
-      if (!dentroDaFaixaValor(lancamento.valor, valorDe, valorAte))
-        return false;
-      if (
-        !dentroDoPeriodo(lancamento.dataVencimento, vencimentoDe, vencimentoAte)
-      ) {
-        return false;
-      }
-      if (
-        termo !== "" &&
-        !`${lancamento.numero ?? ""} ${lancamento.descricao}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      lancamentos,
+      {
+        status: {
+          selecionados: selecao(status),
+          // "A pagar" é situação do dinheiro, não status exato do documento:
+          // traz tudo que ainda tem saldo, incluindo o que já foi aprovado.
+          // Mesma regra da listagem de Lançamentos (ver `comSaldoAberto` em
+          // filtros.ts), senão o mesmo filtro traria conjuntos diferentes nas
+          // duas telas.
+          casa: (lancamento, valor) =>
+            valor === "a_pagar"
+              ? lancamento.aberto.total > 0
+              : lancamento.status === valor,
+        },
+      },
+      [
+        (lancamento) =>
+          dentroDaJanelaDeMeses(lancamento.mesCompetencia, mesDe, mesAte) &&
+          dentroDaFaixaValor(lancamento.valor, valorDe, valorAte) &&
+          dentroDoPeriodo(lancamento.dataVencimento, vencimentoDe, vencimentoAte),
+        (lancamento) =>
+          termo === "" ||
+          `${lancamento.numero ?? ""} ${lancamento.descricao}`
+            .toLowerCase()
+            .includes(termo),
+      ],
+    );
   }, [
     lancamentos,
     busca,
@@ -258,7 +260,7 @@ export function ExtratoFornecedorTabela({
         <FiltroSelect
           valor={status}
           onValorChange={mudarStatus}
-          opcoes={opcoesStatus}
+          opcoes={opcoes("status", opcoesStatus)}
           placeholder="Status"
           todosRotulo="Todos os status"
         />

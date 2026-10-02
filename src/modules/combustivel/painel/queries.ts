@@ -8,6 +8,7 @@ import {
   aplicarFiltroGlobal,
   aplicarFiltroGlobalEntradas,
   opcoesDoFiltroGlobal,
+  type FonteDoFiltro,
   type EntradaComFornecedor,
   type FiltroGlobal,
   type OpcoesFiltroGlobal,
@@ -85,9 +86,16 @@ export const carregarEntradasCombustivel = cache(async (): Promise<EntradaPainel
  * As opções da barra de filtros global, para qualquer aba do Combustível:
  * `<BarraFiltrosCombustivel opcoes={await carregarOpcoesFiltroGlobal(filtro)} ... />`.
  */
-export async function carregarOpcoesFiltroGlobal(filtro: FiltroGlobal): Promise<OpcoesFiltroGlobal> {
-  const [base, entradas] = await Promise.all([carregarBaseCombustivel(), carregarEntradasCombustivel()]);
-  return opcoesDoFiltroGlobal(base, entradas, filtro);
+export async function carregarOpcoesFiltroGlobal(
+  filtro: FiltroGlobal,
+  fonte: FonteDoFiltro = "ambas",
+): Promise<OpcoesFiltroGlobal> {
+  // Aba só de saídas não lê as entradas: as opções são facetas da fonte da aba.
+  const [base, entradas] = await Promise.all([
+    carregarBaseCombustivel(),
+    fonte === "saidas" ? Promise.resolve([]) : carregarEntradasCombustivel(),
+  ]);
+  return opcoesDoFiltroGlobal(base, entradas, filtro, fonte);
 }
 
 /** As chaves das anomalias conferidas (saem do KPI, como as "verificadas" da origem). */

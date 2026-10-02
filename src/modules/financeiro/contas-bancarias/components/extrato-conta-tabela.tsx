@@ -28,6 +28,7 @@ import {
   dentroDoPeriodo,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import {
   compararOrdem,
   somarMovimentos,
@@ -328,27 +329,34 @@ export function ExtratoContaTabela({
     [conta],
   );
 
-  const dados = React.useMemo(() => {
+  // Facetado: o sentido só oferece o que existe nos movimentos filtrados pelos
+  // outros (ver `_shared/filtros-facetados`). Busca, data e valor entram
+  // livres; o escopo vai ao servidor e não é faceta.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return movimentos.filter((movimento) => {
-      if (sentido === "entrada" && !movimento.entrada) return false;
-      if (sentido === "saida" && movimento.entrada) return false;
-      if (!dentroDoPeriodo(movimento.data, dataDe, dataAte)) return false;
-      // A faixa de valor compara o ABSOLUTO: quem digita "de 1.000" quer
-      // movimento de mil reais, entrando ou saindo, não só entrada.
-      if (!dentroDaFaixaValor(movimento.valor, valorDe, valorAte)) return false;
-      if (
-        termo !== "" &&
-        !`${movimento.numero ?? ""} ${movimento.numeroDocumento ?? ""} ${
-          movimento.descricao ?? ""
-        } ${movimento.contraparte ?? ""} ${movimento.categoriaNome ?? ""}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      movimentos,
+      {
+        sentido: {
+          selecionados: sentido === "entrada" || sentido === "saida" ? [sentido] : [],
+          chave: (movimento) => (movimento.entrada ? "entrada" : "saida"),
+        },
+      },
+      [
+        // A faixa de valor compara o ABSOLUTO: quem digita "de 1.000" quer
+        // movimento de mil reais, entrando ou saindo, não só entrada.
+        (movimento) =>
+          dentroDoPeriodo(movimento.data, dataDe, dataAte) &&
+          dentroDaFaixaValor(movimento.valor, valorDe, valorAte),
+        (movimento) =>
+          termo === "" ||
+          `${movimento.numero ?? ""} ${movimento.numeroDocumento ?? ""} ${
+            movimento.descricao ?? ""
+          } ${movimento.contraparte ?? ""} ${movimento.categoriaNome ?? ""}`
+            .toLowerCase()
+            .includes(termo),
+      ],
+    );
   }, [movimentos, busca, sentido, dataDe, dataAte, valorDe, valorAte]);
 
   const soma = React.useMemo(() => somarMovimentos(dados), [dados]);
@@ -426,7 +434,7 @@ export function ExtratoContaTabela({
         <FiltroSelect
           valor={sentido}
           onValorChange={mudarSentido}
-          opcoes={OPCOES_SENTIDO}
+          opcoes={opcoes("sentido", OPCOES_SENTIDO)}
           placeholder="Entrada ou saída"
           todosRotulo="Entradas e saídas"
         />

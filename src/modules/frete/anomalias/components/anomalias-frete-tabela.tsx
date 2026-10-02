@@ -30,6 +30,7 @@ import {
   type DetectorId,
   type Severidade,
 } from "@/modules/frete/anomalias/detect";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { linkDoFrete } from "@/modules/frete/anomalias/links";
 import type { AnomaliaFreteLista, FreteDaAnomalia } from "@/modules/frete/anomalias/queries";
 import { MAXIMO_MOTIVO, type Situacao } from "@/modules/frete/anomalias/schemas";
@@ -90,18 +91,26 @@ export function AnomaliasFreteTabela({
   const [desmarcando, setDesmarcando] = React.useState<AnomaliaFreteLista | null>(null);
   const [motivo, setMotivo] = React.useState("");
 
-  const visiveis = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`). Período e busca restringem, sem lista.
+  const { linhas: visiveis, opcoes } = React.useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return anomalias.filter((a) => {
-      if (situacao === "conferidas" && a.conferencia === null) return false;
-      if (situacao === "pendentes" && a.conferencia !== null) return false;
-      if (severidade && a.severity !== severidade) return false;
-      if (regra && a.detector !== regra) return false;
-      if (de && a.data < de) return false;
-      if (ate && a.data > ate) return false;
-      if (q && !`${a.title} ${a.description}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      anomalias,
+      {
+        situacao: {
+          selecionados: situacao === "todas" ? [] : [situacao],
+          casa: (a, valor) => (valor === "conferidas" ? a.conferencia !== null : a.conferencia === null),
+        },
+        severidade: { selecionados: selecao(severidade), chave: (a) => a.severity },
+        regra: { selecionados: selecao(regra), chave: (a) => a.detector },
+      },
+      [
+        (a) => !de || a.data >= de,
+        (a) => !ate || a.data <= ate,
+        (a) => !q || `${a.title} ${a.description}`.toLowerCase().includes(q),
+      ],
+    );
   }, [anomalias, situacao, severidade, regra, de, ate, busca]);
 
   async function aoConfirmarConferencia() {
@@ -264,7 +273,7 @@ export function AnomaliasFreteTabela({
               <FiltroSelect
                 valor={regra}
                 onValorChange={(valor) => setMuitos({ regra: valor === "" ? null : valor })}
-                opcoes={OPCOES_REGRA}
+                opcoes={opcoes("regra", OPCOES_REGRA)}
                 todosRotulo="Todas as regras"
               />
             ),
@@ -279,7 +288,7 @@ export function AnomaliasFreteTabela({
               <FiltroSelect
                 valor={severidade}
                 onValorChange={(valor) => setMuitos({ severidade: valor === "" ? null : valor })}
-                opcoes={OPCOES_SEVERIDADE}
+                opcoes={opcoes("severidade", OPCOES_SEVERIDADE)}
                 todosRotulo="Todas as severidades"
               />
             ),
@@ -313,7 +322,7 @@ export function AnomaliasFreteTabela({
                 onValorChange={(valor) =>
                   setMuitos({ situacao: valor === "" ? "todas" : valor === "pendentes" ? null : valor })
                 }
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 todosRotulo="Todas"
               />
             ),

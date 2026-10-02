@@ -16,6 +16,7 @@ import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarQuantidade } from "@/lib/formatadores";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { alternarAtivoPeca } from "@/modules/manutencao/almoxarifado/actions";
 import type { InsumoOpcao, Opcao, PecaLinha } from "@/modules/manutencao/almoxarifado/queries";
 import { PecaFormDrawer } from "./peca-form-drawer";
@@ -68,22 +69,29 @@ export function PecasLista({
     [pecas],
   );
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: tipo e status só oferecem o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return pecas.filter((peca) => {
-      if (status === "ativos" && !peca.ativo) return false;
-      if (status === "inativos" && peca.ativo) return false;
-      if (tipo === "oleo" && !peca.tipoOleoId) return false;
-      if (tipo === "peca" && peca.tipoOleoId) return false;
-      if (
-        termo &&
-        !peca.insumoNome.toLowerCase().includes(termo) &&
-        !(peca.tipoOleoNome ?? "").toLowerCase().includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      pecas,
+      {
+        status: {
+          selecionados: status === "todos" ? [] : [status],
+          casa: (peca, valor) => (valor === "ativos") === peca.ativo,
+        },
+        tipo: {
+          selecionados: tipo === "todos" ? [] : [tipo],
+          chave: (peca) => (peca.tipoOleoId ? "oleo" : "peca"),
+        },
+      },
+      [
+        (peca) =>
+          !termo ||
+          peca.insumoNome.toLowerCase().includes(termo) ||
+          (peca.tipoOleoNome ?? "").toLowerCase().includes(termo),
+      ],
+    );
   }, [pecas, busca, status, tipo]);
 
   function abrir(peca: PecaLinha) {
@@ -199,7 +207,7 @@ export function PecasLista({
               <FiltroSelect
                 valor={tipo === "todos" ? "" : tipo}
                 onValorChange={(valor) => setTipo(valor === "" ? "todos" : (valor as FiltroTipo))}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Peças e óleos"
               />
@@ -214,7 +222,7 @@ export function PecasLista({
               <FiltroSelect
                 valor={status === "todos" ? "" : status}
                 onValorChange={(valor) => setStatus(valor === "" ? "todos" : (valor as FiltroStatus))}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todas"
               />

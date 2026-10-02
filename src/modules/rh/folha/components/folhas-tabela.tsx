@@ -29,6 +29,7 @@ import {
   type StatusFolha,
 } from "@/modules/rh/_shared/formato";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { FolhaLista } from "@/modules/rh/folha/queries";
 import { GerarFolhaFormDrawer } from "./gerar-folha-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -111,25 +112,27 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
   const [liquidoDe, setLiquidoDe] = useFiltroSessao("liquidoDe", "");
   const [liquidoAte, setLiquidoAte] = useFiltroSessao("liquidoAte", "");
 
-  const dados = React.useMemo(() => {
+  // Facetado: a situação só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). Competência, período e valores
+  // restringem, mas não são restringidos.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const competencia = mesParaCompetencia(mes);
-    return folhas.filter((folha) => {
-      if (competencia !== "" && folha.competencia !== competencia) return false;
-      if (status !== "" && folha.status !== status) return false;
-      // aprovado_em é timestamptz (UTC); noPeriodo compara string de dia, então
-      // precisa do dia LOCAL (Rio Branco), não o dia cru do ISO em UTC — senão
-      // uma folha aprovada às 19h+ locais (já no dia seguinte em UTC) some do
-      // filtro de período, e depois das 19h a coluna exibida (formatarData, já
-      // em fuso local) divergiria do dia que o filtro considerou.
-      if (
-        !noPeriodo(dataLocalISO(folha.aprovadoEm), aprovacaoDe, aprovacaoAte)
-      ) {
-        return false;
-      }
-      if (!naFaixa(folha.custoTotal, custoDe, custoAte)) return false;
-      if (!naFaixa(folha.valorLiquido, liquidoDe, liquidoAte)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      folhas,
+      { status: { selecionados: selecao(status), chave: (folha) => folha.status } },
+      [
+        (folha) => competencia === "" || folha.competencia === competencia,
+        // aprovado_em é timestamptz (UTC); noPeriodo compara string de dia, então
+        // precisa do dia LOCAL (Rio Branco), não o dia cru do ISO em UTC: senão
+        // uma folha aprovada às 19h+ locais (já no dia seguinte em UTC) some do
+        // filtro de período, e depois das 19h a coluna exibida (formatarData, já
+        // em fuso local) divergiria do dia que o filtro considerou.
+        (folha) =>
+          noPeriodo(dataLocalISO(folha.aprovadoEm), aprovacaoDe, aprovacaoAte),
+        (folha) => naFaixa(folha.custoTotal, custoDe, custoAte),
+        (folha) => naFaixa(folha.valorLiquido, liquidoDe, liquidoAte),
+      ],
+    );
   }, [
     folhas,
     mes,
@@ -171,7 +174,7 @@ export function FolhasTabela({ folhas, podeCriar }: FolhasTabelaProps) {
               <FiltroSelect
                 valor={status}
                 onValorChange={setStatus}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />

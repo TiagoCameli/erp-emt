@@ -7,6 +7,7 @@ import { Copy, ExternalLink, Plus, ShoppingCart } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
+  type OpcaoFiltro,
   BarraSelecao,
   BotaoEspelho,
   CelulaDescricaoCategoria,
@@ -45,11 +46,17 @@ import type {
   CategoriaOpcao,
   CentroCustoOpcao,
   CondicaoPagamentoOpcao,
+  FacetaOrdens,
   FormaPagamentoOpcao,
   FornecedorOpcao,
   InsumoOpcao,
   OrdemLista,
 } from "@/modules/compras/ordens/queries";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { LoteExcluirOrdens } from "./lote-excluir-ordens";
 import { useNovaOrdem } from "./nova-ordem-provider";
 
@@ -246,6 +253,8 @@ export interface OrdensTabelaProps {
    * esconde o que a pessoa não pode fazer.
    */
   podeExcluir: boolean;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaOrdens>;
 }
 
 /**
@@ -286,8 +295,20 @@ export function OrdensTabela({
   insumos,
   idUsuario,
   podeExcluir,
+  facetas,
 }: OrdensTabelaProps) {
   const router = useRouter();
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasOrdens`).
+  function facetar<O extends OpcaoFiltro>(
+    id: FacetaOrdens,
+    base: readonly O[],
+    valor: string,
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
   const { setMuitos, limparTodos } = useFiltrosUrl();
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const novaOrdem = useNovaOrdem();
@@ -436,7 +457,7 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={facetar("status", OPCOES_STATUS, status)}
                 placeholder="Status"
                 todosRotulo="Todos os status"
               />
@@ -456,10 +477,14 @@ export function OrdensTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={fornecedores.map((fornecedor) => ({
-                  valor: fornecedor.id,
-                  rotulo: fornecedor.nome,
-                }))}
+                opcoes={facetar(
+                  "fornecedor",
+                  fornecedores.map((fornecedor) => ({
+                    valor: fornecedor.id,
+                    rotulo: fornecedor.nome,
+                  })),
+                  fornecedorId,
+                )}
                 placeholder="Fornecedor"
                 todosRotulo="Todos os fornecedores"
                 className="max-w-56"
@@ -529,10 +554,14 @@ export function OrdensTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={categorias.map((categoria) => ({
-                  valor: categoria.id,
-                  rotulo: categoria.nome,
-                }))}
+                opcoes={facetar(
+                  "categoria",
+                  categorias.map((categoria) => ({
+                    valor: categoria.id,
+                    rotulo: categoria.nome,
+                  })),
+                  categoriaId,
+                )}
                 placeholder="Categoria do custo"
                 todosRotulo="Todas as categorias"
                 className="max-w-56"
@@ -551,10 +580,14 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ forma: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={formasPagamento.map((forma) => ({
-                  valor: forma.id,
-                  rotulo: forma.nome,
-                }))}
+                opcoes={facetar(
+                  "forma",
+                  formasPagamento.map((forma) => ({
+                    valor: forma.id,
+                    rotulo: forma.nome,
+                  })),
+                  formaPagamentoId,
+                )}
                 placeholder="Forma"
                 todosRotulo="Todas as formas"
               />
@@ -572,10 +605,14 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ condicao: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={condicoesPagamento.map((condicao) => ({
-                  valor: condicao.id,
-                  rotulo: condicao.descricao,
-                }))}
+                opcoes={facetar(
+                  "condicao",
+                  condicoesPagamento.map((condicao) => ({
+                    valor: condicao.id,
+                    rotulo: condicao.descricao,
+                  })),
+                  condicaoPagamentoId,
+                )}
                 placeholder="Condição"
                 todosRotulo="Todas as condições"
                 className="max-w-56"
@@ -636,7 +673,7 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ nota: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={OPCOES_NOTA_OC}
+                opcoes={facetar("nota", OPCOES_NOTA_OC, nota)}
                 placeholder="Nota fiscal"
                 todosRotulo="Com e sem nota"
               />
@@ -654,7 +691,7 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ origem: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={OPCOES_ORIGEM_OC}
+                opcoes={facetar("origem", OPCOES_ORIGEM_OC, origem)}
                 placeholder="Origem"
                 todosRotulo="Qualquer origem"
               />
@@ -673,12 +710,16 @@ export function OrdensTabela({
                   setMuitos({ centro: valor === "" ? null : valor, pagina: "1" })
                 }
                 // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
-                opcoes={centrosCusto.map((centro) => ({
-                  valor: centro.id,
-                  rotulo: centro.codigo
-                    ? `${centro.codigo} ${centro.nome}`
-                    : centro.nome,
-                }))}
+                opcoes={facetar(
+                  "centro",
+                  centrosCusto.map((centro) => ({
+                    valor: centro.id,
+                    rotulo: centro.codigo
+                      ? `${centro.codigo} ${centro.nome}`
+                      : centro.nome,
+                  })),
+                  centroCustoId,
+                )}
                 placeholder="Centro de custo"
                 todosRotulo="Todos os centros de custo"
                 className="max-w-56"
@@ -697,10 +738,14 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ insumo: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={insumos.map((insumo) => ({
-                  valor: insumo.id,
-                  rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
-                }))}
+                opcoes={facetar(
+                  "insumo",
+                  insumos.map((insumo) => ({
+                    valor: insumo.id,
+                    rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
+                  })),
+                  insumoId,
+                )}
                 placeholder="Insumo"
                 todosRotulo="Todos os insumos"
                 className="max-w-56"
@@ -719,7 +764,7 @@ export function OrdensTabela({
                 onValorChange={(valor) =>
                   setMuitos({ autoria: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={OPCOES_AUTORIA_OC}
+                opcoes={facetar("autoria", OPCOES_AUTORIA_OC, autoria)}
                 placeholder="Autoria"
                 todosRotulo="Qualquer autor"
               />

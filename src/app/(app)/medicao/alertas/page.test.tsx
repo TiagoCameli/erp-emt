@@ -19,6 +19,7 @@ vi.mock("@/modules/medicao/contratos/queries", () => ({
 }));
 vi.mock("@/modules/medicao/alertas/queries", () => ({
   carregarAlertas: (...args: unknown[]) => carregarAlertas(...args),
+  facetasAlertas: vi.fn().mockResolvedValue({ contrato: [], gravidade: [] }),
 }));
 vi.mock("@/modules/medicao/alertas/components/alertas-filtros", () => ({
   AlertasFiltros: () => <div data-testid="filtros" />,

@@ -43,7 +43,15 @@ import {
   separarCentrosDaListagem,
   temEtapasParaEscolher,
 } from "@/modules/_shared/centro-custo/filtro";
+import {
+  restringirOpcoes,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
+import {
+  raizesPresentes,
+  type FacetaLancamentos,
+} from "@/modules/financeiro/lancamentos/facetas";
 import { BotaoDuplicarLancamento } from "@/modules/financeiro/lancamentos/components/botao-duplicar-lancamento";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
@@ -392,6 +400,8 @@ export interface LancamentosTabelaProps {
    * do centro exigiria uma segunda leitura do banco no cliente.
    */
   rotuloRecorte: string | null;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaLancamentos>;
 }
 
 /**
@@ -414,6 +424,7 @@ export function LancamentosTabela({
   podeExcluir,
   podeCriar,
   rotuloRecorte,
+  facetas,
 }: LancamentosTabelaProps) {
   const colunas = React.useMemo(
     () => montarColunas(rotuloRecorte),
@@ -537,6 +548,32 @@ export function LancamentosTabela({
   );
 
   const nomesEtapa = rotuloDasEtapas(centrosCusto, raizesEscolhidas);
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver
+  // `facetasLancamentos` e `_shared/filtros-facetados`). O centro chega com o id
+  // cru do rateio e sobe até a raiz aqui, com o cadastro que a tela já tem.
+  const presentesCentro = React.useMemo(
+    () => (facetas ? raizesPresentes(centrosCusto, facetas.centro) : null),
+    [facetas, centrosCusto],
+  );
+  function facetar<O extends OpcaoFiltro>(
+    id: FacetaLancamentos,
+    base: readonly O[],
+    escolhidos: string | string[],
+  ): O[] {
+    if (!facetas) return [...base];
+    const presentes =
+      id === "centro" && presentesCentro
+        ? presentesCentro
+        : new Set(facetas[id]);
+    const selecionados = Array.isArray(escolhidos)
+      ? escolhidos
+      : escolhidos
+        ? [escolhidos]
+        : [];
+    return restringirOpcoes(base, presentes, selecionados);
+  }
 
   /** Grava os dois campos no `centro=`, sempre numa navegação só. */
   const escreverCentro = React.useCallback(
@@ -807,7 +844,7 @@ export function LancamentosTabela({
       chave: "status",
       rotulo: "Status",
       valor: valores.status,
-      opcoes: OPCOES_STATUS,
+      opcoes: facetar("status", OPCOES_STATUS, valores.status),
       todosRotulo: "Todos os status",
     }),
     {
@@ -844,14 +881,14 @@ export function LancamentosTabela({
       chave: "atraso",
       rotulo: "Atraso",
       valor: valores.atraso,
-      opcoes: OPCOES_ATRASO,
+      opcoes: facetar("atraso", OPCOES_ATRASO, valores.atraso),
       todosRotulo: "Vencidos e a vencer",
     }),
     selecao({
       chave: "revisao",
       rotulo: "Revisão",
       valor: valores.revisao,
-      opcoes: OPCOES_REVISAO,
+      opcoes: facetar("revisao", OPCOES_REVISAO, valores.revisao),
       todosRotulo: "Qualquer revisão",
       oculto: true,
     }),
@@ -859,7 +896,7 @@ export function LancamentosTabela({
       chave: "fornecedor",
       rotulo: "Fornecedor",
       valores: valores.fornecedores,
-      opcoes: opcoesFornecedor,
+      opcoes: facetar("fornecedor", opcoesFornecedor, valores.fornecedores),
       todosRotulo: "Todos os fornecedores",
       oculto: true,
       largura: LARGURA_NOME,
@@ -868,7 +905,7 @@ export function LancamentosTabela({
       chave: "categoria",
       rotulo: "Categoria",
       valores: valores.categorias,
-      opcoes: opcoesCategoria,
+      opcoes: facetar("categoria", opcoesCategoria, valores.categorias),
       todosRotulo: "Todas as categorias",
       oculto: true,
       largura: LARGURA_NOME,
@@ -877,7 +914,7 @@ export function LancamentosTabela({
       chave: "centro",
       rotulo: "Centro de custo",
       valores: raizesEscolhidas,
-      opcoes: opcoesCentro,
+      opcoes: facetar("centro", opcoesCentro, raizesEscolhidas),
       todosRotulo: "Todos os centros de custo",
       oculto: true,
       largura: LARGURA_NOME,
@@ -899,7 +936,7 @@ export function LancamentosTabela({
             chave: "etapa",
             rotulo: nomesEtapa.rotulo,
             valores: etapasEscolhidas,
-            opcoes: opcoesEtapa,
+            opcoes: facetar("etapa", opcoesEtapa, etapasEscolhidas),
             todosRotulo: nomesEtapa.todos,
             largura: LARGURA_NOME,
             onValores: (ids) => escreverCentro(raizesEscolhidas, ids),
@@ -911,7 +948,7 @@ export function LancamentosTabela({
       chave: "conta",
       rotulo: "Conta bancária",
       valor: valores.conta,
-      opcoes: opcoesConta,
+      opcoes: facetar("conta", opcoesConta, valores.conta),
       todosRotulo: "Todas as contas",
       oculto: true,
       largura: LARGURA_NOME,
@@ -920,7 +957,7 @@ export function LancamentosTabela({
       chave: "forma",
       rotulo: "Forma de pagamento",
       valores: valores.formas,
-      opcoes: opcoesForma,
+      opcoes: facetar("forma", opcoesForma, valores.formas),
       todosRotulo: "Todas as formas",
       oculto: true,
       largura: LARGURA_NOME,
@@ -929,7 +966,7 @@ export function LancamentosTabela({
       chave: "origem",
       rotulo: "Origem",
       valor: valores.origem,
-      opcoes: OPCOES_ORIGEM,
+      opcoes: facetar("origem", OPCOES_ORIGEM, valores.origem),
       todosRotulo: "Todas as origens",
       oculto: true,
     }),

@@ -266,10 +266,47 @@ describe("opcoesDoFiltroGlobal", () => {
   });
 
   it("no modo carretas, placa, motorista e transportadora vêm das carretas; o marcado sempre entra", () => {
-    const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro({ modo: "carretas", obras: [OBRA_B] }));
+    const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro({ modo: "carretas" }));
     expect(opcoes.placas).toEqual([{ valor: "ABC1D23", rotulo: "ABC1D23" }]);
     expect(opcoes.operadores).toEqual([{ valor: "Zé", rotulo: "Zé" }]);
     expect(opcoes.transportadoras).toEqual([{ valor: TRANSP, rotulo: "Transportes X" }]);
-    expect(opcoes.obras.map((o) => o.valor)).toContain(OBRA_B);
+    // Facetado: a carreta não tem obra, então a obra B marcada corta placa e motorista, mas fica na lista.
+    const comObra = opcoesDoFiltroGlobal(base, entradas, filtro({ modo: "carretas", obras: [OBRA_B] }));
+    expect(comObra.obras.map((o) => o.valor)).toContain(OBRA_B);
+    expect(comObra.placas).toEqual([]);
+  });
+
+  it("facetado: cada lista só oferece o que existe nas saídas que passam nos OUTROS filtros", () => {
+    const comDuasObras: BaseCombustivel = {
+      ...base,
+      saidas: [
+        ...base.saidas,
+        saida({ obraId: OBRA_B, motorista: "Maria", equipamentoId: EQ_2, tipoCombustivel: ARLA }),
+        saida({ obraId: OBRA_B, motorista: "Fora do período", data: "2026-08-01T08:00:00" }),
+      ],
+    };
+    const opcoes = opcoesDoFiltroGlobal(comDuasObras, entradas, filtro({ obras: [OBRA_A] }));
+    // Operador só da obra escolhida; a de fora do período não entra em lista nenhuma.
+    expect(opcoes.operadores.map((o) => o.valor)).toEqual(["João"]);
+    // A própria obra não se restringe: continua oferecendo as duas do período.
+    expect(opcoes.obras.map((o) => o.valor).sort()).toEqual([OBRA_A, OBRA_B].sort());
+    // Combustível: o S10 da obra A nas saídas; o Arla vem das entradas (obra não corta entrada).
+    expect(opcoes.combustiveis.map((o) => o.rotulo)).toEqual(["Arla 32", "Diesel S10"]);
+
+    // Só saídas (abas Equipamentos e Obras): a entrada não traz o Arla.
+    const soSaidas = opcoesDoFiltroGlobal(comDuasObras, entradas, filtro({ obras: [OBRA_A] }), "saidas");
+    expect(soSaidas.combustiveis.map((o) => o.rotulo)).toEqual(["Diesel S10"]);
+  });
+
+  it("facetado: fornecedor corta tanque e combustível das entradas, e o marcado nunca some", () => {
+    const duas: EntradaComFornecedor[] = [
+      ...entradas,
+      { data: "2026-09-11T08:00:00", tanqueId: null, insumoId: S10, fornecedorId: FORN_2, fornecedorNome: "Posto B" },
+    ];
+    const opcoes = opcoesDoFiltroGlobal(base, duas, filtro({ fornecedores: [FORN_2], combustiveis: [ARLA] }), "entradas");
+    expect(opcoes.combustiveis.map((o) => o.rotulo)).toEqual(["Arla 32", "Diesel S10"]);
+    expect(opcoes.tanques).toEqual([]);
+    // Fornecedor sem o próprio filtro, mas com o Arla escolhido: só o Posto A tem Arla; o B fica por estar marcado.
+    expect(opcoes.fornecedores.map((o) => o.rotulo)).toEqual(["Posto A", "Posto B"]);
   });
 });

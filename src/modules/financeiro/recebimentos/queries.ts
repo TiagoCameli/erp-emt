@@ -3,6 +3,10 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
   nomesDoRateio,
   rotuloCentroCusto,
 } from "@/modules/financeiro/_shared/centro-de-custo";
@@ -300,33 +304,30 @@ async function idsClientesPorNome(
   return (data ?? []).map((cliente) => cliente.id);
 }
 
+/** O pedaço do builder do PostgREST que os filtros dos recebidos usam. */
+interface ConsultaFiltravelRecebidas<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string | number) => T;
+  lte: (coluna: string, valor: string | number) => T;
+  or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+}
+
 /**
- * Histórico paginado de parcelas recebidas, mais recentes primeiro. Resolve
- * conta, cliente e categoria via join, e aplica TODOS os filtros no banco.
+ * Aplica os filtros da aba "Recebidos". Serve a lista e as facetas
+ * (`facetasRecebidas`), que precisam do MESMO recorte.
+ *
+ * Síncrona, com os ids de cliente da busca já resolvidos: o builder é
+ * "thenable", e uma função async o dispararia no return (ver
+ * `aplicarFiltrosPagas`).
  */
-export async function listarParcelasRecebidas({
-  pagina,
-  tamanho,
-  filtros = {},
-}: {
-  pagina: number;
-  tamanho: number;
-  filtros?: FiltrosRecebidas;
-}): Promise<RecebidasPagina> {
-  const supabase = await createClient();
-
-  const de = pagina * tamanho;
-  const ate = de + tamanho - 1;
-
-  let consulta = supabase
-    .from("lancamento_parcelas")
-    .select(SELECT_RECEBIDA, { count: "exact" })
-    .eq("status", "pago")
-    .eq("lancamentos.tipo", "a_receber");
-
+function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
+  consultaInicial: T,
+  filtros: FiltrosRecebidas,
+  idsClientes: string[],
+): T {
+  let consulta = consultaInicial;
   if (filtros.busca?.trim()) {
     const padrao = padraoBusca(filtros.busca);
-    const idsClientes = await idsClientesPorNome(supabase, padrao);
     const termos = [
       `numero.ilike.${padrao}`,
       `numero_documento.ilike.${padrao}`,
@@ -368,6 +369,123 @@ export async function listarParcelasRecebidas({
   if (filtros.recebimentoAte) {
     consulta = consulta.lte("data_pagamento", filtros.recebimentoAte);
   }
+  return consulta;
+}
+
+/** Os filtros de seleção da aba "Recebidos", no id da barra. */
+export type FacetaRecebidas = "cliente" | "conta" | "categoria";
+
+interface LinhaFacetaRecebidas {
+  conta_bancaria_id: string | null;
+  lancamentos:
+    | { cliente_id: string | null; categoria_id: string | null }
+    | { cliente_id: string | null; categoria_id: string | null }[]
+    | null;
+}
+
+/** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
+const PARAMETRO_DA_FACETA: Record<FacetaRecebidas, keyof FiltrosRecebidas> = {
+  cliente: "clienteId",
+  conta: "contaBancariaId",
+  categoria: "categoriaId",
+};
+
+/**
+ * O que existe no histórico de recebidos filtrado, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A aba é paginada no banco, então só o servidor
+ * sabe quais pagadores, contas e categorias sobram depois dos outros filtros.
+ * Só as colunas das chaves, sem paginação: recebimento é a menor fatia das
+ * parcelas.
+ */
+export async function facetasRecebidas(
+  filtros: FiltrosRecebidas = {},
+): Promise<FacetasPresentes<FacetaRecebidas>> {
+  const supabase = await createClient();
+  const idsClientes = filtros.busca?.trim()
+    ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
+    : [];
+  const doLancamento = (linha: LinhaFacetaRecebidas) =>
+    linha.lancamentos === null
+      ? []
+      : Array.isArray(linha.lancamentos)
+        ? linha.lancamentos
+        : [linha.lancamentos];
+
+  return facetasNoServidor<LinhaFacetaRecebidas, FacetaRecebidas>(
+    {
+      cliente: {
+        ativo: !!filtros.clienteId,
+        chave: (linha) => doLancamento(linha).map((l) => l.cliente_id),
+      },
+      conta: {
+        ativo: !!filtros.contaBancariaId,
+        chave: (linha) => linha.conta_bancaria_id,
+      },
+      categoria: {
+        ativo: !!filtros.categoriaId,
+        chave: (linha) => doLancamento(linha).map((l) => l.categoria_id),
+      },
+    },
+    async (exceto) => {
+      const recorte =
+        exceto === null
+          ? filtros
+          : { ...filtros, [PARAMETRO_DA_FACETA[exceto]]: undefined };
+      const { linhas, erro } = await todasAsLinhas<LinhaFacetaRecebidas>(
+        (de, ate) =>
+          aplicarFiltrosRecebidas(
+            supabase
+              .from("lancamento_parcelas")
+              .select(
+                "conta_bancaria_id, lancamentos!inner(cliente_id, categoria_id)",
+              )
+              .eq("status", "pago")
+              .eq("lancamentos.tipo", "a_receber"),
+            recorte,
+            idsClientes,
+          )
+            .order("id", { ascending: true })
+            .range(de, ate)
+            .returns<LinhaFacetaRecebidas[]>(),
+      );
+      if (erro) {
+        throw new Error("Não foi possível carregar os filtros dos recebimentos");
+      }
+      return linhas;
+    },
+  );
+}
+
+/**
+ * Histórico paginado de parcelas recebidas, mais recentes primeiro. Resolve
+ * conta, cliente e categoria via join, e aplica TODOS os filtros no banco.
+ */
+export async function listarParcelasRecebidas({
+  pagina,
+  tamanho,
+  filtros = {},
+}: {
+  pagina: number;
+  tamanho: number;
+  filtros?: FiltrosRecebidas;
+}): Promise<RecebidasPagina> {
+  const supabase = await createClient();
+
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  const idsClientes = filtros.busca?.trim()
+    ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
+    : [];
+  const consulta = aplicarFiltrosRecebidas(
+    supabase
+      .from("lancamento_parcelas")
+      .select(SELECT_RECEBIDA, { count: "exact" })
+      .eq("status", "pago")
+      .eq("lancamentos.tipo", "a_receber"),
+    filtros,
+    idsClientes,
+  );
 
   const { data, error, count } = await consulta
     .order("data_pagamento", { ascending: false, nullsFirst: false })

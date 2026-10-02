@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   APLICACOES_OLEO,
   ROTULO_APLICACAO_OLEO,
@@ -61,15 +62,21 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
   const [excluindo, setExcluindo] = React.useState<TipoOleoLista | null>(null);
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: aplicação e status só oferecem o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return tipos.filter((tipo) => {
-      if (status === "ativos" && !tipo.ativo) return false;
-      if (status === "inativos" && tipo.ativo) return false;
-      if (aplicacao !== "" && tipo.aplicacao !== aplicacao) return false;
-      if (termo && !tipo.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      tipos,
+      {
+        status: {
+          selecionados: status === "todos" ? [] : [status],
+          casa: (tipo, valor) => (valor === "ativos") === tipo.ativo,
+        },
+        aplicacao: { selecionados: selecao(aplicacao), chave: (tipo) => tipo.aplicacao },
+      },
+      [(tipo) => !termo || tipo.nome.toLowerCase().includes(termo)],
+    );
   }, [tipos, busca, aplicacao, status]);
 
   const aoAlternarAtivo = React.useCallback(async (tipo: TipoOleoLista) => {
@@ -197,7 +204,7 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
               <FiltroSelect
                 valor={aplicacao}
                 onValorChange={setAplicacao}
-                opcoes={OPCOES_APLICACAO}
+                opcoes={opcoes("aplicacao", OPCOES_APLICACAO)}
                 placeholder="Aplicação"
                 todosRotulo="Todas as aplicações"
               />
@@ -212,7 +219,7 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
               <FiltroSelect
                 valor={status === "todos" ? "" : status}
                 onValorChange={(valor) => setStatus(valor === "" ? "todos" : (valor as FiltroStatus))}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />

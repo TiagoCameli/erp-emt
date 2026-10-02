@@ -338,6 +338,41 @@ export interface PainelCarretas {
   rotas: LinhaRota[];
   /** Fretes fora do padrão da rota ainda não conferidos, agrupados por rota e regra. */
   alertas: AlertaRota[];
+  /** O que os filtros de carreta e tipo oferecem (ver `presentesNosFiltros`). */
+  presentes: PresentesNosFiltros;
+}
+
+export interface PresentesNosFiltros {
+  /** Placas de carreta com frete ou gasto no recorte dos outros filtros. */
+  placas: string[];
+  /** Tipos de transporte com frete no recorte dos outros filtros. */
+  tipos: string[];
+}
+
+/**
+ * Facetado (ver `_shared/filtros-facetados`), pedido do Tiago de 02/10/2026: o
+ * filtro de carreta só oferece as placas com dado no período, no tipo e na rota
+ * escolhidos, e o de tipo só os tipos dos fretes do período, da carreta e da rota.
+ * O período restringe, sem lista. O gasto não tem tipo nem rota (é da carreta
+ * inteira), então conta para a placa em qualquer tipo, como no painel.
+ */
+export function presentesNosFiltros(dados: DadosCarretas, filtro: FiltroCarretas): PresentesNosFiltros {
+  const dentro = (mes: string) => mes >= filtro.de && mes <= filtro.ate;
+  const placaDoCentro = new Map(dados.carretas.map((k) => [k.centroId, k.placa]));
+  const escolhida = filtro.placa ? normalizarPlaca(filtro.placa) : "";
+  const naRota = (f: FreteMes) => !filtro.rota || `${f.origemId ?? ""}_${f.destinoId ?? ""}` === filtro.rota;
+  const placas = new Set<string>();
+  const tipos = new Set<string>();
+  for (const f of dados.fretes) {
+    if (!dentro(f.mes) || !naRota(f)) continue;
+    if (!filtro.tipo || f.tipo === filtro.tipo) placas.add(f.placa);
+    if (!escolhida || f.placa === escolhida) tipos.add(f.tipo);
+  }
+  for (const g of dados.gastos) {
+    const placa = placaDoCentro.get(g.centroId);
+    if (placa && dentro(g.mes)) placas.add(placa);
+  }
+  return { placas: [...placas].sort(), tipos: [...tipos].sort() };
 }
 
 const c = (reais: number) => Math.round(reais * 100);
@@ -683,5 +718,6 @@ export function montarPainel(dados: DadosCarretas, filtro: FiltroCarretas, mesAt
     // A tabela de rotas mostra todas (é nela que se troca a rota); os alertas seguem a rota escolhida.
     rotas: montarRotas(dados, { ...filtro, rota: "" }),
     alertas: montarAlertas(dados, filtro),
+    presentes: presentesNosFiltros(dados, filtro),
   };
 }

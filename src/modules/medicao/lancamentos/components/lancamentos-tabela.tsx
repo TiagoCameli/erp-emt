@@ -26,7 +26,9 @@ import { ColarLancamentos } from "@/modules/medicao/lancamentos/components/colar
 import { ExcluirLancamento } from "@/modules/medicao/lancamentos/components/excluir-lancamento";
 import { LancamentoDrawer } from "@/modules/medicao/lancamentos/components/lancamento-drawer";
 import { numeroExibicao } from "@/modules/medicao/planilha/formato";
+import type { FacetaLancamentos } from "@/modules/medicao/lancamentos/queries";
 import type { LancamentoLista, ServicoParaLancar } from "@/modules/medicao/lancamentos/tipos";
+import { restringirOpcoes, selecao, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 
 export interface MedicaoParaFiltro {
   numero: number;
@@ -148,6 +150,8 @@ export interface LancamentosTabelaProps {
   podeCriar: boolean;
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** Valores que existem na lista filtrada, por filtro de seleção (ver `facetasLancamentos`). */
+  facetas?: FacetasPresentes<FacetaLancamentos>;
 }
 
 /**
@@ -164,6 +168,7 @@ export function LancamentosTabela({
   podeCriar,
   podeEditar,
   podeExcluir,
+  facetas,
 }: LancamentosTabelaProps) {
   const router = useRouter();
   const { get, setMuitos, limparTodos } = useFiltrosUrl();
@@ -188,6 +193,12 @@ export function LancamentosTabela({
     return [...mapa.entries()].map(([valor, rotulo]) => ({ valor, rotulo }));
   }, [servicos, lancamentos]);
 
+  // Cada filtro só oferece o que existe com os outros aplicados (ver `_shared/filtros-facetados`).
+  function facetar(id: FacetaLancamentos, base: { valor: string; rotulo: string }[], valor: string) {
+    if (!facetas) return base;
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
+
   const atualizar = () => router.refresh();
 
   const filtros: FiltroConfiguravel[] = [
@@ -200,10 +211,14 @@ export function LancamentosTabela({
         <FiltroSelect
           valor={medicaoAtual}
           onValorChange={(v) => setMuitos({ medicao: v === "" ? null : v })}
-          opcoes={medicoesParaFiltro.map((m) => ({
-            valor: String(m.numero),
-            rotulo: `${m.numero}ª (${periodoMedicao(m.periodoInicio, m.periodoFim)})`,
-          }))}
+          opcoes={facetar(
+            "medicao",
+            medicoesParaFiltro.map((m) => ({
+              valor: String(m.numero),
+              rotulo: `${m.numero}ª (${periodoMedicao(m.periodoInicio, m.periodoFim)})`,
+            })),
+            medicaoAtual,
+          )}
           todosRotulo="Todas as medições"
         />
       ),
@@ -231,7 +246,7 @@ export function LancamentosTabela({
         <FiltroSelect
           valor={itemAtual}
           onValorChange={(v) => setMuitos({ item: v === "" ? null : v })}
-          opcoes={itensParaFiltro}
+          opcoes={facetar("item", itensParaFiltro, itemAtual)}
           todosRotulo="Todos os itens"
         />
       ),

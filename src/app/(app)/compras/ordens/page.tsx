@@ -30,6 +30,7 @@ import {
   listarFornecedores,
   listarInsumos,
   listarOrdens,
+  facetasOrdens,
   montarPrefillDaCotacao,
 } from "@/modules/compras/ordens/queries";
 
@@ -86,8 +87,32 @@ export default async function PaginaOrdens({
   const gerarCotacaoId =
     typeof params.gerar === "string" ? params.gerar : undefined;
 
+  const filtrosLista = {
+    status,
+    busca,
+    fornecedorId,
+    de,
+    ate,
+    competenciaDe,
+    competenciaAte,
+    categoriaId,
+    formaPagamentoId,
+    condicaoPagamentoId,
+    valorDe: faixaValor.valorDe,
+    valorAte: faixaValor.valorAte,
+    criadaDe,
+    criadaAte,
+    centroCustoId,
+    insumoId,
+    nota,
+    origem,
+    autoria,
+    usuarioLogadoId: usuario.id,
+  };
+
   const [
     { itens, total },
+    facetas,
     fornecedores,
     insumos,
     centrosCusto,
@@ -98,30 +123,8 @@ export default async function PaginaOrdens({
     cartoes,
     prefill,
   ] = await Promise.all([
-    listarOrdens({
-      pagina,
-      tamanho,
-      status,
-      busca,
-      fornecedorId,
-      de,
-      ate,
-      competenciaDe,
-      competenciaAte,
-      categoriaId,
-      formaPagamentoId,
-      condicaoPagamentoId,
-      valorDe: faixaValor.valorDe,
-      valorAte: faixaValor.valorAte,
-      criadaDe,
-      criadaAte,
-      centroCustoId,
-      insumoId,
-      nota,
-      origem,
-      autoria,
-      usuarioLogadoId: usuario.id,
-    }),
+    listarOrdens({ pagina, tamanho, ...filtrosLista }),
+    facetasOrdens(filtrosLista),
     listarFornecedores(),
     listarInsumos(),
     listarCentrosCusto(),
@@ -183,6 +186,7 @@ export default async function PaginaOrdens({
         centrosCusto={centrosCusto}
         insumos={insumos}
         idUsuario={usuario.id}
+        facetas={facetas}
       />
     </NovaOrdemProvider>
   );

@@ -60,7 +60,9 @@ import {
   type MovimentoExtrato,
   type SinalAjuste,
   type TipoMovimento,
+  valoresPresentes,
 } from "@/modules/frete/conta-corrente/extrato";
+import { restringirOpcoes, selecao } from "@/modules/_shared/filtros-facetados";
 
 const numero = (n: number, casas: number) =>
   n.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -347,6 +349,8 @@ export const colunasAjustes: ColumnDef<MovimentoExtrato, unknown>[] = [
 // Abas
 // ---------------------------------------------------------------------------
 
+// Facetado (ver `_shared/filtros-facetados`): o filtro de cada aba só oferece o
+// que existe nas linhas que passam na busca da aba e no mês do cabeçalho.
 const OPCOES_TIPO = TIPOS_MOVIMENTO.map((t) => ({ valor: t, rotulo: TIPO_LABEL[t] }));
 const OPCOES_CATEGORIA = (["transterra", "emt"] as const).map((c) => ({ valor: c, rotulo: ROTULO_CATEGORIA[c] }));
 const OPCOES_METODO = METODOS_PAGAMENTO.map((m) => ({ valor: m, rotulo: METODO_LABEL[m] }));
@@ -363,6 +367,10 @@ function AbaTodos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
   const [tipos, setTipos] = React.useState<TipoMovimento[]>([]);
   const [busca, setBusca] = React.useState("");
   const dados = React.useMemo(() => filtrarTodos(movimentos, tipos, busca), [movimentos, tipos, busca]);
+  const opcoesTipo = React.useMemo(
+    () => restringirOpcoes(OPCOES_TIPO, valoresPresentes(filtrarTodos(movimentos, [], busca), (m) => m.tipo), tipos),
+    [movimentos, busca, tipos],
+  );
   const totais = totaisDe(dados);
   const filtrado = tipos.length > 0 || busca.trim() !== "";
   return (
@@ -405,7 +413,7 @@ function AbaTodos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
               <FiltroSelectMulti
                 valores={tipos}
                 onValoresChange={(v) => setTipos(v as TipoMovimento[])}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoesTipo}
                 todosRotulo="Todos os tipos"
               />
             ),
@@ -465,6 +473,15 @@ function AbaAbastecimentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
   const [categoria, setCategoria] = React.useState<CategoriaAbastecimento | "">("");
   const [busca, setBusca] = React.useState("");
   const dados = React.useMemo(() => filtrarAbastecimentos(movimentos, categoria, busca), [movimentos, categoria, busca]);
+  const opcoesCategoria = React.useMemo(
+    () =>
+      restringirOpcoes(
+        OPCOES_CATEGORIA,
+        valoresPresentes(filtrarAbastecimentos(movimentos, "", busca), (m) => categoriaDoTipo(m.tipo)),
+        selecao(categoria),
+      ),
+    [movimentos, busca, categoria],
+  );
   const total = somar(dados.map((m) => m.valor));
   return (
     <div className="flex flex-col gap-2">
@@ -507,7 +524,7 @@ function AbaAbastecimentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
               <FiltroSelect
                 valor={categoria}
                 onValorChange={(v) => setCategoria(v as CategoriaAbastecimento | "")}
-                opcoes={OPCOES_CATEGORIA}
+                opcoes={opcoesCategoria}
                 todosRotulo="Todas as categorias"
               />
             ),
@@ -528,6 +545,15 @@ function AbaPagamentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
   const [metodo, setMetodo] = React.useState<MetodoPagamento | "">("");
   const [busca, setBusca] = React.useState("");
   const dados = React.useMemo(() => filtrarPagamentos(movimentos, metodo, busca), [movimentos, metodo, busca]);
+  const opcoesMetodo = React.useMemo(
+    () =>
+      restringirOpcoes(
+        OPCOES_METODO,
+        valoresPresentes(filtrarPagamentos(movimentos, "", busca), (m) => m.pagamentoMetodo),
+        selecao(metodo),
+      ),
+    [movimentos, busca, metodo],
+  );
   const total = somar(dados.map((m) => m.valor));
   const litros = somar(dados.map((m) => m.pagamentoLitros));
   return (
@@ -573,7 +599,7 @@ function AbaPagamentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
               <FiltroSelect
                 valor={metodo}
                 onValorChange={(v) => setMetodo(v as MetodoPagamento | "")}
-                opcoes={OPCOES_METODO}
+                opcoes={opcoesMetodo}
                 todosRotulo="Todos os métodos"
               />
             ),
@@ -592,6 +618,15 @@ function AbaAjustes({ movimentos }: { movimentos: MovimentoExtrato[] }) {
   const [sinal, setSinal] = React.useState<SinalAjuste | "">("");
   const [busca, setBusca] = React.useState("");
   const dados = React.useMemo(() => filtrarAjustes(movimentos, sinal, busca), [movimentos, sinal, busca]);
+  const opcoesSinal = React.useMemo(
+    () =>
+      restringirOpcoes(
+        OPCOES_SINAL,
+        valoresPresentes(filtrarAjustes(movimentos, "", busca), (m) => sinalDoTipo(m.tipo)),
+        selecao(sinal),
+      ),
+    [movimentos, busca, sinal],
+  );
   const creditos = somar(dados.filter((m) => sinalDoTipo(m.tipo) === "credito").map((m) => m.valor));
   const debitos = somar(dados.filter((m) => sinalDoTipo(m.tipo) === "debito").map((m) => m.valor));
   const liquido = somar([creditos, -debitos]);
@@ -654,7 +689,7 @@ function AbaAjustes({ movimentos }: { movimentos: MovimentoExtrato[] }) {
               <FiltroSelect
                 valor={sinal}
                 onValorChange={(v) => setSinal(v as SinalAjuste | "")}
-                opcoes={OPCOES_SINAL}
+                opcoes={opcoesSinal}
                 todosRotulo="Crédito e débito"
               />
             ),

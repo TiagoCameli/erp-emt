@@ -25,6 +25,8 @@ import {
 import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
 import { removerFuncao } from "@/modules/cadastros/funcoes/actions";
 import type { FuncaoLista } from "@/modules/cadastros/funcoes/queries";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -68,29 +70,38 @@ export function FuncoesTabela({
     [funcoes],
   );
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). A faixa de salário restringe os
+  // outros sem ser restringida.
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const minimo = salarioDe === "" ? null : Number(salarioDe);
     const maximo = salarioAte === "" ? null : Number(salarioAte);
-    return funcoes.filter((funcao) => {
-      if (status === "ativos" && !funcao.ativo) return false;
-      if (status === "inativos" && funcao.ativo) return false;
-      if (cbo !== "" && funcao.cbo !== cbo) return false;
-      // Função sem salário base sai quando há faixa pedida: não há como dizer
-      // que ela cabe entre dois valores.
-      if (minimo !== null && Number.isFinite(minimo)) {
-        if (funcao.salarioBase === null || funcao.salarioBase < minimo) {
-          return false;
-        }
-      }
-      if (maximo !== null && Number.isFinite(maximo)) {
-        if (funcao.salarioBase === null || funcao.salarioBase > maximo) {
-          return false;
-        }
-      }
-      if (termo && !funcao.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      funcoes,
+      {
+        status: facetaAtivo<FuncaoLista>(status),
+        cbo: { selecionados: selecao(cbo), chave: (funcao) => funcao.cbo },
+      },
+      [
+        // Função sem salário base sai quando há faixa pedida: não há como dizer
+        // que ela cabe entre dois valores.
+        (funcao) => {
+          if (minimo !== null && Number.isFinite(minimo)) {
+            if (funcao.salarioBase === null || funcao.salarioBase < minimo) {
+              return false;
+            }
+          }
+          if (maximo !== null && Number.isFinite(maximo)) {
+            if (funcao.salarioBase === null || funcao.salarioBase > maximo) {
+              return false;
+            }
+          }
+          return true;
+        },
+        (funcao) => !termo || funcao.nome.toLowerCase().includes(termo),
+      ],
+    );
   }, [funcoes, busca, status, cbo, salarioDe, salarioAte]);
 
   async function aoConfirmarExclusao(motivo?: string) {
@@ -223,7 +234,7 @@ export function FuncoesTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -239,7 +250,7 @@ export function FuncoesTabela({
               <FiltroSelect
                 valor={cbo}
                 onValorChange={setCbo}
-                opcoes={opcoesCbo}
+                opcoes={opcoes("cbo", opcoesCbo)}
                 placeholder="CBO"
                 todosRotulo="Todos os CBOs"
               />

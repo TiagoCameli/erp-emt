@@ -13,6 +13,7 @@ import {
   SkeletonResumoLancamentos,
 } from "@/modules/financeiro/lancamentos/components/resumo-lancamentos-cartoes";
 import {
+  facetasLancamentos,
   listarCategorias,
   listarCentrosCusto,
   listarClientes,
@@ -54,6 +55,7 @@ export default async function PaginaLancamentos({
 
   const [
     { itens, total },
+    facetas,
     categorias,
     fornecedores,
     clientes,
@@ -64,6 +66,7 @@ export default async function PaginaLancamentos({
     contas,
   ] = await Promise.all([
     listarLancamentos({ ...filtros, pagina, tamanho }),
+    facetasLancamentos(filtros),
     listarCategorias(),
     listarFornecedores(),
     listarClientes(),
@@ -155,6 +158,7 @@ export default async function PaginaLancamentos({
         formasPagamento={formasPagamento}
         contas={contas}
         rotuloRecorte={rotuloRecorte}
+        facetas={facetas}
       />
     </>
   );

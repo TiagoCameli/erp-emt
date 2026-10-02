@@ -7,6 +7,7 @@ import { AcoesCabecalho } from "@/modules/rh/apontamentos/components/acoes-cabec
 import { PontosTabela } from "@/modules/rh/apontamentos/components/pontos-tabela";
 import {
   dataParam,
+  facetasPontos,
   listarPontos,
   statusParam,
   TAMANHO_PADRAO,
@@ -45,8 +46,10 @@ export default async function PaginaApontamentos({
 
   // Colaboradores são carregados sempre: alimentam o form de ponto (quando há
   // permissão de criar) e as opções do filtro de encarregado, que todo mundo vê.
-  const [{ itens, total }, obras, colaboradores] = await Promise.all([
-    listarPontos({ pagina, tamanho, obraId, status, de, ate, encarregadoId }),
+  const filtrosLista = { obraId, status, de, ate, encarregadoId };
+  const [{ itens, total }, facetas, obras, colaboradores] = await Promise.all([
+    listarPontos({ pagina, tamanho, ...filtrosLista }),
+    facetasPontos(filtrosLista),
     listarObras(),
     listarColaboradores(),
   ]);
@@ -75,6 +78,7 @@ export default async function PaginaApontamentos({
         encarregadoId={encarregadoId ?? ""}
         obras={obras}
         colaboradores={colaboradores}
+        facetas={facetas}
       />
     </>
   );

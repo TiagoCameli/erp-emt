@@ -22,6 +22,7 @@ import {
   dentroDaFaixaValor,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { excluirTransferencia } from "@/modules/financeiro/transferencias/actions";
 import type {
   AplicacaoOpcao,
@@ -197,39 +198,43 @@ export function TransferenciasTabela({
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }, [transferencias]);
 
-  const dados = React.useMemo(() => {
+  // Facetado: conta, origem e destino só oferecem o que existe nas linhas
+  // filtradas pelos outros (ver `_shared/filtros-facetados`). Busca, datas e
+  // valor entram livres.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return transferencias.filter((linha) => {
-      // O filtro de conta pega os DOIS lados: quem procura uma conta quer ver o
-      // que entrou e o que saiu dela, não escolher um lado antes.
-      if (
-        conta !== "" &&
-        linha.contaOrigemId !== conta &&
-        linha.contaDestinoId !== conta
-      ) {
-        return false;
-      }
-      if (origem !== "" && linha.contaOrigemId !== origem) return false;
-      if (destino !== "" && linha.contaDestinoId !== destino) return false;
-      if (de !== "" && linha.dataTransferencia < de) return false;
-      if (ate !== "" && linha.dataTransferencia > ate) return false;
-      // `criadoEm` é timestamp; o filtro é por DIA. Comparar os 10 primeiros
-      // caracteres é o corte certo: comparar a string inteira contra "2026-08-26"
-      // deixaria de fora tudo que foi criado depois da meia-noite daquele dia.
-      const diaCriacao = linha.criadoEm.slice(0, 10);
-      if (criadoDe !== "" && diaCriacao < criadoDe) return false;
-      if (criadoAte !== "" && diaCriacao > criadoAte) return false;
-      if (!dentroDaFaixaValor(linha.valor, valorDe, valorAte)) return false;
-      if (
-        termo &&
-        !`${linha.numero} ${linha.contaOrigemNome} ${linha.contaDestinoNome} ${linha.descricao ?? ""}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      transferencias,
+      {
+        // O filtro de conta pega os DOIS lados: quem procura uma conta quer ver
+        // o que entrou e o que saiu dela, não escolher um lado antes.
+        conta: {
+          selecionados: selecao(conta),
+          chave: (linha) => [linha.contaOrigemId, linha.contaDestinoId],
+        },
+        origem: { selecionados: selecao(origem), chave: (linha) => linha.contaOrigemId },
+        destino: { selecionados: selecao(destino), chave: (linha) => linha.contaDestinoId },
+      },
+      [
+        (linha) => {
+          if (de !== "" && linha.dataTransferencia < de) return false;
+          if (ate !== "" && linha.dataTransferencia > ate) return false;
+          // `criadoEm` é timestamp; o filtro é por DIA. Comparar os 10 primeiros
+          // caracteres é o corte certo: comparar a string inteira contra
+          // "2026-08-26" deixaria de fora tudo que foi criado depois da
+          // meia-noite daquele dia.
+          const diaCriacao = linha.criadoEm.slice(0, 10);
+          if (criadoDe !== "" && diaCriacao < criadoDe) return false;
+          if (criadoAte !== "" && diaCriacao > criadoAte) return false;
+          return dentroDaFaixaValor(linha.valor, valorDe, valorAte);
+        },
+        (linha) =>
+          !termo ||
+          `${linha.numero} ${linha.contaOrigemNome} ${linha.contaDestinoNome} ${linha.descricao ?? ""}`
+            .toLowerCase()
+            .includes(termo),
+      ],
+    );
   }, [
     transferencias,
     busca,
@@ -301,7 +306,7 @@ export function TransferenciasTabela({
         <FiltroSelect
           valor={conta}
           onValorChange={mudarConta}
-          opcoes={opcoesConta}
+          opcoes={opcoes("conta", opcoesConta)}
           placeholder="Conta"
           todosRotulo="Todas as contas"
         />
@@ -331,7 +336,7 @@ export function TransferenciasTabela({
         <FiltroSelect
           valor={origem}
           onValorChange={mudarOrigem}
-          opcoes={opcoesConta}
+          opcoes={opcoes("origem", opcoesConta)}
           placeholder="Saiu de"
           todosRotulo="Qualquer origem"
         />
@@ -347,7 +352,7 @@ export function TransferenciasTabela({
         <FiltroSelect
           valor={destino}
           onValorChange={mudarDestino}
-          opcoes={opcoesConta}
+          opcoes={opcoes("destino", opcoesConta)}
           placeholder="Entrou em"
           todosRotulo="Qualquer destino"
         />

@@ -12,6 +12,7 @@ import {
 } from "@/components/canonicos";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { SaldoColaborador } from "@/modules/rh/banco-horas/queries";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -23,6 +24,9 @@ export interface SaldosPainelProps {
  * Sinal do saldo: é a pergunta operacional do painel ("quem está devendo
  * horas?"). Faixa de valor não serve aqui, porque saldo é número com sinal.
  */
+type FiltroSinal = "" | "negativo" | "positivo" | "zerado";
+const SINAIS: readonly FiltroSinal[] = ["", "negativo", "positivo", "zerado"];
+
 const OPCOES_SINAL = [
   { valor: "negativo", rotulo: "Negativo" },
   { valor: "positivo", rotulo: "Positivo" },
@@ -52,17 +56,27 @@ function SaldoHoras({ saldo }: { saldo: number }) {
  */
 export function SaldosPainel({ saldos }: SaldosPainelProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
-  const [sinal, setSinal] = useFiltroSessao("sinal", "");
+  // Com a lista de válidos: valor velho da sessão que não é sinal nenhum cai no
+  // inicial, em vez de esconder todas as linhas.
+  const [sinal, setSinal] = useFiltroSessao<FiltroSinal>("sinal", "", SINAIS);
 
-  const dados = React.useMemo(() => {
+  // Facetado: o sinal só oferece o que existe na lista filtrada pela busca
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return saldos.filter((item) => {
-      if (sinal === "negativo" && item.saldo >= 0) return false;
-      if (sinal === "positivo" && item.saldo <= 0) return false;
-      if (sinal === "zerado" && item.saldo !== 0) return false;
-      if (termo && !item.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      saldos,
+      {
+        sinal: {
+          selecionados: selecao(sinal),
+          casa: (item, valor) =>
+            (valor === "negativo" && item.saldo < 0) ||
+            (valor === "positivo" && item.saldo > 0) ||
+            (valor === "zerado" && item.saldo === 0),
+        },
+      },
+      [(item) => !termo || item.nome.toLowerCase().includes(termo)],
+    );
   }, [saldos, busca, sinal]);
 
   const colunas = React.useMemo<ColumnDef<SaldoColaborador, unknown>[]>(
@@ -116,8 +130,8 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
           elemento: (
             <FiltroSelect
               valor={sinal}
-              onValorChange={setSinal}
-              opcoes={OPCOES_SINAL}
+              onValorChange={(valor) => setSinal(valor as FiltroSinal)}
+              opcoes={opcoes("sinal", OPCOES_SINAL)}
               placeholder="Saldo"
               todosRotulo="Qualquer saldo"
             />

@@ -29,7 +29,7 @@ import { excluirFrete, restaurarFrete } from "@/modules/frete/fretes/actions";
 import { totaisDosFretes } from "@/modules/frete/fretes/calculo";
 import {
   CHAVES_FILTRO_FRETES as CHAVE,
-  filtrarFretes,
+  filtrarFretesFacetado,
   normalizarPlaca,
   presetAtivo,
   topTransportadoras,
@@ -216,7 +216,9 @@ export function FretesTabela({
     return vendoExcluidos ? [...lista, colunaExclusao] : lista;
   }, [podeEditar, vendoExcluidos]);
 
-  const filtradas = React.useMemo(() => filtrarFretes(base, filtros), [base, filtros]);
+  // Facetado: cada select só oferece o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes: opcoesFacetadas } = React.useMemo(() => filtrarFretesFacetado(base, filtros), [base, filtros]);
   const totais = React.useMemo(() => totaisDosFretes(filtradas), [filtradas]);
   const top = React.useMemo(() => topTransportadoras(vivos, hoje), [vivos, hoje]);
 
@@ -299,14 +301,14 @@ export function FretesTabela({
       onLimpar: () => setBusca(""),
       elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por nota fiscal..." />,
     },
-    filtroSelect("tipo", "Tipo", CHAVE.tipo, filtros.tipo, OPCOES_TIPO, "Todos os tipos"),
-    filtroSelect("obra", "Obra", CHAVE.obra, filtros.obraId, opcoesObra, "Todas as obras"),
+    filtroSelect("tipo", "Tipo", CHAVE.tipo, filtros.tipo, opcoesFacetadas("tipo", OPCOES_TIPO), "Todos os tipos"),
+    filtroSelect("obra", "Obra", CHAVE.obra, filtros.obraId, opcoesFacetadas("obra", opcoesObra), "Todas as obras"),
     filtroSelect(
       "transportadora",
       "Transportadora",
       CHAVE.transportadora,
       filtros.transportadoraId,
-      opcoesTransportadora,
+      opcoesFacetadas("transportadora", opcoesTransportadora),
       "Todas as transportadoras",
     ),
     {
@@ -330,10 +332,10 @@ export function FretesTabela({
       onLimpar: () => setMotorista(""),
       elemento: <FiltroBusca valor={motorista} onValorChange={setMotorista} placeholder="Motorista" />,
     },
-    filtroSelect("placa", "Placa", CHAVE.placa, filtros.placa, opcoesPlaca, "Todas as placas"),
-    filtroSelect("material", "Material", CHAVE.material, filtros.insumoId, opcoesMaterial, "Todos os materiais", true),
-    filtroSelect("origem", "Pedreira", CHAVE.origem, filtros.origemId, opcoesOrigem, "Todas as origens", true),
-    filtroSelect("destino", "Local de entrega", CHAVE.destino, filtros.destinoId, opcoesDestino, "Todos os destinos", true),
+    filtroSelect("placa", "Placa", CHAVE.placa, filtros.placa, opcoesFacetadas("placa", opcoesPlaca), "Todas as placas"),
+    filtroSelect("material", "Material", CHAVE.material, filtros.insumoId, opcoesFacetadas("material", opcoesMaterial), "Todos os materiais", true),
+    filtroSelect("origem", "Pedreira", CHAVE.origem, filtros.origemId, opcoesFacetadas("origem", opcoesOrigem), "Todas as origens", true),
+    filtroSelect("destino", "Local de entrega", CHAVE.destino, filtros.destinoId, opcoesFacetadas("destino", opcoesDestino), "Todos os destinos", true),
     ...(podeRestaurar
       ? [
           filtroSelect(

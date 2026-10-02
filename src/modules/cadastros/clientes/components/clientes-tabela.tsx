@@ -27,6 +27,8 @@ import {
   excluir,
 } from "@/modules/cadastros/clientes/actions";
 import type { ClienteLista } from "@/modules/cadastros/clientes/queries";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { ClientesFormDrawer } from "./clientes-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -86,30 +88,27 @@ export function ClientesTabela({
     [clientes],
   );
 
-  // Cidades da UF escolhida: a lista de cidade acompanha a UF do filtro.
+  // A cidade acompanha a UF pela faceta abaixo.
   const opcoesCidade = React.useMemo(
-    () =>
-      opcoesDistintas(
-        clientes
-          .filter((cliente) => uf === "" || cliente.uf === uf)
-          .map((cliente) => cliente.cidade),
-      ),
-    [clientes, uf],
+    () => opcoesDistintas(clientes.map((cliente) => cliente.cidade)),
+    [clientes],
   );
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). É isso que faz a cidade seguir a
+  // UF escolhida.
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return clientes.filter((cliente) => {
-      if (status === "ativos" && !cliente.ativo) return false;
-      if (status === "inativos" && cliente.ativo) return false;
-      if (tipo !== "" && cliente.tipo !== tipo) return false;
-      if (uf !== "" && cliente.uf !== uf) return false;
-      if (cidade !== "" && cliente.cidade !== cidade) return false;
-      if (termo.length > 0 && !cliente.nome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      clientes,
+      {
+        status: facetaAtivo<ClienteLista>(status),
+        tipo: { selecionados: selecao(tipo), chave: (cliente) => cliente.tipo },
+        uf: { selecionados: selecao(uf), chave: (cliente) => cliente.uf },
+        cidade: { selecionados: selecao(cidade), chave: (cliente) => cliente.cidade },
+      },
+      [(cliente) => termo.length === 0 || cliente.nome.toLowerCase().includes(termo)],
+    );
   }, [clientes, busca, status, tipo, uf, cidade]);
 
   function abrirEdicao(cliente: ClienteLista) {
@@ -304,7 +303,7 @@ export function ClientesTabela({
                 onValorChange={(valor) =>
                   setStatus((valor === "" ? "ativos" : valor) as FiltroStatus)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Ativos"
               />
@@ -320,7 +319,7 @@ export function ClientesTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Física e jurídica"
               />
@@ -344,7 +343,7 @@ export function ClientesTabela({
                   // Trocar a UF derruba a cidade: ela é da anterior.
                   setCidade("");
                 }}
-                opcoes={opcoesUf}
+                opcoes={opcoes("uf", opcoesUf)}
                 placeholder="UF"
                 todosRotulo="Todas as UFs"
               />
@@ -360,7 +359,7 @@ export function ClientesTabela({
               <FiltroSelect
                 valor={cidade}
                 onValorChange={setCidade}
-                opcoes={opcoesCidade}
+                opcoes={opcoes("cidade", opcoesCidade)}
                 placeholder="Cidade"
                 todosRotulo="Todas as cidades"
                 className="max-w-56"

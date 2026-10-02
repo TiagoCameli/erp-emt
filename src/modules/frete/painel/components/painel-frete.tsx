@@ -35,8 +35,8 @@ import {
   ID_OUTROS,
   janelaDeComparacao,
   materialTransportado,
-  opcoesLocais,
-  opcoesObras,
+  opcoesLocaisFacetadas,
+  opcoesObrasFacetadas,
   pagamentosEmpresaMetodo,
   pagamentosPorEmpresa,
   passivoEmt,
@@ -51,6 +51,7 @@ import {
   type DadosPainel,
   type DimensaoCruzada,
   type FiltrosCruzados,
+  type FiltrosLocais,
 } from "@/modules/frete/painel/calculo";
 import { CardsSaldo, corDoSaldoAPagar } from "@/modules/frete/painel/components/cards-saldo";
 import { EvolucaoGrafico, MaterialVsFreteGrafico } from "@/modules/frete/painel/components/graficos";
@@ -147,7 +148,6 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
       pedidosAgregados: agregarPedidos(pedidosF),
       fretes: analisarFretes(bases, cruzados, nomes),
       materiais: analisarMateriais(bases, cruzados, nomes),
-      opcoes: opcoesLocais(fretesF, nomes),
     };
   }, [dados, filtros, cruzados, nomes]);
 
@@ -173,7 +173,17 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
     () => fornecedoresDeMaterialDosCards(dados.cardsIds, nomes, dados.transportadoras),
     [dados.cardsIds, nomes, dados.transportadoras],
   );
-  const obras = React.useMemo(() => opcoesObras(dados.fretes, nomes), [dados.fretes, nomes]);
+  // Facetado (ver `_shared/filtros-facetados`): a obra só oferece as que têm frete no
+  // período e nos filtros cruzados. "Comparar com" é modo de visão, fica de fora.
+  const obras = React.useMemo(
+    () => opcoesObrasFacetadas(dados.fretes, filtros, cruzados, nomes),
+    [dados.fretes, filtros, cruzados, nomes],
+  );
+  // Os filtros locais das tabelas facetam sobre os fretes do recorte.
+  const opcoesLocais = React.useCallback(
+    (f: FiltrosLocais) => opcoesLocaisFacetadas(calc.fretesF, f, nomes),
+    [calc.fretesF, nomes],
+  );
 
   // Calculadas aqui para a tabela vazia ficar fora da grade (sem card em branco).
   const empresaMetodo = pagamentosEmpresaMetodo(calc.pagamentosF);
@@ -604,7 +614,7 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
           somem sem dado ficam fora da grade para não deixar card vazio. */}
       <GradeKpis id="frete.painel.tabelas" titulo="Tabelas" vao="amplo">
         <ItemGrade titulo="Resumo por transportadora" larguraPadrao={12}>
-          <ResumoTransportadoraTabela calcular={(f) => resumoPorTransportadora(calc.fretesF, f, nomes)} opcoes={calc.opcoes} />
+          <ResumoTransportadoraTabela calcular={(f) => resumoPorTransportadora(calc.fretesF, f, nomes)} opcoes={opcoesLocais} />
         </ItemGrade>
         {empresaMetodo.linhas.length > 0 ? (
           <ItemGrade titulo="Pagamentos por empresa e método" larguraPadrao={12}>
@@ -619,7 +629,6 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         <ItemGrade titulo="Pedidos de material por fornecedor" larguraPadrao={12}>
           <SaldoPedreiraTabela
             calcular={(f) => tabelaSaldoPedreira(calc.pedidosF, calc.fretesF, f, sempreVisiveis, nomes)}
-            destinos={calc.opcoes.destinos}
             nomes={nomes}
           />
         </ItemGrade>
@@ -627,10 +636,10 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
           <CustoMaterialFreteTabela calcular={(f) => custoMaterialFrete(calc.fretesF, calc.pedidosAgregados, f, nomes)} nomes={nomes} />
         </ItemGrade>
         <ItemGrade titulo="Gasto com transporte por material e pedreira" larguraPadrao={12}>
-          <GastoTransporteTabela calcular={(f) => gastoTransportePorPedreira(calc.fretesF, f, nomes)} opcoes={calc.opcoes} nomes={nomes} />
+          <GastoTransporteTabela calcular={(f) => gastoTransportePorPedreira(calc.fretesF, f, nomes)} opcoes={opcoesLocais} nomes={nomes} />
         </ItemGrade>
         <ItemGrade titulo="Material transportado" larguraPadrao={12}>
-          <MaterialTransportadoTabela calcular={(f) => materialTransportado(calc.fretesF, f)} opcoes={calc.opcoes} nomes={nomes} />
+          <MaterialTransportadoTabela calcular={(f) => materialTransportado(calc.fretesF, f)} opcoes={opcoesLocais} nomes={nomes} />
         </ItemGrade>
         {pagamentosEmpresa.linhas.length > 0 ? (
           <ItemGrade titulo="Pagamentos por empresa" larguraPadrao={12}>

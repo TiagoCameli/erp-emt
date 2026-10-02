@@ -18,6 +18,7 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { excluirEsvaziamento, restaurarEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
 import type { EsvaziamentoLinha } from "@/modules/combustivel/esvaziamentos/queries";
@@ -90,14 +91,18 @@ export function EsvaziamentosTabela({
   const [tanque, setTanque] = useFiltroSessao("tanque", "");
   const [excluindo, setExcluindo] = React.useState<EsvaziamentoLinha | null>(null);
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: o tanque só oferece o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return esvaziamentos.filter((e) => {
-      if (e.excluidoEm && !mostrarExcluidos) return false;
-      if (tanque && e.tanqueId !== tanque) return false;
-      if (!termo) return true;
-      return e.tanqueNome.toLowerCase().includes(termo) || e.motivo.toLowerCase().includes(termo);
-    });
+    return filtrarFacetado(
+      esvaziamentos,
+      { tanque: { selecionados: selecao(tanque), chave: (e) => e.tanqueId } },
+      [
+        (e) => !e.excluidoEm || mostrarExcluidos,
+        (e) => !termo || e.tanqueNome.toLowerCase().includes(termo) || e.motivo.toLowerCase().includes(termo),
+      ],
+    );
   }, [esvaziamentos, busca, tanque, mostrarExcluidos]);
 
   async function aoConfirmarExclusao(motivo?: string) {
@@ -144,7 +149,7 @@ export function EsvaziamentosTabela({
               <FiltroSelect
                 valor={tanque}
                 onValorChange={setTanque}
-                opcoes={tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome }))}
+                opcoes={opcoes("tanque", tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome })))}
                 placeholder="Tanque"
                 todosRotulo="Todos os tanques"
               />

@@ -320,6 +320,20 @@ function contem(campos: readonly (string | null | undefined)[], busca: string): 
   return campos.some((c) => (c ?? "").toLowerCase().includes(q));
 }
 
+/**
+ * Os valores de um filtro que existem nas linhas (para a faceta, ver
+ * `_shared/filtros-facetados`): a aba chama o próprio filtro com o seu select
+ * em "todos" e passa o resultado aqui, então as opções seguem a busca e o mês.
+ */
+export function valoresPresentes<T>(linhas: readonly T[], chave: (linha: T) => string | null | undefined): Set<string> {
+  const presentes = new Set<string>();
+  for (const linha of linhas) {
+    const valor = chave(linha);
+    if (valor != null) presentes.add(valor);
+  }
+  return presentes;
+}
+
 /** Aba Todos: tipos (vazio = todos) e busca em descrição e placa, com saldo corrido. */
 export function filtrarTodos(
   movimentos: readonly MovimentoExtrato[],

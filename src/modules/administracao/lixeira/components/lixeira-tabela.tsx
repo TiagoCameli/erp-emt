@@ -36,7 +36,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatarDataHora } from "@/lib/formatadores";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import type {
+  FacetaLixeira,
   ItemLixeira,
   UsuarioParaFiltro,
 } from "@/modules/administracao/lixeira/queries";
@@ -63,6 +69,8 @@ interface LixeiraTabelaProps {
   /** Usuários para as opções do filtro de quem excluiu. */
   usuarios: UsuarioParaFiltro[];
   podeEditar: boolean;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaLixeira>;
 }
 
 function eventosDoItem(item: ItemLixeira): EventoTrilha[] {
@@ -109,8 +117,20 @@ export function LixeiraTabela({
   tabelas,
   usuarios,
   podeEditar,
+  facetas,
 }: LixeiraTabelaProps) {
   const { setMuitos: atualizarParams, limparTodos } = useFiltrosUrl();
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasLixeira`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaLixeira,
+    base: readonly O[],
+    valor: string,
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
   // Digitar no motivo escreve na URL com debounce, como as buscas das outras
   // listagens server-side.
   const { busca: motivo, setBusca: setMotivo } = useBuscaUrl(
@@ -245,10 +265,14 @@ export function LixeiraTabela({
                     pagina: null,
                   })
                 }
-                opcoes={tabelas.map((tabela) => ({
-                  valor: tabela,
-                  rotulo: tabela,
-                }))}
+                opcoes={facetar(
+                  "tabela",
+                  tabelas.map((tabela) => ({
+                    valor: tabela,
+                    rotulo: tabela,
+                  })),
+                  filtroTabela,
+                )}
                 placeholder="Tabela"
                 todosRotulo="Todas as tabelas"
                 className="max-w-56"
@@ -270,10 +294,14 @@ export function LixeiraTabela({
                     pagina: null,
                   })
                 }
-                opcoes={usuarios.map((usuario) => ({
-                  valor: usuario.id,
-                  rotulo: usuario.nome,
-                }))}
+                opcoes={facetar(
+                  "por",
+                  usuarios.map((usuario) => ({
+                    valor: usuario.id,
+                    rotulo: usuario.nome,
+                  })),
+                  filtroPor,
+                )}
                 placeholder="Quem excluiu"
                 todosRotulo="Todos os usuários"
                 className="max-w-56"

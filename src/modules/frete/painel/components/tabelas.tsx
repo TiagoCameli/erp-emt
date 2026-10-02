@@ -73,7 +73,8 @@ const LINHA_ITEM = "border-t border-border";
 const RODAPE = "border-t-2 border-border bg-surface font-semibold";
 
 // ---------------------------------------------------------------------------
-// Filtros locais (FilterMultiSelect da origem)
+// Filtros locais (FilterMultiSelect da origem). As opções chegam facetadas pelo
+// filtro atual (ver `_shared/filtros-facetados`): `opcoes(filtro)`.
 // ---------------------------------------------------------------------------
 
 function FiltrosDaTabela({
@@ -125,12 +126,12 @@ export function ResumoTransportadoraTabela({
   opcoes,
 }: {
   calcular: (f: FiltrosLocais) => ReturnType<typeof resumoPorTransportadora>;
-  opcoes: OpcoesLocais;
+  opcoes: (f: FiltrosLocais) => OpcoesLocais;
 }) {
   const [filtro, setFiltro] = useFiltroLocal();
   const r = calcular(filtro);
   return (
-    <SecaoDetalhe titulo="Resumo por transportadora" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes} />}>
+    <SecaoDetalhe titulo="Resumo por transportadora" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes(filtro)} />}>
       {r.linhas.length === 0 ? (
         SEM_DADOS
       ) : (
@@ -277,11 +278,9 @@ export interface FiltroSaldo {
 
 export function SaldoPedreiraTabela({
   calcular,
-  destinos,
   nomes,
 }: {
   calcular: (f: FiltroSaldo) => TabelaSaldoPedreira;
-  destinos: OpcaoPainel[];
   nomes: NomesPainel;
 }) {
   const [filtro, setFiltro] = React.useState<FiltroSaldo>({ fornecedores: [], materiais: [], destinos: [] });
@@ -295,7 +294,7 @@ export function SaldoPedreiraTabela({
         <div className="flex flex-wrap items-center gap-2">
           <FiltroSelectMulti valores={filtro.fornecedores} onValoresChange={(v) => setFiltro({ ...filtro, fornecedores: v })} opcoes={t.opcoesFornecedores} todosRotulo="Todos os fornecedores" />
           <FiltroSelectMulti valores={filtro.materiais} onValoresChange={(v) => setFiltro({ ...filtro, materiais: v })} opcoes={t.opcoesMateriais} todosRotulo="Todos os materiais" />
-          <FiltroSelectMulti valores={filtro.destinos} onValoresChange={(v) => setFiltro({ ...filtro, destinos: v })} opcoes={destinos} todosRotulo="Todos os locais" />
+          <FiltroSelectMulti valores={filtro.destinos} onValoresChange={(v) => setFiltro({ ...filtro, destinos: v })} opcoes={t.opcoesDestinos} todosRotulo="Todos os locais" />
           {algum ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => setFiltro({ fornecedores: [], materiais: [], destinos: [] })}>
               Limpar
@@ -496,13 +495,13 @@ export function GastoTransporteTabela({
   nomes,
 }: {
   calcular: (f: FiltrosLocais) => ReturnType<typeof gastoTransportePorPedreira>;
-  opcoes: OpcoesLocais;
+  opcoes: (f: FiltrosLocais) => OpcoesLocais;
   nomes: NomesPainel;
 }) {
   const [filtro, setFiltro] = useFiltroLocal();
   const r = calcular(filtro);
   return (
-    <SecaoDetalhe titulo="Gasto com transporte por material e pedreira" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes} />}>
+    <SecaoDetalhe titulo="Gasto com transporte por material e pedreira" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes(filtro)} />}>
       {r.pedreiras.length === 0 ? (
         SEM_DADOS
       ) : (
@@ -552,14 +551,14 @@ export function MaterialTransportadoTabela({
   nomes,
 }: {
   calcular: (f: FiltrosLocais) => ReturnType<typeof materialTransportado>;
-  opcoes: OpcoesLocais;
+  opcoes: (f: FiltrosLocais) => OpcoesLocais;
   nomes: NomesPainel;
 }) {
   const [filtro, setFiltro] = useFiltroLocal();
   const r = calcular(filtro);
   const vazio = <span className="text-muted-foreground">Nenhum</span>;
   return (
-    <SecaoDetalhe titulo="Material transportado" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes} />}>
+    <SecaoDetalhe titulo="Material transportado" acao={<FiltrosDaTabela valor={filtro} onChange={setFiltro} {...opcoes(filtro)} />}>
       {r.linhas.length === 0 ? (
         SEM_DADOS
       ) : (

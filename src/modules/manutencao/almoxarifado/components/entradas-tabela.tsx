@@ -18,6 +18,7 @@ import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { excluirEntrada } from "@/modules/manutencao/almoxarifado/actions";
 import { formatarPreco } from "@/modules/manutencao/almoxarifado/calculo";
 import type { EntradaLinha, Opcao } from "@/modules/manutencao/almoxarifado/queries";
@@ -50,17 +51,21 @@ export function EntradasTabela({
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: o depósito só oferece o que existe entre as que passam na busca
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return entradas.filter((entrada) => {
-      if (deposito && entrada.depositoId !== deposito) return false;
-      if (!termo) return true;
-      return (
-        entrada.insumoNome.toLowerCase().includes(termo) ||
-        entrada.fornecedorNome.toLowerCase().includes(termo) ||
-        (entrada.notaFiscal ?? "").toLowerCase().includes(termo)
-      );
-    });
+    return filtrarFacetado(
+      entradas,
+      { deposito: { selecionados: selecao(deposito), chave: (entrada) => entrada.depositoId } },
+      [
+        (entrada) =>
+          !termo ||
+          entrada.insumoNome.toLowerCase().includes(termo) ||
+          entrada.fornecedorNome.toLowerCase().includes(termo) ||
+          (entrada.notaFiscal ?? "").toLowerCase().includes(termo),
+      ],
+    );
   }, [entradas, busca, deposito]);
 
   function abrirEdicao(entrada: EntradaLinha) {
@@ -176,7 +181,7 @@ export function EntradasTabela({
               <FiltroSelect
                 valor={deposito}
                 onValorChange={setDeposito}
-                opcoes={depositos.map((d) => ({ valor: d.id, rotulo: d.nome }))}
+                opcoes={opcoes("deposito", depositos.map((d) => ({ valor: d.id, rotulo: d.nome })))}
                 placeholder="Depósito"
                 todosRotulo="Todos os depósitos"
               />

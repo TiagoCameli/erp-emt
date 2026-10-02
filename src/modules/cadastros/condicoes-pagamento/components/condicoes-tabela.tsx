@@ -22,6 +22,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { opcoesNumericasDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { desativarCondicao } from "@/modules/cadastros/condicoes-pagamento/actions";
 import type { CondicaoLista } from "@/modules/cadastros/condicoes-pagamento/queries";
 import { CondicaoFormDrawer } from "./condicao-form-drawer";
@@ -104,30 +106,37 @@ export function CondicoesTabela({
     [condicoes],
   );
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). O prazo é faixa: restringe os
+  // outros sem ser restringido.
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const minimo = prazoDe === "" ? null : Number(prazoDe);
     const maximo = prazoAte === "" ? null : Number(prazoAte);
-    return condicoes.filter((condicao) => {
-      if (status === "ativos" && !condicao.ativo) return false;
-      if (status === "inativos" && condicao.ativo) return false;
-      if (qtdParcelas !== "" && String(condicao.qtdParcelas) !== qtdParcelas) {
-        return false;
-      }
-      if (minimo !== null || maximo !== null) {
-        const prazo = prazoEmDias(condicao);
-        if (minimo !== null && Number.isFinite(minimo) && prazo < minimo) {
-          return false;
-        }
-        if (maximo !== null && Number.isFinite(maximo) && prazo > maximo) {
-          return false;
-        }
-      }
-      if (termo && !condicao.descricao.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      condicoes,
+      {
+        status: facetaAtivo<CondicaoLista>(status),
+        parcelas: {
+          selecionados: selecao(qtdParcelas),
+          chave: (condicao) => String(condicao.qtdParcelas),
+        },
+      },
+      [
+        (condicao) => {
+          if (minimo === null && maximo === null) return true;
+          const prazo = prazoEmDias(condicao);
+          if (minimo !== null && Number.isFinite(minimo) && prazo < minimo) {
+            return false;
+          }
+          if (maximo !== null && Number.isFinite(maximo) && prazo > maximo) {
+            return false;
+          }
+          return true;
+        },
+        (condicao) => !termo || condicao.descricao.toLowerCase().includes(termo),
+      ],
+    );
   }, [condicoes, busca, status, qtdParcelas, prazoDe, prazoAte]);
 
   const colunas = React.useMemo<ColumnDef<CondicaoLista, unknown>[]>(() => {
@@ -246,7 +255,7 @@ export function CondicoesTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -262,7 +271,7 @@ export function CondicoesTabela({
               <FiltroSelect
                 valor={qtdParcelas}
                 onValorChange={setQtdParcelas}
-                opcoes={opcoesQtdParcelas}
+                opcoes={opcoes("parcelas", opcoesQtdParcelas)}
                 placeholder="Parcelas"
                 todosRotulo="Qualquer número"
               />

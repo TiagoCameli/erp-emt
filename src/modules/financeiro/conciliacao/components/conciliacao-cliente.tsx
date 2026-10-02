@@ -36,6 +36,7 @@ import {
   dentroDoPeriodo,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   buscarSugestoes,
   desconciliar,
@@ -49,6 +50,16 @@ import type {
 import { ConciliarDialog } from "./conciliar-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+
+const OPCOES_SITUACAO = [
+  { valor: "conciliada", rotulo: "Conciliadas" },
+  { valor: "pendente", rotulo: "Pendentes" },
+];
+
+const OPCOES_TIPO = [
+  { valor: "credito", rotulo: "Créditos (entradas)" },
+  { valor: "debito", rotulo: "Débitos (saídas)" },
+];
 
 type FiltroConciliacao = "" | "conciliada" | "pendente";
 
@@ -176,35 +187,43 @@ export function ConciliacaoCliente({
     zerarPagina();
   }
 
-  const dados = React.useMemo(() => {
+  // Facetado: situação, extrato e tipo só oferecem o que existe nas transações
+  // filtradas pelos outros (ver `_shared/filtros-facetados`). Busca, período e
+  // valor entram livres; a conta vai ao servidor e não é faceta.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return transacoes.filter((transacao) => {
-      if (conciliacao === "conciliada" && !transacao.conciliada) return false;
-      if (conciliacao === "pendente" && transacao.conciliada) return false;
-      if (extratoId !== "" && transacao.extratoId !== extratoId) return false;
-      if (tipo !== "" && transacao.tipo !== tipo) return false;
-      if (!dentroDoPeriodo(transacao.dataMovimento, dataDe, dataAte)) {
-        return false;
-      }
-      // Débito vem negativo do OFX: a faixa compara o módulo, que é o número
-      // que a pessoa lê na tela.
-      if (
-        !dentroDaFaixaValor(Math.abs(transacao.valor), valorDe, valorAte)
-      ) {
-        return false;
-      }
-      if (termo !== "") {
-        const parcela = transacao.parcela;
-        const transferencia = transacao.transferencia;
-        const alvo = `${transacao.memo ?? ""} ${parcela?.lancamentoNumero ?? ""} ${
-          parcela?.lancamentoDescricao ?? ""
-        } ${parcela?.fornecedorNome ?? ""} ${transferencia?.numero ?? ""} ${
-          transferencia?.descricao ?? ""
-        }`;
-        if (!alvo.toLowerCase().includes(termo)) return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      transacoes,
+      {
+        situacao: {
+          selecionados:
+            conciliacao === "conciliada" || conciliacao === "pendente"
+              ? [conciliacao]
+              : [],
+          chave: (transacao) => (transacao.conciliada ? "conciliada" : "pendente"),
+        },
+        extrato: { selecionados: selecao(extratoId), chave: (t) => t.extratoId },
+        tipo: { selecionados: selecao(tipo), chave: (t) => t.tipo },
+      },
+      [
+        // Débito vem negativo do OFX: a faixa compara o módulo, que é o número
+        // que a pessoa lê na tela.
+        (transacao) =>
+          dentroDoPeriodo(transacao.dataMovimento, dataDe, dataAte) &&
+          dentroDaFaixaValor(Math.abs(transacao.valor), valorDe, valorAte),
+        (transacao) => {
+          if (termo === "") return true;
+          const parcela = transacao.parcela;
+          const transferencia = transacao.transferencia;
+          const alvo = `${transacao.memo ?? ""} ${parcela?.lancamentoNumero ?? ""} ${
+            parcela?.lancamentoDescricao ?? ""
+          } ${parcela?.fornecedorNome ?? ""} ${transferencia?.numero ?? ""} ${
+            transferencia?.descricao ?? ""
+          }`;
+          return alvo.toLowerCase().includes(termo);
+        },
+      ],
+    );
   }, [
     transacoes,
     conciliacao,
@@ -447,10 +466,7 @@ export function ConciliacaoCliente({
         <FiltroSelect
           valor={conciliacao}
           onValorChange={mudarConciliacao}
-          opcoes={[
-            { valor: "conciliada", rotulo: "Conciliadas" },
-            { valor: "pendente", rotulo: "Pendentes" },
-          ]}
+          opcoes={opcoes("situacao", OPCOES_SITUACAO)}
           placeholder="Situação"
           todosRotulo="Todas as situações"
         />
@@ -466,7 +482,7 @@ export function ConciliacaoCliente({
         <FiltroSelect
           valor={extratoId}
           onValorChange={mudarExtrato}
-          opcoes={opcoesExtrato}
+          opcoes={opcoes("extrato", opcoesExtrato)}
           placeholder="Extrato importado"
           todosRotulo="Todos os extratos"
           className="max-w-64"
@@ -483,10 +499,7 @@ export function ConciliacaoCliente({
         <FiltroSelect
           valor={tipo}
           onValorChange={mudarTipo}
-          opcoes={[
-            { valor: "credito", rotulo: "Créditos (entradas)" },
-            { valor: "debito", rotulo: "Débitos (saídas)" },
-          ]}
+          opcoes={opcoes("tipo", OPCOES_TIPO)}
           placeholder="Crédito ou débito"
           todosRotulo="Créditos e débitos"
         />

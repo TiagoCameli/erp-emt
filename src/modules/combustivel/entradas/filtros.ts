@@ -1,6 +1,7 @@
 import { dataLocalISO } from "@/lib/formatadores";
 import type { EntradaLinha } from "@/modules/combustivel/entradas/queries";
 import { diaValido, type Periodo } from "@/modules/combustivel/relatorios/periodo";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
 
 /**
@@ -54,25 +55,38 @@ export function lerFiltrosEntradas(params: Parametros, periodoPadrao?: Periodo):
 }
 
 /**
- * Filtro da lista, puro para o teste. O período compara o DIA em Rio Branco: uma
- * entrada às 20h de Rio Branco já é o dia seguinte em UTC.
+ * Filtro da lista, puro para o teste, e facetado (ver `_shared/filtros-facetados`):
+ * tanque, combustível e fornecedor só oferecem o que existe nas linhas que passam
+ * nos outros filtros; período e busca restringem, mas não são restringidos. O
+ * período compara o DIA em Rio Branco: uma entrada às 20h de Rio Branco já é o
+ * dia seguinte em UTC.
  */
-export function filtrarEntradas(entradas: readonly EntradaLinha[], filtros: FiltrosEntradas): EntradaLinha[] {
+export function facetarEntradas(entradas: readonly EntradaLinha[], filtros: FiltrosEntradas) {
   const termo = filtros.busca.trim().toLowerCase();
-  return entradas.filter((entrada) => {
-    if (filtros.tanqueIds.length > 0 && !filtros.tanqueIds.includes(entrada.tanqueId)) return false;
-    if (filtros.insumoIds.length > 0 && !filtros.insumoIds.includes(entrada.insumoId)) return false;
-    if (filtros.fornecedorIds.length > 0 && !(entrada.fornecedorId && filtros.fornecedorIds.includes(entrada.fornecedorId))) {
-      return false;
-    }
-    const dia = dataLocalISO(entrada.dataHora) ?? "";
-    if (filtros.de && dia < filtros.de) return false;
-    if (filtros.ate && dia > filtros.ate) return false;
-    if (!termo) return true;
-    return (
-      (entrada.fornecedorNome ?? "").toLowerCase().includes(termo) ||
-      (entrada.notaFiscal ?? "").toLowerCase().includes(termo) ||
-      (entrada.observacoes ?? "").toLowerCase().includes(termo)
-    );
-  });
+  return filtrarFacetado(
+    entradas,
+    {
+      tanque: { selecionados: filtros.tanqueIds, chave: (e) => e.tanqueId },
+      combustivel: { selecionados: filtros.insumoIds, chave: (e) => e.insumoId },
+      fornecedor: { selecionados: filtros.fornecedorIds, chave: (e) => e.fornecedorId },
+    },
+    [
+      (entrada) => {
+        const dia = dataLocalISO(entrada.dataHora) ?? "";
+        if (filtros.de && dia < filtros.de) return false;
+        if (filtros.ate && dia > filtros.ate) return false;
+        return true;
+      },
+      (entrada) =>
+        !termo ||
+        (entrada.fornecedorNome ?? "").toLowerCase().includes(termo) ||
+        (entrada.notaFiscal ?? "").toLowerCase().includes(termo) ||
+        (entrada.observacoes ?? "").toLowerCase().includes(termo),
+    ],
+  );
+}
+
+/** Só as linhas do filtro (o que a tabela mostra). */
+export function filtrarEntradas(entradas: readonly EntradaLinha[], filtros: FiltrosEntradas): EntradaLinha[] {
+  return facetarEntradas(entradas, filtros).linhas;
 }

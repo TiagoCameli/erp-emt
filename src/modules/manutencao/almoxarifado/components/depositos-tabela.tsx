@@ -16,6 +16,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { alternarAtivoDeposito, excluirDeposito } from "@/modules/manutencao/almoxarifado/actions";
 import type { DepositoLinha } from "@/modules/manutencao/almoxarifado/queries";
 import { DepositoFormDrawer } from "./deposito-form-drawer";
@@ -49,20 +50,25 @@ export function DepositosTabela({ depositos, podeEditar, podeExcluir }: Deposito
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [excluindo, setExcluindo] = React.useState<DepositoLinha | null>(null);
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: o status só oferece o que existe entre os que passam na busca
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return depositos.filter((deposito) => {
-      if (status === "ativos" && !deposito.ativo) return false;
-      if (status === "inativos" && deposito.ativo) return false;
-      if (
-        termo &&
-        !deposito.nome.toLowerCase().includes(termo) &&
-        !(deposito.endereco ?? "").toLowerCase().includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      depositos,
+      {
+        status: {
+          selecionados: status === "todos" ? [] : [status],
+          casa: (deposito, valor) => (valor === "ativos") === deposito.ativo,
+        },
+      },
+      [
+        (deposito) =>
+          !termo ||
+          deposito.nome.toLowerCase().includes(termo) ||
+          (deposito.endereco ?? "").toLowerCase().includes(termo),
+      ],
+    );
   }, [depositos, busca, status]);
 
   async function aoAlternarAtivo(deposito: DepositoLinha) {
@@ -140,7 +146,7 @@ export function DepositosTabela({ depositos, podeEditar, podeExcluir }: Deposito
               <FiltroSelect
                 valor={status === "todos" ? "" : status}
                 onValorChange={(valor) => setStatus(valor === "" ? "todos" : (valor as FiltroStatus))}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />

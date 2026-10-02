@@ -30,7 +30,15 @@ import {
   STATUS_OS,
   TIPOS_OS,
 } from "@/modules/manutencao/_shared/rotulos";
-import { CHAVES_FILTRO_SERVICOS as CHAVE } from "@/modules/manutencao/servicos/filtros";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
+  CHAVES_FILTRO_SERVICOS as CHAVE,
+  type FacetaServicos,
+} from "@/modules/manutencao/servicos/filtros";
 import { rotuloPropriedade } from "@/modules/manutencao/servicos/formato";
 import type { EquipamentoFiltro, OsLista } from "@/modules/manutencao/servicos/queries";
 
@@ -103,6 +111,8 @@ export interface ServicosTabelaProps {
   busca: string;
   equipamentos: EquipamentoFiltro[];
   idUsuario: string;
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaServicos>;
 }
 
 /**
@@ -124,6 +134,7 @@ export function ServicosTabela({
   busca: buscaUrl,
   equipamentos,
   idUsuario,
+  facetas,
 }: ServicosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
@@ -138,6 +149,17 @@ export function ServicosTabela({
 
   function abrir(os: OsLista) {
     router.push(`/manutencao/servicos/${os.id}`);
+  }
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasServicos`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaServicos,
+    base: readonly O[],
+    selecionados: readonly string[],
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecionados);
   }
 
   const opcoesEquipamento = React.useMemo(
@@ -181,7 +203,7 @@ export function ServicosTabela({
                 onValoresChange={(valores) =>
                   setMuitos({ [CHAVE.status]: escreverListaNaUrl(valores), [CHAVE.pagina]: "1" })
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={facetar("status", OPCOES_STATUS, status)}
                 todosRotulo="Todos os status"
               />
             ),
@@ -197,7 +219,7 @@ export function ServicosTabela({
                 onValorChange={(valor) =>
                   setMuitos({ [CHAVE.equipamento]: valor === "" ? null : valor, [CHAVE.pagina]: "1" })
                 }
-                opcoes={opcoesEquipamento}
+                opcoes={facetar("equipamento", opcoesEquipamento, selecao(equipamentoId))}
                 placeholder="Equipamento"
                 todosRotulo="Todos os equipamentos"
               />
@@ -214,7 +236,7 @@ export function ServicosTabela({
                 onValorChange={(valor) =>
                   setMuitos({ [CHAVE.tipo]: valor === "" ? null : valor, [CHAVE.pagina]: "1" })
                 }
-                opcoes={OPCOES_TIPO}
+                opcoes={facetar("tipo", OPCOES_TIPO, selecao(tipo))}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />

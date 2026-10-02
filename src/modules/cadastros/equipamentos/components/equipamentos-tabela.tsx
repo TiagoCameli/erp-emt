@@ -26,6 +26,8 @@ import {
   ROTULO_PROPRIEDADE,
 } from "@/modules/cadastros/equipamentos/schemas";
 import { EquipamentosFormDrawer } from "./equipamentos-form-drawer";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -160,25 +162,36 @@ export function EquipamentosTabela({
     [equipamentos],
   );
 
-  const dados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return equipamentos.filter((equipamento) => {
-      if (status === "ativos" && !equipamento.ativo) return false;
-      if (status === "inativos" && equipamento.ativo) return false;
-      if (tipo !== "" && equipamento.tipo !== tipo) return false;
-      if (marca !== "" && equipamento.marca !== marca) return false;
-      if (controle !== "" && equipamento.controlePor !== controle) return false;
-      if (propriedade !== "" && equipamento.propriedade !== propriedade) return false;
-      if (ano !== "" && String(equipamento.ano ?? "") !== ano) return false;
-      if (termo === "") return true;
-      // Código, descrição e placa: os três jeitos de alguém apontar para uma
-      // máquina no pátio.
-      const alvo = [equipamento.codigo, equipamento.descricao, equipamento.placa]
-        .filter((valor): valor is string => valor !== null)
-        .join(" ")
-        .toLowerCase();
-      return alvo.includes(termo);
-    });
+    return filtrarFacetado(
+      equipamentos,
+      {
+        status: facetaAtivo<EquipamentoLista>(status),
+        tipo: { selecionados: selecao(tipo), chave: (e) => e.tipo },
+        marca: { selecionados: selecao(marca), chave: (e) => e.marca },
+        controle: { selecionados: selecao(controle), chave: (e) => e.controlePor },
+        propriedade: {
+          selecionados: selecao(propriedade),
+          chave: (e) => e.propriedade,
+        },
+        ano: { selecionados: selecao(ano), chave: (e) => String(e.ano ?? "") },
+      },
+      [
+        (equipamento) => {
+          if (termo === "") return true;
+          // Código, descrição e placa: os três jeitos de alguém apontar para uma
+          // máquina no pátio.
+          const alvo = [equipamento.codigo, equipamento.descricao, equipamento.placa]
+            .filter((valor): valor is string => valor !== null)
+            .join(" ")
+            .toLowerCase();
+          return alvo.includes(termo);
+        },
+      ],
+    );
   }, [equipamentos, busca, status, tipo, marca, controle, propriedade, ano]);
 
   function abrirEdicao(equipamento: EquipamentoLista) {
@@ -222,7 +235,7 @@ export function EquipamentosTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -238,7 +251,7 @@ export function EquipamentosTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={opcoesTipo}
+                opcoes={opcoes("tipo", opcoesTipo)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
                 className="max-w-56"
@@ -255,7 +268,7 @@ export function EquipamentosTabela({
               <FiltroSelect
                 valor={marca}
                 onValorChange={setMarca}
-                opcoes={opcoesMarca}
+                opcoes={opcoes("marca", opcoesMarca)}
                 placeholder="Marca"
                 todosRotulo="Todas as marcas"
                 className="max-w-56"
@@ -271,7 +284,7 @@ export function EquipamentosTabela({
               <FiltroSelect
                 valor={propriedade}
                 onValorChange={setPropriedade}
-                opcoes={OPCOES_PROPRIEDADE}
+                opcoes={opcoes("propriedade", OPCOES_PROPRIEDADE)}
                 placeholder="De quem é"
                 todosRotulo="Todas"
               />
@@ -287,7 +300,7 @@ export function EquipamentosTabela({
               <FiltroSelect
                 valor={controle}
                 onValorChange={setControle}
-                opcoes={OPCOES_CONTROLE}
+                opcoes={opcoes("controle", OPCOES_CONTROLE)}
                 placeholder="Controle"
                 todosRotulo="Todas as formas"
               />
@@ -303,7 +316,7 @@ export function EquipamentosTabela({
               <FiltroSelect
                 valor={ano}
                 onValorChange={setAno}
-                opcoes={opcoesAno}
+                opcoes={opcoes("ano", opcoesAno)}
                 placeholder="Ano"
                 todosRotulo="Todos os anos"
               />

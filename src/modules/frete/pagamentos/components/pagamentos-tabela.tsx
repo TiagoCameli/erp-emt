@@ -21,7 +21,7 @@ import { formatarData, formatarDataHora, formatarQuantidade } from "@/lib/format
 import { excluirPagamento, restaurarPagamento } from "@/modules/frete/pagamentos/actions";
 import type { OpcaoPagoPor, PagamentoLinha, Transportadora } from "@/modules/frete/pagamentos/queries";
 import {
-  filtrarPagamentos,
+  filtrarPagamentosFacetado,
   mesesDosPagamentos,
   METODOS_PAGAMENTO,
   pagoPorDosPagamentos,
@@ -139,8 +139,10 @@ export function PagamentosTabela({
     [vendoExcluidos],
   );
 
-  const filtrados = React.useMemo(
-    () => filtrarPagamentos(pagamentos, { transportadoraId, mes, de, ate, metodo, pagoPor }),
+  // Facetado: cada select só oferece o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`). O mês é lista de datas: restringe, não é cortado.
+  const { linhas: filtrados, opcoes } = React.useMemo(
+    () => filtrarPagamentosFacetado(pagamentos, { transportadoraId, mes, de, ate, metodo, pagoPor }),
     [pagamentos, transportadoraId, mes, de, ate, metodo, pagoPor],
   );
   const total = totalDosPagamentos(filtrados);
@@ -216,7 +218,7 @@ export function PagamentosTabela({
               <FiltroSelect
                 valor={transportadoraId}
                 onValorChange={setTransportadoraId}
-                opcoes={opcoesTransportadora}
+                opcoes={opcoes("transportadora", opcoesTransportadora)}
                 placeholder="Transportadora"
                 todosRotulo="Todas as transportadoras"
               />
@@ -266,7 +268,7 @@ export function PagamentosTabela({
               <FiltroSelect
                 valor={metodo}
                 onValorChange={setMetodo}
-                opcoes={OPCOES_METODO}
+                opcoes={opcoes("metodo", OPCOES_METODO)}
                 placeholder="Método"
                 todosRotulo="Todos os métodos"
               />
@@ -282,7 +284,7 @@ export function PagamentosTabela({
               <FiltroSelect
                 valor={pagoPor}
                 onValorChange={setPagoPor}
-                opcoes={opcoesPagoPorFiltro}
+                opcoes={opcoes("pagoPor", opcoesPagoPorFiltro)}
                 placeholder="Pago por"
                 todosRotulo="Todos (pago por)"
               />
