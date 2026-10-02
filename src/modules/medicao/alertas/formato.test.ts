@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dataPtBr, dinheiroTexto, fraseAlerta } from "./formato";
+import { ROTULO_TIPO_ALERTA, dataPtBr, dinheiroTexto, fraseAlerta } from "./formato";
 
 const base = { itemCodigo: null, unidade: null, valor: null, referencia: null, data: null, comMotivo: false };
 
@@ -32,6 +32,23 @@ describe("fraseAlerta", () => {
     expect(
       fraseAlerta({ ...base, tipo: "valor_contrato_diferente", valor: "243927498.02", referencia: "243927483.49" }),
     ).toContain("diferença R$ 14,53");
+  });
+
+  it("medição aprovada sem reajuste: Nª, início do período e aniversário da data-base", () => {
+    expect(
+      fraseAlerta({ ...base, tipo: "medicao_sem_reajuste", valor: "3", referencia: "2026-01-01", data: "2026-01-01" }),
+    ).toBe("3ª medição (início 01/01/2026) aprovada sem reajuste; aniversário da data-base em 01/01/2026");
+  });
+
+  it("reajuste provisório: Nª e o total do relatório que vale", () => {
+    expect(fraseAlerta({ ...base, tipo: "reajuste_provisorio", valor: "1", referencia: "1234.56", data: "2026-01-01" })).toBe(
+      "O reajuste da 1ª medição está com índices provisórios: R$ 1.234,56",
+    );
+  });
+
+  it("rótulos dos dois tipos da Fase 6", () => {
+    expect(ROTULO_TIPO_ALERTA.medicao_sem_reajuste).toBe("Medição aprovada sem reajuste");
+    expect(ROTULO_TIPO_ALERTA.reajuste_provisorio).toBe("Reajuste provisório");
   });
 
   it("tipo desconhecido vira texto vazio", () => {

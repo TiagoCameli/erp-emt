@@ -27,6 +27,11 @@ export interface ContratoPainel {
   acumulado: string | null;
   saldo: string | null;
   pct_executado: string | null;
+  /**
+   * Reajuste do DNIT (Fase 6): soma do total do relatório que vale em cada medição do contrato,
+   * feita no banco; "0" sem relatório e nulo sem regra de arredondamento.
+   */
+  reajuste_acumulado: string | null;
   /** Quantidade de medições do contrato (todas, não só até uma Nª). */
   medicoes: number;
   /** A medição de maior número; nulo quando o contrato ainda não tem medição. */
@@ -41,6 +46,8 @@ export interface TotalPainel {
   pct_executado: string | null;
   /** Soma da medição corrente de cada contrato (não é um objeto: é só o dinheiro). */
   corrente: string;
+  /** Soma do reajuste acumulado dos contratos com regra de arredondamento. */
+  reajuste_acumulado: string;
 }
 
 export interface Painel {

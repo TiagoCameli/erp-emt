@@ -125,6 +125,14 @@ const colunas: ColumnDef<ContratoPainel, unknown>[] = [
     cell: ({ row }) => <Dinheiro valor={row.original.saldo} />,
   },
   {
+    id: "reajuste_acumulado",
+    header: "Reajuste acumulado",
+    size: 160,
+    // No card do celular é um campo com rótulo, como Previsto e Saldo: o valor do card é o Acumulado.
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <Dinheiro valor={row.original.reajuste_acumulado} />,
+  },
+  {
     id: "corrente",
     header: "Medição corrente",
     size: 220,
@@ -170,6 +178,7 @@ export function PainelTabela({ painel, podeAbrirBoletim }: PainelTabelaProps) {
         pct_executado: <Numero texto={percentualExibicao(t.pct_executado)} negrito />,
         saldo: <Dinheiro valor={t.saldo} negrito />,
         corrente: <Dinheiro valor={t.corrente} negrito />,
+        reajuste_acumulado: <Dinheiro valor={t.reajuste_acumulado} negrito />,
       }}
       emptyState={
         <EmptyState

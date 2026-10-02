@@ -1,6 +1,8 @@
 import { comparar, lerDecimal } from "@/modules/medicao/_shared/decimal";
 import { dinheiroTexto } from "@/modules/medicao/alertas/formato";
 
+import type { SituacaoFiltroReajuste } from "./tipos";
+
 /**
  * Textos do reajuste (Fase 6). Dinheiro vem do banco como texto e só é formatado (BigInt, sem
  * Number, D7). Datas "aaaa-mm-dd" viram texto sem passar por Date (sem deslocamento de fuso).
@@ -15,6 +17,18 @@ export function rotuloSituacaoReajuste(situacao: string): string {
 
 export function rotuloOrigemReajuste(origem: string): string {
   return ROTULO_ORIGEM[origem] ?? origem;
+}
+
+/** Filtro de situação da aba Reajuste (`?situacao=`), na ordem da tela. */
+export const ROTULO_FILTRO_SITUACAO_REAJUSTE: Record<SituacaoFiltroReajuste, string> = {
+  sem_relatorio: "Sem relatório",
+  provisorio: "Provisório",
+  definitivo: "Definitivo",
+};
+
+/** `?situacao=` válido, ou undefined (inclusive chave herdada do protótipo, como "toString"). */
+export function situacaoFiltroReajuste(valor: string): SituacaoFiltroReajuste | undefined {
+  return Object.prototype.hasOwnProperty.call(ROTULO_FILTRO_SITUACAO_REAJUSTE, valor) ? (valor as SituacaoFiltroReajuste) : undefined;
 }
 
 /** O reajuste entra só em medição enviada ou aprovada (a RPC confere de novo). */

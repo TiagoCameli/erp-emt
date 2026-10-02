@@ -41,6 +41,7 @@ function contrato(over: Partial<ContratoPainel> = {}): ContratoPainel {
     acumulado: "400.00",
     saldo: "600.00",
     pct_executado: "0.4000",
+    reajuste_acumulado: "0",
     medicoes: 4,
     corrente: {
       numero: 4,
@@ -57,7 +58,7 @@ function painel(contratos: ContratoPainel[], totalOver: Partial<Painel["total"]>
   return {
     contratos,
     // De propósito diferente da soma das linhas: prova que a tela mostra o total da RPC.
-    total: { previsto: "999.00", acumulado: "999.00", saldo: "999.00", pct_executado: "0.9999", corrente: "999.00", ...totalOver },
+    total: { previsto: "999.00", acumulado: "999.00", saldo: "999.00", pct_executado: "0.9999", corrente: "999.00", reajuste_acumulado: "0", ...totalOver },
   };
 }
 
@@ -94,6 +95,24 @@ describe("PainelTabela", () => {
     expect(texto(pe.querySelector('[data-coluna="contrato"]'))).toBe("Total consolidado");
     expect(texto(pe.querySelector('[data-coluna="previsto"]'))).toBe("R$ 999,00");
     expect(texto(pe.querySelector('[data-coluna="acumulado"]'))).toBe("R$ 999,00");
+  });
+
+  it("reajuste acumulado: L09 -R$ 40.021,28, L10 R$ 0,00 e o rodapé do total da RPC", () => {
+    const dois = [
+      contrato({ id: "l09", codigo: "L09", nome_obra: "Lote 09", reajuste_acumulado: "-40021.28" }),
+      contrato({ id: "l10", codigo: "L10", nome_obra: "Lote 10", reajuste_acumulado: "0" }),
+    ];
+    const { container } = render(<PainelTabela painel={painel(dois, { reajuste_acumulado: "-40021.28" })} podeAbrirBoletim />);
+    expect(texto(container.querySelector('thead th[data-coluna="reajuste_acumulado"]'))).toBe("Reajuste acumulado");
+    const celulas = [...container.querySelectorAll('tbody [data-coluna="reajuste_acumulado"]')].map((td) => texto(td));
+    expect(celulas).toEqual(["-R$ 40.021,28", "R$ 0,00"]);
+    expect(texto(container.querySelector('tfoot [data-coluna="reajuste_acumulado"]'))).toBe("-R$ 40.021,28");
+  });
+
+  it("reajuste de contrato sem regra de arredondamento fica em traço", () => {
+    const c = contrato({ previsto: null, acumulado: null, saldo: null, pct_executado: null, reajuste_acumulado: null });
+    const { container } = render(<PainelTabela painel={painel([c])} podeAbrirBoletim />);
+    expect(texto(container.querySelector('tbody [data-coluna="reajuste_acumulado"]'))).toBe("—");
   });
 
   it("clique na linha navega para o boletim do contrato", () => {

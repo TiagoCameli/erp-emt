@@ -65,7 +65,7 @@ function boletim(over: Partial<Boletim> = {}): Boletim {
     medicoes: [],
     linhas: [],
     fora_da_versao: [],
-    total: { previsto: "1.00", valor_medicao: "1.00", acumulado: "1.00", saldo: "0.00", pct_executado: "1", pct_a_medir: "0" },
+    total: { previsto: "1.00", valor_medicao: "1.00", acumulado: "1.00", saldo: "0.00", pct_executado: "1", pct_a_medir: "0", reajuste_medicao: "0", reajuste_acumulado: "0" },
     ...over,
   };
 }

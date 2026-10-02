@@ -8,6 +8,8 @@ export const ROTULO_TIPO_ALERTA: Record<string, string> = {
   prazo_perto_do_fim: "Prazo perto do fim",
   valor_perto_do_previsto: "Valor perto do previsto",
   valor_contrato_diferente: "Valor do contrato diferente da planilha",
+  medicao_sem_reajuste: "Medição aprovada sem reajuste",
+  reajuste_provisorio: "Reajuste provisório",
 };
 
 export const ROTULO_GRAVIDADE: Record<string, string> = { alta: "Alta", media: "Média", baixa: "Baixa" };
@@ -77,6 +79,12 @@ export function fraseAlerta(a: Pick<AlertaLinha, "tipo" | "itemCodigo" | "unidad
         return base;
       }
     }
+    // valor = nº da medição, referencia = aniversário da data-base, data = início do período.
+    case "medicao_sem_reajuste":
+      return `${a.valor ?? ""}ª medição (início ${dataPtBr(a.data)}) aprovada sem reajuste; aniversário da data-base em ${dataPtBr(a.referencia)}`;
+    // valor = nº da medição, referencia = total do relatório que vale.
+    case "reajuste_provisorio":
+      return `O reajuste da ${a.valor ?? ""}ª medição está com índices provisórios: ${dinheiroTexto(a.referencia)}`;
     default:
       return "";
   }

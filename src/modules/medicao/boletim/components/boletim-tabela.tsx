@@ -32,6 +32,7 @@ function ehTitulo(n: NoBoletim): boolean {
 function montarColunas(ate: number | null): ColumnDef<NoBoletim, unknown>[] {
   const medicoes = Array.from({ length: ate ?? 0 }, (_, i) => i + 1);
   const rotuloN = ate === null ? "Valor na medição" : `Valor na ${ate}ª`;
+  const rotuloReajusteN = ate === null ? "Reajuste na medição" : `Reajuste na ${ate}ª`;
   return [
     {
       id: "item",
@@ -120,6 +121,22 @@ function montarColunas(ate: number | null): ColumnDef<NoBoletim, unknown>[] {
       size: 110,
       meta: { alinharDireita: true, atomico: true },
       cell: ({ row }) => <Numero texto={percentualExibicao(row.original.pct_a_medir)} negrito={ehTitulo(row.original)} />,
+    },
+    // Reajuste do DNIT (Fase 6): a soma do rateio do relatório que vale, por linha, como o banco
+    // mandou. A árvore não vira card no celular, então nenhuma `meta.celular` aqui.
+    {
+      id: "reajuste_medicao",
+      header: rotuloReajusteN,
+      size: 150,
+      meta: { alinharDireita: true, atomico: true },
+      cell: ({ row }) => <Dinheiro valor={row.original.reajuste_medicao} negrito={ehTitulo(row.original)} />,
+    },
+    {
+      id: "reajuste_acumulado",
+      header: "Reajuste acumulado",
+      size: 160,
+      meta: { alinharDireita: true, atomico: true },
+      cell: ({ row }) => <Dinheiro valor={row.original.reajuste_acumulado} negrito={ehTitulo(row.original)} />,
     },
     {
       // A busca da DataTable olha UMA coluna: esta junta código e descrição. Fica escondida e
@@ -215,6 +232,8 @@ export function BoletimTabela({ boletim, grupoId }: BoletimTabelaProps) {
           pct_executado: <Numero texto={percentualExibicao(t.pct_executado)} negrito />,
           saldo: <Dinheiro valor={t.saldo} negrito />,
           pct_a_medir: <Numero texto={percentualExibicao(t.pct_a_medir)} negrito />,
+          reajuste_medicao: <Dinheiro valor={t.reajuste_medicao} negrito />,
+          reajuste_acumulado: <Dinheiro valor={t.reajuste_acumulado} negrito />,
         }}
         emptyState={
           <EmptyState

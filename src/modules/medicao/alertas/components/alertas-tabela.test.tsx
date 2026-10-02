@@ -48,6 +48,21 @@ describe("AlertasTabela", () => {
     expect(screen.getByText(/diferença R\$ 17\.567,22/)).toBeTruthy();
   });
 
+  it("os dois alertas do reajuste: tipo e frase", () => {
+    render(
+      <AlertasTabela
+        alertas={[
+          alerta({ chave: "a", codigo: "L09", tipo: "medicao_sem_reajuste", gravidade: "media", valor: "3", referencia: "2026-01-01", data: "2026-01-01" }),
+          alerta({ chave: "b", codigo: "K9", tipo: "reajuste_provisorio", gravidade: "baixa", valor: "1", referencia: "1234.56", data: "2026-01-01" }),
+        ]}
+      />,
+    );
+    expect(screen.getByText("Medição aprovada sem reajuste")).toBeTruthy();
+    expect(screen.getByText("3ª medição (início 01/01/2026) aprovada sem reajuste; aniversário da data-base em 01/01/2026")).toBeTruthy();
+    expect(screen.getByText("Reajuste provisório")).toBeTruthy();
+    expect(screen.getByText("O reajuste da 1ª medição está com índices provisórios: R$ 1.234,56")).toBeTruthy();
+  });
+
   it("sem alertas, mostra o estado vazio", () => {
     render(<AlertasTabela alertas={[]} />);
     expect(screen.getByText("Nenhum alerta")).toBeTruthy();
