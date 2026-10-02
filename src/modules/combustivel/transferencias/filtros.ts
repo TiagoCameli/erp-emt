@@ -1,5 +1,6 @@
 import { dataLocalISO } from "@/lib/formatadores";
 import { diaValido, type Periodo } from "@/modules/combustivel/relatorios/periodo";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
 
 /**
@@ -54,26 +55,45 @@ export interface TransferenciaFiltravel {
   excluidoEm: string | null;
 }
 
-/** Filtro da lista. O período compara o DIA em Rio Branco. */
+/**
+ * Filtro da lista, facetado (ver `_shared/filtros-facetados`): tanque e combustível
+ * só oferecem o que existe nas linhas que passam nos outros filtros. Período,
+ * busca e excluídos restringem, mas não são restringidos. O período compara o DIA
+ * em Rio Branco.
+ */
+export function facetarTransferencias<T extends TransferenciaFiltravel>(
+  transferencias: readonly T[],
+  filtros: FiltrosTransferencias,
+) {
+  const termo = filtros.busca.trim().toLowerCase();
+  return filtrarFacetado(
+    transferencias,
+    {
+      // O tanque casa com a origem OU o destino.
+      tanque: { selecionados: filtros.tanqueIds, chave: (t) => [t.origemId, t.destinoId] },
+      combustivel: { selecionados: filtros.insumoIds, chave: (t) => t.insumoId },
+    },
+    [
+      (t) => !t.excluidoEm || filtros.mostrarExcluidos,
+      (t) => {
+        const dia = dataLocalISO(t.dataHora) ?? "";
+        if (filtros.de && dia < filtros.de) return false;
+        if (filtros.ate && dia > filtros.ate) return false;
+        return true;
+      },
+      (t) =>
+        !termo ||
+        t.origemNome.toLowerCase().includes(termo) ||
+        t.destinoNome.toLowerCase().includes(termo) ||
+        (t.observacoes ?? "").toLowerCase().includes(termo),
+    ],
+  );
+}
+
+/** Só as linhas do filtro (o que a tabela mostra). */
 export function filtrarTransferencias<T extends TransferenciaFiltravel>(
   transferencias: readonly T[],
   filtros: FiltrosTransferencias,
 ): T[] {
-  const termo = filtros.busca.trim().toLowerCase();
-  return transferencias.filter((t) => {
-    if (t.excluidoEm && !filtros.mostrarExcluidos) return false;
-    if (filtros.tanqueIds.length > 0 && !filtros.tanqueIds.includes(t.origemId) && !filtros.tanqueIds.includes(t.destinoId)) {
-      return false;
-    }
-    if (filtros.insumoIds.length > 0 && !(t.insumoId && filtros.insumoIds.includes(t.insumoId))) return false;
-    const dia = dataLocalISO(t.dataHora) ?? "";
-    if (filtros.de && dia < filtros.de) return false;
-    if (filtros.ate && dia > filtros.ate) return false;
-    if (!termo) return true;
-    return (
-      t.origemNome.toLowerCase().includes(termo) ||
-      t.destinoNome.toLowerCase().includes(termo) ||
-      (t.observacoes ?? "").toLowerCase().includes(termo)
-    );
-  });
+  return facetarTransferencias(transferencias, filtros).linhas;
 }

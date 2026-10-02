@@ -19,7 +19,8 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { restaurarContrato } from "@/modules/medicao/contratos/actions";
-import type { ContratoLista } from "@/modules/medicao/contratos/queries";
+import type { ContratoLista, FacetaContratos } from "@/modules/medicao/contratos/queries";
+import { restringirOpcoes, selecao, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 import {
   ROTULO_STATUS_CONTRATO,
   ROTULO_TIPO_CONTRATANTE,
@@ -103,6 +104,8 @@ export interface ContratosTabelaProps {
    * consulta, mas não oferece restaurar.
    */
   podeRestaurar: boolean;
+  /** Valores que existem no recorte, por filtro de seleção (ver `facetasContratos`). */
+  facetas?: FacetasPresentes<FacetaContratos>;
 }
 
 /**
@@ -111,7 +114,16 @@ export interface ContratosTabelaProps {
  * aparece para quem pode excluir; a ação de restaurar, só para quem tem as
  * duas permissões de `podeRestaurar`.
  */
-export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, podeExcluir, podeRestaurar }: ContratosTabelaProps) {
+export function ContratosTabela({
+  contratos,
+  status,
+  tipo,
+  lixeira,
+  podeCriar,
+  podeExcluir,
+  podeRestaurar,
+  facetas,
+}: ContratosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
   const [restaurando, setRestaurando] = React.useState<ContratoLista | null>(null);
@@ -126,6 +138,12 @@ export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, p
     toast.success("Contrato restaurado");
     setRestaurando(null);
     semDerrubarSucesso("medicao.contratos.restaurar", () => router.refresh());
+  }
+
+  // Cada filtro só oferece o que existe com os outros aplicados (ver `_shared/filtros-facetados`).
+  function facetar(id: FacetaContratos, base: { valor: string; rotulo: string }[], valor: string) {
+    if (!facetas) return base;
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
   }
 
   const filtroSelect = (chave: string, valor: string, opcoes: { valor: string; rotulo: string }[], todos: string) => (
@@ -152,14 +170,14 @@ export function ContratosTabela({ contratos, status, tipo, lixeira, podeCriar, p
             fixo: true,
             temValor: status !== "",
             onLimpar: () => setMuitos({ [CHAVE.status]: null }),
-            elemento: filtroSelect(CHAVE.status, status, OPCOES_STATUS, "Todos os status"),
+            elemento: filtroSelect(CHAVE.status, status, facetar("status", OPCOES_STATUS, status), "Todos os status"),
           },
           {
             id: "tipo",
             rotulo: "Contratante",
             temValor: tipo !== "",
             onLimpar: () => setMuitos({ [CHAVE.tipo]: null }),
-            elemento: filtroSelect(CHAVE.tipo, tipo, OPCOES_TIPO, "Todos os contratantes"),
+            elemento: filtroSelect(CHAVE.tipo, tipo, facetar("tipo", OPCOES_TIPO, tipo), "Todos os contratantes"),
           },
           ...(podeExcluir
             ? [

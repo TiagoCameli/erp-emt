@@ -26,7 +26,7 @@ import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerEpi } from "@/modules/rh/epis/actions";
 import type { EpiLista } from "@/modules/rh/epis/queries";
-import { noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarEpis } from "@/modules/rh/epis/filtros";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { EpiFormDrawer } from "./epi-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -106,43 +106,42 @@ export function EpisTabela({
     toast.success("EPI excluído");
   }
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todas as entregas (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return epis.filter((item) => {
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      if (situacao === "em_uso" && item.dataDevolucao !== null) return false;
-      if (situacao === "devolvido" && item.dataDevolucao === null) return false;
-      if (assinado === "sim" && !item.assinado) return false;
-      if (assinado === "nao" && item.assinado) return false;
-      if (!noPeriodo(item.dataEntrega, entregaDe, entregaAte)) return false;
-      // EPI ainda em uso (sem devolução) sai da lista quando o usuário pede uma
-      // janela de devolução: sem data, não é resposta.
-      if (!noPeriodo(item.dataDevolucao, devolucaoDe, devolucaoAte)) {
-        return false;
-      }
-      if (termo) {
-        // A busca cobre quem recebeu e o que recebeu: o nome do EPI e o CA são
-        // o jeito natural de achar "quem está com bota" ou um CA específico.
-        const alvo = [item.colaboradorNome, item.descricao, item.ca ?? ""]
-          .join(" ")
-          .toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
-    });
-  }, [
-    epis,
-    busca,
-    colaboradorId,
-    situacao,
-    assinado,
-    entregaDe,
-    entregaAte,
-    devolucaoDe,
-    devolucaoAte,
-  ]);
+  // server-side), então o total exibido continua sendo o total real. Facetado
+  // (ver `epis/filtros`).
+  const { linhas: dados, opcoes } = React.useMemo(
+    () =>
+      filtrarEpis(epis, {
+        busca,
+        colaboradorId,
+        situacao,
+        assinado,
+        entregaDe,
+        entregaAte,
+        devolucaoDe,
+        devolucaoAte,
+      }),
+    [
+      epis,
+      busca,
+      colaboradorId,
+      situacao,
+      assinado,
+      entregaDe,
+      entregaAte,
+      devolucaoDe,
+      devolucaoAte,
+    ],
+  );
 
   const podeAgir = podeEditar || podeExcluir;
 
@@ -292,10 +291,7 @@ export function EpisTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"
@@ -312,7 +308,7 @@ export function EpisTabela({
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />
@@ -328,7 +324,7 @@ export function EpisTabela({
               <FiltroSelect
                 valor={assinado}
                 onValorChange={setAssinado}
-                opcoes={OPCOES_ASSINADO}
+                opcoes={opcoes("assinado", OPCOES_ASSINADO)}
                 placeholder="Termo"
                 todosRotulo="Assinado ou não"
               />

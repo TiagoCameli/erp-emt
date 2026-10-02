@@ -9,6 +9,10 @@ import {
 } from "@/components/canonicos";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
   idsFornecedoresPorNome,
   inicioDoDiaISO,
   padraoBusca,
@@ -173,6 +177,217 @@ const SELECT_LISTA_COTACAO = `id, numero, status, created_at, created_by, descri
    fornecedores(razao_social, nome_fantasia),
    categorias_financeiras(nome)`;
 
+/** Os filtros da listagem, sem a paginação. */
+export type FiltrosCotacoes = Omit<ListarCotacoesParams, "pagina" | "tamanho">;
+
+/**
+ * Os embeds de que os filtros precisam no select. Entram só quando o filtro está
+ * ligado: join a mais em toda listagem seria custo cobrado de quem nem usa o
+ * filtro.
+ *
+ * `participante` é apelido obrigatório porque `cotacao_fornecedores(count)` já
+ * ocupa o nome da relação, e a contagem tem que continuar somando TODOS os
+ * fornecedores da cotação, não só o que está sendo filtrado. Como cada embed
+ * é uma subconsulta lateral independente, o filtro do apelido não mexe no
+ * count e o `!inner` corta as cotações onde o fornecedor não cotou.
+ */
+function embedsDosFiltros(filtros: FiltrosCotacoes): string[] {
+  const partes: string[] = [];
+  if (filtros.fornecedorId) {
+    partes.push("participante:cotacao_fornecedores!inner(fornecedor_id)");
+  }
+  if (filtros.insumoId) {
+    partes.push("item:cotacao_itens!inner(insumo_id)");
+  }
+  // "Com OC" é join interno; "sem OC" é join à esquerda mais embed nulo, que é
+  // como o PostgREST expressa "não existe filho" (não há NOT EXISTS na API).
+  if (filtros.ocGerada === "com") partes.push("ordens_compra!inner(id)");
+  if (filtros.ocGerada === "sem") partes.push("ordens_compra!left(id)");
+  return partes;
+}
+
+/** O pedaço do builder do PostgREST que os filtros das cotações usam. */
+interface ConsultaFiltravelCotacoes<T> {
+  eq: (coluna: string, valor: string) => T;
+  neq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string) => T;
+  lt: (coluna: string, valor: string) => T;
+  is: (coluna: string, valor: null) => T;
+  or: (filtro: string) => T;
+}
+
+/**
+ * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
+ * MESMO recorte. O select tem que trazer os `embedsDosFiltros`. Síncrona, com
+ * os ids de vencedor da busca já resolvidos: o builder é thenable (ver
+ * `aplicarFiltrosPagas`).
+ */
+function aplicarFiltrosCotacoes<T extends ConsultaFiltravelCotacoes<T>>(
+  consultaInicial: T,
+  filtros: FiltrosCotacoes,
+  idsVencedoresBusca: string[],
+): T {
+  let consulta = consultaInicial;
+  if (filtros.status) consulta = consulta.eq("status", filtros.status);
+  if (filtros.categoriaId) {
+    consulta = consulta.eq("categoria_id", filtros.categoriaId);
+  }
+  if (filtros.vencedorId) {
+    consulta = consulta.eq("vencedor_fornecedor_id", filtros.vencedorId);
+  }
+  if (filtros.fornecedorId) {
+    consulta = consulta.eq("participante.fornecedor_id", filtros.fornecedorId);
+  }
+  if (filtros.insumoId) {
+    consulta = consulta.eq("item.insumo_id", filtros.insumoId);
+  }
+  if (filtros.ocGerada === "sem") {
+    consulta = consulta.is("ordens_compra", null);
+  }
+  // Autoria só faz sentido com o usuário em mãos; sem ele o filtro é ignorado
+  // em vez de virar uma lista errada. "Criadas por outros" é `neq`, então
+  // cotação com autor nulo (carga antiga) fica fora das duas pontas.
+  if (filtros.autoria && filtros.usuarioId) {
+    consulta =
+      filtros.autoria === "eu"
+        ? consulta.eq("created_by", filtros.usuarioId)
+        : consulta.neq("created_by", filtros.usuarioId);
+  }
+  // created_at é timestamptz: o dia final entra inteiro somando 1 dia e usando
+  // "menor que", senão a cotação criada às 14h do dia "ate" ficaria de fora.
+  if (filtros.de) {
+    consulta = consulta.gte("created_at", inicioDoDiaISO(filtros.de));
+  }
+  if (filtros.ate) {
+    consulta = consulta.lt("created_at", inicioDoDiaISO(filtros.ate, 1));
+  }
+
+  if (filtros.busca) {
+    const padrao = padraoBusca(filtros.busca);
+    const clausulas = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
+    if (idsVencedoresBusca.length > 0) {
+      clausulas.push(
+        `vencedor_fornecedor_id.in.(${idsVencedoresBusca.join(",")})`,
+      );
+    }
+    consulta = consulta.or(clausulas.join(","));
+  }
+  return consulta;
+}
+
+/** Os filtros de seleção da barra, na chave que a tabela usa. */
+export type FacetaCotacoes =
+  | "status"
+  | "categoria"
+  | "fornecedor"
+  | "vencedor"
+  | "insumo"
+  | "oc"
+  | "autoria";
+
+/** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
+const PARAMETRO_DA_FACETA: Record<FacetaCotacoes, keyof FiltrosCotacoes> = {
+  status: "status",
+  categoria: "categoriaId",
+  fornecedor: "fornecedorId",
+  vencedor: "vencedorId",
+  insumo: "insumoId",
+  oc: "ocGerada",
+  autoria: "autoria",
+};
+
+interface LinhaFacetaCotacao {
+  status: string;
+  categoria_id: string | null;
+  vencedor_fornecedor_id: string | null;
+  created_by: string | null;
+  cf: { fornecedor_id: string }[] | null;
+  ci: { insumo_id: string }[] | null;
+  oc?: { id: string }[] | null;
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A tabela é paginada no banco, então só o
+ * servidor sabe quais categorias, fornecedores e insumos sobram depois dos
+ * outros filtros.
+ *
+ * Fornecedor e insumo vêm de embeds com apelido próprio (`cf`, `ci`), sem
+ * filtro: a faceta quer TODOS os participantes da cotação que passou, e não só
+ * o que o `participante` filtrado devolve. As OCs só entram para quem vê ordem
+ * de compra: para os outros o filtro nem existe, e a RLS esconderia as OCs.
+ */
+export async function facetasCotacoes(
+  filtros: FiltrosCotacoes,
+  { podeVerOrdens }: { podeVerOrdens: boolean },
+): Promise<FacetasPresentes<FacetaCotacoes>> {
+  const supabase = await createClient();
+  const idsVencedores = filtros.busca
+    ? await idsFornecedoresPorNome(supabase, padraoBusca(filtros.busca))
+    : [];
+  const usuarioId = filtros.usuarioId;
+
+  return facetasNoServidor<LinhaFacetaCotacao, FacetaCotacoes>(
+    {
+      status: { ativo: !!filtros.status, chave: (c) => c.status },
+      categoria: { ativo: !!filtros.categoriaId, chave: (c) => c.categoria_id },
+      fornecedor: {
+        ativo: !!filtros.fornecedorId,
+        chave: (c) => (c.cf ?? []).map((f) => f.fornecedor_id),
+      },
+      vencedor: {
+        ativo: !!filtros.vencedorId,
+        chave: (c) => c.vencedor_fornecedor_id,
+      },
+      insumo: {
+        ativo: !!filtros.insumoId,
+        chave: (c) => (c.ci ?? []).map((i) => i.insumo_id),
+      },
+      oc: {
+        ativo: !!filtros.ocGerada,
+        chave: (c) =>
+          podeVerOrdens ? ((c.oc ?? []).length > 0 ? "com" : "sem") : null,
+      },
+      // Mesma regra do filtro: autor nulo não é "meu" nem "dos outros".
+      autoria: {
+        ativo: !!filtros.autoria,
+        chave: (c) =>
+          !usuarioId || !c.created_by
+            ? null
+            : c.created_by === usuarioId
+              ? "eu"
+              : "outros",
+      },
+    },
+    async (exceto) => {
+      const recorte =
+        exceto === null
+          ? filtros
+          : { ...filtros, [PARAMETRO_DA_FACETA[exceto]]: undefined };
+      const partesSelect = [
+        `id, status, categoria_id, vencedor_fornecedor_id, created_by,
+         cf:cotacao_fornecedores(fornecedor_id), ci:cotacao_itens(insumo_id)`,
+        ...(podeVerOrdens ? ["oc:ordens_compra(id)"] : []),
+        ...embedsDosFiltros(recorte),
+      ];
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosCotacoes(
+          supabase.from("cotacoes").select(partesSelect.join(", ")),
+          recorte,
+          idsVencedores,
+        )
+          .order("id")
+          .range(de, ate)
+          .returns<LinhaFacetaCotacao[]>(),
+      );
+      if (erro) {
+        throw new Error("Não foi possível carregar os filtros das cotações");
+      }
+      return linhas;
+    },
+  );
+}
+
 /**
  * Lista as cotações com paginação server-side (range + count exact), a
  * contagem de fornecedores agregada no banco e o nome do vencedor (quando
@@ -192,73 +407,21 @@ export async function listarCotacoes(
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
-  // Os embeds de filtro entram no select só quando o filtro está ligado: join a
-  // mais em toda listagem seria custo cobrado de quem nem usa o filtro.
-  //
-  // `participante` é apelido obrigatório porque `cotacao_fornecedores(count)` já
-  // ocupa o nome da relação, e a contagem tem que continuar somando TODOS os
-  // fornecedores da cotação, não só o que está sendo filtrado. Como cada embed
-  // é uma subconsulta lateral independente, o filtro do apelido não mexe no
-  // count e o `!inner` corta as cotações onde o fornecedor não cotou.
-  const partesSelect = [SELECT_LISTA_COTACAO];
-  if (params.fornecedorId) {
-    partesSelect.push("participante:cotacao_fornecedores!inner(fornecedor_id)");
-  }
-  if (params.insumoId) {
-    partesSelect.push("item:cotacao_itens!inner(insumo_id)");
-  }
-  // "Com OC" é join interno; "sem OC" é join à esquerda mais embed nulo, que é
-  // como o PostgREST expressa "não existe filho" (não há NOT EXISTS na API).
-  if (params.ocGerada === "com") partesSelect.push("ordens_compra!inner(id)");
-  if (params.ocGerada === "sem") partesSelect.push("ordens_compra!left(id)");
+  const partesSelect = [SELECT_LISTA_COTACAO, ...embedsDosFiltros(params)];
 
-  let consulta = supabase
-    .from("cotacoes")
-    .select(partesSelect.join(", "), { count: "exact" })
+  const idsVencedores = params.busca
+    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
+    : [];
+
+  const consulta = aplicarFiltrosCotacoes(
+    supabase
+      .from("cotacoes")
+      .select(partesSelect.join(", "), { count: "exact" }),
+    params,
+    idsVencedores,
+  )
     .order("created_at", { ascending: false })
     .range(de, ate);
-
-  if (params.status) consulta = consulta.eq("status", params.status);
-  if (params.categoriaId) {
-    consulta = consulta.eq("categoria_id", params.categoriaId);
-  }
-  if (params.vencedorId) {
-    consulta = consulta.eq("vencedor_fornecedor_id", params.vencedorId);
-  }
-  if (params.fornecedorId) {
-    consulta = consulta.eq("participante.fornecedor_id", params.fornecedorId);
-  }
-  if (params.insumoId) {
-    consulta = consulta.eq("item.insumo_id", params.insumoId);
-  }
-  if (params.ocGerada === "sem") {
-    consulta = consulta.is("ordens_compra", null);
-  }
-  // Autoria só faz sentido com o usuário em mãos; sem ele o filtro é ignorado
-  // em vez de virar uma lista errada. "Criadas por outros" é `neq`, então
-  // cotação com autor nulo (carga antiga) fica fora das duas pontas.
-  if (params.autoria && params.usuarioId) {
-    consulta =
-      params.autoria === "eu"
-        ? consulta.eq("created_by", params.usuarioId)
-        : consulta.neq("created_by", params.usuarioId);
-  }
-  // created_at é timestamptz: o dia final entra inteiro somando 1 dia e usando
-  // "menor que", senão a cotação criada às 14h do dia "ate" ficaria de fora.
-  if (params.de) consulta = consulta.gte("created_at", inicioDoDiaISO(params.de));
-  if (params.ate) {
-    consulta = consulta.lt("created_at", inicioDoDiaISO(params.ate, 1));
-  }
-
-  if (params.busca) {
-    const padrao = padraoBusca(params.busca);
-    const idsVencedores = await idsFornecedoresPorNome(supabase, padrao);
-    const clausulas = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
-    if (idsVencedores.length > 0) {
-      clausulas.push(`vencedor_fornecedor_id.in.(${idsVencedores.join(",")})`);
-    }
-    consulta = consulta.or(clausulas.join(","));
-  }
 
   // `returns` explícito porque o select é montado em tempo de execução: sem
   // string literal o supabase-js não tem o que inferir.

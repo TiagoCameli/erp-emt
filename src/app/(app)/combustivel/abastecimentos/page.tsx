@@ -10,6 +10,7 @@ import {
   rotaDoAbastecimento,
 } from "@/modules/combustivel/abastecimentos/filtros";
 import {
+  facetasAbastecimentos,
   listarAbastecimentos,
   listarCombustivelDaUltimaEntrada,
   listarEquipamentos,
@@ -51,8 +52,9 @@ export default async function PaginaAbastecimentos({
   const tanques = await listarTanques();
   const contexto = { idsTanquesExternos: tanques.filter((t) => t.ehExterno).map((t) => t.id) };
 
-  const [lista, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
+  const [lista, facetas, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
     listarAbastecimentos(filtros, contexto),
+    facetasAbastecimentos(filtros, contexto),
     listarEquipamentos(),
     listarTransportadoras(),
     listarInsumosCombustivel(),
@@ -73,6 +75,7 @@ export default async function PaginaAbastecimentos({
         valorDoFiltro={lista.valorDoFiltro}
         contagens={lista.contagens}
         filtros={filtros}
+        facetas={facetas}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
         podeExcluir={podeExcluir}

@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatarData } from "@/lib/formatadores";
 import type { PerfilOpcao, UsuarioLista } from "@/modules/administracao/usuarios/queries";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { DetalheUsuarioDrawer } from "./detalhe-usuario-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -132,32 +133,53 @@ export function UsuariosTabela({
     setDetalheAberto(true);
   }
 
-  const dados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). Período e busca restringem os
+  // outros sem serem restringidos.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return usuarios.filter((usuario) => {
-      if (perfilId === SEM_PERFIL && usuario.perfilId !== null) return false;
-      if (
-        perfilId !== "" &&
-        perfilId !== SEM_PERFIL &&
-        usuario.perfilId !== perfilId
-      ) {
-        return false;
-      }
-      if (status === "ativos" && !usuario.ativo) return false;
-      if (status === "inativos" && usuario.ativo) return false;
-      if (acesso === "pendente" && !usuario.acessoPendente) return false;
-      if (acesso === "concluido" && usuario.acessoPendente) return false;
-      // criadoEm é timestamptz em ISO: o prefixo yyyy-MM-dd compara direto com
-      // as pontas do filtro de período.
-      const criadoDia = usuario.criadoEm.slice(0, 10);
-      if (criadoDe !== "" && criadoDia < criadoDe) return false;
-      if (criadoAte !== "" && criadoDia > criadoAte) return false;
-      if (termo) {
-        const alvo = `${usuario.nome} ${usuario.email}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      usuarios,
+      {
+        perfil: {
+          selecionados: selecao(perfilId),
+          chave: (usuario) => usuario.perfilId ?? SEM_PERFIL,
+        },
+        status: {
+          selecionados: selecao(status),
+          casa: (usuario, valor) =>
+            valor === "ativos"
+              ? usuario.ativo
+              : valor === "inativos"
+                ? !usuario.ativo
+                : true,
+        },
+        acesso: {
+          selecionados: selecao(acesso),
+          casa: (usuario, valor) =>
+            valor === "pendente"
+              ? usuario.acessoPendente
+              : valor === "concluido"
+                ? !usuario.acessoPendente
+                : true,
+        },
+      },
+      [
+        (usuario) => {
+          // criadoEm é timestamptz em ISO: o prefixo yyyy-MM-dd compara direto
+          // com as pontas do filtro de período.
+          const criadoDia = usuario.criadoEm.slice(0, 10);
+          if (criadoDe !== "" && criadoDia < criadoDe) return false;
+          if (criadoAte !== "" && criadoDia > criadoAte) return false;
+          return true;
+        },
+        (usuario) => {
+          if (!termo) return true;
+          const alvo = `${usuario.nome} ${usuario.email}`.toLowerCase();
+          return alvo.includes(termo);
+        },
+      ],
+    );
   }, [usuarios, busca, perfilId, status, acesso, criadoDe, criadoAte]);
 
   return (
@@ -194,13 +216,13 @@ export function UsuariosTabela({
               <FiltroSelect
                 valor={perfilId}
                 onValorChange={setPerfilId}
-                opcoes={[
+                opcoes={opcoes("perfil", [
                   ...perfis.map((perfil) => ({
                     valor: perfil.id,
                     rotulo: perfil.nome,
                   })),
                   { valor: SEM_PERFIL, rotulo: "Sem perfil" },
-                ]}
+                ])}
                 placeholder="Perfil"
                 todosRotulo="Todos os perfis"
                 className="max-w-56"
@@ -217,7 +239,7 @@ export function UsuariosTabela({
               <FiltroSelect
                 valor={status}
                 onValorChange={setStatus}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Ativos e inativos"
               />
@@ -233,7 +255,7 @@ export function UsuariosTabela({
               <FiltroSelect
                 valor={acesso}
                 onValorChange={setAcesso}
-                opcoes={OPCOES_ACESSO}
+                opcoes={opcoes("acesso", OPCOES_ACESSO)}
                 placeholder="Primeiro acesso"
                 todosRotulo="Qualquer situação de acesso"
                 className="max-w-56"

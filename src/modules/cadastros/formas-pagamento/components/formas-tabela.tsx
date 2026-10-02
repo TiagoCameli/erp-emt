@@ -26,6 +26,8 @@ import {
 } from "@/modules/_shared/forma-pagamento";
 import type { FormaLista } from "@/modules/cadastros/formas-pagamento/queries";
 import { FormaFormDrawer } from "./forma-form-drawer";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -83,17 +85,27 @@ export function FormasTabela({
     setDrawerAberto(true);
   }
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return formas.filter((forma) => {
-      if (status === "ativos" && !forma.ativo) return false;
-      if (status === "inativos" && forma.ativo) return false;
-      if (tipo !== "" && forma.tipo !== tipo) return false;
-      if (uso === "usadas" && forma.usoEmOrdens === 0) return false;
-      if (uso === "sem-uso" && forma.usoEmOrdens > 0) return false;
-      if (termo && !forma.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      formas,
+      {
+        status: facetaAtivo<FormaLista>(status),
+        tipo: { selecionados: selecao(tipo), chave: (forma) => forma.tipo },
+        uso: {
+          selecionados: selecao(uso),
+          casa: (forma, valor) =>
+            valor === "usadas"
+              ? forma.usoEmOrdens > 0
+              : valor === "sem-uso"
+                ? forma.usoEmOrdens === 0
+                : true,
+        },
+      },
+      [(forma) => !termo || forma.nome.toLowerCase().includes(termo)],
+    );
   }, [formas, busca, status, tipo, uso]);
 
   const colunas = React.useMemo<ColumnDef<FormaLista, unknown>[]>(() => {
@@ -210,7 +222,7 @@ export function FormasTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -226,7 +238,7 @@ export function FormasTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />
@@ -242,7 +254,7 @@ export function FormasTabela({
               <FiltroSelect
                 valor={uso}
                 onValorChange={setUso}
-                opcoes={OPCOES_USO}
+                opcoes={opcoes("uso", OPCOES_USO)}
                 placeholder="Uso"
                 todosRotulo="Usadas e não usadas"
               />

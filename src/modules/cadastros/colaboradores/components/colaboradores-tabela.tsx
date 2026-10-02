@@ -40,6 +40,7 @@ import {
 } from "@/modules/cadastros/colaboradores/schemas";
 import type { FuncaoAtiva } from "@/modules/cadastros/funcoes/queries";
 import type { JornadaAtiva } from "@/modules/cadastros/jornadas/queries";
+import { filtrarColaboradores } from "@/modules/cadastros/colaboradores/filtros";
 import { ColaboradoresFormDrawer } from "./colaboradores-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -146,53 +147,36 @@ export function ColaboradoresTabela({
     setAExcluir(null);
   }
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return colaboradores.filter((colaborador) => {
-      if (status === "ativos" && !colaborador.ativo) return false;
-      if (status === "inativos" && colaborador.ativo) return false;
-      if (funcaoId !== "" && colaborador.funcaoId !== funcaoId) return false;
-      if (obraId !== "" && colaborador.obraId !== obraId) return false;
-      if (jornadaId !== "" && colaborador.jornadaId !== jornadaId) return false;
-      if (vinculo !== "" && colaborador.vinculo !== vinculo) return false;
-      if (
-        centroCustoId !== "" &&
-        colaborador.centroCustoId !== centroCustoId
-      ) {
-        return false;
-      }
-      if (cnh !== "" && colaborador.cnhCategoria !== cnh) return false;
-      // Datas em "YYYY-MM-DD": comparação de string já é cronológica. Sem data de
-      // admissão o colaborador sai quando o período está preenchido: não há como
-      // afirmar que ele cabe na janela pedida.
-      if (
-        admissaoDe !== "" &&
-        (!colaborador.dataAdmissao || colaborador.dataAdmissao < admissaoDe)
-      ) {
-        return false;
-      }
-      if (
-        admissaoAte !== "" &&
-        (!colaborador.dataAdmissao || colaborador.dataAdmissao > admissaoAte)
-      ) {
-        return false;
-      }
-      if (termo && !colaborador.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
-  }, [
-    colaboradores,
-    busca,
-    status,
-    funcaoId,
-    obraId,
-    jornadaId,
-    vinculo,
-    centroCustoId,
-    cnh,
-    admissaoDe,
-    admissaoAte,
-  ]);
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `filtrarColaboradores`).
+  const { linhas: dados, opcoes } = React.useMemo(
+    () =>
+      filtrarColaboradores(colaboradores, {
+        busca,
+        status,
+        funcaoId,
+        obraId,
+        jornadaId,
+        vinculo,
+        centroCustoId,
+        cnh,
+        admissaoDe,
+        admissaoAte,
+      }),
+    [
+      colaboradores,
+      busca,
+      status,
+      funcaoId,
+      obraId,
+      jornadaId,
+      vinculo,
+      centroCustoId,
+      cnh,
+      admissaoDe,
+      admissaoAte,
+    ],
+  );
 
   const colunas = React.useMemo<ColumnDef<ColaboradorLista, unknown>[]>(() => {
     const base: ColumnDef<ColaboradorLista, unknown>[] = [
@@ -349,7 +333,7 @@ export function ColaboradoresTabela({
                 onValorChange={(valor) =>
                   setStatus((valor || "todos") as FiltroStatus)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -365,10 +349,13 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={funcaoId}
                 onValorChange={setFuncaoId}
-                opcoes={funcoes.map((funcao) => ({
-                  valor: funcao.id,
-                  rotulo: funcao.nome,
-                }))}
+                opcoes={opcoes(
+                  "funcao",
+                  funcoes.map((funcao) => ({
+                    valor: funcao.id,
+                    rotulo: funcao.nome,
+                  })),
+                )}
                 placeholder="Função"
                 todosRotulo="Todas as funções"
                 className="max-w-56"
@@ -385,10 +372,13 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={obraId}
                 onValorChange={setObraId}
-                opcoes={obras.map((obra) => ({
-                  valor: obra.id,
-                  rotulo: obra.nome,
-                }))}
+                opcoes={opcoes(
+                  "obra",
+                  obras.map((obra) => ({
+                    valor: obra.id,
+                    rotulo: obra.nome,
+                  })),
+                )}
                 placeholder="Obra"
                 todosRotulo="Todas as obras"
                 className="max-w-56"
@@ -405,10 +395,13 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={jornadaId}
                 onValorChange={setJornadaId}
-                opcoes={jornadas.map((jornada) => ({
-                  valor: jornada.id,
-                  rotulo: jornada.nome,
-                }))}
+                opcoes={opcoes(
+                  "jornada",
+                  jornadas.map((jornada) => ({
+                    valor: jornada.id,
+                    rotulo: jornada.nome,
+                  })),
+                )}
                 placeholder="Jornada"
                 todosRotulo="Todas as jornadas"
                 className="max-w-56"
@@ -425,7 +418,7 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={vinculo}
                 onValorChange={setVinculo}
-                opcoes={OPCOES_VINCULO}
+                opcoes={opcoes("vinculo", OPCOES_VINCULO)}
                 placeholder="Vínculo"
                 todosRotulo="Todos os vínculos"
               />
@@ -441,10 +434,13 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={centroCustoId}
                 onValorChange={setCentroCustoId}
-                opcoes={centrosCusto.map((centro) => ({
-                  valor: centro.id,
-                  rotulo: centro.nome,
-                }))}
+                opcoes={opcoes(
+                  "centroCusto",
+                  centrosCusto.map((centro) => ({
+                    valor: centro.id,
+                    rotulo: centro.nome,
+                  })),
+                )}
                 placeholder="Centro de custo"
                 todosRotulo="Todos os centros"
                 className="max-w-56"
@@ -482,7 +478,7 @@ export function ColaboradoresTabela({
               <FiltroSelect
                 valor={cnh}
                 onValorChange={setCnh}
-                opcoes={OPCOES_CNH}
+                opcoes={opcoes("cnh", OPCOES_CNH)}
                 placeholder="CNH"
                 todosRotulo="Todas as categorias"
               />

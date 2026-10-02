@@ -4,6 +4,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarGrupos } from "@/modules/cadastros/categorias/queries";
 import { InsumosTabela } from "@/modules/cadastros/insumos/components/insumos-tabela";
 import {
+  facetasInsumos,
   listar,
   listarCategorias,
   listarUnidades,
@@ -60,17 +61,18 @@ export default async function PaginaInsumos({
       ? tamanhoParam
       : TAMANHO_PADRAO;
 
-  const [{ itens, total }, categorias, grupos, unidades] =
+  const filtrosLista = {
+    busca: busca === "" ? undefined : busca,
+    ativo: status === "todos" ? undefined : status === "ativos",
+    grupoId: grupo === "" ? undefined : grupo,
+    categoriaId: categoria === "" ? undefined : categoria,
+    unidadeId: unidade === "" ? undefined : unidade,
+  };
+
+  const [{ itens, total }, facetas, categorias, grupos, unidades] =
     await Promise.all([
-      listar({
-        pagina,
-        tamanho,
-        busca: busca === "" ? undefined : busca,
-        ativo: status === "todos" ? undefined : status === "ativos",
-        grupoId: grupo === "" ? undefined : grupo,
-        categoriaId: categoria === "" ? undefined : categoria,
-        unidadeId: unidade === "" ? undefined : unidade,
-      }),
+      listar({ pagina, tamanho, ...filtrosLista }),
+      facetasInsumos(filtrosLista),
       listarCategorias(),
       listarGrupos(),
       listarUnidades(),
@@ -93,6 +95,7 @@ export default async function PaginaInsumos({
       podeCriar={temPermissao(usuario, "cadastros.insumos", "criar")}
       podeEditar={temPermissao(usuario, "cadastros.insumos", "editar")}
       podeExcluir={temPermissao(usuario, "cadastros.insumos", "excluir")}
+      facetas={facetas}
     />
   );
 }

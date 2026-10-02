@@ -19,6 +19,7 @@ import type {
 } from "@/modules/administracao/perfis/queries";
 import { DetalhePerfilDrawer } from "./detalhe-perfil-drawer";
 import { NovoPerfilDrawer } from "./novo-perfil-drawer";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface PerfisTabProps {
@@ -90,19 +91,32 @@ export function PerfisTab({
   const perfilSelecionado =
     perfis.find((perfil) => perfil.id === idSelecionado) ?? null;
 
-  const dados = useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return perfis.filter((perfil) => {
-      if (comUsuarios === "com" && perfil.totalUsuarios === 0) return false;
-      if (comUsuarios === "sem" && perfil.totalUsuarios > 0) return false;
-      if (comPermissoes === "com" && perfil.totalPermissoes === 0) return false;
-      if (comPermissoes === "sem" && perfil.totalPermissoes > 0) return false;
-      if (termo) {
-        const alvo = `${perfil.nome} ${perfil.descricao ?? ""}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
-    });
+    const comOuSem = (total: number, valor: string) =>
+      valor === "com" ? total > 0 : valor === "sem" ? total === 0 : true;
+    return filtrarFacetado(
+      perfis,
+      {
+        usuarios: {
+          selecionados: selecao(comUsuarios),
+          casa: (perfil, valor) => comOuSem(perfil.totalUsuarios, valor),
+        },
+        permissoes: {
+          selecionados: selecao(comPermissoes),
+          casa: (perfil, valor) => comOuSem(perfil.totalPermissoes, valor),
+        },
+      },
+      [
+        (perfil) => {
+          if (!termo) return true;
+          const alvo = `${perfil.nome} ${perfil.descricao ?? ""}`.toLowerCase();
+          return alvo.includes(termo);
+        },
+      ],
+    );
   }, [perfis, busca, comUsuarios, comPermissoes]);
 
   return (
@@ -153,7 +167,7 @@ export function PerfisTab({
               <FiltroSelect
                 valor={comUsuarios}
                 onValorChange={setComUsuarios}
-                opcoes={OPCOES_USUARIOS}
+                opcoes={opcoes("usuarios", OPCOES_USUARIOS)}
                 placeholder="Usuários"
                 todosRotulo="Com ou sem usuários"
                 className="max-w-56"
@@ -170,7 +184,7 @@ export function PerfisTab({
               <FiltroSelect
                 valor={comPermissoes}
                 onValorChange={setComPermissoes}
-                opcoes={OPCOES_PERMISSOES}
+                opcoes={opcoes("permissoes", OPCOES_PERMISSOES)}
                 placeholder="Permissões"
                 todosRotulo="Com ou sem permissões"
                 className="max-w-56"

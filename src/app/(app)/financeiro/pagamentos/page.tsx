@@ -18,6 +18,7 @@ import {
   lerUuidsDaUrl,
 } from "@/modules/financeiro/_shared/listas-na-url";
 import {
+  facetasParcelasPagas,
   listarContasBancarias,
   listarParcelasAPagar,
   listarParcelasPagas,
@@ -235,6 +236,7 @@ export default async function PaginaPagamentos({
     aprovadas,
     pagas,
     somaPagas,
+    facetasPagas,
     contas,
     fornecedores,
     categorias,
@@ -252,6 +254,8 @@ export default async function PaginaPagamentos({
     // Soma do recorte inteiro, não da página: é ela que tem que bater com o
     // cartão "Pago no mês" do Painel quando se chega aqui clicando nele.
     somaDasParcelasPagas(filtrosPagas),
+    // O que cada filtro do histórico ainda acha com os outros aplicados.
+    facetasParcelasPagas(filtrosPagas),
     listarContasBancarias(),
     listarFornecedores(),
     listarCategorias(),
@@ -323,6 +327,7 @@ export default async function PaginaPagamentos({
           compraAte: texto(filtrosPagas.compraAte),
         }}
         filtrosPagas={filtrosPagas}
+        facetasPagas={facetasPagas}
       />
     </>
   );

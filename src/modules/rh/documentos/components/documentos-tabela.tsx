@@ -34,6 +34,7 @@ import {
   TIPOS_DOCUMENTO,
 } from "@/modules/rh/documentos/schemas";
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { DocumentoFormDrawer } from "./documento-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -131,25 +132,42 @@ export function DocumentosTabela({
     [],
   );
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todos os documentos (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
+  // server-side), então o total exibido continua sendo o total real. Facetado:
+  // tipo, situação e colaborador só oferecem o que existe na lista filtrada
+  // pelos outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return documentos.filter((item) => {
-      if (tipo && item.tipo !== tipo) return false;
-      if (situacao && item.situacao !== situacao) return false;
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      // Documento sem vencimento sai da lista quando o usuário pede uma janela
-      // de vencimento: sem data, não é resposta.
-      if (!noPeriodo(item.dataVencimento, vencimentoDe, vencimentoAte)) {
-        return false;
-      }
-      if (!noPeriodo(item.dataEmissao, emissaoDe, emissaoAte)) return false;
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      documentos,
+      {
+        tipo: { selecionados: selecao(tipo), chave: (item) => item.tipo },
+        situacao: {
+          selecionados: selecao(situacao),
+          chave: (item) => item.situacao,
+        },
+        colaborador: {
+          selecionados: selecao(colaboradorId),
+          chave: (item) => item.colaboradorId,
+        },
+      },
+      [
+        // Documento sem vencimento sai da lista quando o usuário pede uma janela
+        // de vencimento: sem data, não é resposta.
+        (item) => noPeriodo(item.dataVencimento, vencimentoDe, vencimentoAte),
+        (item) => noPeriodo(item.dataEmissao, emissaoDe, emissaoAte),
+        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      ],
+    );
   }, [
     documentos,
     busca,
@@ -290,7 +308,7 @@ export function DocumentosTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={opcoesTipo}
+                opcoes={opcoes("tipo", opcoesTipo)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />
@@ -305,7 +323,7 @@ export function DocumentosTabela({
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />
@@ -321,10 +339,7 @@ export function DocumentosTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"

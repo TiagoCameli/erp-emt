@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import { facetasNoServidor } from "@/modules/_shared/filtros-facetados";
 import {
   aplicarFiltrosServicos,
   lerFiltrosServicos,
+  soltarFacetaServicos,
   padraoBuscaOs,
   TAMANHO_MAXIMO_SERVICOS,
   TAMANHO_PADRAO_SERVICOS,
@@ -110,5 +112,71 @@ describe("aplicarFiltrosServicos", () => {
 describe("padraoBuscaOs", () => {
   it("tira o que quebra o or() do PostgREST", () => {
     expect(padraoBuscaOs('bomba, (hidr)"')).toBe("%bomba hidr%");
+  });
+});
+
+/** Builder que filtra um array em memória: o banco de mentira das facetas. */
+interface Linha {
+  status: string;
+  equipamento_id: string;
+  tipo: string;
+  data_conclusao: string | null;
+}
+
+interface EmMemoria extends ConsultaFiltravelOs<EmMemoria> {
+  linhas: Linha[];
+}
+
+function emMemoria(linhas: Linha[]): EmMemoria {
+  const coluna = (linha: Linha, nome: string) => linha[nome as keyof Linha] ?? "";
+  const com = (filtradas: Linha[]): EmMemoria => ({
+    linhas: filtradas,
+    eq: (nome, valor) => com(filtradas.filter((l) => coluna(l, nome) === valor)),
+    gte: (nome, valor) => com(filtradas.filter((l) => coluna(l, nome) >= valor)),
+    lte: (nome, valor) => com(filtradas.filter((l) => coluna(l, nome) <= valor)),
+    in: (nome, valores) => com(filtradas.filter((l) => valores.includes(coluna(l, nome)))),
+    or: () => com(filtradas),
+  });
+  return com(linhas);
+}
+
+const EQUIP_B = "22222222-2222-4222-8222-222222222222";
+
+describe("facetas do caderno de serviços", () => {
+  const linhas: Linha[] = [
+    { status: "aberta", equipamento_id: EQUIP, tipo: "corretiva", data_conclusao: null },
+    { status: "concluida", equipamento_id: EQUIP, tipo: "troca_oleo", data_conclusao: "2026-09-10" },
+    { status: "concluida", equipamento_id: EQUIP_B, tipo: "preventiva", data_conclusao: "2026-08-01" },
+  ];
+
+  function facetas(filtros: Parameters<typeof soltarFacetaServicos>[0]) {
+    return facetasNoServidor(
+      {
+        status: { ativo: filtros.status.length > 0, chave: (l: Linha) => l.status },
+        equipamento: { ativo: !!filtros.equipamentoId, chave: (l: Linha) => l.equipamento_id },
+        tipo: { ativo: !!filtros.tipo, chave: (l: Linha) => l.tipo },
+      },
+      async (exceto) =>
+        aplicarFiltrosServicos(emMemoria(linhas), exceto ? soltarFacetaServicos(filtros, exceto) : filtros)
+          .linhas,
+    );
+  }
+
+  it("escolher o equipamento restringe os tipos, e o próprio equipamento não se corta", async () => {
+    const resultado = await facetas({ status: [], equipamentoId: EQUIP });
+    expect(resultado.tipo.sort()).toEqual(["corretiva", "troca_oleo"]);
+    expect(resultado.equipamento.sort()).toEqual([EQUIP, EQUIP_B].sort());
+  });
+
+  it("período de conclusão restringe status e equipamento", async () => {
+    const resultado = await facetas({ status: [], conclusaoDe: "2026-09-01" });
+    expect(resultado.status).toEqual(["concluida"]);
+    expect(resultado.equipamento).toEqual([EQUIP]);
+  });
+
+  it("soltar a faceta só tira o filtro dela", () => {
+    const filtros = { status: ["aberta" as const], equipamentoId: EQUIP, tipo: "corretiva" as const };
+    expect(soltarFacetaServicos(filtros, "status")).toEqual({ ...filtros, status: [] });
+    expect(soltarFacetaServicos(filtros, "tipo")).toEqual({ ...filtros, tipo: undefined });
   });
 });

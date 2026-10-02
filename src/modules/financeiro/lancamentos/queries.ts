@@ -12,6 +12,18 @@ import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
+import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { separarCentrosDaListagem } from "@/modules/_shared/centro-custo/filtro";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
+  facetasDaListagem,
+  filtrosSemFaceta,
+  type FacetaLancamentos,
+  type LinhaFacetaLancamentos,
+} from "@/modules/financeiro/lancamentos/facetas";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import type { OrigemDataProgramada } from "@/modules/financeiro/_shared/janela-pagamento";
 import {
@@ -55,10 +67,13 @@ import {
   aplicarNaturezaOperacional,
   aplicarRecorteNoEmbed,
   recorteNoEmbed,
+  type ConsultaComEmbed,
 } from "@/modules/financeiro/lancamentos/recorte-no-embed";
 import {
   aplicarRevisaoNoEmbed,
   revisaoNoEmbed,
+  type ConsultaComSondaDeRevisao,
+  type RevisaoNoEmbed,
 } from "@/modules/financeiro/lancamentos/revisao-no-embed";
 import {
   emLotes,
@@ -922,23 +937,41 @@ function inicioDoDiaISO(data: string, deslocamentoDias = 0): string {
   return new TZDate(ano, mes - 1, dia + deslocamentoDias, TIMEZONE).toISOString();
 }
 
+/** Os filtros da listagem, sem paginação nem ordenação. */
+type FiltrosDaConsulta = Omit<
+  ListarLancamentosParams,
+  "pagina" | "tamanho" | "ordem" | "direcao"
+>;
+
 /**
- * Lista os lançamentos com paginação server-side (count exato), o nome da
- * categoria e do fornecedor resolvidos e a contagem de parcelas. Todos os
- * filtros de `ListarLancamentosParams` são aplicados no banco.
+ * O que os filtros precisam ler do banco ANTES da consulta principal (ids de
+ * atraso e saldo aberto, subárvore do centro, corte do recorte), mais as
+ * medidas de recorte que só a listagem usa.
  */
-export async function listarLancamentos(
-  params: ListarLancamentosParams,
-): Promise<LancamentosPagina> {
-  const supabase = await createClient();
+interface FiltrosResolvidos {
+  idsFiltrados: string[] | null;
+  subarvoreCentro: string[] | null;
+  valoresCentro: Map<string, number> | null;
+  valoresRecorte: Map<string, number> | null;
+  saldoInicialData: string | null;
+  categoriasDeMovimentacao: string[];
+  revisaoDoFiltro: RevisaoNoEmbed | null;
+}
 
-  const ordem = params.ordem ?? ORDEM_PADRAO;
-  const direcao = params.direcao ?? DIRECAO_PADRAO;
-  const pagina = Math.max(0, params.pagina);
-  const tamanho = Math.max(1, params.tamanho);
-  const de = pagina * tamanho;
-  const ate = de + tamanho - 1;
-
+/**
+ * Faz as leituras auxiliares dos filtros. `null` = o filtro com certeza não
+ * acha nada, e quem chama devolve vazio sem ir ao banco de novo.
+ *
+ * `comMedidas` liga as leituras do VALOR do recorte (centro e fatia de
+ * relatório), que servem a coluna da lista e não o filtro: as facetas
+ * (`facetasLancamentos`) passam `false` e economizam essas idas.
+ */
+async function resolverFiltros(
+  supabase: ClienteSupabase,
+  params: FiltrosDaConsulta,
+  hojeISO: string,
+  comMedidas: boolean,
+): Promise<FiltrosResolvidos | null> {
   // Filtros que moram na PARCELA viram lista de ids. Não dá para filtrar pelo
   // join embutido no select: `lancamento_parcelas` é o que alimenta a coluna
   // "Revisão" e o cálculo de dinheiro da linha, e filtrar o embed esconderia
@@ -949,12 +982,6 @@ export async function listarLancamentos(
   // valor dele, então filtrá-lo não mexe em nenhum número da tela. E precisava
   // sair: a lista de ids do centro viaja na query string, e o Escritório Central
   // tem 1.871 lançamentos.
-  // Uma leitura do relógio para a consulta toda: serve o filtro de atraso e o
-  // cálculo por linha. Com duas chamadas de `dataHojeISO()`, uma consulta que
-  // virasse a meia-noite filtraria por um dia e classificaria as linhas pelo
-  // outro, e o filtro "vencidos" traria linha que a coluna mostra em dia.
-  const hojeISO = dataHojeISO();
-
   const listasDeIds: string[][] = [];
   /**
    * A revisão NÃO vira lista de ids: `revisado` é quase a base inteira (6.106 de
@@ -970,7 +997,7 @@ export async function listarLancamentos(
   // interseção ficava vazia, e a resposta certa continua sendo lista vazia — não
   // a lista de a receber inteira.
   if (revisaoDoFiltro?.soAPagar && params.tipo && params.tipo !== "a_pagar") {
-    return { itens: [], total: 0 };
+    return null;
   }
   // As leituras auxiliares abaixo não dependem umas das outras (só os valores
   // do centro dependem da subárvore), então saem juntas. Em fila, filtrar por
@@ -1006,9 +1033,10 @@ export async function listarLancamentos(
             ]),
           ]
         : null;
-    const valores = subarvore?.length
-      ? await valoresPorCentroCusto(supabase, subarvore)
-      : null;
+    const valores =
+      subarvore?.length && comMedidas
+        ? await valoresPorCentroCusto(supabase, subarvore)
+        : null;
     return { subarvore, valores };
   })();
   // O recorte de parcela também é filtro E medida, e agora pelos mesmos dois
@@ -1019,9 +1047,10 @@ export async function listarLancamentos(
   // comentário acima proíbe. Custou 400 no clique do fluxo de caixa (732
   // lançamentos, URL de 29.342 caracteres, medido no edge_logs em 01/09/2026) e,
   // no `conta_paga`, uma requisição de 4.818 ids que nem chegava a virar erro.
-  const valoresRecorteP = params.recorte
-    ? valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
-    : null;
+  const valoresRecorteP =
+    params.recorte && comMedidas
+      ? valoresDoRecorte(supabase, params.recorte, params.contaBancariaId)
+      : null;
   // O corte do saldo inicial é da CONTA, então só o banco sabe. Uma leitura, e
   // só quando o recorte é o da posição bancária.
   const saldoInicialDataP =
@@ -1056,49 +1085,58 @@ export async function listarLancamentos(
   if (listasDeIds.length > 0) {
     idsFiltrados = intersecao(listasDeIds);
     // Nenhum lançamento no filtro: devolve vazio sem ir buscar a lista toda.
-    if (idsFiltrados.length === 0) return { itens: [], total: 0 };
+    if (idsFiltrados.length === 0) return null;
   }
 
-  let consulta = supabase
-    .from("lancamentos")
-    .select(
-      `id, numero, numero_documento, tipo, origem, descricao, valor,
-       data_vencimento, status, data_compra, mes_competencia, created_at,
-       categorias_financeiras(nome),
-       fornecedores(razao_social, nome_fantasia),
-       colaboradores(nome),
-       lancamento_parcelas(
-         status, conta_bancaria_id, valor, valor_liquido, desconto,
-         data_vencimento
-       ),
-       lancamento_rateios(centro_custo_id, centros_custo(nome)),
-       recorte_parcelas:lancamento_parcelas(id),
-       conta_parcelas:lancamento_parcelas(id),
-       revisao_pendentes:lancamento_parcelas(id),
-       revisao_resolvidas:lancamento_parcelas(id)`,
-      { count: "exact" },
-    )
-    // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
-    // sobre a página carregada. A coluna vem de COLUNA_DO_BANCO, lista fechada,
-    // então nada cru da URL chega no `order`.
-    .order(COLUNA_DO_BANCO[ordem], { ascending: direcao === "asc" })
-    // Segundo critério, sempre: com muitos lançamentos no mesmo dia (e no mesmo
-    // status, no mesmo tipo), a coluna escolhida sozinha empata demais. Acompanha
-    // a direção escolhida para a lista não ficar com metade da ordem invertida.
-    .order("created_at", { ascending: direcao === "asc" })
-    // Desempate por id, que é único: sem ele a ordem de lançamentos com a MESMA
-    // data de compra e o mesmo created_at fica a critério do Postgres, e pode
-    // sair diferente entre uma página e a seguinte — a página 2 repete uma linha
-    // e some com outra. Não é hipótese: a carga do Mais Controle gravou milhares
-    // de lançamentos na mesma transação, então created_at empatado é o normal
-    // aqui. Vale para a paginação da tela e para a leitura completa da
-    // exportação, que percorre página por página.
-    //
-    // Com ordenação escolhida pela pessoa isto fica MAIS importante, não menos:
-    // ordenar por status ou por tipo empata milhares de linhas de uma vez.
-    .order("id", { ascending: false })
-    .range(de, ate);
+  // Centro que não existe mais (ou sem nenhum id) não pode virar "sem filtro":
+  // a resposta certa é lista vazia, não a lista inteira.
+  if (subarvoreCentro && subarvoreCentro.length === 0) return null;
 
+  return {
+    idsFiltrados,
+    subarvoreCentro,
+    valoresCentro,
+    valoresRecorte,
+    saldoInicialData,
+    categoriasDeMovimentacao,
+    revisaoDoFiltro,
+  };
+}
+
+/** O pedaço do builder do PostgREST que os filtros da listagem usam. */
+interface ConsultaFiltravelLancamentos<T>
+  extends ConsultaComEmbed<T>,
+    ConsultaComSondaDeRevisao<T> {
+  eq: (coluna: string, valor: string) => T;
+  neq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string | number) => T;
+  lte: (coluna: string, valor: string | number) => T;
+  not: (coluna: string, operador: string, valor: string | null) => T;
+  or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+}
+
+/**
+ * Aplica os filtros na consulta recebida. Serve a listagem e as facetas, que
+ * precisam do MESMO recorte: montado de um jeito na lista e de outro nas
+ * opções, o filtro ofereceria opção que devolve tabela vazia.
+ *
+ * Síncrona, com as leituras auxiliares já feitas: o builder é "thenable", e
+ * uma função async o dispararia no return (ver `aplicarFiltrosPagas`).
+ */
+function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
+  consultaInicial: T,
+  params: FiltrosDaConsulta,
+  resolvidos: FiltrosResolvidos,
+  hojeISO: string,
+): T {
+  let consulta = consultaInicial;
+  const {
+    idsFiltrados,
+    subarvoreCentro,
+    saldoInicialData,
+    categoriasDeMovimentacao,
+    revisaoDoFiltro,
+  } = resolvidos;
   if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
   // Centro de custo vive no RATEIO, não no lançamento: o filtro cai no embed e o
   // `lancamento_rateios=not.is.null` é o que descarta o lançamento sem nenhum
@@ -1111,9 +1149,6 @@ export async function listarLancamentos(
   // independente, então filtrá-lo não mexe no `count: "exact"` nem multiplica a
   // linha do lançamento.
   if (subarvoreCentro) {
-    // Centro que não existe mais (ou sem nenhum id) não pode virar "sem filtro":
-    // a resposta certa é lista vazia, não a lista inteira.
-    if (subarvoreCentro.length === 0) return { itens: [], total: 0 };
     consulta = consulta
       .in("lancamento_rateios.centro_custo_id", subarvoreCentro)
       .not("lancamento_rateios", "is", null);
@@ -1232,6 +1267,78 @@ export async function listarLancamentos(
       `numero.ilike.${padrao},numero_documento.ilike.${padrao},descricao.ilike.${padrao}`,
     );
   }
+  return consulta;
+}
+
+/**
+ * Lista os lançamentos com paginação server-side (count exato), o nome da
+ * categoria e do fornecedor resolvidos e a contagem de parcelas. Todos os
+ * filtros de `ListarLancamentosParams` são aplicados no banco.
+ */
+export async function listarLancamentos(
+  params: ListarLancamentosParams,
+): Promise<LancamentosPagina> {
+  const supabase = await createClient();
+
+  const ordem = params.ordem ?? ORDEM_PADRAO;
+  const direcao = params.direcao ?? DIRECAO_PADRAO;
+  const pagina = Math.max(0, params.pagina);
+  const tamanho = Math.max(1, params.tamanho);
+  const de = pagina * tamanho;
+  const ate = de + tamanho - 1;
+
+  // Uma leitura do relógio para a consulta toda: serve o filtro de atraso e o
+  // cálculo por linha. Com duas chamadas de `dataHojeISO()`, uma consulta que
+  // virasse a meia-noite filtraria por um dia e classificaria as linhas pelo
+  // outro, e o filtro "vencidos" traria linha que a coluna mostra em dia.
+  const hojeISO = dataHojeISO();
+
+  const resolvidos = await resolverFiltros(supabase, params, hojeISO, true);
+  // Nenhum lançamento no filtro: devolve vazio sem ir buscar a lista toda.
+  if (!resolvidos) return { itens: [], total: 0 };
+  const { valoresCentro, valoresRecorte } = resolvidos;
+
+  let consulta = supabase
+    .from("lancamentos")
+    .select(
+      `id, numero, numero_documento, tipo, origem, descricao, valor,
+       data_vencimento, status, data_compra, mes_competencia, created_at,
+       categorias_financeiras(nome),
+       fornecedores(razao_social, nome_fantasia),
+       colaboradores(nome),
+       lancamento_parcelas(
+         status, conta_bancaria_id, valor, valor_liquido, desconto,
+         data_vencimento
+       ),
+       lancamento_rateios(centro_custo_id, centros_custo(nome)),
+       recorte_parcelas:lancamento_parcelas(id),
+       conta_parcelas:lancamento_parcelas(id),
+       revisao_pendentes:lancamento_parcelas(id),
+       revisao_resolvidas:lancamento_parcelas(id)`,
+      { count: "exact" },
+    )
+    // Ordem escolhida pela pessoa, no SERVIDOR: sobre o filtro inteiro, não
+    // sobre a página carregada. A coluna vem de COLUNA_DO_BANCO, lista fechada,
+    // então nada cru da URL chega no `order`.
+    .order(COLUNA_DO_BANCO[ordem], { ascending: direcao === "asc" })
+    // Segundo critério, sempre: com muitos lançamentos no mesmo dia (e no mesmo
+    // status, no mesmo tipo), a coluna escolhida sozinha empata demais. Acompanha
+    // a direção escolhida para a lista não ficar com metade da ordem invertida.
+    .order("created_at", { ascending: direcao === "asc" })
+    // Desempate por id, que é único: sem ele a ordem de lançamentos com a MESMA
+    // data de compra e o mesmo created_at fica a critério do Postgres, e pode
+    // sair diferente entre uma página e a seguinte — a página 2 repete uma linha
+    // e some com outra. Não é hipótese: a carga do Mais Controle gravou milhares
+    // de lançamentos na mesma transação, então created_at empatado é o normal
+    // aqui. Vale para a paginação da tela e para a leitura completa da
+    // exportação, que percorre página por página.
+    //
+    // Com ordenação escolhida pela pessoa isto fica MAIS importante, não menos:
+    // ordenar por status ou por tipo empata milhares de linhas de uma vez.
+    .order("id", { ascending: false })
+    .range(de, ate);
+
+  consulta = aplicarFiltrosLancamentos(consulta, params, resolvidos, hojeISO);
 
   const { data, error, count } = await consulta;
 
@@ -1318,6 +1425,106 @@ export async function listarLancamentos(
   });
 
   return { itens, total: count ?? 0 };
+}
+
+/**
+ * O select da consulta de facetas: as colunas das chaves e, dos embeds com
+ * apelido, só os que o recorte filtra. Eles existem para filtrar (o PostgREST
+ * só aceita filtro em embed que está no select), e sem filtro cada um traria o
+ * id de todas as parcelas dos ~6 mil lançamentos à toa.
+ */
+function selectDasFacetas(recorte: FiltrosDaConsulta): string {
+  const colunas = [
+    "id, tipo, status, origem, fornecedor_id, categoria_id, forma_pagamento_id",
+    "lancamento_parcelas(status, conta_bancaria_id, data_vencimento)",
+    "lancamento_rateios(centro_custo_id)",
+  ];
+  if (recorte.recorte) colunas.push("recorte_parcelas:lancamento_parcelas(id)");
+  if (recorte.contaBancariaId) {
+    colunas.push("conta_parcelas:lancamento_parcelas(id)");
+  }
+  if (recorte.revisao) {
+    colunas.push(
+      "revisao_pendentes:lancamento_parcelas(id)",
+      "revisao_resolvidas:lancamento_parcelas(id)",
+    );
+  }
+  return colunas.join(", ");
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados` e `lancamentos/facetas.ts`). A tabela só tem a
+ * página, então quem sabe quais fornecedores, categorias e status sobram depois
+ * dos outros filtros é o servidor.
+ *
+ * Mesmos filtros da listagem (`resolverFiltros` + `aplicarFiltrosLancamentos`),
+ * sem as medidas do recorte e trazendo só as colunas das chaves. O tipo é
+ * obrigatório na tela, então cada consulta lê um tipo só (~6 mil lançamentos a
+ * pagar no maior caso): uma consulta com tudo aplicado, mais uma por filtro de
+ * seleção preenchido.
+ */
+export async function facetasLancamentos(
+  filtros: FiltrosDaConsulta,
+): Promise<FacetasPresentes<FacetaLancamentos>> {
+  const supabase = await createClient();
+  const hojeISO = dataHojeISO();
+
+  // As raízes escolhidas só saem do `centro=` com o cadastro: é delas que a
+  // faceta de etapa precisa (a etapa solta o segundo campo, não o primeiro).
+  const temCentro =
+    !!filtros.centroCustoIds?.length || !!filtros.centroSemEtapaIds?.length;
+  const { raizes, segundoCampo } = temCentro
+    ? separarCentrosDaListagem(
+        await listarCentrosCusto(),
+        filtros.centroCustoIds ?? [],
+        filtros.centroSemEtapaIds ?? [],
+      )
+    : { raizes: [], segundoCampo: [] };
+
+  // As leituras auxiliares (atraso, saldo aberto, subárvore, revisão) não
+  // dependem destas facetas: soltá-las reaproveita a resolução do recorte
+  // inteiro, em vez de reler as parcelas abertas uma vez por filtro.
+  let resolvidosDoRecorte: ReturnType<typeof resolverFiltros> | null = null;
+  const naoMexemNaResolucao: FacetaLancamentos[] = [
+    "fornecedor",
+    "categoria",
+    "forma",
+    "origem",
+  ];
+
+  return facetasNoServidor<LinhaFacetaLancamentos, FacetaLancamentos>(
+    facetasDaListagem(filtros, segundoCampo.length > 0, hojeISO),
+    async (exceto) => {
+      const recorte =
+        exceto === null ? filtros : filtrosSemFaceta(filtros, exceto, raizes);
+      const resolvidos =
+        exceto === null || naoMexemNaResolucao.includes(exceto)
+          ? await (resolvidosDoRecorte ??= resolverFiltros(
+              supabase,
+              filtros,
+              hojeISO,
+              false,
+            ))
+          : await resolverFiltros(supabase, recorte, hojeISO, false);
+      if (!resolvidos) return [];
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosLancamentos(
+          supabase.from("lancamentos").select(selectDasFacetas(recorte)),
+          recorte,
+          resolvidos,
+          hojeISO,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) {
+        throw new Error("Não foi possível carregar os filtros dos lançamentos");
+      }
+      // O select é montado conforme o recorte, então o tipo não sai inferido.
+      return linhas as unknown as LinhaFacetaLancamentos[];
+    },
+  );
 }
 
 /** O que a planilha acrescenta a uma linha da lista. */

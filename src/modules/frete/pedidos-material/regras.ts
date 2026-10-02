@@ -1,4 +1,5 @@
 import { CASAS_TAXA } from "@/lib/casas-decimais";
+import { filtrarFacetado, selecao, type ResultadoFacetado } from "@/modules/_shared/filtros-facetados";
 import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 /**
@@ -125,16 +126,30 @@ export interface FiltrosPedidos {
 
 export const FILTROS_PEDIDOS_VAZIOS: FiltrosPedidos = { fornecedorId: "", materialId: "", de: "", ate: "" };
 
+/** Os filtros de seleção da lista, pelo id do filtro na tabela. */
+export type FacetaPedido = "fornecedor" | "material";
+
+/**
+ * Facetado (ver `_shared/filtros-facetados`): fornecedor e material só oferecem o
+ * que existe nas linhas que passam no outro e no período (que restringe, sem lista).
+ */
+export function filtrarPedidosFacetado<T extends PedidoFiltravel>(
+  pedidos: readonly T[],
+  filtros: FiltrosPedidos,
+): ResultadoFacetado<T, FacetaPedido> {
+  const resultado = filtrarFacetado<T, FacetaPedido>(
+    pedidos,
+    {
+      fornecedor: { selecionados: selecao(filtros.fornecedorId), chave: (p) => p.fornecedorId },
+      material: { selecionados: selecao(filtros.materialId), chave: (p) => p.itens.map((i) => i.insumoId) },
+    },
+    [(p) => !filtros.de || p.data >= filtros.de, (p) => !filtros.ate || p.data <= filtros.ate],
+  );
+  return { ...resultado, linhas: resultado.linhas.sort((a, b) => b.data.localeCompare(a.data)) };
+}
+
 export function filtrarPedidos<T extends PedidoFiltravel>(pedidos: readonly T[], filtros: FiltrosPedidos): T[] {
-  return pedidos
-    .filter((p) => {
-      if (filtros.fornecedorId && p.fornecedorId !== filtros.fornecedorId) return false;
-      if (filtros.materialId && !p.itens.some((i) => i.insumoId === filtros.materialId)) return false;
-      if (filtros.de && p.data < filtros.de) return false;
-      if (filtros.ate && p.data > filtros.ate) return false;
-      return true;
-    })
-    .sort((a, b) => b.data.localeCompare(a.data));
+  return filtrarPedidosFacetado(pedidos, filtros).linhas;
 }
 
 /** "Total (N pedidos)". */

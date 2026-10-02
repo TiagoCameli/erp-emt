@@ -26,6 +26,7 @@ import { formatarPercentual } from "@/lib/formatadores";
 import { removerEncargo } from "@/modules/rh/encargos/actions";
 import type { EncargoLista } from "@/modules/rh/encargos/queries";
 import { naFaixa } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -60,17 +61,23 @@ export function EncargosTabela({
   const [percentualAte, setPercentualAte] = useFiltroSessao("percentualAte", "");
   const [excluindo, setExcluindo] = React.useState<EncargoLista | null>(null);
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: o status só oferece o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return encargos.filter((encargo) => {
-      if (status === "ativos" && !encargo.ativo) return false;
-      if (status === "inativos" && encargo.ativo) return false;
-      if (!naFaixa(encargo.percentual, percentualDe, percentualAte)) {
-        return false;
-      }
-      if (termo && !encargo.nome.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      encargos,
+      {
+        status: {
+          selecionados: status === "todos" ? [] : [status],
+          casa: (encargo, valor) => (valor === "ativos") === encargo.ativo,
+        },
+      },
+      [
+        (encargo) => naFaixa(encargo.percentual, percentualDe, percentualAte),
+        (encargo) => !termo || encargo.nome.toLowerCase().includes(termo),
+      ],
+    );
   }, [encargos, busca, status, percentualDe, percentualAte]);
 
   async function aoConfirmarExclusao(motivo?: string) {
@@ -198,7 +205,7 @@ export function EncargosTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />

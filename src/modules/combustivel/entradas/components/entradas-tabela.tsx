@@ -33,7 +33,7 @@ import { useNovoDaUrl } from "@/modules/combustivel/_shared/use-novo-da-url";
 import { excluirEntrada, restaurarEntrada } from "@/modules/combustivel/entradas/actions";
 import {
   CHAVES_FILTRO_ENTRADAS as CHAVE,
-  filtrarEntradas,
+  facetarEntradas,
   type FiltrosEntradasUrl,
 } from "@/modules/combustivel/entradas/filtros";
 import type { EntradaLinha, InsumoCombustivel, Opcao, TanqueOpcao } from "@/modules/combustivel/entradas/queries";
@@ -223,8 +223,10 @@ export function EntradasTabela({
     [vendoExcluidas],
   );
 
-  const filtradas = React.useMemo(
-    () => filtrarEntradas(entradas, { ...filtrosUrl, busca }),
+  // Facetado: tanque, combustível e fornecedor só oferecem o que existe na lista
+  // filtrada pelos outros.
+  const { linhas: filtradas, opcoes } = React.useMemo(
+    () => facetarEntradas(entradas, { ...filtrosUrl, busca }),
     [entradas, filtrosUrl, busca],
   );
 
@@ -268,7 +270,7 @@ export function EntradasTabela({
     rotulo: string,
     chave: string,
     valores: readonly string[],
-    opcoes: { valor: string; rotulo: string }[],
+    opcoesFiltro: { valor: string; rotulo: string }[],
     todos: string,
   ): FiltroConfiguravel {
     return {
@@ -280,7 +282,7 @@ export function EntradasTabela({
         <FiltroSelectMulti
           valores={[...valores]}
           onValoresChange={(novos) => setMuitos({ [chave]: novos.length > 0 ? novos.join(",") : null })}
-          opcoes={opcoes}
+          opcoes={opcoesFiltro}
           placeholder={rotulo}
           todosRotulo={todos}
         />
@@ -344,7 +346,7 @@ export function EntradasTabela({
             "Tanque",
             CHAVE.tanque,
             filtrosUrl.tanqueIds,
-            tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome })),
+            opcoes("tanque", tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome }))),
             "Todos os tanques",
           ),
           filtroMulti(
@@ -352,7 +354,7 @@ export function EntradasTabela({
             "Combustível",
             CHAVE.combustivel,
             filtrosUrl.insumoIds,
-            opcoesCombustivel,
+            opcoes("combustivel", opcoesCombustivel),
             "Todos os combustíveis",
           ),
           {
@@ -361,7 +363,7 @@ export function EntradasTabela({
               "Fornecedor",
               CHAVE.fornecedor,
               filtrosUrl.fornecedorIds,
-              opcoesFornecedor,
+              opcoes("fornecedor", opcoesFornecedor),
               "Todos os fornecedores",
             ),
             ocultoPorPadrao: true,

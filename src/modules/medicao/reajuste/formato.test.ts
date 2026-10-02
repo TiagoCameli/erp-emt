@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { aniversario, diferencaReajuste, mesAno, rotuloOrigemReajuste, rotuloSituacaoReajuste } from "./formato";
+import {
+  aniversario,
+  diferencaReajuste,
+  mesAno,
+  rotuloOrigemReajuste,
+  rotuloSituacaoReajuste,
+  situacaoDaLinhaReajuste,
+} from "./formato";
 
 describe("rótulos", () => {
   it("situação e origem", () => {
@@ -37,5 +44,13 @@ describe("mesAno e aniversario", () => {
     expect(aniversario("2025-11-01", 3)).toBe("02/2026");
     expect(aniversario("2025-01-01", 24)).toBe("01/2027");
     expect(aniversario(null, 12)).toBe("");
+  });
+});
+
+describe("situacaoDaLinhaReajuste", () => {
+  it("sem relatório que valha é sem_relatorio; com relatório, a situação dele", () => {
+    expect(situacaoDaLinhaReajuste({ relatorioId: null, situacao: null })).toBe("sem_relatorio");
+    expect(situacaoDaLinhaReajuste({ relatorioId: "r1", situacao: "provisorio" })).toBe("provisorio");
+    expect(situacaoDaLinhaReajuste({ relatorioId: "r1", situacao: "definitivo" })).toBe("definitivo");
   });
 });

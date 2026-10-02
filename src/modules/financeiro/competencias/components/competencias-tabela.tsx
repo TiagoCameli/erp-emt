@@ -26,6 +26,7 @@ import {
   mesmoMesReferencia,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   fecharCompetencia,
   reabrirCompetencia,
@@ -104,23 +105,34 @@ export function CompetenciasTabela({
     zerarPagina();
   }
 
-  const dados = React.useMemo(
+  // Facetado: situação, incompletos e exceções só oferecem o que existe nos
+  // meses filtrados pelos outros (ver `_shared/filtros-facetados`). Mês e custo
+  // entram livres.
+  const { linhas: dados, opcoes } = React.useMemo(
     () =>
-      competencias.filter((competencia) => {
-        if (!mesmoMesReferencia(competencia.mes, mes)) return false;
-        if (situacao === "aberta" && competencia.fechada) return false;
-        if (situacao === "fechada" && !competencia.fechada) return false;
-        if (incompletos === "com" && competencia.incompletos === 0) return false;
-        if (incompletos === "sem" && competencia.incompletos > 0) return false;
-        const temExcecao =
-          competencia.excecoes > 0 || competencia.reaberturas > 0;
-        if (excecoes === "com" && !temExcecao) return false;
-        if (excecoes === "sem" && temExcecao) return false;
-        if (!dentroDaFaixaValor(competencia.custo, custoDe, custoAte)) {
-          return false;
-        }
-        return true;
-      }),
+      filtrarFacetado(
+        competencias,
+        {
+          situacao: {
+            selecionados: selecao(situacao),
+            chave: (competencia) => (competencia.fechada ? "fechada" : "aberta"),
+          },
+          incompletos: {
+            selecionados: selecao(incompletos),
+            chave: (competencia) => (competencia.incompletos > 0 ? "com" : "sem"),
+          },
+          excecoes: {
+            selecionados: selecao(excecoes),
+            chave: (competencia) =>
+              competencia.excecoes > 0 || competencia.reaberturas > 0 ? "com" : "sem",
+          },
+        },
+        [
+          (competencia) =>
+            mesmoMesReferencia(competencia.mes, mes) &&
+            dentroDaFaixaValor(competencia.custo, custoDe, custoAte),
+        ],
+      ),
     [competencias, mes, situacao, incompletos, excecoes, custoDe, custoAte],
   );
 
@@ -152,7 +164,7 @@ export function CompetenciasTabela({
         <FiltroSelect
           valor={situacao}
           onValorChange={mudarSituacao}
-          opcoes={OPCOES_SITUACAO}
+          opcoes={opcoes("situacao", OPCOES_SITUACAO)}
           placeholder="Situação"
           todosRotulo="Abertas e fechadas"
         />
@@ -168,7 +180,7 @@ export function CompetenciasTabela({
         <FiltroSelect
           valor={incompletos}
           onValorChange={mudarIncompletos}
-          opcoes={OPCOES_INCOMPLETOS}
+          opcoes={opcoes("incompletos", OPCOES_INCOMPLETOS)}
           placeholder="Incompletos"
           todosRotulo="Com e sem incompletos"
         />
@@ -184,7 +196,7 @@ export function CompetenciasTabela({
         <FiltroSelect
           valor={excecoes}
           onValorChange={mudarExcecoes}
-          opcoes={OPCOES_EXCECOES}
+          opcoes={opcoes("excecoes", OPCOES_EXCECOES)}
           placeholder="Exceções"
           todosRotulo="Com e sem exceção"
           className="max-w-56"

@@ -306,3 +306,125 @@ export function aplicarFiltrosAbastecimentos<T extends ConsultaFiltravelAbasteci
   return consulta;
 }
 
+
+// ---------------------------------------------------------------------------
+// Facetas (ver `_shared/filtros-facetados`)
+// ---------------------------------------------------------------------------
+
+/**
+ * Os filtros de seleção da barra que são facetados. Período, modo, sub-aba e origens
+ * externas restringem os outros mas não têm opção cortada; "Mostrar excluídos" muda o que
+ * é carregado, então fica de fora.
+ */
+export type FacetaAbastecimentos =
+  | "tanque"
+  | "equipamento"
+  | "transportadora"
+  | "obra"
+  | "combustivel"
+  | "placa"
+  | "operador"
+  | "origem"
+  | "canal";
+
+export const FACETAS_ABASTECIMENTOS: readonly FacetaAbastecimentos[] = [
+  "tanque",
+  "equipamento",
+  "transportadora",
+  "obra",
+  "combustivel",
+  "placa",
+  "operador",
+  "origem",
+  "canal",
+];
+
+/** A linha que a consulta de facetas traz: só as colunas das chaves. */
+export interface LinhaFacetaAbastecimentos {
+  tanque_id: string | null;
+  equipamento_id: string | null;
+  transportadora_id: string | null;
+  insumo_id: string | null;
+  placa: string | null;
+  motorista: string | null;
+  origem: string;
+  canal: string;
+  filtro_obra: { centro_custo_id: string | null }[] | null;
+}
+
+/** Texto livre só vira opção se a URL o aceitaria de volta (`textoLivre`). */
+function opcaoDeTexto(valor: string | null): string | null {
+  // Só vira opção o valor que volta IGUAL da URL: a leitura corta nas vírgulas e
+  // apara cada item, e o filtro é `in` exato. "Zé " ou "A, B" virariam opção que
+  // devolve tabela vazia.
+  if (valor === null || valor.trim() === "" || !textoLivre(valor)) return null;
+  if (valor !== valor.trim() || valor.includes(",")) return null;
+  return valor;
+}
+
+/**
+ * O valor da linha em cada faceta, no MESMO formato que `aplicarFiltrosAbastecimentos`
+ * compara: placa e operador crus (o filtro é `in` exato), obra pelo centro da alocação.
+ */
+export const CHAVE_DA_FACETA_ABASTECIMENTO: Record<
+  FacetaAbastecimentos,
+  (linha: LinhaFacetaAbastecimentos) => string | null | (string | null)[]
+> = {
+  tanque: (l) => l.tanque_id,
+  equipamento: (l) => l.equipamento_id,
+  transportadora: (l) => l.transportadora_id,
+  obra: (l) => (l.filtro_obra ?? []).map((a) => a.centro_custo_id),
+  combustivel: (l) => l.insumo_id,
+  placa: (l) => opcaoDeTexto(l.placa),
+  operador: (l) => opcaoDeTexto(l.motorista),
+  origem: (l) => l.origem,
+  canal: (l) => l.canal,
+};
+
+/** A faceta está aplicada? */
+export function facetaAtiva(filtros: FiltrosAbastecimentos, id: FacetaAbastecimentos): boolean {
+  switch (id) {
+    case "tanque":
+      return filtros.tanqueIds.length > 0;
+    case "equipamento":
+      return filtros.equipamentoIds.length > 0;
+    case "transportadora":
+      return filtros.transportadoraIds.length > 0;
+    case "obra":
+      return filtros.obraIds.length > 0;
+    case "combustivel":
+      return filtros.combustivelIds.length > 0;
+    case "placa":
+      return filtros.placas.length > 0;
+    case "operador":
+      return filtros.operadores.length > 0;
+    case "origem":
+      return filtros.origem !== undefined;
+    case "canal":
+      return filtros.canal !== undefined;
+  }
+}
+
+/** Os filtros sem a faceta `id`: o recorte de onde saem as opções dela. */
+export function filtrosSemFaceta(filtros: FiltrosAbastecimentos, id: FacetaAbastecimentos): FiltrosAbastecimentos {
+  switch (id) {
+    case "tanque":
+      return { ...filtros, tanqueIds: [] };
+    case "equipamento":
+      return { ...filtros, equipamentoIds: [] };
+    case "transportadora":
+      return { ...filtros, transportadoraIds: [] };
+    case "obra":
+      return { ...filtros, obraIds: [] };
+    case "combustivel":
+      return { ...filtros, combustivelIds: [] };
+    case "placa":
+      return { ...filtros, placas: [] };
+    case "operador":
+      return { ...filtros, operadores: [] };
+    case "origem":
+      return { ...filtros, origem: undefined };
+    case "canal":
+      return { ...filtros, canal: undefined };
+  }
+}

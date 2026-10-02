@@ -28,6 +28,7 @@ import {
   opcoesDeNomes,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { PagarParcelaDrawer } from "@/modules/financeiro/pagamentos/components/pagar-parcela-drawer";
 import type {
   ContaBancariaOpcao,
@@ -220,41 +221,44 @@ export function ProgramadosTabela({
     vencimentoDe !== "" ||
     vencimentoAte !== "";
 
-  const parcelasFiltradas = React.useMemo(() => {
+  // Facetado: situação, fornecedor, categoria e conta só oferecem o que existe
+  // nas parcelas filtradas pelos outros (ver `_shared/filtros-facetados`).
+  // Busca, valor e datas entram livres.
+  const { linhas: parcelasFiltradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return parcelas.filter((parcela) => {
-      if (
-        termo !== "" &&
-        !`${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      if (janela !== "") {
-        if (!parcela.dataEfetiva) return false;
-        if (bucketProgramacao(parcela.dataEfetiva, hoje) !== janela) {
-          return false;
-        }
-      }
-      if (fornecedor !== "" && parcela.fornecedorNome !== fornecedor) {
-        return false;
-      }
-      if (categoria !== "" && (parcela.categoriaNome ?? "") !== categoria) {
-        return false;
-      }
-      if (contaId !== "" && parcela.contaBancariaId !== contaId) return false;
-      if (!dentroDaFaixaValor(parcela.valor, valorDe, valorAte)) return false;
-      if (!dentroDoPeriodo(parcela.dataEfetiva, programadaDe, programadaAte)) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(parcela.dataVencimento, vencimentoDe, vencimentoAte)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      parcelas,
+      {
+        janela: {
+          selecionados: selecao(janela),
+          chave: (parcela) =>
+            parcela.dataEfetiva ? bucketProgramacao(parcela.dataEfetiva, hoje) : null,
+        },
+        fornecedor: {
+          selecionados: selecao(fornecedor),
+          chave: (parcela) => parcela.fornecedorNome,
+        },
+        categoria: {
+          selecionados: selecao(categoria),
+          chave: (parcela) => parcela.categoriaNome ?? "",
+        },
+        conta: {
+          selecionados: selecao(contaId),
+          chave: (parcela) => parcela.contaBancariaId,
+        },
+      },
+      [
+        (parcela) =>
+          termo === "" ||
+          `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
+            .toLowerCase()
+            .includes(termo),
+        (parcela) =>
+          dentroDaFaixaValor(parcela.valor, valorDe, valorAte) &&
+          dentroDoPeriodo(parcela.dataEfetiva, programadaDe, programadaAte) &&
+          dentroDoPeriodo(parcela.dataVencimento, vencimentoDe, vencimentoAte),
+      ],
+    );
   }, [
     parcelas,
     busca,
@@ -301,7 +305,7 @@ export function ProgramadosTabela({
         <FiltroSelect
           valor={janela}
           onValorChange={mudarJanela}
-          opcoes={OPCOES_JANELA}
+          opcoes={opcoes("janela", OPCOES_JANELA)}
           placeholder="Situação"
           todosRotulo="Todas as situações"
         />
@@ -317,7 +321,7 @@ export function ProgramadosTabela({
         <FiltroSelect
           valor={fornecedor}
           onValorChange={mudarFornecedor}
-          opcoes={opcoesFornecedor}
+          opcoes={opcoes("fornecedor", opcoesFornecedor)}
           placeholder="Fornecedor"
           todosRotulo="Todos os fornecedores"
           className="max-w-56"
@@ -334,7 +338,7 @@ export function ProgramadosTabela({
         <FiltroSelect
           valor={categoria}
           onValorChange={mudarCategoria}
-          opcoes={opcoesCategoria}
+          opcoes={opcoes("categoria", opcoesCategoria)}
           placeholder="Categoria"
           todosRotulo="Todas as categorias"
           className="max-w-56"
@@ -351,7 +355,7 @@ export function ProgramadosTabela({
         <FiltroSelect
           valor={contaId}
           onValorChange={mudarConta}
-          opcoes={opcoesConta}
+          opcoes={opcoes("conta", opcoesConta)}
           placeholder="Conta bancária"
           todosRotulo="Todas as contas"
           className="max-w-56"

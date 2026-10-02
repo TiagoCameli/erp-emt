@@ -1,3 +1,4 @@
+import { filtrarFacetado, selecao, type ResultadoFacetado } from "@/modules/_shared/filtros-facetados";
 import { dataIsoValida, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 import type { FreteLinha } from "@/modules/frete/fretes/tipos";
 
@@ -121,27 +122,46 @@ export function lerFiltrosFretes(params: Parametros): FiltrosFretes {
   };
 }
 
-/** O filtro da lista (e da exportação, com `semChegada` desligado). */
-export function filtrarFretes(fretes: readonly FreteLinha[], filtros: FiltrosFretes): FreteLinha[] {
+/** Os filtros de seleção da lista, pelo id do filtro na tabela. */
+export type FacetaFrete = "tipo" | "obra" | "transportadora" | "placa" | "material" | "origem" | "destino";
+
+/**
+ * O filtro da lista, facetado (ver `_shared/filtros-facetados`): devolve as linhas e
+ * as opções de cada select restritas ao que existe nas linhas que passam nos outros.
+ * NF, período, motorista, "sem chegada" e a lista de ids restringem, sem lista.
+ */
+export function filtrarFretesFacetado(
+  fretes: readonly FreteLinha[],
+  filtros: FiltrosFretes,
+): ResultadoFacetado<FreteLinha, FacetaFrete> {
   const nf = filtros.busca.trim().toLowerCase();
   const motorista = filtros.motorista.trim().toLowerCase();
   const ids = filtros.ids.length > 0 ? new Set(filtros.ids) : null;
-  return fretes.filter((f) => {
-    if (ids && !ids.has(f.id)) return false;
-    if (filtros.semChegada && f.dataChegada) return false;
-    if (nf && !(f.notaFiscal ?? "").toLowerCase().includes(nf)) return false;
-    if (filtros.tipo && f.tipo !== filtros.tipo) return false;
-    if (filtros.obraId && f.centroCustoId !== filtros.obraId) return false;
-    if (filtros.transportadoraId && f.transportadoraId !== filtros.transportadoraId) return false;
-    if (filtros.de && f.data < filtros.de) return false;
-    if (filtros.ate && f.data > filtros.ate) return false;
-    if (motorista && !(f.motorista ?? "").toLowerCase().includes(motorista)) return false;
-    if (filtros.placa && normalizarPlaca(f.placaCarreta) !== filtros.placa) return false;
-    if (filtros.insumoId && f.insumoId !== filtros.insumoId) return false;
-    if (filtros.origemId && f.origemId !== filtros.origemId) return false;
-    if (filtros.destinoId && f.destinoId !== filtros.destinoId) return false;
-    return true;
-  });
+  return filtrarFacetado<FreteLinha, FacetaFrete>(
+    fretes,
+    {
+      tipo: { selecionados: selecao(filtros.tipo), chave: (f) => f.tipo },
+      obra: { selecionados: selecao(filtros.obraId), chave: (f) => f.centroCustoId },
+      transportadora: { selecionados: selecao(filtros.transportadoraId), chave: (f) => f.transportadoraId },
+      placa: { selecionados: selecao(filtros.placa), chave: (f) => normalizarPlaca(f.placaCarreta) },
+      material: { selecionados: selecao(filtros.insumoId), chave: (f) => f.insumoId },
+      origem: { selecionados: selecao(filtros.origemId), chave: (f) => f.origemId },
+      destino: { selecionados: selecao(filtros.destinoId), chave: (f) => f.destinoId },
+    },
+    [
+      (f) => !ids || ids.has(f.id),
+      (f) => !filtros.semChegada || !f.dataChegada,
+      (f) => !nf || (f.notaFiscal ?? "").toLowerCase().includes(nf),
+      (f) => !filtros.de || f.data >= filtros.de,
+      (f) => !filtros.ate || f.data <= filtros.ate,
+      (f) => !motorista || (f.motorista ?? "").toLowerCase().includes(motorista),
+    ],
+  );
+}
+
+/** O filtro da lista (e da exportação, com `semChegada` desligado). */
+export function filtrarFretes(fretes: readonly FreteLinha[], filtros: FiltrosFretes): FreteLinha[] {
+  return filtrarFretesFacetado(fretes, filtros).linhas;
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { facetasNoServidor, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 
 import type { FiltrosLancamentos, LancamentoLista, ServicoParaLancar } from "./tipos";
 
@@ -47,6 +48,40 @@ async function contarAnexos(
   return contagem;
 }
 
+/** O pedaço do builder do PostgREST que os filtros dos lançamentos usam. */
+interface ConsultaFiltravelLancamentos<T> {
+  eq: (coluna: string, valor: string | number) => T;
+  is: (coluna: string, valor: null) => T;
+  gte: (coluna: string, valor: string) => T;
+  lte: (coluna: string, valor: string) => T;
+  or: (filtro: string) => T;
+}
+
+/**
+ * Aplica os filtros da lista (contrato, não excluídos, medição, período, item, busca). Serve a
+ * lista e as facetas (`facetasLancamentos`), que precisam do MESMO recorte. Síncrona: o builder é
+ * "thenable" (ver `aplicarFiltrosPagas` em financeiro/pagamentos/filtros-pagas.ts).
+ */
+export function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
+  consultaInicial: T,
+  filtros: FiltrosLancamentos,
+): T {
+  let consulta = consultaInicial.eq("contrato_id", filtros.contratoId).is("excluido_em", null);
+  if (filtros.medicao !== undefined) consulta = consulta.eq("medicao_numero", filtros.medicao);
+  if (filtros.de) consulta = consulta.gte("data", filtros.de);
+  if (filtros.ate) consulta = consulta.lte("data", filtros.ate);
+  if (filtros.itemId) consulta = consulta.eq("item_id", filtros.itemId);
+  if (filtros.busca) {
+    const padrao = padraoBusca(filtros.busca);
+    if (padrao !== "%%") {
+      consulta = consulta.or(
+        `codigo.ilike.${padrao},descricao.ilike.${padrao},estaca.ilike.${padrao},local_texto.ilike.${padrao},observacao.ilike.${padrao}`,
+      );
+    }
+  }
+  return consulta;
+}
+
 /**
  * Lista de lançamentos do contrato, não excluídos, de `mc_v_lancamentos` (a RLS das tabelas de
  * origem vale, `security_invoker`). `todasAsLinhas` por causa do teto de 1.000 linhas do
@@ -57,30 +92,14 @@ export async function listarLancamentos(filtros: FiltrosLancamentos): Promise<La
   const supabase = await createClient();
 
   const { linhas, erro } = await todasAsLinhas((de, ate) => {
-    let consulta = supabase
+    const consulta = supabase
       .from("mc_v_lancamentos")
       .select(
         `id, contrato_id, medicao_id, medicao_numero, medicao_status, item_id, codigo, descricao, unidade, data,
         quantidade:quantidade::text, km_inicial:km_inicial::text, km_final:km_final::text, estaca, local_texto,
         observacao, motivo_excesso, created_at, created_by`,
-      )
-      .eq("contrato_id", filtros.contratoId)
-      .is("excluido_em", null);
-
-    if (filtros.medicao !== undefined) consulta = consulta.eq("medicao_numero", filtros.medicao);
-    if (filtros.de) consulta = consulta.gte("data", filtros.de);
-    if (filtros.ate) consulta = consulta.lte("data", filtros.ate);
-    if (filtros.itemId) consulta = consulta.eq("item_id", filtros.itemId);
-    if (filtros.busca) {
-      const padrao = padraoBusca(filtros.busca);
-      if (padrao !== "%%") {
-        consulta = consulta.or(
-          `codigo.ilike.${padrao},descricao.ilike.${padrao},estaca.ilike.${padrao},local_texto.ilike.${padrao},observacao.ilike.${padrao}`,
-        );
-      }
-    }
-
-    return consulta.order("data", { ascending: false }).order("id").range(de, ate);
+      );
+    return aplicarFiltrosLancamentos(consulta, filtros).order("data", { ascending: false }).order("id").range(de, ate);
   });
   if (erro) throw new Error(erro);
 
@@ -111,6 +130,43 @@ export async function listarLancamentos(filtros: FiltrosLancamentos): Promise<La
     createdBy: l.created_by,
     anexos: contagemAnexos.get(l.id ?? "") ?? 0,
   }));
+}
+
+/** Os filtros de seleção da lista: medição (pelo número, como na URL) e item. */
+export type FacetaLancamentos = "medicao" | "item";
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver `_shared/filtros-facetados`): as
+ * medições oferecidas são as que têm lançamento no período, item e busca escolhidos, e os itens,
+ * os lançados na medição e no período. Traz só as duas colunas das chaves; um contrato longo tem
+ * alguns milhares de lançamentos, o que é leve.
+ */
+export async function facetasLancamentos(filtros: FiltrosLancamentos): Promise<FacetasPresentes<FacetaLancamentos>> {
+  const supabase = await createClient();
+  type Linha = { medicao_numero: number | null; item_id: string | null };
+  return facetasNoServidor<Linha, FacetaLancamentos>(
+    {
+      medicao: {
+        ativo: filtros.medicao !== undefined,
+        chave: (l) => (l.medicao_numero === null ? null : String(l.medicao_numero)),
+      },
+      item: { ativo: !!filtros.itemId, chave: (l) => l.item_id },
+    },
+    async (exceto) => {
+      const recorte: FiltrosLancamentos = {
+        ...filtros,
+        ...(exceto === "medicao" ? { medicao: undefined } : {}),
+        ...(exceto === "item" ? { itemId: undefined } : {}),
+      };
+      const { linhas, erro } = await todasAsLinhas<Linha>((de, ate) =>
+        aplicarFiltrosLancamentos(supabase.from("mc_v_lancamentos").select("medicao_numero, item_id"), recorte)
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error(erro);
+      return linhas;
+    },
+  );
 }
 
 /**

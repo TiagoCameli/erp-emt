@@ -17,6 +17,7 @@ import {
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { formatarData, formatarMesAno, formatarPercentual } from "@/lib/formatadores";
 import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   DIAS_POSICAO_VELHA,
   mesAMes,
@@ -207,14 +208,17 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
   const [de, setDe] = useFiltroSessao("de", "");
   const [ate, setAte] = useFiltroSessao("ate", "");
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
-  const dadosMov = React.useMemo(
+  // Facetado: tipo e aplicação só oferecem o que existe nos movimentos filtrados
+  // pelos outros (ver `_shared/filtros-facetados`); o período entra livre.
+  const { linhas: dadosMov, opcoes: opcoesMov } = React.useMemo(
     () =>
-      movimentos.filter(
-        (m) =>
-          (tipo === "" || m.tipo === tipo) &&
-          (aplicacaoMov === "" || m.aplicacaoId === aplicacaoMov) &&
-          (de === "" || m.data >= de) &&
-          (ate === "" || m.data <= ate),
+      filtrarFacetado(
+        movimentos,
+        {
+          tipo: { selecionados: selecao(tipo), chave: (m) => m.tipo },
+          aplicacao: { selecionados: selecao(aplicacaoMov), chave: (m) => m.aplicacaoId },
+        },
+        [(m) => (de === "" || m.data >= de) && (ate === "" || m.data <= ate)],
       ),
     [movimentos, tipo, aplicacaoMov, de, ate],
   );
@@ -262,7 +266,7 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
         <FiltroSelect
           valor={tipo}
           onValorChange={(v) => { setTipo(v); zerarPagina(); }}
-          opcoes={TIPOS.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_MOVIMENTO[t] }))}
+          opcoes={opcoesMov("tipo", TIPOS.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_MOVIMENTO[t] })))}
           placeholder="Tipo"
           todosRotulo="Todos os tipos"
         />
@@ -277,7 +281,7 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
         <FiltroSelect
           valor={aplicacaoMov}
           onValorChange={(v) => { setAplicacaoMov(v); zerarPagina(); }}
-          opcoes={opcoesAplicacao}
+          opcoes={opcoesMov("aplicacao", opcoesAplicacao)}
           placeholder="Aplicação"
           todosRotulo="Todas as aplicações"
         />

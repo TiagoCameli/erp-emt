@@ -52,7 +52,13 @@ import {
 } from "@/modules/financeiro/lancamentos/schemas";
 import { subarvoreDeCentros } from "@/modules/_shared/centro-custo/selecao";
 import {
-  filtrarFilaAPagar,
+  restringirOpcoes,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import { raizesPresentes } from "@/modules/financeiro/lancamentos/facetas";
+import type { FacetaPagas } from "@/modules/financeiro/pagamentos/filtros-pagas";
+import {
+  facetarFilaAPagar,
   VALORES_FILTROS_A_PAGAR_VAZIOS,
   type ValoresFiltrosAPagar,
 } from "@/modules/financeiro/pagamentos/fila-a-pagar";
@@ -194,6 +200,8 @@ export interface PagamentosClienteProps {
    * action que busca as próximas páginas do histórico.
    */
   filtrosPagas: FiltrosParcelasPagas;
+  /** Valores que existem no histórico filtrado, por filtro de seleção. */
+  facetasPagas?: FacetasPresentes<FacetaPagas>;
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-0001 / 2). */
@@ -354,6 +362,7 @@ export function PagamentosCliente({
   valoresAPagar,
   valoresPagas,
   filtrosPagas,
+  facetasPagas,
 }: PagamentosClienteProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
@@ -713,15 +722,41 @@ export function PagamentosCliente({
    * A busca entra por fora do objeto porque ela é digitada e vive em estado
    * local até o debounce escrever na URL; o resto já vem da página.
    */
-  const aprovadasFiltradas = React.useMemo(
-    () =>
-      filtrarFilaAPagar(
-        aprovadas,
-        { ...valoresAPagar, busca: buscaAprovadas },
-        centroDoFiltro,
-      ),
-    [aprovadas, buscaAprovadas, valoresAPagar, centroDoFiltro],
-  );
+  //
+  // Facetado (ver `_shared/filtros-facetados`): cada seletor da aba só oferece
+  // o que existe na fila filtrada pelos outros. A subárvore de cada opção de
+  // centro é resolvida uma vez e guardada.
+  const { linhas: aprovadasFiltradas, opcoes: opcoesAPagar } = React.useMemo(() => {
+    const subarvores = new Map<string, ReadonlySet<string>>();
+    const subarvoreDe = (id: string) => {
+      let dentro = subarvores.get(id);
+      if (!dentro) {
+        dentro = subarvoreDeCentros(centrosCusto, [id]);
+        subarvores.set(id, dentro);
+      }
+      return dentro;
+    };
+    return facetarFilaAPagar(
+      aprovadas,
+      { ...valoresAPagar, busca: buscaAprovadas },
+      centroDoFiltro,
+      subarvoreDe,
+    );
+  }, [aprovadas, buscaAprovadas, valoresAPagar, centroDoFiltro, centrosCusto]);
+
+  /**
+   * Opções de centro da aba. A faceta conhece a lista EFETIVA (as etapas quando
+   * há etapa escolhida), então a raiz marcada no primeiro campo é mantida aqui:
+   * escolhido nunca some da lista.
+   */
+  function opcoesCentroAPagar(base: OpcaoFiltro[], escolhidos: string[]) {
+    const restritas = opcoesAPagar("centro", base);
+    return restringirOpcoes(
+      base,
+      new Set(restritas.map((opcao) => opcao.valor)),
+      escolhidos,
+    );
+  }
 
   /**
    * As parcelas que os cards resumem.
@@ -775,7 +810,7 @@ export function PagamentosCliente({
       chave: "situacao",
       rotulo: "Situação",
       valores: valoresAPagar.situacoes,
-      opcoes: OPCOES_SITUACAO,
+      opcoes: opcoesAPagar("situacao", OPCOES_SITUACAO),
       todosRotulo: "Todas as situações",
     }),
     selecaoMulti({
@@ -783,7 +818,7 @@ export function PagamentosCliente({
       chave: "fornecedor",
       rotulo: "Fornecedor",
       valores: valoresAPagar.fornecedorIds,
-      opcoes: opcoesFornecedor,
+      opcoes: opcoesAPagar("fornecedor", opcoesFornecedor),
       todosRotulo: "Todos os fornecedores",
       largura: LARGURA_NOME,
     }),
@@ -792,7 +827,7 @@ export function PagamentosCliente({
       chave: "conta",
       rotulo: "Conta bancária",
       valores: valoresAPagar.contaIds,
-      opcoes: opcoesConta,
+      opcoes: opcoesAPagar("conta", opcoesConta),
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
@@ -822,7 +857,7 @@ export function PagamentosCliente({
       chave: "centro",
       rotulo: "Centro de custo",
       valores: escadaAPagar.raizes,
-      opcoes: opcoesCentro,
+      opcoes: opcoesCentroAPagar(opcoesCentro, escadaAPagar.raizes),
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
       // Desmarcar a raiz apaga as etapas dela na MESMA navegação.
@@ -843,7 +878,10 @@ export function PagamentosCliente({
             chave: "centro",
             rotulo: escadaAPagar.nomes.rotulo,
             valores: escadaAPagar.etapas,
-            opcoes: opcoesDeEtapa(centrosCusto, escadaAPagar.raizes),
+            opcoes: opcoesCentroAPagar(
+              opcoesDeEtapa(centrosCusto, escadaAPagar.raizes),
+              escadaAPagar.etapas,
+            ),
             todosRotulo: escadaAPagar.nomes.todos,
             largura: LARGURA_NOME,
             oculto: false,
@@ -857,7 +895,7 @@ export function PagamentosCliente({
       chave: "categoria",
       rotulo: "Categoria",
       valores: valoresAPagar.categoriaIds,
-      opcoes: opcoesCategoria,
+      opcoes: opcoesAPagar("categoria", opcoesCategoria),
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),
@@ -866,7 +904,7 @@ export function PagamentosCliente({
       chave: "forma",
       rotulo: "Forma de pagamento",
       valores: valoresAPagar.formaIds,
-      opcoes: opcoesForma,
+      opcoes: opcoesAPagar("forma", opcoesForma),
       todosRotulo: "Todas as formas",
     }),
     mesReferencia({ id: "mes", chave: "mes", valor: valoresAPagar.mes }),
@@ -875,7 +913,7 @@ export function PagamentosCliente({
       chave: "origem",
       rotulo: "Origem",
       valor: valoresAPagar.origem,
-      opcoes: OPCOES_ORIGEM,
+      opcoes: opcoesAPagar("origem", OPCOES_ORIGEM),
       todosRotulo: "Todas as origens",
     }),
     periodo({
@@ -897,6 +935,21 @@ export function PagamentosCliente({
     valoresPagas.busca,
     "h_busca",
   );
+  // Facetado no servidor (ver `facetasParcelasPagas`): a aba só tem a página,
+  // então quem diz o que existe no histórico filtrado pelos outros é a página.
+  // O centro chega com o id cru do rateio e sobe até a raiz aqui.
+  function facetarPagas(
+    id: FacetaPagas,
+    base: OpcaoFiltro[],
+    escolhidos: string[],
+  ): OpcaoFiltro[] {
+    if (!facetasPagas) return base;
+    const presentes =
+      id === "centro"
+        ? raizesPresentes(centrosCusto, facetasPagas.centro)
+        : new Set(facetasPagas[id]);
+    return restringirOpcoes(base, presentes, escolhidos);
+  }
 
   const filtrosPagasBarra: FiltroConfiguravel[] = [
     {
@@ -920,7 +973,11 @@ export function PagamentosCliente({
       chave: "h_fornecedor",
       rotulo: "Fornecedor",
       valores: valoresPagas.fornecedorIds,
-      opcoes: opcoesFornecedor,
+      opcoes: facetarPagas(
+        "fornecedor",
+        opcoesFornecedor,
+        valoresPagas.fornecedorIds,
+      ),
       todosRotulo: "Todos os fornecedores",
       largura: LARGURA_NOME,
     }),
@@ -929,7 +986,7 @@ export function PagamentosCliente({
       chave: "h_conta",
       rotulo: "Conta bancária",
       valores: valoresPagas.contaIds,
-      opcoes: opcoesConta,
+      opcoes: facetarPagas("conta", opcoesConta, valoresPagas.contaIds),
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
@@ -968,7 +1025,7 @@ export function PagamentosCliente({
       chave: "h_centro",
       rotulo: "Centro de custo",
       valores: escadaPagas.raizes,
-      opcoes: opcoesCentro,
+      opcoes: facetarPagas("centro", opcoesCentro, escadaPagas.raizes),
       todosRotulo: "Todos os centros",
       largura: LARGURA_NOME,
       onValores: (ids) =>
@@ -985,7 +1042,11 @@ export function PagamentosCliente({
             chave: "h_centro",
             rotulo: escadaPagas.nomes.rotulo,
             valores: escadaPagas.etapas,
-            opcoes: opcoesDeEtapa(centrosCusto, escadaPagas.raizes),
+            opcoes: facetarPagas(
+              "etapa",
+              opcoesDeEtapa(centrosCusto, escadaPagas.raizes),
+              escadaPagas.etapas,
+            ),
             todosRotulo: escadaPagas.nomes.todos,
             largura: LARGURA_NOME,
             oculto: false,
@@ -999,7 +1060,11 @@ export function PagamentosCliente({
       chave: "h_categoria",
       rotulo: "Categoria",
       valores: valoresPagas.categoriaIds,
-      opcoes: opcoesCategoria,
+      opcoes: facetarPagas(
+        "categoria",
+        opcoesCategoria,
+        valoresPagas.categoriaIds,
+      ),
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),
@@ -1008,7 +1073,7 @@ export function PagamentosCliente({
       chave: "h_forma",
       rotulo: "Forma de pagamento",
       valores: valoresPagas.formaIds,
-      opcoes: opcoesForma,
+      opcoes: facetarPagas("forma", opcoesForma, valoresPagas.formaIds),
       todosRotulo: "Todas as formas",
     }),
     mesReferencia({ id: "mes", chave: "h_mes", valor: valoresPagas.mes }),
@@ -1017,7 +1082,11 @@ export function PagamentosCliente({
       chave: "h_origem",
       rotulo: "Origem",
       valor: valoresPagas.origem,
-      opcoes: OPCOES_ORIGEM,
+      opcoes: facetarPagas(
+        "origem",
+        OPCOES_ORIGEM,
+        valoresPagas.origem ? [valoresPagas.origem] : [],
+      ),
       todosRotulo: "Todas as origens",
     }),
     periodo({

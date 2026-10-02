@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { Button } from "@/components/ui/button";
 import {
   rotuloParcela,
@@ -92,8 +93,13 @@ export function LotesTabela({
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [status, setStatus] = useFiltroSessao("statusLote", "");
 
-  const dados = React.useMemo(
-    () => lotes.filter((lote) => status === "" || lote.status === status),
+  // Facetado: a situação só oferece o que existe nos lotes (ver
+  // `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(
+    () =>
+      filtrarFacetado(lotes, {
+        status: { selecionados: selecao(status), chave: (lote) => lote.status },
+      }),
     [lotes, status],
   );
 
@@ -113,7 +119,7 @@ export function LotesTabela({
               <FiltroSelect
                 valor={status}
                 onValorChange={(valor) => setStatus(valor as StatusLote | "")}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />

@@ -12,6 +12,8 @@ import {
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
 import {
@@ -80,22 +82,35 @@ export function CartoesTabela({
     setDrawerAberto(true);
   }
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return cartoes.filter((cartao) => {
-      if (status === "ativos" && !cartao.ativo) return false;
-      if (status === "inativos" && cartao.ativo) return false;
-      if (uso === "usados" && cartao.usoEmDocumentos === 0) return false;
-      if (uso === "sem-uso" && cartao.usoEmDocumentos > 0) return false;
-      if (termo) {
-        // A busca casa também com os dígitos: quem está com a fatura na mão
-        // procura por "4829", não pelo apelido.
-        const alvo =
-          `${cartao.nome} ${cartao.ultimosDigitos} ${cartao.bandeira ?? ""} ${cartao.banco ?? ""}`.toLowerCase();
-        if (!alvo.includes(termo)) return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      cartoes,
+      {
+        status: facetaAtivo<CartaoLista>(status),
+        uso: {
+          selecionados: selecao(uso),
+          casa: (cartao, valor) =>
+            valor === "usados"
+              ? cartao.usoEmDocumentos > 0
+              : valor === "sem-uso"
+                ? cartao.usoEmDocumentos === 0
+                : true,
+        },
+      },
+      [
+        (cartao) => {
+          if (!termo) return true;
+          // A busca casa também com os dígitos: quem está com a fatura na mão
+          // procura por "4829", não pelo apelido.
+          const alvo =
+            `${cartao.nome} ${cartao.ultimosDigitos} ${cartao.bandeira ?? ""} ${cartao.banco ?? ""}`.toLowerCase();
+          return alvo.includes(termo);
+        },
+      ],
+    );
   }, [cartoes, busca, status, uso]);
 
   const colunas = React.useMemo<ColumnDef<CartaoLista, unknown>[]>(() => {
@@ -237,7 +252,7 @@ export function CartoesTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -253,7 +268,7 @@ export function CartoesTabela({
               <FiltroSelect
                 valor={uso}
                 onValorChange={setUso}
-                opcoes={OPCOES_USO}
+                opcoes={opcoes("uso", OPCOES_USO)}
                 placeholder="Uso"
                 todosRotulo="Usados e não usados"
               />

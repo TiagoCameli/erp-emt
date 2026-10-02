@@ -35,6 +35,8 @@ import {
   type TipoCategoriaFinanceira,
 } from "@/modules/cadastros/categorias-financeiras/schemas";
 import { CategoriasFormDrawer } from "./categorias-form-drawer";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 export interface CategoriasTabelaProps {
@@ -169,30 +171,40 @@ export function CategoriasTabela({
       .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
   }, [categorias]);
 
-  const dados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return categorias.filter((categoria) => {
-      if (status === "ativos" && !categoria.ativo) return false;
-      if (status === "inativos" && categoria.ativo) return false;
-      if (tipo && categoria.tipo !== tipo) return false;
-      if (natureza && categoria.natureza !== natureza) return false;
-      if (paiId !== "" && categoria.paiId !== paiId) return false;
-      if (nivel === "raiz" && categoria.paiId !== null) return false;
-      if (nivel === "filha" && categoria.paiId === null) return false;
-      if (uso === "com" && categoria.usos === 0) return false;
-      if (uso === "sem" && categoria.usos > 0) return false;
-      // A busca cobre o nome do pai também: quem digita "Combustível" quer o
-      // galho inteiro, não só a categoria com aquele nome exato.
-      if (
-        termo &&
-        !`${categoria.nome} ${categoria.paiNome ?? ""}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      categorias,
+      {
+        status: facetaAtivo<CategoriaFinanceiraLista>(status),
+        tipo: { selecionados: selecao(tipo), chave: (c) => c.tipo },
+        natureza: { selecionados: selecao(natureza), chave: (c) => c.natureza },
+        pai: { selecionados: selecao(paiId), chave: (c) => c.paiId },
+        nivel: {
+          selecionados: selecao(nivel),
+          casa: (c, valor) =>
+            valor === "raiz"
+              ? c.paiId === null
+              : valor === "filha"
+                ? c.paiId !== null
+                : true,
+        },
+        uso: {
+          selecionados: selecao(uso),
+          casa: (c, valor) =>
+            valor === "com" ? c.usos > 0 : valor === "sem" ? c.usos === 0 : true,
+        },
+      },
+      [
+        // A busca cobre o nome do pai também: quem digita "Combustível" quer o
+        // galho inteiro, não só a categoria com aquele nome exato.
+        (c) =>
+          !termo ||
+          `${c.nome} ${c.paiNome ?? ""}`.toLowerCase().includes(termo),
+      ],
+    );
   }, [categorias, busca, tipo, natureza, status, paiId, nivel, uso]);
 
   const colunas = React.useMemo<
@@ -313,7 +325,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={tipo}
           onValorChange={mudarTipo}
-          opcoes={OPCOES_TIPO}
+          opcoes={opcoes("tipo", OPCOES_TIPO)}
           placeholder="Tipo"
           todosRotulo="Todos os tipos"
         />
@@ -329,7 +341,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={natureza}
           onValorChange={mudarNatureza}
-          opcoes={OPCOES_NATUREZA}
+          opcoes={opcoes("natureza", OPCOES_NATUREZA)}
           placeholder="Natureza"
           todosRotulo="Todas as naturezas"
         />
@@ -344,7 +356,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={status === "todos" ? "" : status}
           onValorChange={mudarStatus}
-          opcoes={OPCOES_STATUS}
+          opcoes={opcoes("status", OPCOES_STATUS)}
           placeholder="Status"
           todosRotulo="Todos"
         />
@@ -360,7 +372,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={paiId}
           onValorChange={mudarPai}
-          opcoes={opcoesPai}
+          opcoes={opcoes("pai", opcoesPai)}
           placeholder="Categoria pai"
           todosRotulo="Todas as categorias pai"
           className="max-w-56"
@@ -377,7 +389,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={nivel}
           onValorChange={mudarNivel}
-          opcoes={OPCOES_NIVEL}
+          opcoes={opcoes("nivel", OPCOES_NIVEL)}
           placeholder="Nível"
           todosRotulo="Todos os níveis"
         />
@@ -393,7 +405,7 @@ export function CategoriasTabela({
         <FiltroSelect
           valor={uso}
           onValorChange={mudarUso}
-          opcoes={OPCOES_USO}
+          opcoes={opcoes("uso", OPCOES_USO)}
           placeholder="Uso em lançamentos"
           todosRotulo="Com e sem lançamentos"
         />

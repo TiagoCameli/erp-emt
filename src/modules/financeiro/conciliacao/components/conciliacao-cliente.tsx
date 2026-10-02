@@ -31,6 +31,7 @@ import {
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
@@ -449,15 +450,19 @@ function TabelaFaltam({
     return mapa;
   }, [transacoes, candidatos]);
 
-  const dados = React.useMemo(() => {
+  // Facetado (ver `_shared/filtros-facetados`): o tipo só oferece o que existe
+  // nas transações que a busca deixou.
+  const { linhas: dados, opcoes: opcoesFacetadas } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return transacoes.filter((t) => {
-      if (tipo && t.tipo !== tipo) return false;
-      if (termo && !`${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      transacoes,
+      { tipo: { selecionados: selecao(tipo), chave: (t) => t.tipo } },
+      [
+        (t) =>
+          !termo ||
+          `${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`.toLowerCase().includes(termo),
+      ],
+    );
   }, [transacoes, busca, tipo]);
 
   const validos = selecionados.filter((id) => transacoes.some((t) => t.id === id));
@@ -578,10 +583,10 @@ function TabelaFaltam({
             setTipo(v);
             zerarPagina();
           }}
-          opcoes={[
+          opcoes={opcoesFacetadas("tipo", [
             { valor: "debito", rotulo: "Saídas" },
             { valor: "credito", rotulo: "Entradas" },
-          ]}
+          ])}
           placeholder="Entrada ou saída"
           todosRotulo="Entradas e saídas"
         />
@@ -813,15 +818,26 @@ function TabelaCasados({
   const [situacao, setSituacao] = React.useState("");
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
-  const dados = React.useMemo(() => {
+  // Facetado: "como casou" só oferece o que existe nas transações da busca.
+  const { linhas: dados, opcoes: opcoesFacetadas } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return transacoes.filter((t) => {
-      if (situacao === "confira" && !precisaConferir(t)) return false;
-      if (situacao === "automatico" && !t.automatica) return false;
-      if (situacao === "manual" && t.automatica) return false;
-      if (termo && !`${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      transacoes,
+      {
+        situacao: {
+          selecionados: selecao(situacao),
+          casa: (t, valor) =>
+            valor === "confira"
+              ? precisaConferir(t)
+              : valor === "automatico"
+                ? t.automatica
+                : valor === "manual"
+                  ? !t.automatica
+                  : true,
+        },
+      },
+      [(t) => !termo || `${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo)],
+    );
   }, [transacoes, busca, situacao]);
 
   const colunas = React.useMemo<ColumnDef<TransacaoPainel, unknown>[]>(
@@ -916,11 +932,11 @@ function TabelaCasados({
             setSituacao(v);
             zerarPagina();
           }}
-          opcoes={[
+          opcoes={opcoesFacetadas("situacao", [
             { valor: "confira", rotulo: `Para conferir (${qtdConferir})` },
             { valor: "automatico", rotulo: "Automático" },
             { valor: "manual", rotulo: "Manual" },
-          ]}
+          ])}
           placeholder="Como casou"
           todosRotulo="Todos"
         />

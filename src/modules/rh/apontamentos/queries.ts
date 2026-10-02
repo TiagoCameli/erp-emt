@@ -1,6 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import type { JornadaHoras } from "@/modules/cadastros/jornadas/formato";
 import {
   STATUS_PONTO,
@@ -191,6 +196,102 @@ export interface ListarPontosParams {
   encarregadoId?: string;
 }
 
+/** Os filtros da listagem, sem a paginação. */
+export type FiltrosPontos = Omit<ListarPontosParams, "pagina" | "tamanho">;
+
+/** O pedaço do builder do PostgREST que os filtros dos pontos usam. */
+interface ConsultaFiltravelPontos<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string) => T;
+  lte: (coluna: string, valor: string) => T;
+}
+
+/**
+ * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
+ * MESMO recorte. Síncrona: o builder é thenable (ver `aplicarFiltrosPagas`).
+ */
+export function aplicarFiltrosPontos<T extends ConsultaFiltravelPontos<T>>(
+  consultaInicial: T,
+  filtros: FiltrosPontos,
+): T {
+  let consulta = consultaInicial;
+  if (filtros.obraId) consulta = consulta.eq("obra_id", filtros.obraId);
+  if (filtros.status) consulta = consulta.eq("status", filtros.status);
+  // `data` é DATE no banco: a string yyyy-MM-dd compara direto, sem fuso.
+  if (filtros.de) consulta = consulta.gte("data", filtros.de);
+  if (filtros.ate) consulta = consulta.lte("data", filtros.ate);
+  if (filtros.encarregadoId) {
+    consulta = consulta.eq("encarregado_id", filtros.encarregadoId);
+  }
+  return consulta;
+}
+
+/** Os filtros de seleção da barra. O período restringe, mas não tem lista. */
+export type FacetaPontos = "obra" | "status" | "encarregado";
+
+/** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
+const PARAMETRO_DA_FACETA_PONTOS: Record<FacetaPontos, keyof FiltrosPontos> = {
+  obra: "obraId",
+  status: "status",
+  encarregado: "encarregadoId",
+};
+
+/** Os filtros sem o da faceta: o recorte de onde saem as opções dela. */
+export function soltarFacetaPontos(
+  filtros: FiltrosPontos,
+  faceta: FacetaPontos,
+): FiltrosPontos {
+  return { ...filtros, [PARAMETRO_DA_FACETA_PONTOS[faceta]]: undefined };
+}
+
+interface LinhaFacetaPontos {
+  obra_id: string;
+  status: string;
+  encarregado_id: string | null;
+}
+
+/** As facetas dos pontos vistas pela linha (ver `facetasPontos`). */
+export function facetasDosPontos(filtros: FiltrosPontos) {
+  return {
+    obra: { ativo: !!filtros.obraId, chave: (p: LinhaFacetaPontos) => p.obra_id },
+    status: { ativo: !!filtros.status, chave: (p: LinhaFacetaPontos) => p.status },
+    encarregado: {
+      ativo: !!filtros.encarregadoId,
+      chave: (p: LinhaFacetaPontos) => p.encarregado_id,
+    },
+  };
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A tabela é paginada no banco, então só o
+ * servidor sabe quais obras, status e encarregados sobram depois dos outros
+ * filtros. Só as colunas das chaves, sem paginação.
+ */
+export async function facetasPontos(
+  filtros: FiltrosPontos,
+): Promise<FacetasPresentes<FacetaPontos>> {
+  const supabase = await createClient();
+
+  return facetasNoServidor<LinhaFacetaPontos, FacetaPontos>(
+    facetasDosPontos(filtros),
+    async (exceto) => {
+      const recorte =
+        exceto === null ? filtros : soltarFacetaPontos(filtros, exceto);
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosPontos(
+          supabase.from("rh_pontos").select("id, obra_id, status, encarregado_id"),
+          recorte,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros dos pontos");
+      return linhas;
+    },
+  );
+}
+
 /**
  * Lista os pontos com paginação server-side (range + count exact), nome da obra
  * e do encarregado resolvidos via join. Para cada ponto da página, agrega a
@@ -222,14 +323,7 @@ export async function listarPontos(
     .order("created_at", { ascending: false })
     .range(de, ate);
 
-  if (params.obraId) consulta = consulta.eq("obra_id", params.obraId);
-  if (params.status) consulta = consulta.eq("status", params.status);
-  // `data` é DATE no banco: a string yyyy-MM-dd compara direto, sem fuso.
-  if (params.de) consulta = consulta.gte("data", params.de);
-  if (params.ate) consulta = consulta.lte("data", params.ate);
-  if (params.encarregadoId) {
-    consulta = consulta.eq("encarregado_id", params.encarregadoId);
-  }
+  consulta = aplicarFiltrosPontos(consulta, params);
 
   const { data, error, count } = await consulta;
 

@@ -45,6 +45,7 @@ import {
   ROTULO_ORIGEM_EXTERNA,
   ROTULO_VISAO,
   VISOES_SAIDA,
+  type FacetaAbastecimentos,
   type FiltrosAbastecimentos,
   type OrigemExterna,
   type VisaoSaida,
@@ -55,6 +56,7 @@ import type {
   SaidaLista,
 } from "@/modules/combustivel/abastecimentos/queries";
 import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato";
+import { restringirOpcoes, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
 import { AbastecimentoDetalheDrawer } from "./abastecimento-detalhe-drawer";
 import { AbastecimentoFormDrawer, type OpcoesAbastecimento } from "./abastecimento-form-drawer";
 import { ROTULO_ORIGEM_CURTO } from "./rotulos-lista";
@@ -333,6 +335,8 @@ export interface AbastecimentosTabelaProps {
   /** Opções do formulário; nulo quando não dá para criar nem editar. */
   opcoesFormulario?: OpcoesAbastecimento | null;
   opcoesFiltro: OpcoesFiltroAbastecimentos;
+  /** Valores que existem na lista filtrada pelos outros filtros, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaAbastecimentos>;
 }
 
 /**
@@ -354,6 +358,7 @@ export function AbastecimentosTabela({
   podeRestaurar = false,
   opcoesFormulario = null,
   opcoesFiltro,
+  facetas,
 }: AbastecimentosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl({ naoSaoFiltro: NAO_SAO_FILTRO });
@@ -490,9 +495,31 @@ export function AbastecimentosTabela({
     };
   }
 
-  const paraOpcoes = (lista: OpcaoFiltroAbastecimento[]) => lista.map((o) => ({ valor: o.id, rotulo: o.rotulo }));
-  /** Texto livre (placa, operador): as opções são o que está marcado, para dar para desmarcar. */
-  const opcoesDoTexto = (valores: string[]) => valores.map((v) => ({ valor: v, rotulo: v }));
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem sabe isso é o
+  // servidor, porque a tabela só tem a página (ver `facetasAbastecimentos`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaAbastecimentos,
+    base: readonly O[],
+    selecionados: readonly string[],
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecionados);
+  }
+  const paraOpcoes = (id: FacetaAbastecimentos, lista: OpcaoFiltroAbastecimento[], selecionados: string[]) =>
+    facetar(
+      id,
+      lista.map((o) => ({ valor: o.id, rotulo: o.rotulo })),
+      selecionados,
+    );
+  /**
+   * Texto livre (placa, operador): não há cadastro, as opções são os valores presentes na
+   * faceta mais o que está marcado (para dar para desmarcar).
+   */
+  const opcoesDoTexto = (id: FacetaAbastecimentos, valores: string[]) =>
+    [...new Set([...(facetas?.[id] ?? []), ...valores])]
+      .sort((a, b) => a.localeCompare(b, "pt-BR"))
+      .map((v) => ({ valor: v, rotulo: v.trim() }));
+  const selecionado = (valor: string | undefined) => (valor ? [valor] : []);
 
   const filtrosDaBarra: FiltroConfiguravel[] = [
     {
@@ -515,14 +542,14 @@ export function AbastecimentosTabela({
         />
       ),
     },
-    filtroMulti("tanque", "Tanque", CHAVE.tanque, filtros.tanqueIds, paraOpcoes(opcoesFiltro.tanques), "Todos os tanques"),
+    filtroMulti("tanque", "Tanque", CHAVE.tanque, filtros.tanqueIds, paraOpcoes("tanque", opcoesFiltro.tanques, filtros.tanqueIds), "Todos os tanques"),
     carretas
       ? filtroMulti(
           "transportadora",
           "Transportadora",
           CHAVE.transportadora,
           filtros.transportadoraIds,
-          paraOpcoes(opcoesFiltro.transportadoras),
+          paraOpcoes("transportadora", opcoesFiltro.transportadoras, filtros.transportadoraIds),
           "Todas as transportadoras",
         )
       : filtroMulti(
@@ -530,10 +557,10 @@ export function AbastecimentosTabela({
           "Equipamento",
           CHAVE.equipamento,
           filtros.equipamentoIds,
-          paraOpcoes(opcoesFiltro.equipamentos),
+          paraOpcoes("equipamento", opcoesFiltro.equipamentos, filtros.equipamentoIds),
           "Todos os equipamentos",
         ),
-    filtroMulti("obra", "Obra", CHAVE.obra, filtros.obraIds, paraOpcoes(opcoesFiltro.obras), "Todas as obras", {
+    filtroMulti("obra", "Obra", CHAVE.obra, filtros.obraIds, paraOpcoes("obra", opcoesFiltro.obras, filtros.obraIds), "Todas as obras", {
       ocultoPorPadrao: true,
     }),
     filtroMulti(
@@ -541,27 +568,49 @@ export function AbastecimentosTabela({
       "Combustível",
       CHAVE.combustivel,
       filtros.combustivelIds,
-      paraOpcoes(opcoesFiltro.combustiveis),
+      paraOpcoes("combustivel", opcoesFiltro.combustiveis, filtros.combustivelIds),
       "Todos os combustíveis",
       { ocultoPorPadrao: true },
     ),
-    ...(filtros.placas.length > 0
-      ? [filtroMulti("placa", "Placa", CHAVE.placa, filtros.placas, opcoesDoTexto(filtros.placas), "Todas as placas")]
-      : []),
-    ...(filtros.operadores.length > 0
+    // Placa só existe em carretas (a leitura da URL descarta no modo próprios).
+    ...(carretas
       ? [
           filtroMulti(
-            "operador",
-            carretas ? "Motorista" : "Operador",
-            CHAVE.operador,
-            filtros.operadores,
-            opcoesDoTexto(filtros.operadores),
-            "Todos",
+            "placa",
+            "Placa",
+            CHAVE.placa,
+            filtros.placas,
+            opcoesDoTexto("placa", filtros.placas),
+            "Todas as placas",
+            { ocultoPorPadrao: true },
           ),
         ]
       : []),
-    filtroSelect("origem", "Origem", CHAVE.origem, filtros.origem ?? "", OPCOES_ORIGEM, "Todas as origens"),
-    filtroSelect("canal", "Canal", CHAVE.canal, filtros.canal ?? "", OPCOES_CANAL, "Todos os canais"),
+    filtroMulti(
+      "operador",
+      carretas ? "Motorista" : "Operador",
+      CHAVE.operador,
+      filtros.operadores,
+      opcoesDoTexto("operador", filtros.operadores),
+      "Todos",
+      { ocultoPorPadrao: true },
+    ),
+    filtroSelect(
+      "origem",
+      "Origem",
+      CHAVE.origem,
+      filtros.origem ?? "",
+      facetar("origem", OPCOES_ORIGEM, selecionado(filtros.origem)),
+      "Todas as origens",
+    ),
+    filtroSelect(
+      "canal",
+      "Canal",
+      CHAVE.canal,
+      filtros.canal ?? "",
+      facetar("canal", OPCOES_CANAL, selecionado(filtros.canal)),
+      "Todos os canais",
+    ),
     ...(podeRestaurar
       ? [
           filtroSelect(

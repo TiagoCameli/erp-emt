@@ -15,6 +15,8 @@ import {
   gastoTransportePorPedreira,
   janelaDeComparacao,
   materialTransportado,
+  opcoesLocaisFacetadas,
+  opcoesObrasFacetadas,
   pagamentosEmpresaMetodo,
   pagamentosPorEmpresa,
   passivoEmt,
@@ -259,6 +261,37 @@ describe("tabelas", () => {
     const soObra = tabelaSaldoPedreira([pedido({})], fretes, { fornecedores: [], materiais: [], destinos: ["lObra"] }, new Set(), nomes);
     expect(soObra.grupos[0]!.linhas[0]!.saldoQtd).toBe(70);
     expect(soObra.opcoesFornecedores.map((o) => o.valor)).toEqual(["britam"]);
+  });
+
+  it("saldo na pedreira facetado (02/10/2026): cada filtro oferece só o que existe na tabela filtrada pelos outros", () => {
+    // Antes as opções saíam DE PROPÓSITO da conta sem os filtros locais; o pedido do
+    // Tiago de 02/10/2026 trocou a regra pela faceta.
+    const pedidos = [
+      pedido({ itens: [{ insumoId: "brita", quantidade: 100, valorUnitario: 120 }] }),
+      pedido({ id: "2", fornecedorId: "formate", itens: [{ insumoId: "bgs", quantidade: 50, valorUnitario: 90 }] }),
+    ];
+    const fretes = [frete({ id: "a", destinoId: "lObra" }), frete({ id: "b", pedreiraId: "formate", insumoId: "bgs", destinoId: "lUsina" })];
+    const sem = tabelaSaldoPedreira(pedidos, fretes, { fornecedores: [], materiais: [], destinos: [] }, new Set(), nomes);
+    expect(sem.opcoesMateriais.map((o) => o.valor).sort()).toEqual(["bgs", "brita"]);
+    const soBritam = tabelaSaldoPedreira(pedidos, fretes, { fornecedores: ["britam"], materiais: [], destinos: [] }, new Set(), nomes);
+    expect(soBritam.opcoesMateriais.map((o) => o.valor)).toEqual(["brita"]);
+    expect(soBritam.opcoesDestinos.map((o) => o.valor)).toEqual(["lObra"]);
+    expect(soBritam.opcoesFornecedores.map((o) => o.valor)).toEqual(["britam", "formate"]);
+    const soBgs = tabelaSaldoPedreira(pedidos, fretes, { fornecedores: [], materiais: ["bgs"], destinos: [] }, new Set(), nomes);
+    expect(soBgs.opcoesFornecedores.map((o) => o.valor)).toEqual(["formate"]);
+  });
+
+  it("filtros locais e obra do topo facetados: escolher um restringe os outros, o escolhido não some", () => {
+    const fretes = [
+      frete({ id: "a", destinoId: "lObra", insumoId: "brita" }),
+      frete({ id: "b", destinoId: "lUsina", insumoId: "bgs", obraId: "o2", data: "2026-04-02" }),
+    ];
+    const o = opcoesLocaisFacetadas(fretes, { pedreiras: [], materiais: ["bgs"], destinos: [] }, nomes);
+    expect(o.destinos.map((x) => x.valor)).toEqual(["lUsina"]);
+    expect(o.materiais.map((x) => x.valor).sort()).toEqual(["bgs", "brita"]);
+    const obras = opcoesObrasFacetadas(fretes, { obraId: "o1", de: "2026-04-01", ate: "" }, {}, nomes);
+    expect(obras.map((x) => x.valor)).toEqual(["o1", "o2"]);
+    expect(opcoesObrasFacetadas(fretes, { obraId: "", de: "2026-04-01", ate: "" }, {}, nomes).map((x) => x.valor)).toEqual(["o2"]);
   });
 
   it("custo material + frete: preço ponderado do pedido da pedreira da origem, sem transferência", () => {

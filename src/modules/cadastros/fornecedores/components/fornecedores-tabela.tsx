@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { opcoesDistintas } from "@/modules/cadastros/_shared/opcoes-filtro";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   alternarAtivo,
   excluir,
@@ -95,37 +96,43 @@ export function FornecedoresTabela({
     [fornecedores],
   );
 
-  // Cidades da UF escolhida: escolher UF primeiro e ver 200 cidades do país
-  // inteiro na lista não ajuda ninguém.
   const opcoesCidade = React.useMemo(
-    () =>
-      opcoesDistintas(
-        fornecedores
-          .filter((f) => uf === "" || f.uf === uf)
-          .map((f) => f.cidade),
-      ),
-    [fornecedores, uf],
+    () => opcoesDistintas(fornecedores.map((f) => f.cidade)),
+    [fornecedores],
   );
 
-  const filtrados = React.useMemo(() => {
+  // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). É isso que faz a cidade seguir a
+  // UF escolhida, e o tipo seguir a cidade.
+  const { linhas: filtrados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return fornecedores.filter((fornecedor) => {
-      if (status === "ativos" && !fornecedor.ativo) return false;
-      if (status === "inativos" && fornecedor.ativo) return false;
-      if (tipo !== "" && fornecedor.tipo !== tipo) return false;
-      if (uf !== "" && fornecedor.uf !== uf) return false;
-      if (cidade !== "" && fornecedor.cidade !== cidade) return false;
-      if (termo.length === 0) return true;
-      const alvo = [
-        fornecedor.razaoSocial,
-        fornecedor.nomeFantasia,
-        fornecedor.cnpjCpf,
-      ]
-        .filter((valor): valor is string => valor !== null)
-        .join(" ")
-        .toLowerCase();
-      return alvo.includes(termo);
-    });
+    return filtrarFacetado(
+      fornecedores,
+      {
+        status: {
+          selecionados: status === "todos" ? [] : [status],
+          casa: (fornecedor, valor) =>
+            valor === "todos" || (valor === "ativos") === fornecedor.ativo,
+        },
+        tipo: { selecionados: selecao(tipo), chave: (f) => f.tipo },
+        uf: { selecionados: selecao(uf), chave: (f) => f.uf?.trim() },
+        cidade: { selecionados: selecao(cidade), chave: (f) => f.cidade?.trim() },
+      },
+      [
+        (fornecedor) => {
+          if (termo.length === 0) return true;
+          const alvo = [
+            fornecedor.razaoSocial,
+            fornecedor.nomeFantasia,
+            fornecedor.cnpjCpf,
+          ]
+            .filter((valor): valor is string => valor !== null)
+            .join(" ")
+            .toLowerCase();
+          return alvo.includes(termo);
+        },
+      ],
+    );
   }, [fornecedores, busca, status, tipo, uf, cidade]);
 
   function abrirEdicao(fornecedor: FornecedorLista) {
@@ -337,7 +344,7 @@ export function FornecedoresTabela({
                 onValorChange={(valor) =>
                   setStatus((valor === "" ? "todos" : valor) as FiltroStatus)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -353,7 +360,7 @@ export function FornecedoresTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Física e jurídica"
               />
@@ -377,7 +384,7 @@ export function FornecedoresTabela({
                   // Trocar a UF derruba a cidade: ela é da anterior.
                   setCidade("");
                 }}
-                opcoes={opcoesUf}
+                opcoes={opcoes("uf", opcoesUf)}
                 placeholder="UF"
                 todosRotulo="Todas as UFs"
               />
@@ -393,7 +400,7 @@ export function FornecedoresTabela({
               <FiltroSelect
                 valor={cidade}
                 onValorChange={setCidade}
-                opcoes={opcoesCidade}
+                opcoes={opcoes("cidade", opcoesCidade)}
                 placeholder="Cidade"
                 todosRotulo="Todas as cidades"
                 className="max-w-56"

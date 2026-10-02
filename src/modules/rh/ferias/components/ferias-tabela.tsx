@@ -36,6 +36,7 @@ import {
 } from "@/modules/rh/ferias/schemas";
 import { STATUS_RECIBO_INFO } from "@/modules/rh/ferias/recibo-formato";
 import { noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { FeriasFormDrawer } from "./ferias-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -124,23 +125,42 @@ export function FeriasTabela({
     toast.success("Férias excluídas");
   }
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todos os períodos (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
+  // server-side), então o total exibido continua sendo o total real. Facetado:
+  // situação, colaborador e status só oferecem o que existe na lista filtrada
+  // pelos outros (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return ferias.filter((item) => {
-      if (situacao && item.situacao !== situacao) return false;
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      if (status && item.status !== status) return false;
-      // Período só programado (sem gozo marcado) sai da lista quando o usuário
-      // pede uma janela de gozo: sem data de início, não é resposta.
-      if (!noPeriodo(item.dataInicio, gozoDe, gozoAte)) return false;
-      if (!noPeriodo(item.limiteGozo, limiteDe, limiteAte)) return false;
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      ferias,
+      {
+        situacao: {
+          selecionados: selecao(situacao),
+          chave: (item) => item.situacao,
+        },
+        colaborador: {
+          selecionados: selecao(colaboradorId),
+          chave: (item) => item.colaboradorId,
+        },
+        status: { selecionados: selecao(status), chave: (item) => item.status },
+      },
+      [
+        // Período só programado (sem gozo marcado) sai da lista quando o usuário
+        // pede uma janela de gozo: sem data de início, não é resposta.
+        (item) => noPeriodo(item.dataInicio, gozoDe, gozoAte),
+        (item) => noPeriodo(item.limiteGozo, limiteDe, limiteAte),
+        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      ],
+    );
   }, [
     ferias,
     busca,
@@ -329,7 +349,7 @@ export function FeriasTabela({
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />
@@ -345,10 +365,7 @@ export function FeriasTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"
@@ -365,7 +382,7 @@ export function FeriasTabela({
               <FiltroSelect
                 valor={status}
                 onValorChange={setStatus}
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos os status"
               />

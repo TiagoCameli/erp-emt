@@ -12,6 +12,7 @@ import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { EsvaziamentoFormDrawer } from "@/modules/combustivel/esvaziamentos/components/esvaziamento-form-drawer";
 import { podeEsvaziar as temCombustivelParaEsvaziar } from "@/modules/combustivel/esvaziamentos/schemas";
 import { excluirTanque } from "@/modules/combustivel/tanques/actions";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import type { FornecedorOpcao, TanqueLinha } from "@/modules/combustivel/tanques/queries";
 import { TanqueFormDrawer } from "./tanque-form-drawer";
 import { TanqueVisual } from "./tanque-visual";
@@ -34,19 +35,33 @@ export interface TanquesListaProps {
   podeEsvaziar?: boolean;
 }
 
-/** Filtro em memória: o cadastro inteiro vem da página (dezenas de linhas). */
-export function filtrarTanques(tanques: readonly TanqueLinha[], busca: string, status: FiltroStatus): TanqueLinha[] {
+/**
+ * Filtro em memória: o cadastro inteiro vem da página (dezenas de linhas).
+ * Facetado (ver `_shared/filtros-facetados`): o status só oferece o que existe
+ * entre os tanques que passam na busca.
+ */
+export function facetarTanques(tanques: readonly TanqueLinha[], busca: string, status: FiltroStatus) {
   const termo = busca.trim().toLowerCase();
-  return tanques.filter((tanque) => {
-    if (status === "ativos" && !tanque.ativo) return false;
-    if (status === "inativos" && tanque.ativo) return false;
-    if (!termo) return true;
-    return (
-      tanque.nome.toLowerCase().includes(termo) ||
-      (tanque.apelido ?? "").toLowerCase().includes(termo) ||
-      (tanque.proprietarioNome ?? "").toLowerCase().includes(termo)
-    );
-  });
+  return filtrarFacetado(
+    tanques,
+    {
+      status: {
+        selecionados: status === "todos" ? [] : [status],
+        casa: (tanque, valor) => (valor === "ativos") === tanque.ativo,
+      },
+    },
+    [
+      (tanque) =>
+        !termo ||
+        tanque.nome.toLowerCase().includes(termo) ||
+        (tanque.apelido ?? "").toLowerCase().includes(termo) ||
+        (tanque.proprietarioNome ?? "").toLowerCase().includes(termo),
+    ],
+  );
+}
+
+export function filtrarTanques(tanques: readonly TanqueLinha[], busca: string, status: FiltroStatus): TanqueLinha[] {
+  return facetarTanques(tanques, busca, status).linhas;
 }
 
 const CLASSE_ACAO = "h-7 px-2 text-xs";
@@ -71,7 +86,7 @@ export function TanquesLista({
   const [esvaziando, setEsvaziando] = React.useState<TanqueLinha | null>(null);
   const [excluindo, setExcluindo] = React.useState<TanqueLinha | null>(null);
 
-  const filtrados = React.useMemo(() => filtrarTanques(tanques, busca, status), [tanques, busca, status]);
+  const { linhas: filtrados, opcoes } = React.useMemo(() => facetarTanques(tanques, busca, status), [tanques, busca, status]);
   const proprios = filtrados.filter((t) => !t.ehExterno);
   const externos = filtrados.filter((t) => t.ehExterno);
 
@@ -161,7 +176,7 @@ export function TanquesLista({
                 <FiltroSelect
                   valor={status === "todos" ? "" : status}
                   onValorChange={(valor) => setStatus(valor === "" ? "todos" : (valor as FiltroStatus))}
-                  opcoes={OPCOES_STATUS}
+                  opcoes={opcoes("status", OPCOES_STATUS)}
                   placeholder="Status"
                   todosRotulo="Todos"
                 />

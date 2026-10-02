@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { alternarAtivo, excluir } from "@/modules/cadastros/localidades/actions";
 import type { LocalidadeLista } from "@/modules/cadastros/localidades/queries";
+import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -55,21 +57,21 @@ export function LocalidadesTabela({
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
   const [excluindo, setExcluindo] = React.useState<LocalidadeLista | null>(null);
 
-  const filtradas = React.useMemo(() => {
+  // Facetado: o status só oferece o que existe na lista filtrada pela busca
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return localidades.filter((localidade) => {
-      if (status === "ativos" && !localidade.ativo) return false;
-      if (status === "inativos" && localidade.ativo) return false;
-      if (
-        termo &&
-        !localidade.nome.toLowerCase().includes(termo) &&
-        !(localidade.endereco ?? "").toLowerCase().includes(termo) &&
-        !(localidade.fornecedorNome ?? "").toLowerCase().includes(termo)
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      localidades,
+      { status: facetaAtivo<LocalidadeLista>(status) },
+      [
+        (localidade) =>
+          !termo ||
+          localidade.nome.toLowerCase().includes(termo) ||
+          (localidade.endereco ?? "").toLowerCase().includes(termo) ||
+          (localidade.fornecedorNome ?? "").toLowerCase().includes(termo),
+      ],
+    );
   }, [localidades, busca, status]);
 
   async function aoAlternarAtivo(localidade: LocalidadeLista) {
@@ -222,7 +224,7 @@ export function LocalidadesTabela({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : (valor as FiltroStatus))
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todas"
               />

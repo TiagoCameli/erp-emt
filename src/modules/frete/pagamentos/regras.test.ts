@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   filtrarPagamentos,
+  filtrarPagamentosFacetado,
   FILTROS_PAGAMENTOS_VAZIOS,
   gerarMeses,
   mesesDosPagamentos,
@@ -183,6 +184,20 @@ describe("filtro da lista", () => {
     expect(filtrarPagamentos(linhas, { ...f, metodo: "pix" }).map((l) => l.id)).toEqual(["a"]);
     expect(filtrarPagamentos(linhas, { ...f, pagoPor: "Fulano" }).map((l) => l.id)).toEqual(["b"]);
     expect(filtrarPagamentos(linhas, { ...f, de: "2026-08-05", ate: "2026-08-20" }).map((l) => l.id)).toEqual(["c", "a"]);
+  });
+
+  it("facetado: o mês restringe as transportadoras e a transportadora restringe os métodos", () => {
+    const f = FILTROS_PAGAMENTOS_VAZIOS;
+    const transportadoras = [
+      { valor: T1, rotulo: "T1" },
+      { valor: T2, rotulo: "T2" },
+    ];
+    const metodos = ["pix", "boleto", "combustivel"].map((m) => ({ valor: m, rotulo: m }));
+    const porMes = filtrarPagamentosFacetado(linhas, { ...f, mes: "2026-07" });
+    expect(porMes.opcoes("transportadora", transportadoras).map((o) => o.valor)).toEqual([T1]);
+    const porTransportadora = filtrarPagamentosFacetado(linhas, { ...f, transportadoraId: T1 });
+    expect(porTransportadora.opcoes("metodo", metodos).map((o) => o.valor)).toEqual(["pix", "boleto"]);
+    expect(porTransportadora.opcoes("transportadora", transportadoras).map((o) => o.valor)).toEqual([T1, T2]);
   });
 
   it("opções de mês e pago por saem dos pagamentos; total e rótulo do rodapé", () => {

@@ -234,3 +234,120 @@ export const filtrosPagasSchema = z.strictObject({
 
 /** O que sai da validação, para a checagem de chaves contra a interface. */
 export type FiltrosPagasValidados = z.infer<typeof filtrosPagasSchema>;
+
+// ---------------------------------------------------------------------------
+// Facetas da aba "Pagas" (ver `_shared/filtros-facetados`)
+// ---------------------------------------------------------------------------
+
+/** Os filtros de seleção da aba, no id que a barra usa. */
+export type FacetaPagas =
+  | "fornecedor"
+  | "conta"
+  | "centro"
+  | "etapa"
+  | "categoria"
+  | "forma"
+  | "origem";
+
+/** Embed que chega como objeto ou lista, conforme a inferência do PostgREST. */
+type Embed<T> = T | T[] | null;
+
+/** O que a consulta de facetas traz de cada parcela paga. */
+export interface LinhaFacetaPagas {
+  conta_bancaria_id: string | null;
+  lancamento_formas: Embed<{ forma_pagamento_id: string | null }>;
+  lancamentos: Embed<{
+    fornecedor_id: string | null;
+    categoria_id: string | null;
+    origem: string | null;
+    lancamento_rateios: { centro_custo_id: string | null }[] | null;
+  }>;
+}
+
+function lista<T>(embed: Embed<T>): T[] {
+  if (embed === null) return [];
+  return Array.isArray(embed) ? embed : [embed];
+}
+
+/**
+ * As facetas da aba, com a chave de cada parcela copiada dos filtros de
+ * `aplicarFiltrosPagas`. `etapaAtiva`: a lista de centros tem etapa escolhida,
+ * o que só dá para saber com o cadastro de centros.
+ *
+ * O centro devolve o id cru do rateio; a tela sobe cada um até a raiz com o
+ * cadastro que já tem.
+ */
+export function facetasDasPagas(
+  filtros: FiltrosParcelasPagas,
+  etapaAtiva: boolean,
+): Record<
+  FacetaPagas,
+  {
+    ativo: boolean;
+    chave: (linha: LinhaFacetaPagas) => (string | null)[] | string | null;
+  }
+> {
+  const doLancamento = (linha: LinhaFacetaPagas) => lista(linha.lancamentos);
+  const centros = (linha: LinhaFacetaPagas) =>
+    doLancamento(linha).flatMap((lancamento) =>
+      (lancamento.lancamento_rateios ?? []).map(
+        (rateio) => rateio.centro_custo_id,
+      ),
+    );
+  return {
+    fornecedor: {
+      ativo: !!filtros.fornecedorIds?.length,
+      chave: (linha) => doLancamento(linha).map((l) => l.fornecedor_id),
+    },
+    conta: {
+      ativo: !!filtros.contaBancariaIds?.length,
+      chave: (linha) => linha.conta_bancaria_id,
+    },
+    centro: {
+      ativo: !!filtros.centroCustoIds?.length,
+      chave: centros,
+    },
+    etapa: { ativo: etapaAtiva, chave: centros },
+    categoria: {
+      ativo: !!filtros.categoriaIds?.length,
+      chave: (linha) => doLancamento(linha).map((l) => l.categoria_id),
+    },
+    forma: {
+      ativo: !!filtros.formaPagamentoIds?.length,
+      chave: (linha) =>
+        lista(linha.lancamento_formas).map((forma) => forma.forma_pagamento_id),
+    },
+    origem: {
+      ativo: !!filtros.origem,
+      chave: (linha) => doLancamento(linha).map((l) => l.origem),
+    },
+  };
+}
+
+/**
+ * Os filtros sem o da faceta, para calcular as opções dela. A etapa troca a
+ * lista de centros pelas raízes escolhidas: os equipamentos oferecidos são os
+ * do centro marcado no primeiro campo, não os de qualquer centro.
+ */
+export function filtrosPagasSemFaceta(
+  filtros: FiltrosParcelasPagas,
+  faceta: FacetaPagas,
+  raizesEscolhidas: string[],
+): FiltrosParcelasPagas {
+  switch (faceta) {
+    case "fornecedor":
+      return { ...filtros, fornecedorIds: undefined };
+    case "conta":
+      return { ...filtros, contaBancariaIds: undefined };
+    case "centro":
+      return { ...filtros, centroCustoIds: undefined };
+    case "etapa":
+      return { ...filtros, centroCustoIds: raizesEscolhidas };
+    case "categoria":
+      return { ...filtros, categoriaIds: undefined };
+    case "forma":
+      return { ...filtros, formaPagamentoIds: undefined };
+    case "origem":
+      return { ...filtros, origem: undefined };
+  }
+}

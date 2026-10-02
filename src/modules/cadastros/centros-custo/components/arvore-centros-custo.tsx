@@ -46,6 +46,8 @@ import {
   type TipoCentro,
 } from "@/modules/cadastros/centros-custo/schemas";
 import { NoFormDrawer, type ModoNo } from "./no-form-drawer";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
+import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { motivoParaNaoDesativar } from "@/modules/cadastros/centros-custo/travas-de-status";
 
@@ -219,6 +221,42 @@ export function ArvoreCentrosCusto({
     const completa = filtrarRaizes(montarArvore(nos), tipo, obraId);
     return filtrarArvore(completa, filtrosDeLinha);
   }, [nos, tipo, obraId, filtrosDeLinha]);
+
+  // Facetado: cada filtro só oferece o que existe nos nós que passam nos
+  // outros (ver `_shared/filtros-facetados`). Vale a regra da árvore: tipo e
+  // obra são do centro raiz, status, nível e busca são do próprio nó. A árvore
+  // exibida continua saindo de `filtrarArvore`; daqui saem só as opções.
+  const { opcoes } = React.useMemo(() => {
+    const porId = new Map(nos.map((no) => [no.id, no]));
+    function raizDe(no: NoCentroCusto): NoCentroCusto {
+      let atual = no;
+      const vistos = new Set<string>();
+      while (atual.pai_id && porId.has(atual.pai_id) && !vistos.has(atual.id)) {
+        vistos.add(atual.id);
+        atual = porId.get(atual.pai_id)!;
+      }
+      return atual;
+    }
+    const linhas = nos.map((no) => ({ no, raiz: raizDe(no) }));
+    return filtrarFacetado(
+      linhas,
+      {
+        status: facetaAtivo(status, (linha: { no: NoCentroCusto }) => linha.no.ativo),
+        tipo: { selecionados: selecao(tipo), chave: (linha) => linha.raiz.tipo },
+        obra: { selecionados: selecao(obraId), chave: (linha) => linha.raiz.obra_id },
+        nivel: {
+          selecionados: selecao(nivel),
+          chave: (linha) => String(linha.no.nivel),
+        },
+      },
+      [
+        ({ no }) =>
+          termo === "" ||
+          no.nome.toLowerCase().includes(termo) ||
+          (no.codigo?.toLowerCase().includes(termo) ?? false),
+      ],
+    );
+  }, [nos, status, tipo, obraId, nivel, termo]);
 
   // Com filtro de linha ativo, expande tudo para revelar os resultados.
   const filtrando = !semFiltroDeLinha(filtrosDeLinha);
@@ -482,7 +520,7 @@ export function ArvoreCentrosCusto({
                 onValorChange={(valor) =>
                   setStatus(valor === "" ? "todos" : valor)
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={opcoes("status", OPCOES_STATUS)}
                 placeholder="Status"
                 todosRotulo="Todos"
               />
@@ -498,7 +536,7 @@ export function ArvoreCentrosCusto({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />
@@ -514,7 +552,7 @@ export function ArvoreCentrosCusto({
               <FiltroSelect
                 valor={obraId}
                 onValorChange={setObraId}
-                opcoes={opcoesObra}
+                opcoes={opcoes("obra", opcoesObra)}
                 placeholder="Obra"
                 todosRotulo="Todas as obras"
                 className="max-w-56"
@@ -531,7 +569,7 @@ export function ArvoreCentrosCusto({
               <FiltroSelect
                 valor={nivel}
                 onValorChange={setNivel}
-                opcoes={OPCOES_NIVEL}
+                opcoes={opcoes("nivel", OPCOES_NIVEL)}
                 placeholder="Nível"
                 todosRotulo="Todos os níveis"
               />

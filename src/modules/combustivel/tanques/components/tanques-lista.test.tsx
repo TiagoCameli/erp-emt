@@ -24,7 +24,7 @@ vi.mock("@/modules/combustivel/esvaziamentos/components/esvaziamento-form-drawer
 vi.mock("./tanque-form-drawer", () => ({ TanqueFormDrawer: () => null }));
 vi.mock("./tanques-acoes-cabecalho", () => ({ TanquesAcoesCabecalho: () => null }));
 
-import { filtrarTanques, TanquesLista } from "./tanques-lista";
+import { facetarTanques, filtrarTanques, TanquesLista } from "./tanques-lista";
 
 afterEach(cleanup);
 
@@ -125,5 +125,18 @@ describe("filtrarTanques", () => {
     const lista = [tanque(), EXTERNO];
     expect(filtrarTanques(lista, "transterra", "todos").map((t) => t.nome)).toEqual(["Posto Transterra"]);
     expect(filtrarTanques(lista, "comboio", "todos").map((t) => t.nome)).toEqual(["Tanque Comboio 01"]);
+  });
+
+  it("facetado: a busca corta o status; o escolhido não some", () => {
+    const lista = [tanque(), inativo];
+    const opcoesStatus = [
+      { valor: "ativos", rotulo: "Ativos" },
+      { valor: "inativos", rotulo: "Inativos" },
+    ];
+    expect(facetarTanques(lista, "velho", "todos").opcoes("status", opcoesStatus).map((o) => o.valor)).toEqual(["inativos"]);
+    expect(facetarTanques(lista, "velho", "ativos").opcoes("status", opcoesStatus).map((o) => o.valor)).toEqual([
+      "ativos",
+      "inativos",
+    ]);
   });
 });

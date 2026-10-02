@@ -27,7 +27,7 @@ import { formatarData } from "@/lib/formatadores";
 import { removerDiaria } from "@/modules/rh/diaristas/actions";
 import type { DiariaLista } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
-import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarDiarias, SEM_OBRA } from "@/modules/rh/diaristas/filtros";
 import type {
   DiaristaOpcao,
   ObraOpcao,
@@ -40,9 +40,6 @@ const OPCOES_SITUACAO = [
   { valor: "aberto", rotulo: "Em aberto" },
   { valor: "paga", rotulo: "Paga" },
 ];
-
-/** Valor do filtro de obra para a diária lançada sem obra. */
-const SEM_OBRA = "sem-obra";
 
 export interface DiariasTabelaProps {
   diarias: DiariaLista[];
@@ -123,38 +120,57 @@ export function DiariasTabela({
     [diarias],
   );
 
+  const opcoesObra = React.useMemo(
+    () => [
+      ...obras.map((obra) => ({
+        valor: obra.id,
+        rotulo: obra.lote ? `${obra.nome} (Lote ${obra.lote})` : obra.nome,
+      })),
+      // A diária pode ser lançada sem obra, e a coluna mostra "Sem obra": sem
+      // essa opção não haveria como achá-las.
+      { valor: SEM_OBRA, rotulo: "Sem obra" },
+    ],
+    [obras],
+  );
+
+  const opcoesDiarista = React.useMemo(
+    () =>
+      diaristas.map((diarista) => ({
+        valor: diarista.id,
+        rotulo: diarista.nome,
+      })),
+    [diaristas],
+  );
+
   // Filtro em memória: a tela carrega todas as diárias (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return diarias.filter((item) => {
-      if (competencia && item.competencia !== competencia) return false;
-      if (obraId === SEM_OBRA && item.obraId !== null) return false;
-      if (obraId !== "" && obraId !== SEM_OBRA && item.obraId !== obraId) {
-        return false;
-      }
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      if (situacao === "paga" && !item.fechada) return false;
-      if (situacao === "aberto" && item.fechada) return false;
-      if (!noPeriodo(item.data, dataDe, dataAte)) return false;
-      if (!naFaixa(item.valor, valorDe, valorAte)) return false;
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
-  }, [
-    diarias,
-    busca,
-    competencia,
-    obraId,
-    colaboradorId,
-    situacao,
-    dataDe,
-    dataAte,
-    valorDe,
-    valorAte,
-  ]);
+  // server-side), então o total exibido continua sendo o total real. Facetado
+  // (ver `diaristas/filtros`).
+  const { linhas: dados, opcoes } = React.useMemo(
+    () =>
+      filtrarDiarias(diarias, {
+        busca,
+        competencia,
+        obraId,
+        colaboradorId,
+        situacao,
+        dataDe,
+        dataAte,
+        valorDe,
+        valorAte,
+      }),
+    [
+      diarias,
+      busca,
+      competencia,
+      obraId,
+      colaboradorId,
+      situacao,
+      dataDe,
+      dataAte,
+      valorDe,
+      valorAte,
+    ],
+  );
 
   const colunas = React.useMemo<ColumnDef<DiariaLista, unknown>[]>(() => {
     const base: ColumnDef<DiariaLista, unknown>[] = [
@@ -302,17 +318,7 @@ export function DiariasTabela({
               <FiltroSelect
                 valor={obraId}
                 onValorChange={setObraId}
-                opcoes={[
-                  ...obras.map((obra) => ({
-                    valor: obra.id,
-                    rotulo: obra.lote
-                      ? `${obra.nome} (Lote ${obra.lote})`
-                      : obra.nome,
-                  })),
-                  // A diária pode ser lançada sem obra, e a coluna mostra
-                  // "Sem obra": sem essa opção não haveria como achá-las.
-                  { valor: SEM_OBRA, rotulo: "Sem obra" },
-                ]}
+                opcoes={opcoes("obra", opcoesObra)}
                 placeholder="Obra"
                 todosRotulo="Todas as obras"
                 className="max-w-56"
@@ -329,10 +335,7 @@ export function DiariasTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={diaristas.map((diarista) => ({
-                  valor: diarista.id,
-                  rotulo: diarista.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesDiarista)}
                 placeholder="Diarista"
                 todosRotulo="Todos os diaristas"
                 className="max-w-56"
@@ -349,7 +352,7 @@ export function DiariasTabela({
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />

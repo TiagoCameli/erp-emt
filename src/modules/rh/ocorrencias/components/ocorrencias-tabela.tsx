@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatarData } from "@/lib/formatadores";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerOcorrencia } from "@/modules/rh/ocorrencias/actions";
 import type { OcorrenciaLista } from "@/modules/rh/ocorrencias/queries";
@@ -111,27 +112,44 @@ export function OcorrenciasTabela({
     toast.success("Ocorrência excluída");
   }
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todas as ocorrências (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
+  // server-side), então o total exibido continua sendo o total real. Facetado:
+  // tipo e colaborador só oferecem o que existe na lista filtrada pelos outros
+  // (ver `_shared/filtros-facetados`).
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return ocorrencias.filter((item) => {
-      if (tipo && item.tipo !== tipo) return false;
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      // Atestado com período (data a dataFim) entra se qualquer parte dele cai
-      // dentro da janela pedida: cortar pelo início esconderia o atestado que
-      // começou no mês passado e ainda cobre o dia procurado.
-      if (dataDe !== "" || dataAte !== "") {
-        const inicio = item.data;
-        const fim = item.dataFim ?? item.data;
-        if (dataDe !== "" && fim < dataDe) return false;
-        if (dataAte !== "" && inicio > dataAte) return false;
-      }
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      ocorrencias,
+      {
+        tipo: { selecionados: selecao(tipo), chave: (item) => item.tipo },
+        colaborador: {
+          selecionados: selecao(colaboradorId),
+          chave: (item) => item.colaboradorId,
+        },
+      },
+      [
+        // Atestado com período (data a dataFim) entra se qualquer parte dele cai
+        // dentro da janela pedida: cortar pelo início esconderia o atestado que
+        // começou no mês passado e ainda cobre o dia procurado.
+        (item) => {
+          const inicio = item.data;
+          const fim = item.dataFim ?? item.data;
+          if (dataDe !== "" && fim < dataDe) return false;
+          if (dataAte !== "" && inicio > dataAte) return false;
+          return true;
+        },
+        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      ],
+    );
   }, [ocorrencias, busca, tipo, colaboradorId, dataDe, dataAte]);
 
   const podeAgir = podeEditar || podeExcluir;
@@ -256,7 +274,7 @@ export function OcorrenciasTabela({
               <FiltroSelect
                 valor={tipo}
                 onValorChange={setTipo}
-                opcoes={OPCOES_TIPO}
+                opcoes={opcoes("tipo", OPCOES_TIPO)}
                 placeholder="Tipo"
                 todosRotulo="Todos os tipos"
               />
@@ -272,10 +290,7 @@ export function OcorrenciasTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"

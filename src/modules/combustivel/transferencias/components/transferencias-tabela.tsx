@@ -32,7 +32,7 @@ import { useNovoDaUrl } from "@/modules/combustivel/_shared/use-novo-da-url";
 import { excluirTransferencia, restaurarTransferencia } from "@/modules/combustivel/transferencias/actions";
 import {
   CHAVES_FILTRO_TRANSFERENCIAS as CHAVE,
-  filtrarTransferencias,
+  facetarTransferencias,
   type FiltrosTransferenciasUrl,
 } from "@/modules/combustivel/transferencias/filtros";
 import type { TransferenciaLinha } from "@/modules/combustivel/transferencias/queries";
@@ -138,8 +138,9 @@ export function TransferenciasTabela({
   const [editando, setEditando] = React.useState<TransferenciaLinha | null>(null);
   const [excluindo, setExcluindo] = React.useState<TransferenciaLinha | null>(null);
 
-  const filtradas = React.useMemo(
-    () => filtrarTransferencias(transferencias, { ...filtrosUrl, busca, mostrarExcluidos }),
+  // Facetado: tanque e combustível só oferecem o que existe na lista filtrada pelos outros.
+  const { linhas: filtradas, opcoes } = React.useMemo(
+    () => facetarTransferencias(transferencias, { ...filtrosUrl, busca, mostrarExcluidos }),
     [transferencias, filtrosUrl, busca, mostrarExcluidos],
   );
 
@@ -180,7 +181,7 @@ export function TransferenciasTabela({
     rotulo: string,
     chave: string,
     valores: readonly string[],
-    opcoes: { valor: string; rotulo: string }[],
+    opcoesFiltro: { valor: string; rotulo: string }[],
     todos: string,
   ): FiltroConfiguravel {
     return {
@@ -192,7 +193,7 @@ export function TransferenciasTabela({
         <FiltroSelectMulti
           valores={[...valores]}
           onValoresChange={(novos) => setMuitos({ [chave]: novos.length > 0 ? novos.join(",") : null })}
-          opcoes={opcoes}
+          opcoes={opcoesFiltro}
           placeholder={rotulo}
           todosRotulo={todos}
         />
@@ -256,7 +257,7 @@ export function TransferenciasTabela({
             "Tanque",
             CHAVE.tanque,
             filtrosUrl.tanqueIds,
-            tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome })),
+            opcoes("tanque", tanquesFiltro.map((t) => ({ valor: t.id, rotulo: t.nome }))),
             "Todos os tanques",
           ),
           {
@@ -265,7 +266,7 @@ export function TransferenciasTabela({
               "Combustível",
               CHAVE.combustivel,
               filtrosUrl.insumoIds,
-              opcoesCombustivel,
+              opcoes("combustivel", opcoesCombustivel),
               "Todos os combustíveis",
             ),
             ocultoPorPadrao: true,

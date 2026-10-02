@@ -8,6 +8,7 @@ import {
   montarPainel,
   normalizarPlaca,
   periodoPadrao,
+  presentesNosFiltros,
   rotuloMes,
 } from "./calculo";
 import { paraDadosCarretas } from "./dados";
@@ -191,5 +192,22 @@ describe("paraDadosCarretas", () => {
   it("recusa formato inesperado", () => {
     expect(paraDadosCarretas(null)).toBeNull();
     expect(paraDadosCarretas({ carretas: [] })).toBeNull();
+  });
+});
+
+describe("filtros facetados (pedido de 02/10/2026)", () => {
+  it("a carreta escolhida restringe os tipos, e o período restringe as carretas", () => {
+    const dados = base();
+    expect(presentesNosFiltros(dados, { ...FILTRO, placa: "SQU9C94" }).tipos).toEqual(["transferencia"]);
+    expect(presentesNosFiltros(dados, FILTRO).tipos).toEqual(["material", "transferencia"]);
+    const agosto = presentesNosFiltros(dados, { de: "2026-08", ate: "2026-08", placa: "" });
+    expect(agosto.placas).toEqual(["SQS7E01"]);
+  });
+
+  it("o gasto conta para a placa em qualquer tipo; o painel leva o que existe", () => {
+    const dados = base();
+    const soMaterial = presentesNosFiltros(dados, { ...FILTRO, tipo: "material" });
+    expect(soMaterial.placas).toContain("SQU9C94");
+    expect(montarPainel(dados, FILTRO, "2026-09").presentes.tipos).toEqual(["material", "transferencia"]);
   });
 });

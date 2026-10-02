@@ -10,7 +10,13 @@ import type {
   UnidadeOleo,
 } from "@/modules/manutencao/_shared/rotulos";
 import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
   aplicarFiltrosServicos,
+  soltarFacetaServicos,
+  type FacetaServicos,
   type FiltrosServicos,
 } from "@/modules/manutencao/servicos/filtros";
 import {
@@ -126,6 +132,45 @@ export async function listarServicos(filtros: FiltrosServicos): Promise<Resultad
       resultadoSoma.linhas.map((linha) => paraNumeroDoBanco(linha.custo_total)),
     ),
   };
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A tabela é paginada no banco, então só o
+ * servidor sabe quais status, equipamentos e tipos sobram depois dos outros
+ * filtros. Mesmo `aplicarFiltrosServicos` da lista, só com as colunas das chaves.
+ */
+export async function facetasServicos(
+  filtros: Omit<FiltrosServicos, "pagina" | "tamanho">,
+): Promise<FacetasPresentes<FacetaServicos>> {
+  const supabase = await createClient();
+
+  return facetasNoServidor<LinhaFacetaServicos, FacetaServicos>(
+    {
+      status: { ativo: filtros.status.length > 0, chave: (os) => os.status },
+      equipamento: { ativo: !!filtros.equipamentoId, chave: (os) => os.equipamento_id },
+      tipo: { ativo: !!filtros.tipo, chave: (os) => os.tipo },
+    },
+    async (exceto) => {
+      const recorte = exceto === null ? filtros : soltarFacetaServicos(filtros, exceto);
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosServicos(
+          supabase.from("ordens_servico").select("id, status, equipamento_id, tipo").is("excluido_em", null),
+          recorte,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros das ordens de serviço");
+      return linhas;
+    },
+  );
+}
+
+interface LinhaFacetaServicos {
+  status: string;
+  equipamento_id: string;
+  tipo: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { baixarBase64, MIME_XLSX } from "@/lib/download";
 import { formatarBRL } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { restringirOpcoes, selecao } from "@/modules/_shared/filtros-facetados";
 import { gerarPlanilhaCarretasEmt } from "@/modules/frete/carretas-emt/actions";
 import { ROTULO_TIPO_FRETE, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 import {
@@ -435,6 +436,27 @@ export function PainelCarretasEmt({
     }
   }
 
+  // Facetado (ver `_shared/filtros-facetados`): carreta e tipo só oferecem o que tem
+  // dado no recorte dos outros filtros; o servidor manda o que existe em `presentes`.
+  const opcoesCarreta = React.useMemo(
+    () =>
+      restringirOpcoes(
+        carretas.map((k) => ({ valor: k.placa, rotulo: k.placa })),
+        new Set(painel.presentes.placas),
+        selecao(painel.filtro.placa),
+      ),
+    [carretas, painel],
+  );
+  const opcoesTipo = React.useMemo(
+    () =>
+      restringirOpcoes(
+        TIPOS_FRETE.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_FRETE[t] })),
+        new Set(painel.presentes.tipos),
+        selecao(painel.filtro.tipo),
+      ),
+    [painel],
+  );
+
   // Ordem e largura dos filtros por usuário, no "Personalizar tela".
   const personalizacaoFiltros = usePersonalizacaoFiltros("frete.carretas-emt.filtros", ["periodo", "carreta", "tipo"]);
 
@@ -462,7 +484,7 @@ export function PainelCarretasEmt({
               <FiltroSelect
                 valor={painel.filtro.placa}
                 onValorChange={(valor) => setMuitos({ placa: valor || null })}
-                opcoes={carretas.map((k) => ({ valor: k.placa, rotulo: k.placa }))}
+                opcoes={opcoesCarreta}
                 todosRotulo="Todas as carretas"
               />
             ),
@@ -474,7 +496,7 @@ export function PainelCarretasEmt({
               <FiltroSelect
                 valor={painel.filtro.tipo ?? ""}
                 onValorChange={(valor) => setMuitos({ tipo: valor || null })}
-                opcoes={TIPOS_FRETE.map((t) => ({ valor: t, rotulo: ROTULO_TIPO_FRETE[t] }))}
+                opcoes={opcoesTipo}
                 todosRotulo="Todos os tipos"
               />
             ),

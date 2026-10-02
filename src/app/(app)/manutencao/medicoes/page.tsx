@@ -5,6 +5,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { MedicoesAcoesCabecalho } from "@/modules/manutencao/medicoes/components/medicoes-acoes-cabecalho";
 import { MedicoesTabela } from "@/modules/manutencao/medicoes/components/medicoes-tabela";
 import {
+  facetasMedicoes,
   listarEquipamentosComMedicao,
   listarMedicoes,
   TAMANHO_PADRAO,
@@ -36,8 +37,10 @@ export default async function PaginaMedicoes({
   let ate = paramData(params.ate);
   if (de && ate && de > ate) [de, ate] = [ate, de];
 
-  const [{ itens, total }, equipamentos] = await Promise.all([
-    listarMedicoes({ pagina, tamanho, equipamentoId, de, ate }),
+  const filtrosLista = { equipamentoId, de, ate };
+  const [{ itens, total }, facetas, equipamentos] = await Promise.all([
+    listarMedicoes({ pagina, tamanho, ...filtrosLista }),
+    facetasMedicoes(filtrosLista),
     listarEquipamentosComMedicao(),
   ]);
 
@@ -59,6 +62,7 @@ export default async function PaginaMedicoes({
         ate={ate ?? ""}
         equipamentos={equipamentos}
         podeEditar={podeEditar}
+        facetas={facetas}
       />
     </>
   );

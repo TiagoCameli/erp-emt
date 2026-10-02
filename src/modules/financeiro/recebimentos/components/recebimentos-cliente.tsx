@@ -52,6 +52,7 @@ import {
 } from "@/modules/financeiro/recebimentos/actions";
 import type {
   CategoriaReceitaOpcao,
+  FacetaRecebidas,
   FiltrosRecebidas,
   ParcelaAReceber,
   ParcelaRecebida,
@@ -61,6 +62,12 @@ import {
   somarParaResumoAReceber,
 } from "@/modules/financeiro/recebimentos/resumo";
 import { DarComoRecebidoDialog } from "./dar-como-recebido-dialog";
+import {
+  filtrarFacetado,
+  restringirOpcoes,
+  selecao as selecaoUnica,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 
 const TAMANHO_PAGINA = 25;
 
@@ -156,6 +163,8 @@ export interface RecebimentosClienteProps {
   valoresRecebidos: ValoresFiltrosRecebidos;
   /** Os filtros da aba "Recebidos" já validados, para a action paginar. */
   filtrosRecebidas: FiltrosRecebidas;
+  /** Valores que existem no histórico filtrado, por filtro de seleção. */
+  facetasRecebidos?: FacetasPresentes<FacetaRecebidas>;
   /** Catálogos do formulário de lançamento, que é o mesmo das duas telas. */
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
@@ -254,6 +263,7 @@ export function RecebimentosCliente({
   valoresAReceber,
   valoresRecebidos,
   filtrosRecebidas,
+  facetasRecebidos,
   categorias,
   fornecedores,
   centrosCusto,
@@ -437,47 +447,45 @@ export function RecebimentosCliente({
   );
   const faixaAReceber = useFaixaUrl("valor_de", "valor_ate");
 
-  const aReceberFiltradas = React.useMemo(() => {
+  // Facetado: quem paga e conta só oferecem o que existe na fila filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). Busca, valor e vencimento entram
+  // livres.
+  const { linhas: aReceberFiltradas, opcoes: opcoesAReceber } = React.useMemo(() => {
     const termo = buscaAReceber.trim().toLowerCase();
     const valorDe =
       valoresAReceber.valorDe === "" ? null : Number(valoresAReceber.valorDe);
     const valorAte =
       valoresAReceber.valorAte === "" ? null : Number(valoresAReceber.valorAte);
 
-    return aReceber.filter((parcela) => {
-      if (
-        termo !== "" &&
-        !`${parcela.lancamentoNumero ?? ""} ${parcela.numeroDocumento ?? ""} ${parcela.descricao} ${parcela.clienteNome}`
-          .toLowerCase()
-          .includes(termo)
-      ) {
-        return false;
-      }
-      if (
-        valoresAReceber.cliente !== "" &&
-        parcela.clienteId !== valoresAReceber.cliente
-      ) {
-        return false;
-      }
-      if (
-        valoresAReceber.conta !== "" &&
-        parcela.contaBancariaId !== valoresAReceber.conta
-      ) {
-        return false;
-      }
-      if (valorDe !== null && parcela.valor < valorDe) return false;
-      if (valorAte !== null && parcela.valor > valorAte) return false;
-      if (
-        !dentroDoPeriodo(
-          parcela.dataVencimento,
-          valoresAReceber.vencDe,
-          valoresAReceber.vencAte,
-        )
-      ) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      aReceber,
+      {
+        cliente: {
+          selecionados: selecaoUnica(valoresAReceber.cliente),
+          chave: (parcela) => parcela.clienteId,
+        },
+        conta: {
+          selecionados: selecaoUnica(valoresAReceber.conta),
+          chave: (parcela) => parcela.contaBancariaId,
+        },
+      },
+      [
+        (parcela) =>
+          termo === "" ||
+          `${parcela.lancamentoNumero ?? ""} ${parcela.numeroDocumento ?? ""} ${parcela.descricao} ${parcela.clienteNome}`
+            .toLowerCase()
+            .includes(termo),
+        (parcela) => {
+          if (valorDe !== null && parcela.valor < valorDe) return false;
+          if (valorAte !== null && parcela.valor > valorAte) return false;
+          return dentroDoPeriodo(
+            parcela.dataVencimento,
+            valoresAReceber.vencDe,
+            valoresAReceber.vencAte,
+          );
+        },
+      ],
+    );
   }, [aReceber, buscaAReceber, valoresAReceber]);
 
   /**
@@ -520,7 +528,7 @@ export function RecebimentosCliente({
       chave: "cliente",
       rotulo: "Quem paga",
       valor: valoresAReceber.cliente,
-      opcoes: opcoesCliente,
+      opcoes: opcoesAReceber("cliente", opcoesCliente),
       todosRotulo: "Todos os pagadores",
       largura: LARGURA_NOME,
     }),
@@ -529,7 +537,7 @@ export function RecebimentosCliente({
       chave: "conta",
       rotulo: "Conta de destino",
       valor: valoresAReceber.conta,
-      opcoes: opcoesConta,
+      opcoes: opcoesAReceber("conta", opcoesConta),
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
@@ -675,6 +683,21 @@ export function RecebimentosCliente({
   );
   const faixaRecebidos = useFaixaUrl("h_valor_de", "h_valor_ate");
 
+  // Facetado no servidor (ver `facetasRecebidas`): a aba só tem a página, então
+  // quem diz o que existe no histórico filtrado pelos outros é a página.
+  function facetarRecebidos(
+    id: FacetaRecebidas,
+    base: OpcaoFiltro[],
+    valor: string,
+  ): OpcaoFiltro[] {
+    if (!facetasRecebidos) return base;
+    return restringirOpcoes(
+      base,
+      new Set(facetasRecebidos[id]),
+      selecaoUnica(valor),
+    );
+  }
+
   const [linhasRecebidas, setLinhasRecebidas] = React.useState(recebidas);
   const [totalRegistros, setTotalRegistros] = React.useState(totalRecebidas);
   const [paginacao, setPaginacao] = React.useState<PaginationState>({
@@ -734,7 +757,11 @@ export function RecebimentosCliente({
       chave: "h_cliente",
       rotulo: "Quem pagou",
       valor: valoresRecebidos.cliente,
-      opcoes: opcoesCliente,
+      opcoes: facetarRecebidos(
+        "cliente",
+        opcoesCliente,
+        valoresRecebidos.cliente,
+      ),
       todosRotulo: "Todos os pagadores",
       largura: LARGURA_NOME,
     }),
@@ -743,7 +770,7 @@ export function RecebimentosCliente({
       chave: "h_conta",
       rotulo: "Conta que recebeu",
       valor: valoresRecebidos.conta,
-      opcoes: opcoesConta,
+      opcoes: facetarRecebidos("conta", opcoesConta, valoresRecebidos.conta),
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
@@ -752,7 +779,11 @@ export function RecebimentosCliente({
       chave: "h_categoria",
       rotulo: "Categoria",
       valor: valoresRecebidos.categoria,
-      opcoes: opcoesCategoria,
+      opcoes: facetarRecebidos(
+        "categoria",
+        opcoesCategoria,
+        valoresRecebidos.categoria,
+      ),
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),

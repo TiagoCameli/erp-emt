@@ -7,7 +7,7 @@ import { listarContratos } from "@/modules/medicao/contratos/queries";
 import { ReajustesFiltros } from "@/modules/medicao/reajuste/components/reajustes-filtros";
 import { ReajustesTabela } from "@/modules/medicao/reajuste/components/reajustes-tabela";
 import { situacaoFiltroReajuste } from "@/modules/medicao/reajuste/formato";
-import { listarReajustes } from "@/modules/medicao/reajuste/queries";
+import { facetasReajustes, listarReajustes } from "@/modules/medicao/reajuste/queries";
 
 const RECURSO = "medicao.reajuste" as const;
 
@@ -33,9 +33,11 @@ export default async function PaginaReajuste({
   const contratoId = idSchema.safeParse(contratoParam).success ? contratoParam : "";
   const situacao = situacaoFiltroReajuste(primeiro(params.situacao));
 
-  const [contratos, linhas] = await Promise.all([
+  const filtro = { contratoId: contratoId || undefined, situacao };
+  const [contratos, linhas, facetas] = await Promise.all([
     listarContratos({}),
-    listarReajustes({ contratoId: contratoId || undefined, situacao }),
+    listarReajustes(filtro),
+    facetasReajustes(filtro),
   ]);
 
   return (
@@ -49,6 +51,7 @@ export default async function PaginaReajuste({
         contratos={contratos.map((c) => ({ id: c.id, codigo: c.codigo, nomeObra: c.nomeObra }))}
         contratoId={contratoId}
         situacao={situacao ?? ""}
+        facetas={facetas}
       />
       <ReajustesTabela linhas={linhas} />
     </>

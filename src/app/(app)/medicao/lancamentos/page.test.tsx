@@ -33,6 +33,7 @@ vi.mock("@/modules/medicao/medicoes/queries", () => ({
 vi.mock("@/modules/medicao/lancamentos/queries", () => ({
   servicosParaLancar: vi.fn().mockResolvedValue([]),
   listarLancamentos: vi.fn().mockResolvedValue([]),
+  facetasLancamentos: vi.fn().mockResolvedValue({ medicao: [], item: [] }),
 }));
 vi.mock("@/modules/medicao/_shared/seletor-contrato", () => ({
   FiltroContrato: () => <div data-testid="filtro-contrato" />,

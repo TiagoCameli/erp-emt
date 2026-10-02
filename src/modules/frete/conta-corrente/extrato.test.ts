@@ -26,6 +26,8 @@ import {
   type MovimentoExtrato,
   type SaldoTransportadora,
   type TipoMovimento,
+  categoriaDoTipo,
+  valoresPresentes,
 } from "@/modules/frete/conta-corrente/extrato";
 
 let seq = 0;
@@ -226,6 +228,14 @@ describe("abas", () => {
     expect(filtrarAbastecimentos(todos, "", "joão")).toEqual([extDeb]);
     expect(precoBaseAbastecimento(emt)).toBe(6.1);
     expect(precoBaseAbastecimento(extDeb)).toBe(6.8);
+  });
+
+  it("facetado: a busca da aba restringe as opções do filtro de categoria e de tipo", () => {
+    const semBusca = valoresPresentes(filtrarAbastecimentos(todos, "", ""), (m) => categoriaDoTipo(m.tipo));
+    expect([...semBusca].sort()).toEqual(["emt", "transterra"]);
+    const comBusca = valoresPresentes(filtrarAbastecimentos(todos, "", "joão"), (m) => categoriaDoTipo(m.tipo));
+    expect([...comBusca]).toEqual(["transterra"]);
+    expect([...valoresPresentes(filtrarTodos(todos, [], "aaa1a"), (m) => m.tipo)]).toEqual(["credito_frete"]);
   });
 
   it("Pagamentos: método e busca", () => {

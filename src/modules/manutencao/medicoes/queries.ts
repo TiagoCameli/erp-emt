@@ -3,6 +3,10 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import {
   ORIGENS_MEDICAO,
   TIPOS_MEDICAO,
   type OrigemMedicao,
@@ -63,6 +67,63 @@ function origemValida(valor: string): OrigemMedicao {
   return (ORIGENS_MEDICAO as readonly string[]).includes(valor) ? (valor as OrigemMedicao) : "manual";
 }
 
+/** Os filtros da listagem, sem a paginação. */
+export type FiltrosMedicoes = Omit<ListarMedicoesParams, "pagina" | "tamanho">;
+
+/** O pedaço do builder do PostgREST que os filtros das leituras usam. */
+interface ConsultaFiltravelMedicoes<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string) => T;
+  lte: (coluna: string, valor: string) => T;
+}
+
+/**
+ * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
+ * MESMO recorte. Síncrona: o builder é thenable (ver `aplicarFiltrosPagas`).
+ */
+function aplicarFiltrosMedicoes<T extends ConsultaFiltravelMedicoes<T>>(
+  consultaInicial: T,
+  filtros: FiltrosMedicoes,
+): T {
+  let consulta = consultaInicial;
+  if (filtros.equipamentoId) consulta = consulta.eq("equipamento_id", filtros.equipamentoId);
+  // `data` é DATE: a string yyyy-MM-dd compara direto, sem fuso.
+  if (filtros.de) consulta = consulta.gte("data", filtros.de);
+  if (filtros.ate) consulta = consulta.lte("data", filtros.ate);
+  return consulta;
+}
+
+/** Os filtros de seleção da barra. O período restringe, mas não tem lista. */
+export type FacetaMedicoes = "equipamento";
+
+/**
+ * Equipamentos que têm leitura no recorte dos outros filtros (o período), para
+ * o filtro de equipamento só oferecer o que devolve linha (ver
+ * `_shared/filtros-facetados`). Só a coluna da chave, sem paginação.
+ */
+export async function facetasMedicoes(
+  filtros: FiltrosMedicoes,
+): Promise<FacetasPresentes<FacetaMedicoes>> {
+  const supabase = await createClient();
+
+  return facetasNoServidor<{ equipamento_id: string }, FacetaMedicoes>(
+    { equipamento: { ativo: !!filtros.equipamentoId, chave: (linha) => linha.equipamento_id } },
+    async (exceto) => {
+      const recorte = exceto === "equipamento" ? { ...filtros, equipamentoId: undefined } : filtros;
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosMedicoes(
+          supabase.from("equipamento_medicoes").select("id, equipamento_id").is("excluido_em", null),
+          recorte,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros das leituras");
+      return linhas;
+    },
+  );
+}
+
 /**
  * Leituras com paginação no servidor (range + count exact): a tabela cresce
  * todo dia e não pode depender do teto de 1.000 do PostgREST. Filtros vão para
@@ -89,10 +150,7 @@ export async function listarMedicoes(params: ListarMedicoesParams): Promise<Medi
     .order("id")
     .range(de, de + tamanho - 1);
 
-  if (params.equipamentoId) consulta = consulta.eq("equipamento_id", params.equipamentoId);
-  // `data` é DATE: a string yyyy-MM-dd compara direto, sem fuso.
-  if (params.de) consulta = consulta.gte("data", params.de);
-  if (params.ate) consulta = consulta.lte("data", params.ate);
+  consulta = aplicarFiltrosMedicoes(consulta, params);
 
   const { data, error, count } = await consulta;
   if (error) throw new Error("Não foi possível carregar as leituras de horímetro e km");

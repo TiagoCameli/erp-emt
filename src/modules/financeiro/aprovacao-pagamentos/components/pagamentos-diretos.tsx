@@ -63,6 +63,7 @@ import {
   opcoesDeNomes,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   rotuloParcela,
   STATUS_PARCELA,
@@ -219,65 +220,47 @@ export function PagamentosDiretos({
     filtroPagoAte !== "";
 
   /** A lista depois dos filtros: seleção, lote e KPIs trabalham só em cima dela. */
-  const visiveis = React.useMemo(() => {
+  // Facetado: cada seletor só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). Busca, mês, valor e datas entram
+  // livres.
+  const { linhas: visiveis, opcoes } = React.useMemo(() => {
     const termo = filtroBusca.trim().toLowerCase();
-    return pagamentos.filter((pagamento) => {
-      const conferido = pagamento.conferidoEm !== null;
-      if (filtroConferencia === "sim" && !conferido) return false;
-      if (filtroConferencia === "nao" && conferido) return false;
-      if (filtroSituacao !== "" && pagamento.status !== filtroSituacao) {
-        return false;
-      }
-      if (
-        filtroForma !== "" &&
-        (pagamento.formaPagamentoNome ?? "") !== filtroForma
-      ) {
-        return false;
-      }
-      if (
-        filtroCategoria !== "" &&
-        (pagamento.categoriaNome ?? "") !== filtroCategoria
-      ) {
-        return false;
-      }
-      if (
-        filtroFornecedor !== "" &&
-        pagamento.fornecedorNome !== filtroFornecedor
-      ) {
-        return false;
-      }
-      if (
-        filtroCentroCusto !== "" &&
-        !pagamento.rateios.some((rateio) => rateio.nome === filtroCentroCusto)
-      ) {
-        return false;
-      }
-      if (filtroConta !== "" && pagamento.contaBancariaId !== filtroConta) {
-        return false;
-      }
-      if (filtroNota === "sem" && !pagamento.semNota) return false;
-      if (filtroNota === "com" && pagamento.semNota) return false;
-      if (!mesmoMesReferencia(pagamento.mesCompetencia, filtroMes))
-        return false;
-      if (!dentroDaFaixaValor(pagamento.valor, filtroValorDe, filtroValorAte)) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(pagamento.dataVencimento, filtroVencDe, filtroVencAte)
-      ) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(pagamento.dataPagamento, filtroPagoDe, filtroPagoAte)
-      ) {
-        return false;
-      }
-      if (termo !== "") {
-        const alvo = `${pagamento.lancamentoNumero ?? ""} ${pagamento.lancamentoDescricao} ${pagamento.fornecedorNome} ${pagamento.origemNumero ?? ""}`;
-        if (!alvo.toLowerCase().includes(termo)) return false;
-      }
-      return true;
-    });
+    const binario = (valor: string, sim: string, nao: string) =>
+      valor === sim || valor === nao ? [valor] : [];
+    return filtrarFacetado(
+      pagamentos,
+      {
+        conferencia: {
+          selecionados: binario(filtroConferencia, "sim", "nao"),
+          chave: (p) => (p.conferidoEm !== null ? "sim" : "nao"),
+        },
+        situacao: { selecionados: selecao(filtroSituacao), chave: (p) => p.status },
+        forma: { selecionados: selecao(filtroForma), chave: (p) => p.formaPagamentoNome ?? "" },
+        categoria: { selecionados: selecao(filtroCategoria), chave: (p) => p.categoriaNome ?? "" },
+        fornecedor: { selecionados: selecao(filtroFornecedor), chave: (p) => p.fornecedorNome },
+        centroCusto: {
+          selecionados: selecao(filtroCentroCusto),
+          chave: (p) => p.rateios.map((rateio) => rateio.nome),
+        },
+        conta: { selecionados: selecao(filtroConta), chave: (p) => p.contaBancariaId },
+        nota: {
+          selecionados: binario(filtroNota, "sem", "com"),
+          chave: (p) => (p.semNota ? "sem" : "com"),
+        },
+      },
+      [
+        (pagamento) =>
+          mesmoMesReferencia(pagamento.mesCompetencia, filtroMes) &&
+          dentroDaFaixaValor(pagamento.valor, filtroValorDe, filtroValorAte) &&
+          dentroDoPeriodo(pagamento.dataVencimento, filtroVencDe, filtroVencAte) &&
+          dentroDoPeriodo(pagamento.dataPagamento, filtroPagoDe, filtroPagoAte),
+        (pagamento) =>
+          termo === "" ||
+          `${pagamento.lancamentoNumero ?? ""} ${pagamento.lancamentoDescricao} ${pagamento.fornecedorNome} ${pagamento.origemNumero ?? ""}`
+            .toLowerCase()
+            .includes(termo),
+      ],
+    );
   }, [
     pagamentos,
     filtroBusca,
@@ -878,7 +861,7 @@ export function PagamentosDiretos({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroConferencia(valor))
           }
-          opcoes={OPCOES_CONFERENCIA}
+          opcoes={opcoes("conferencia", OPCOES_CONFERENCIA)}
           placeholder={CONFERENCIA.coluna}
           todosRotulo="Conferidos e não conferidos"
           className="max-w-56"
@@ -898,7 +881,7 @@ export function PagamentosDiretos({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroSituacao(valor))
           }
-          opcoes={opcoesSituacao}
+          opcoes={opcoes("situacao", opcoesSituacao)}
           placeholder="Situação"
           todosRotulo="Todas as situações"
           className="max-w-56"
@@ -916,7 +899,7 @@ export function PagamentosDiretos({
         <FiltroSelect
           valor={filtroForma}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroForma(valor))}
-          opcoes={opcoesForma}
+          opcoes={opcoes("forma", opcoesForma)}
           placeholder="Forma de pagamento"
           todosRotulo="Dinheiro e cartão"
           className="max-w-56"
@@ -937,7 +920,7 @@ export function PagamentosDiretos({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroFornecedor(valor))
           }
-          opcoes={opcoesFornecedor}
+          opcoes={opcoes("fornecedor", opcoesFornecedor)}
           placeholder="Fornecedor"
           todosRotulo="Todos os fornecedores"
           className="max-w-56"
@@ -958,7 +941,7 @@ export function PagamentosDiretos({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroCategoria(valor))
           }
-          opcoes={opcoesCategoria}
+          opcoes={opcoes("categoria", opcoesCategoria)}
           placeholder="Categoria"
           todosRotulo="Todas as categorias"
           className="max-w-56"
@@ -979,7 +962,7 @@ export function PagamentosDiretos({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroCentroCusto(valor))
           }
-          opcoes={opcoesCentroCusto}
+          opcoes={opcoes("centroCusto", opcoesCentroCusto)}
           placeholder="Centro de custo"
           todosRotulo="Todos os centros de custo"
           className="max-w-56"
@@ -998,7 +981,7 @@ export function PagamentosDiretos({
         <FiltroSelect
           valor={filtroConta}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroConta(valor))}
-          opcoes={opcoesConta}
+          opcoes={opcoes("conta", opcoesConta)}
           todosRotulo="Todas as contas"
           className="max-w-56"
         />
@@ -1100,7 +1083,7 @@ export function PagamentosDiretos({
         <FiltroSelect
           valor={filtroNota}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroNota(valor))}
-          opcoes={OPCOES_NOTA}
+          opcoes={opcoes("nota", OPCOES_NOTA)}
           placeholder="Nota fiscal"
           todosRotulo="Com e sem nota"
         />

@@ -37,7 +37,7 @@ import { CHAVES_RECORTE } from "@/modules/combustivel/_shared/navegacao";
  * página reinjetava os últimos 30 dias quando a URL ficava sem `de`/`ate` — o filtro nunca
  * desligava (relatado pelo Tiago em 24/09/2026).
  *
- * `filtro` vem da página; `opcoes`, prontas. Cada
+ * `filtro` vem da página; `opcoes`, prontas e já facetadas (`opcoesDoFiltroGlobal`). Cada
  * mudança é UMA navegação (`useFiltrosUrl().setMuitos`), e zera a `pagina` de quem lista.
  */
 

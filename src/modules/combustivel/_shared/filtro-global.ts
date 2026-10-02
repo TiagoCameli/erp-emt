@@ -362,31 +362,79 @@ export interface EntradaComFornecedor extends EntradaFiltravel {
 }
 
 /**
- * As opções da barra a partir da base carregada. Obra e combustível listam os que aparecem
- * nas saídas e entradas (a raiz de centro de custo inclui o Escritório e afins, que nunca
- * abastecem); equipamento lista os ativos sem o sentinela (como o seletor da origem);
- * operador e placa são os textos distintos das saídas do modo; fornecedor, os das entradas.
+ * De onde a aba tira o que mostra: o painel usa saídas e entradas, Equipamentos e Obras só
+ * saídas, Fornecedores só entradas. As opções da barra são facetas dessa fonte.
+ */
+export type FonteDoFiltro = "ambas" | "saidas" | "entradas";
+
+/**
+ * As opções da barra a partir da base carregada, FACETADAS (`_shared/filtros-facetados`):
+ * cada lista oferece só o que existe nas linhas que passam em todos os OUTROS filtros
+ * globais (período inclusive), na fonte da aba. A dimensão que não filtra uma fonte não a
+ * corta (fornecedor não corta saída; obra não corta entrada), igual a `aplicarFiltroGlobal`
+ * e `aplicarFiltroGlobalEntradas`, que são os predicados usados aqui.
+ *
+ * Rótulos e ordem como antes: equipamento sai do cadastro ativo sem o sentinela (como o
+ * seletor da origem), tanque do cadastro ativo, operador e placa são os textos aparados.
  * O que está marcado na URL entra sempre, para o chip e o gatilho mostrarem o nome.
  */
 export function opcoesDoFiltroGlobal(
   base: BaseCombustivel,
   entradas: readonly EntradaComFornecedor[],
   filtro: FiltroGlobal,
+  fonte: FonteDoFiltro = "ambas",
 ): OpcoesFiltroGlobal {
-  const tipo = TIPO_POR_MODO[filtro.modo];
-  const doModo = base.saidas.filter((s) => s.tipoConsumidor === tipo);
+  const usaSaidas = fonte !== "entradas";
+  const usaEntradas = fonte !== "saidas";
 
-  const obras = new Set<string>(filtro.obras);
-  const combustiveis = new Set<string>(filtro.combustiveis);
-  for (const s of base.saidas) {
-    if (s.obraId) obras.add(s.obraId);
-    if (s.tipoCombustivel) combustiveis.add(s.tipoCombustivel);
-  }
-  const fornecedores = new Map<string, string>();
+  // As linhas de cada fonte sem o filtro da própria dimensão. Dimensão vazia não se exclui
+  // de nada: reaproveita o recorte com tudo aplicado.
+  const saidasComTudo = usaSaidas ? aplicarFiltroGlobal(base.saidas, filtro) : [];
+  const entradasComTudo = usaEntradas ? aplicarFiltroGlobalEntradas(entradas, filtro) : [];
+  const saidasSem = (dimensao: DimensaoFiltro) =>
+    !usaSaidas ? [] : filtro[dimensao].length === 0 ? saidasComTudo : aplicarFiltroGlobal(base.saidas, { ...filtro, [dimensao]: [] });
+  const entradasSem = (dimensao: DimensaoFiltro) =>
+    !usaEntradas
+      ? []
+      : filtro[dimensao].length === 0
+        ? entradasComTudo
+        : aplicarFiltroGlobalEntradas(entradas, { ...filtro, [dimensao]: [] });
+
+  const comMarcados = (valores: Iterable<string | null | undefined>, marcados: readonly string[]) => {
+    const vistos = new Set<string>(marcados);
+    for (const valor of valores) if (valor) vistos.add(valor);
+    return vistos;
+  };
+
+  const obras = comMarcados(
+    saidasSem("obras").map((s) => s.obraId),
+    filtro.obras,
+  );
+  const combustiveis = comMarcados(
+    [...saidasSem("combustiveis").map((s) => s.tipoCombustivel), ...entradasSem("combustiveis").map((e) => e.insumoId)],
+    filtro.combustiveis,
+  );
+  const tanquesPresentes = comMarcados(
+    [...saidasSem("tanques").map((s) => s.tanqueId), ...entradasSem("tanques").map((e) => e.tanqueId)],
+    filtro.tanques,
+  );
+  const transportadoras = comMarcados(
+    saidasSem("transportadoras").map((s) => s.transportadoraId),
+    filtro.transportadoras,
+  );
+  const equipamentosPresentes = comMarcados(
+    saidasSem("equipamentos").map((s) => (s.equipamentoId === EQUIPAMENTO_DESCONHECIDO ? null : s.equipamentoId)),
+    filtro.equipamentos,
+  );
+  // O nome sai de todas as entradas: o marcado que a faceta não traz ainda mostra o nome.
+  const nomeFornecedor = new Map<string, string>();
   for (const e of entradas) {
-    if (e.insumoId) combustiveis.add(e.insumoId);
-    if (e.fornecedorId) fornecedores.set(e.fornecedorId, e.fornecedorNome?.trim() || "Fornecedor sem nome");
+    if (e.fornecedorId) nomeFornecedor.set(e.fornecedorId, e.fornecedorNome?.trim() || "Fornecedor sem nome");
   }
+  const fornecedores = comMarcados(
+    entradasSem("fornecedores").map((e) => e.fornecedorId),
+    filtro.fornecedores,
+  );
 
   const textos = (valores: Iterable<string | null>, marcados: readonly string[]) => {
     const vistos = new Set<string>(marcados);
@@ -397,16 +445,13 @@ export function opcoesDoFiltroGlobal(
     return [...vistos].map((valor) => ({ valor, rotulo: valor })).sort(porRotulo);
   };
 
-  const equipamentos = opcoesDeEquipamento(base.equipamentos);
+  const equipamentos = opcoesDeEquipamento(base.equipamentos).filter((o) => equipamentosPresentes.has(o.valor));
   const equipamentosMarcadosFora = filtro.equipamentos
     .filter((id) => !equipamentos.some((o) => o.valor === id))
     .map((id) => {
       const e = base.equipamentos.find((eq) => eq.id === id);
       return { valor: id, rotulo: e ? e.descricao : "Equipamento não encontrado" };
     });
-
-  const transportadoras = new Set<string>(filtro.transportadoras);
-  for (const s of doModo) if (s.transportadoraId) transportadoras.add(s.transportadoraId);
 
   return {
     obras: [...obras]
@@ -417,24 +462,21 @@ export function opcoesDoFiltroGlobal(
       .map((id) => ({ valor: id, rotulo: base.transportadoraNome.get(id) ?? "Transportadora não encontrada" }))
       .sort(porRotulo),
     placas: textos(
-      doModo.map((s) => s.placa),
+      saidasSem("placas").map((s) => s.placa),
       filtro.placas,
     ),
     tanques: base.tanques
-      .filter((t) => t.ativo || filtro.tanques.includes(t.id))
+      .filter((t) => (t.ativo && tanquesPresentes.has(t.id)) || filtro.tanques.includes(t.id))
       .map((t) => ({ valor: t.id, rotulo: t.nomeExibicao }))
       .sort(porRotulo),
     combustiveis: [...combustiveis]
       .map((id) => ({ valor: id, rotulo: base.combustivelNome.get(id) ?? "Combustível não encontrado" }))
       .sort(porRotulo),
-    fornecedores: [
-      ...[...fornecedores].map(([valor, rotulo]) => ({ valor, rotulo })),
-      ...filtro.fornecedores
-        .filter((id) => !fornecedores.has(id))
-        .map((id) => ({ valor: id, rotulo: "Fornecedor não encontrado" })),
-    ].sort(porRotulo),
+    fornecedores: [...fornecedores]
+      .map((id) => ({ valor: id, rotulo: nomeFornecedor.get(id) ?? "Fornecedor não encontrado" }))
+      .sort(porRotulo),
     operadores: textos(
-      doModo.map((s) => s.motorista),
+      saidasSem("operadores").map((s) => s.motorista),
       filtro.operadores,
     ),
   };

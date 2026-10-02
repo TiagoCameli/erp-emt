@@ -20,7 +20,15 @@ import type {
   ColaboradorOpcao,
   ObraOpcao,
 } from "@/modules/rh/_shared/queries";
-import type { PontoLista } from "@/modules/rh/apontamentos/queries";
+import {
+  restringirOpcoes,
+  selecao,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
+import type {
+  FacetaPontos,
+  PontoLista,
+} from "@/modules/rh/apontamentos/queries";
 
 const OPCOES_STATUS = (Object.keys(STATUS_PONTO) as StatusPonto[]).map(
   (valor) => ({ valor, rotulo: STATUS_PONTO[valor].rotulo }),
@@ -94,6 +102,8 @@ export interface PontosTabelaProps {
   encarregadoId: string;
   obras: ObraOpcao[];
   colaboradores: ColaboradorOpcao[];
+  /** Valores que existem na lista filtrada, por filtro de seleção. */
+  facetas?: FacetasPresentes<FacetaPontos>;
 }
 
 /**
@@ -113,9 +123,21 @@ export function PontosTabela({
   encarregadoId,
   obras,
   colaboradores,
+  facetas,
 }: PontosTabelaProps) {
   const router = useRouter();
   const { setMuitos, limparTodos } = useFiltrosUrl();
+
+  // Cada filtro só oferece o que existe na lista filtrada pelos outros; quem
+  // sabe isso é o servidor, porque a tabela só tem a página (ver `facetasPontos`).
+  function facetar<O extends { valor: string; rotulo: string }>(
+    id: FacetaPontos,
+    base: readonly O[],
+    valor: string,
+  ): O[] {
+    if (!facetas) return [...base];
+    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+  }
 
   const opcoesObra = obras.map((obra) => ({
     valor: obra.id,
@@ -153,7 +175,7 @@ export function PontosTabela({
                 onValorChange={(valor) =>
                   setMuitos({ obra: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={opcoesObra}
+                opcoes={facetar("obra", opcoesObra, obraId)}
                 placeholder="Obra"
                 todosRotulo="Todas as obras"
               />
@@ -170,7 +192,7 @@ export function PontosTabela({
                 onValorChange={(valor) =>
                   setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
                 }
-                opcoes={OPCOES_STATUS}
+                opcoes={facetar("status", OPCOES_STATUS, status)}
                 placeholder="Status"
                 todosRotulo="Todos os status"
               />
@@ -212,7 +234,7 @@ export function PontosTabela({
                     pagina: "1",
                   })
                 }
-                opcoes={opcoesColaborador}
+                opcoes={facetar("encarregado", opcoesColaborador, encarregadoId)}
                 placeholder="Encarregado"
                 todosRotulo="Todos os encarregados"
                 className="max-w-56"

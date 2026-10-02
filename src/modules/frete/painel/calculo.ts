@@ -23,6 +23,7 @@
  *   ranking de 10 (é o que a origem faz).
  */
 
+import { filtrarFacetado, restringirOpcoes, selecao } from "@/modules/_shared/filtros-facetados";
 import type { FreteBase, PedidoBase } from "@/modules/frete/_shared/pedreira-dados";
 import type { Localidade, TracadoRota } from "@/modules/frete/carretas-emt/calculo";
 import {
@@ -704,6 +705,30 @@ export function opcoesLocais(fretesF: readonly FretePainel[], nomes: NomesPainel
   };
 }
 
+/** As três facetas dos filtros locais sobre qualquer linha com origem, material e destino. */
+function facetasLocais<T extends { origemId: string | null; insumoId: string | null; destinoId: string | null }>(f: FiltrosLocais) {
+  return {
+    pedreiras: { selecionados: f.pedreiras, chave: (x: T) => x.origemId },
+    materiais: { selecionados: f.materiais, chave: (x: T) => x.insumoId },
+    destinos: { selecionados: f.destinos, chave: (x: T) => x.destinoId },
+  };
+}
+
+/**
+ * As opções dos filtros locais, facetadas (ver `_shared/filtros-facetados`): cada
+ * filtro só oferece o que existe nos fretes do recorte que passam nos outros dois.
+ * Pedido do Tiago de 02/10/2026; antes as três listas saíam do recorte inteiro.
+ */
+export function opcoesLocaisFacetadas(fretesF: readonly FretePainel[], f: FiltrosLocais, nomes: NomesPainel) {
+  const base = opcoesLocais(fretesF, nomes);
+  const { opcoes: facetar } = filtrarFacetado(fretesF, facetasLocais<FretePainel>(f));
+  return {
+    pedreiras: facetar("pedreiras", base.pedreiras),
+    destinos: facetar("destinos", base.destinos),
+    materiais: facetar("materiais", base.materiais),
+  };
+}
+
 // 1. Resumo por Transportadora
 export interface LinhaResumoTransportadora {
   id: string;
@@ -809,6 +834,7 @@ export interface TabelaSaldoPedreira {
   total: TotalSaldoPedreira;
   opcoesFornecedores: OpcaoPainel[];
   opcoesMateriais: OpcaoPainel[];
+  opcoesDestinos: OpcaoPainel[];
 }
 
 /** Fornecedores dos cards que NÃO são transportadora: aparecem na tabela mesmo sem pedido. */
@@ -826,23 +852,79 @@ export function tabelaSaldoPedreira(
 ): TabelaSaldoPedreira {
   const pedidos = agregarPedidos(pedidosF);
   const nomeFornecedor = (id: string) => nomes.fornecedor[id] ?? id;
-  // As opções vêm da conta sem os filtros locais (FreteDashboard.tsx:664-769).
+  const nomeLocal = (id: string) => nome(nomes.localidade, id);
+  const doDestino = fretesF.filter((f) => casa(f.destinoId, filtros.destinos));
+  const transporteDoDestino = agregarTransporte(doDestino);
+  // A base das opções é a conta sem os filtros locais (FreteDashboard.tsx:664-769).
   const semFiltro = saldoNaPedreira({ pedidos, transporte: agregarTransporte(fretesF), sempreVisiveis, nomeFornecedor });
   const comFiltro = saldoNaPedreira({
     pedidos,
-    transporte: agregarTransporte(fretesF.filter((f) => casa(f.destinoId, filtros.destinos))),
+    transporte: transporteDoDestino,
     sempreVisiveis,
     fornecedores: filtros.fornecedores,
     materiais: filtros.materiais,
     nomeFornecedor,
   });
+
+  // Facetado (ver `_shared/filtros-facetados`), pedido do Tiago de 02/10/2026: até
+  // então as opções saíam DE PROPÓSITO da conta sem filtro (como a origem); agora cada
+  // filtro só oferece o que existe na tabela filtrada pelos outros dois. A base
+  // continua a conta sem filtro, para manter rótulo e ordem.
+  const visiveis = (grupos: readonly GrupoSaldoPedreira[]) => grupos.filter((g) => g.visivel);
+  const semFornecedor = saldoNaPedreira({
+    pedidos,
+    transporte: transporteDoDestino,
+    sempreVisiveis,
+    materiais: filtros.materiais,
+    nomeFornecedor,
+  });
+  const fornecedoresPresentes = new Set(
+    visiveis(semFornecedor.grupos)
+      .filter((g) => filtros.materiais.length === 0 || g.linhas.length > 0)
+      .map((g) => g.fornecedorId),
+  );
+  const semMaterial = saldoNaPedreira({
+    pedidos,
+    transporte: transporteDoDestino,
+    sempreVisiveis,
+    fornecedores: filtros.fornecedores,
+    nomeFornecedor,
+  });
+  const materiaisPresentes = new Set(visiveis(semMaterial.grupos).flatMap((g) => g.linhas.map((l) => l.insumoId)));
+  // O local de entrega só pesa no transportado: oferece os destinos dos fretes de
+  // pedreira que entram na conta (agregarTransporte) e casam com fornecedor e material.
+  const destinosPresentes = new Set(
+    apenasFretesDePedreira(fretesF)
+      .filter(
+        (f) =>
+          f.pedreiraId !== null &&
+          f.insumoId !== "" &&
+          casa(f.pedreiraId, filtros.fornecedores) &&
+          casa(f.insumoId, filtros.materiais),
+      )
+      .map((f) => f.destinoId),
+  );
+
   return {
     grupos: comFiltro.grupos.filter((g) => g.visivel),
     total: comFiltro.total,
-    opcoesFornecedores: semFiltro.grupos.map((g) => ({ valor: g.fornecedorId, rotulo: nomeFornecedor(g.fornecedorId) })),
-    opcoesMateriais: opcoes(
-      semFiltro.grupos.flatMap((g) => g.linhas.map((l) => l.insumoId)),
-      (id) => nome(nomes.insumo, id),
+    opcoesFornecedores: restringirOpcoes(
+      semFiltro.grupos.map((g) => ({ valor: g.fornecedorId, rotulo: nomeFornecedor(g.fornecedorId) })),
+      fornecedoresPresentes,
+      filtros.fornecedores,
+    ),
+    opcoesMateriais: restringirOpcoes(
+      opcoes(
+        semFiltro.grupos.flatMap((g) => g.linhas.map((l) => l.insumoId)),
+        (id) => nome(nomes.insumo, id),
+      ),
+      materiaisPresentes,
+      filtros.materiais,
+    ),
+    opcoesDestinos: restringirOpcoes(
+      opcoes(fretesF.map((f) => f.destinoId), nomeLocal),
+      destinosPresentes,
+      filtros.destinos,
     ),
   };
 }
@@ -918,7 +1000,9 @@ export function custoMaterialFrete(
       }
     }
   }
-  const filtradas = todas.filter((r) => casa(r.origemId, f.pedreiras) && casa(r.insumoId, f.materiais) && casa(r.destinoId, f.destinos));
+  // Facetado (ver `_shared/filtros-facetados`): cada filtro só oferece o que existe nas
+  // linhas que passam nos outros dois.
+  const { linhas: filtradas, opcoes: facetar } = filtrarFacetado(todas, facetasLocais<LinhaCustoMaterialFrete>(f));
   // Reagrupa pedreira -> destino, na ordem da conta.
   const pedreiras: { origemId: string; totais: TotaisCusto; destinos: { destinoId: string; totais: TotaisCusto; linhas: LinhaCustoMaterialFrete[] }[] }[] = [];
   for (const r of filtradas) {
@@ -941,9 +1025,9 @@ export function custoMaterialFrete(
   return {
     pedreiras,
     total: somarCusto(filtradas),
-    opcoesPedreiras: opcoes(todas.map((r) => r.origemId), nomeLocal),
-    opcoesMateriais: opcoes(todas.map((r) => r.insumoId), (id) => nome(nomes.insumo, id)),
-    opcoesDestinos: opcoes(todas.map((r) => r.destinoId), nomeLocal),
+    opcoesPedreiras: facetar("pedreiras", opcoes(todas.map((r) => r.origemId), nomeLocal)),
+    opcoesMateriais: facetar("materiais", opcoes(todas.map((r) => r.insumoId), (id) => nome(nomes.insumo, id))),
+    opcoesDestinos: facetar("destinos", opcoes(todas.map((r) => r.destinoId), nomeLocal)),
   };
 }
 
@@ -1089,6 +1173,26 @@ export function rotuloCruzado(dim: DimensaoCruzada, valor: string, nomes: NomesP
     default:
       return valor;
   }
+}
+
+/**
+ * As obras do filtro do topo, facetadas (ver `_shared/filtros-facetados`): só as que
+ * têm frete no período e nos filtros cruzados escolhidos. A escolhida nunca some.
+ */
+export function opcoesObrasFacetadas(
+  fretes: readonly FretePainel[],
+  filtros: FiltrosTopo,
+  cruzados: FiltrosCruzados,
+  nomes: NomesPainel,
+): OpcaoPainel[] {
+  const presentes = new Set<string>();
+  for (const f of cruzarFretes(
+    fretes.filter((x) => noPeriodo(x.data, filtros.de, filtros.ate)),
+    cruzados,
+  )) {
+    if (f.obraId) presentes.add(f.obraId);
+  }
+  return restringirOpcoes(opcoesObras(fretes, nomes), presentes, selecao(filtros.obraId));
 }
 
 /** Obras (raiz do centro) que têm frete, para o filtro do topo. */

@@ -77,6 +77,7 @@ import {
   opcoesDeNomes,
   usePaginacaoCliente,
 } from "@/modules/_shared/filtros-cliente";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { rotuloParcela } from "@/modules/financeiro/_shared/formato";
 import { cn } from "@/lib/utils";
 import { useTelaCelular } from "@/lib/use-tela-celular";
@@ -303,7 +304,7 @@ export function FilaAprovacao({
    * painel trabalha em cima desta lista: aprovar em lote não pode alcançar linha
    * que a pessoa não está vendo.
    */
-  const visiveis = React.useMemo(() => {
+  const { linhas: visiveis, opcoes } = React.useMemo(() => {
     const termo = filtroBusca.trim().toLowerCase();
     // O link é recorte, não filtro: vem antes de tudo e não aparece na barra de
     // filtros. Quem abriu um link não quer aprovar por engano a parcela vizinha.
@@ -312,57 +313,47 @@ export function FilaAprovacao({
     // sessão esconderia parcela do link sem ninguém ver por quê (e o estado
     // vazio diria que elas saíram da fila). Lá o recorte do link é a lista toda.
     const soLink = doLink !== null && celular === true;
-    return parcelas.filter((parcela) => {
-      if (doLink && !doLink.has(parcela.id)) return false;
-      if (soLink) return true;
-      if (filtroConta !== "" && parcela.contaBancariaId !== filtroConta) {
-        return false;
-      }
-      if (
-        filtroCategoria !== "" &&
-        (parcela.categoriaNome ?? "") !== filtroCategoria
-      ) {
-        return false;
-      }
-      if (
-        filtroFornecedor !== "" &&
-        parcela.fornecedorNome !== filtroFornecedor
-      ) {
-        return false;
-      }
-      if (
-        filtroCentroCusto !== "" &&
-        !parcela.rateios.some((rateio) => rateio.nome === filtroCentroCusto)
-      ) {
-        return false;
-      }
-      if (
-        filtroForma !== "" &&
-        (parcela.formaPagamentoNome ?? "") !== filtroForma
-      ) {
-        return false;
-      }
-      // Igualdade exata: "Manual" agora quer dizer manual, não "tudo que não é
-      // ordem de compra". Filtrar por folha, guia ou adiantamento é o motivo de
-      // o seletor existir nesta tela.
-      if (filtroOrigem !== "" && parcela.origem !== filtroOrigem) return false;
-      if (filtroNota === "sem" && !parcela.semNota) return false;
-      if (filtroNota === "com" && parcela.semNota) return false;
-      if (!mesmoMesReferencia(parcela.mesCompetencia, filtroMes)) return false;
-      if (!dentroDaFaixaValor(parcela.valor, filtroValorDe, filtroValorAte)) {
-        return false;
-      }
-      if (
-        !dentroDoPeriodo(parcela.dataVencimento, filtroVencDe, filtroVencAte)
-      ) {
-        return false;
-      }
-      if (termo !== "") {
-        const alvo = `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome} ${parcela.origemNumero ?? ""}`;
-        if (!alvo.toLowerCase().includes(termo)) return false;
-      }
-      return true;
-    });
+    const recorte = doLink
+      ? parcelas.filter((parcela) => doLink.has(parcela.id))
+      : parcelas;
+    const sel = (valor: string) => (soLink ? [] : selecao(valor));
+    // Facetado: cada seletor só oferece o que existe na fila filtrada pelos
+    // outros (ver `_shared/filtros-facetados`). Busca, mês, valor e vencimento
+    // entram livres.
+    return filtrarFacetado(
+      recorte,
+      {
+        conta: { selecionados: sel(filtroConta), chave: (p) => p.contaBancariaId },
+        categoria: { selecionados: sel(filtroCategoria), chave: (p) => p.categoriaNome ?? "" },
+        fornecedor: { selecionados: sel(filtroFornecedor), chave: (p) => p.fornecedorNome },
+        centroCusto: {
+          selecionados: sel(filtroCentroCusto),
+          chave: (p) => p.rateios.map((rateio) => rateio.nome),
+        },
+        forma: { selecionados: sel(filtroForma), chave: (p) => p.formaPagamentoNome ?? "" },
+        // Igualdade exata: "Manual" agora quer dizer manual, não "tudo que não
+        // é ordem de compra". Filtrar por folha, guia ou adiantamento é o
+        // motivo de o seletor existir nesta tela.
+        origem: { selecionados: sel(filtroOrigem), chave: (p) => p.origem },
+        nota: {
+          selecionados: filtroNota === "sem" || filtroNota === "com" ? sel(filtroNota) : [],
+          chave: (p) => (p.semNota ? "sem" : "com"),
+        },
+      },
+      soLink
+        ? []
+        : [
+            (parcela) =>
+              mesmoMesReferencia(parcela.mesCompetencia, filtroMes) &&
+              dentroDaFaixaValor(parcela.valor, filtroValorDe, filtroValorAte) &&
+              dentroDoPeriodo(parcela.dataVencimento, filtroVencDe, filtroVencAte),
+            (parcela) =>
+              termo === "" ||
+              `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome} ${parcela.origemNumero ?? ""}`
+                .toLowerCase()
+                .includes(termo),
+          ],
+    );
   }, [
     parcelas,
     parcelasDoLink,
@@ -1023,7 +1014,7 @@ export function FilaAprovacao({
         <FiltroSelect
           valor={filtroConta}
           onValorChange={trocarFiltroConta}
-          opcoes={opcoesConta}
+          opcoes={opcoes("conta", opcoesConta)}
           todosRotulo="Todas as contas"
           className="max-w-56"
         />
@@ -1040,7 +1031,7 @@ export function FilaAprovacao({
         <FiltroSelect
           valor={filtroCategoria}
           onValorChange={trocarFiltroCategoria}
-          opcoes={opcoesCategoria}
+          opcoes={opcoes("categoria", opcoesCategoria)}
           todosRotulo="Todas as categorias"
           className="max-w-56"
         />
@@ -1060,7 +1051,7 @@ export function FilaAprovacao({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroFornecedor(valor))
           }
-          opcoes={opcoesFornecedor}
+          opcoes={opcoes("fornecedor", opcoesFornecedor)}
           placeholder="Fornecedor"
           todosRotulo="Todos os fornecedores"
           className="max-w-56"
@@ -1081,7 +1072,7 @@ export function FilaAprovacao({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroCentroCusto(valor))
           }
-          opcoes={opcoesCentroCusto}
+          opcoes={opcoes("centroCusto", opcoesCentroCusto)}
           placeholder="Centro de custo"
           todosRotulo="Todos os centros de custo"
           className="max-w-56"
@@ -1100,7 +1091,7 @@ export function FilaAprovacao({
         <FiltroSelect
           valor={filtroForma}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroForma(valor))}
-          opcoes={opcoesForma}
+          opcoes={opcoes("forma", opcoesForma)}
           placeholder="Forma de pagamento"
           todosRotulo="Todas as formas"
           className="max-w-56"
@@ -1179,7 +1170,7 @@ export function FilaAprovacao({
         <FiltroSelect
           valor={filtroNota}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroNota(valor))}
-          opcoes={OPCOES_NOTA}
+          opcoes={opcoes("nota", OPCOES_NOTA)}
           placeholder="Nota fiscal"
           todosRotulo="Com e sem nota"
         />
@@ -1197,7 +1188,7 @@ export function FilaAprovacao({
           onValorChange={(valor) =>
             aoTrocarFiltro(() => setFiltroOrigem(valor))
           }
-          opcoes={OPCOES_ORIGEM}
+          opcoes={opcoes("origem", OPCOES_ORIGEM)}
           placeholder="Origem"
           todosRotulo="Todas as origens"
         />

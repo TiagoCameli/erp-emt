@@ -1,9 +1,17 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 
+import { facetasNoServidor, type FacetaServidor } from "@/modules/_shared/filtros-facetados";
 import {
   aplicarFiltrosAbastecimentos,
+  CHAVE_DA_FACETA_ABASTECIMENTO,
   condicaoExternas,
+  FACETAS_ABASTECIMENTOS,
+  facetaAtiva,
+  filtrosSemFaceta,
+  type FacetaAbastecimentos,
+  type FiltrosAbastecimentos,
+  type LinhaFacetaAbastecimentos,
   inicioDoDia,
   inicioDoDiaSeguinte,
   lerFiltrosAbastecimentos,
@@ -265,5 +273,70 @@ describe("lerSaidaDoLink (link das Anomalias)", () => {
 
   it("o parâmetro do link não vira filtro da lista", () => {
     expect(lerFiltrosAbastecimentos({ saida: ID })).toEqual(lerFiltrosAbastecimentos({}));
+  });
+});
+
+describe("facetas da lista de Saídas", () => {
+  function linha(troca: Partial<LinhaFacetaAbastecimentos>): LinhaFacetaAbastecimentos {
+    return {
+      tanque_id: null,
+      equipamento_id: null,
+      transportadora_id: null,
+      insumo_id: null,
+      placa: null,
+      motorista: null,
+      origem: "tanque",
+      canal: "computador",
+      filtro_obra: [],
+      ...troca,
+    };
+  }
+
+  it("soltar uma faceta tira só o parâmetro dela; o resto do recorte fica", () => {
+    const filtros = lerFiltrosAbastecimentos({ modo: "carretas", tanque: ID, placa: "ABC1D23", origem: "tanque" });
+    const semTanque = filtrosSemFaceta(filtros, "tanque");
+    expect(semTanque.tanqueIds).toEqual([]);
+    expect(semTanque.placas).toEqual(["ABC1D23"]);
+    expect(semTanque.origem).toBe("tanque");
+    expect(filtrosSemFaceta(filtros, "origem").origem).toBeUndefined();
+    expect(FACETAS_ABASTECIMENTOS.filter((id) => facetaAtiva(filtros, id))).toEqual(["tanque", "placa", "origem"]);
+    for (const id of FACETAS_ABASTECIMENTOS) expect(facetaAtiva(filtrosSemFaceta(filtros, id), id)).toBe(false);
+  });
+
+  it("escolher um tanque restringe placa, operador e origem ao que existe nele", async () => {
+    const linhas = [
+      linha({ tanque_id: ID, placa: "ABC1D23", motorista: "Zé", origem: "tanque" }),
+      linha({ tanque_id: OUTRO, placa: "XYZ9K88", motorista: "Ana", origem: "requisicao" }),
+      linha({ tanque_id: ID, placa: "  ", motorista: null, filtro_obra: [{ centro_custo_id: OUTRO }] }),
+    ];
+    const filtros = lerFiltrosAbastecimentos({ modo: "carretas", tanque: ID });
+    // O banco de mentira: o mesmo recorte que `aplicarFiltrosAbastecimentos` mandaria.
+    const passa = (l: LinhaFacetaAbastecimentos, f: FiltrosAbastecimentos) =>
+      (f.tanqueIds.length === 0 || (l.tanque_id !== null && f.tanqueIds.includes(l.tanque_id))) &&
+      (f.placas.length === 0 || (l.placa !== null && f.placas.includes(l.placa)));
+    const facetas = Object.fromEntries(
+      FACETAS_ABASTECIMENTOS.map((id) => [id, { ativo: facetaAtiva(filtros, id), chave: CHAVE_DA_FACETA_ABASTECIMENTO[id] }]),
+    ) as Record<FacetaAbastecimentos, FacetaServidor<LinhaFacetaAbastecimentos>>;
+
+    const presentes = await facetasNoServidor(facetas, async (exceto) => {
+      const recorte = exceto === null ? filtros : filtrosSemFaceta(filtros, exceto);
+      return linhas.filter((l) => passa(l, recorte));
+    });
+
+    // Placa em branco não vira opção; o próprio tanque continua oferecendo os dois.
+    expect(presentes.placa).toEqual(["ABC1D23"]);
+    expect(presentes.operador).toEqual(["Zé"]);
+    expect(presentes.origem).toEqual(["tanque"]);
+    expect(presentes.obra).toEqual([OUTRO]);
+    expect(presentes.tanque.sort()).toEqual([ID, OUTRO].sort());
+  });
+
+  it("placa e operador que não voltam iguais da URL não viram opção", () => {
+    const chaveOperador = CHAVE_DA_FACETA_ABASTECIMENTO.operador;
+    const chavePlaca = CHAVE_DA_FACETA_ABASTECIMENTO.placa;
+    expect(chaveOperador(linha({ motorista: "Zé " }))).toBeNull();
+    expect(chaveOperador(linha({ motorista: "Silva, José" }))).toBeNull();
+    expect(chaveOperador(linha({ motorista: "Zé" }))).toBe("Zé");
+    expect(chavePlaca(linha({ placa: " ABC1D23" }))).toBeNull();
   });
 });

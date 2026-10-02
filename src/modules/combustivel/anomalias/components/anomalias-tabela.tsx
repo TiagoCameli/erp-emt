@@ -23,6 +23,7 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { atribuirEquipamento, conferirAnomalia, conferirAnomalias } from "@/modules/combustivel/anomalias/actions";
 import {
@@ -119,16 +120,23 @@ export function AnomaliasTabela({
   const [atribuindoUma, setAtribuindoUma] = React.useState<AnomaliaLista | null>(null);
   const [equipamentoUma, setEquipamentoUma] = React.useState("");
 
-  const visiveis = React.useMemo(() => {
+  // Período e modo já vieram do servidor. Severidade, detector e situação filtram
+  // aqui, facetados: cada um só oferece o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`).
+  const { linhas: visiveis, opcoes } = React.useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return anomalias.filter((a) => {
-      if (situacao === "conferidas" && a.conferencia === null) return false;
-      if (situacao === "pendentes" && a.conferencia !== null) return false;
-      if (severidade && a.severity !== severidade) return false;
-      if (detector && a.detector !== detector) return false;
-      if (q && !`${a.title} ${a.description}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
+    return filtrarFacetado(
+      anomalias,
+      {
+        situacao: {
+          selecionados: situacao === "todas" ? [] : [situacao],
+          casa: (a, valor) => (valor === "conferidas" ? a.conferencia !== null : a.conferencia === null),
+        },
+        severidade: { selecionados: selecao(severidade), chave: (a) => a.severity },
+        detector: { selecionados: selecao(detector), chave: (a) => a.detector },
+      },
+      [(a) => !q || `${a.title} ${a.description}`.toLowerCase().includes(q)],
+    );
   }, [anomalias, situacao, severidade, detector, busca]);
 
   // A seleção só guarda o que ainda está na lista (a anomalia some quando é resolvida).
@@ -459,7 +467,7 @@ export function AnomaliasTabela({
               <FiltroSelect
                 valor={severidade}
                 onValorChange={(valor) => setMuitos({ severidade: valor === "" ? null : valor })}
-                opcoes={OPCOES_SEVERIDADE}
+                opcoes={opcoes("severidade", OPCOES_SEVERIDADE)}
                 todosRotulo="Todas as severidades"
               />
             ),
@@ -473,7 +481,7 @@ export function AnomaliasTabela({
               <FiltroSelect
                 valor={detector}
                 onValorChange={(valor) => setMuitos({ detector: valor === "" ? null : valor })}
-                opcoes={OPCOES_DETECTOR}
+                opcoes={opcoes("detector", OPCOES_DETECTOR)}
                 todosRotulo="Todos os detectores"
               />
             ),
@@ -489,7 +497,7 @@ export function AnomaliasTabela({
                 valor={situacao === "todas" ? "" : situacao}
                 // "Todas" é o vazio do filtro; o padrão da tela (sem parâmetro) é "pendentes".
                 onValorChange={(valor) => setMuitos({ situacao: valor === "" ? "todas" : valor === "pendentes" ? null : valor })}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 todosRotulo="Todas"
               />
             ),

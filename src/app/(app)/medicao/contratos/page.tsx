@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ContratosTabela } from "@/modules/medicao/contratos/components/contratos-tabela";
 import { NovoContratoBotao } from "@/modules/medicao/contratos/components/novo-contrato-botao";
-import { listarContratos } from "@/modules/medicao/contratos/queries";
+import { facetasContratos, listarContratos } from "@/modules/medicao/contratos/queries";
 import { STATUS_CONTRATO, TIPOS_CONTRATANTE } from "@/modules/medicao/_shared/rotulos";
 
 const RECURSO = "medicao.contratos" as const;
@@ -33,11 +33,14 @@ export default async function PaginaContratos({
   const tipo = (TIPOS_CONTRATANTE as readonly string[]).includes(tipoParam) ? tipoParam : "";
   const lixeira = podeExcluir && primeiro(params.lixeira) === "1";
 
-  const contratos = await listarContratos({
-    status: status || undefined,
-    tipo: tipo || undefined,
-    lixeira,
-  });
+  const [contratos, facetas] = await Promise.all([
+    listarContratos({
+      status: status || undefined,
+      tipo: tipo || undefined,
+      lixeira,
+    }),
+    facetasContratos({ status: status ? [status] : [], tipos: tipo ? [tipo] : [], lixeira }),
+  ]);
 
   return (
     <>
@@ -55,6 +58,7 @@ export default async function PaginaContratos({
         podeCriar={podeCriar}
         podeExcluir={podeExcluir}
         podeRestaurar={podeRestaurar}
+        facetas={facetas}
       />
     </>
   );

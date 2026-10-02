@@ -23,6 +23,7 @@ import {
   resumirSaldos,
   valorEmEstoque,
 } from "@/modules/manutencao/almoxarifado/calculo";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { Opcao, SaldoLinha } from "@/modules/manutencao/almoxarifado/queries";
 
 type FiltroSituacao = "todos" | "com_saldo" | "zerados" | "abaixo";
@@ -82,16 +83,28 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
     });
   }, [linhas, busca, deposito]);
 
-  const filtradas = React.useMemo(
-    () =>
-      doRecorte.filter((linha) => {
-        if (situacao === "com_saldo") return linha.saldo > 0;
-        if (situacao === "zerados") return linha.saldo <= 0;
-        if (situacao === "abaixo") return linha.abaixo;
-        return true;
-      }),
-    [doRecorte, situacao],
-  );
+  // Facetado: depósito e situação só oferecem o que existe na lista filtrada
+  // pelos outros (ver `_shared/filtros-facetados`). Os cartões seguem em
+  // `doRecorte`, sem a situação.
+  const { linhas: filtradas, opcoes } = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return filtrarFacetado(
+      linhas,
+      {
+        deposito: { selecionados: selecao(deposito), chave: (linha) => linha.depositoId },
+        situacao: {
+          selecionados: situacao === "todos" ? [] : [situacao],
+          casa: (linha, valor) => {
+            if (valor === "com_saldo") return linha.saldo > 0;
+            if (valor === "zerados") return linha.saldo <= 0;
+            if (valor === "abaixo") return linha.abaixo;
+            return true;
+          },
+        },
+      },
+      [(linha) => !termo || linha.insumoNome.toLowerCase().includes(termo)],
+    );
+  }, [linhas, busca, deposito, situacao]);
 
   const resumo = React.useMemo(() => resumirSaldos(doRecorte), [doRecorte]);
 
@@ -215,7 +228,7 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
               <FiltroSelect
                 valor={deposito}
                 onValorChange={setDeposito}
-                opcoes={depositos.map((d) => ({ valor: d.id, rotulo: d.nome }))}
+                opcoes={opcoes("deposito", depositos.map((d) => ({ valor: d.id, rotulo: d.nome })))}
                 placeholder="Depósito"
                 todosRotulo="Todos os depósitos"
               />
@@ -232,7 +245,7 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
                 onValorChange={(valor) =>
                   setSituacao(valor === "" ? "todos" : (valor as FiltroSituacao))
                 }
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Saldo"
                 todosRotulo="Com e sem saldo"
               />

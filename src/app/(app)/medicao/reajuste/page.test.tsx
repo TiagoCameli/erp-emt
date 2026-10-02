@@ -25,6 +25,7 @@ vi.mock("@/modules/medicao/contratos/queries", () => ({
 }));
 vi.mock("@/modules/medicao/reajuste/queries", () => ({
   listarReajustes: (...args: unknown[]) => listarReajustes(...args),
+  facetasReajustes: vi.fn().mockResolvedValue({ contrato: [], situacao: [] }),
 }));
 vi.mock("@/modules/medicao/reajuste/components/reajustes-filtros", () => ({
   ReajustesFiltros: () => <div data-testid="filtros" />,

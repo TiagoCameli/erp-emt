@@ -55,7 +55,7 @@ export default async function PaginaFornecedoresCombustivel({
   const filtro = filtroGlobalDaUrl(await searchParams);
   // A base dá os nomes de tanque e combustível das opções da barra (é a mesma leitura cacheada das outras abas).
   const [entradas, base] = await Promise.all([carregarEntradasAnaliticas(), carregarBaseCombustivel()]);
-  const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro);
+  const opcoes = opcoesDoFiltroGlobal(base, entradas, filtro, "entradas");
 
   // Das chaves globais, só período, combustível, fornecedor e tanque valem para entradas (como na origem).
   const noPeriodo = aplicarFiltroGlobalEntradas(entradas, filtro);

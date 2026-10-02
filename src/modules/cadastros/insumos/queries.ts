@@ -1,6 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import {
   corGrupo,
   type CorGrupo,
@@ -79,6 +84,111 @@ export interface InsumosPagina {
   total: number;
 }
 
+/** Os filtros da listagem, sem a paginação. */
+export type FiltrosInsumos = Omit<ListarInsumosParams, "pagina" | "tamanho">;
+
+/** O pedaço do builder do PostgREST que os filtros dos insumos usam. */
+interface ConsultaFiltravelInsumos<T> {
+  eq: (coluna: string, valor: string | boolean) => T;
+  or: (filtro: string) => T;
+}
+
+/**
+ * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
+ * MESMO recorte. Síncrona: o builder é thenable (ver `aplicarFiltrosPagas`).
+ * O filtro de grupo cai no embed `categorias_insumo!inner`, então quem chama
+ * tem que trazê-lo no select.
+ */
+function aplicarFiltrosInsumos<T extends ConsultaFiltravelInsumos<T>>(
+  consultaInicial: T,
+  filtros: FiltrosInsumos,
+): T {
+  let consulta = consultaInicial;
+  if (filtros.ativo !== undefined) consulta = consulta.eq("ativo", filtros.ativo);
+  if (filtros.unidadeId) consulta = consulta.eq("unidade_id", filtros.unidadeId);
+  if (filtros.categoriaId) {
+    consulta = consulta.eq("categoria_id", filtros.categoriaId);
+  } else if (filtros.grupoId) {
+    // Filtro por grupo passa pela categoria (o insumo não guarda grupo).
+    consulta = consulta.eq("categorias_insumo.grupo_id", filtros.grupoId);
+  }
+
+  // Remove caracteres que quebram a sintaxe do filtro `or` do PostgREST.
+  const termo = (filtros.busca ?? "").trim().replace(/[,()"\\]/g, "");
+  if (termo) {
+    consulta = consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`);
+  }
+  return consulta;
+}
+
+/** Os filtros de seleção da barra, na chave que a tabela usa. */
+export type FacetaInsumos = "status" | "grupo" | "categoria" | "unidade";
+
+/** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
+const PARAMETRO_DA_FACETA: Record<FacetaInsumos, keyof FiltrosInsumos> = {
+  status: "ativo",
+  grupo: "grupoId",
+  categoria: "categoriaId",
+  unidade: "unidadeId",
+};
+
+interface LinhaFacetaInsumos {
+  ativo: boolean;
+  categoria_id: string;
+  unidade_id: string;
+  categorias_insumo: { grupo_id: string } | null;
+}
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A tabela é paginada no banco, então só o
+ * servidor sabe quais grupos, subcategorias e unidades sobram depois dos
+ * outros filtros. São ~3,6 mil insumos, só com as colunas das chaves.
+ *
+ * A subcategoria continua em cascata com o grupo: sem ela, a faceta da
+ * subcategoria já sai do recorte do grupo escolhido. E o grupo, com uma
+ * subcategoria escolhida, oferece o grupo dela (o filtro de grupo é ignorado
+ * quando há subcategoria, igual à lista).
+ */
+export async function facetasInsumos(
+  filtros: FiltrosInsumos,
+): Promise<FacetasPresentes<FacetaInsumos>> {
+  const supabase = await createClient();
+
+  return facetasNoServidor<LinhaFacetaInsumos, FacetaInsumos>(
+    {
+      status: {
+        ativo: filtros.ativo !== undefined,
+        chave: (insumo) => (insumo.ativo ? "ativos" : "inativos"),
+      },
+      grupo: {
+        ativo: !!filtros.grupoId,
+        chave: (insumo) => insumo.categorias_insumo?.grupo_id,
+      },
+      categoria: { ativo: !!filtros.categoriaId, chave: (insumo) => insumo.categoria_id },
+      unidade: { ativo: !!filtros.unidadeId, chave: (insumo) => insumo.unidade_id },
+    },
+    async (exceto) => {
+      const recorte =
+        exceto === null
+          ? filtros
+          : { ...filtros, [PARAMETRO_DA_FACETA[exceto]]: undefined };
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosInsumos(
+          supabase
+            .from("insumos")
+            .select("id, ativo, categoria_id, unidade_id, categorias_insumo!inner(grupo_id)"),
+          recorte,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro) throw new Error("Não foi possível carregar os filtros dos insumos");
+      return linhas;
+    },
+  );
+}
+
 /**
  * Lista os insumos com paginação server-side (count exato), categoria (nome)
  * e unidade (sigla) resolvidas. Aceita busca por nome ou código e filtro por
@@ -107,20 +217,7 @@ export async function listar(
     .order("id")
     .range(de, ate);
 
-  if (params.ativo !== undefined) consulta = consulta.eq("ativo", params.ativo);
-  if (params.unidadeId) consulta = consulta.eq("unidade_id", params.unidadeId);
-  if (params.categoriaId) {
-    consulta = consulta.eq("categoria_id", params.categoriaId);
-  } else if (params.grupoId) {
-    // Filtro por grupo passa pela categoria (o insumo não guarda grupo).
-    consulta = consulta.eq("categorias_insumo.grupo_id", params.grupoId);
-  }
-
-  // Remove caracteres que quebram a sintaxe do filtro `or` do PostgREST.
-  const termo = (params.busca ?? "").trim().replace(/[,()"\\]/g, "");
-  if (termo) {
-    consulta = consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`);
-  }
+  consulta = aplicarFiltrosInsumos(consulta, params);
 
   const { data, error, count } = await consulta;
 

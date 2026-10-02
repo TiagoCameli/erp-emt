@@ -27,6 +27,9 @@ vi.mock("@/modules/medicao/painel/queries", () => ({
     erro: null,
   }),
 }));
+vi.mock("@/modules/medicao/contratos/queries", () => ({
+  facetasContratos: vi.fn().mockResolvedValue({ status: [], tipo: [] }),
+}));
 vi.mock("@/modules/medicao/painel/components/painel-filtros", () => ({
   PainelFiltros: () => <div data-testid="filtros" />,
 }));

@@ -38,6 +38,7 @@ import { removerAdiantamento } from "@/modules/rh/adiantamentos/actions";
 import { dividirEmParcelas } from "@/modules/rh/adiantamentos/parcelamento";
 import type { AdiantamentoLista } from "@/modules/rh/adiantamentos/queries";
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
+import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type { ColaboradorOpcao } from "@/modules/rh/_shared/queries";
 import { AdiantamentoFormDrawer } from "./adiantamento-form-drawer";
@@ -164,22 +165,41 @@ export function AdiantamentosTabela({
     [adiantamentos],
   );
 
+  const opcoesColaborador = React.useMemo(
+    () =>
+      colaboradores.map((colaborador) => ({
+        valor: colaborador.id,
+        rotulo: colaborador.nome,
+      })),
+    [colaboradores],
+  );
+
   // Filtro em memória: a tela carrega todos os adiantamentos (sem paginação
-  // server-side), então o total exibido continua sendo o total real.
-  const dados = React.useMemo(() => {
+  // server-side), então o total exibido continua sendo o total real. Facetado:
+  // colaborador e situação só oferecem o que existe na lista filtrada pelos
+  // outros (ver `_shared/filtros-facetados`). A competência é filtro de data:
+  // restringe os outros, mas mantém a lista de meses inteira.
+  const { linhas: dados, opcoes } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    return adiantamentos.filter((item) => {
-      if (competencia && item.competencia !== competencia) return false;
-      if (colaboradorId && item.colaboradorId !== colaboradorId) return false;
-      if (situacao === "folha" && !item.naFolha) return false;
-      if (situacao === "aberto" && item.naFolha) return false;
-      if (!noPeriodo(item.data, dataDe, dataAte)) return false;
-      if (!naFaixa(item.valor, valorDe, valorAte)) return false;
-      if (termo && !item.colaboradorNome.toLowerCase().includes(termo)) {
-        return false;
-      }
-      return true;
-    });
+    return filtrarFacetado(
+      adiantamentos,
+      {
+        colaborador: {
+          selecionados: selecao(colaboradorId),
+          chave: (item) => item.colaboradorId,
+        },
+        situacao: {
+          selecionados: selecao(situacao),
+          chave: (item) => (item.naFolha ? "folha" : "aberto"),
+        },
+      },
+      [
+        (item) => !competencia || item.competencia === competencia,
+        (item) => noPeriodo(item.data, dataDe, dataAte),
+        (item) => naFaixa(item.valor, valorDe, valorAte),
+        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      ],
+    );
   }, [
     adiantamentos,
     busca,
@@ -394,10 +414,7 @@ export function AdiantamentosTabela({
               <FiltroSelect
                 valor={colaboradorId}
                 onValorChange={setColaboradorId}
-                opcoes={colaboradores.map((colaborador) => ({
-                  valor: colaborador.id,
-                  rotulo: colaborador.nome,
-                }))}
+                opcoes={opcoes("colaborador", opcoesColaborador)}
                 placeholder="Colaborador"
                 todosRotulo="Todos os colaboradores"
                 className="max-w-56"
@@ -414,7 +431,7 @@ export function AdiantamentosTabela({
               <FiltroSelect
                 valor={situacao}
                 onValorChange={setSituacao}
-                opcoes={OPCOES_SITUACAO}
+                opcoes={opcoes("situacao", OPCOES_SITUACAO)}
                 placeholder="Situação"
                 todosRotulo="Todas as situações"
               />

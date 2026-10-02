@@ -77,3 +77,37 @@ export function limitesDoPeriodo(filtros: FiltrosAjustes): { desde?: string; ant
     antes: filtros.ate ? proximoDia(filtros.ate) : undefined,
   };
 }
+
+/** O pedaço do builder do PostgREST que os filtros dos ajustes usam. */
+interface ConsultaFiltravelAjustes<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string) => T;
+  lt: (coluna: string, valor: string) => T;
+}
+
+/**
+ * Aplica os filtros da lista na consulta recebida. Serve a lista e as facetas
+ * (`facetasAjustes`), que precisam do MESMO recorte. Síncrona: o builder é
+ * "thenable" (ver `aplicarFiltrosPagas` em financeiro/pagamentos/filtros-pagas.ts).
+ */
+export function aplicarFiltrosAjustes<T extends ConsultaFiltravelAjustes<T>>(consultaInicial: T, filtros: FiltrosAjustes): T {
+  const { desde, antes } = limitesDoPeriodo(filtros);
+  let consulta = consultaInicial;
+  if (filtros.transportadoraId) consulta = consulta.eq("transportadora_id", filtros.transportadoraId);
+  if (filtros.status) consulta = consulta.eq("status", filtros.status);
+  if (filtros.sinal) consulta = consulta.eq("sinal", filtros.sinal);
+  if (desde) consulta = consulta.gte("data", desde);
+  if (antes) consulta = consulta.lt("data", antes);
+  return consulta;
+}
+
+/** Os filtros de seleção da lista de ajustes (o período restringe, mas não é facetado). */
+export type FacetaAjustes = "transportadora" | "status" | "sinal";
+
+/** O filtro que cada faceta solta quando calcula as próprias opções. */
+export function filtrosSemFaceta(filtros: FiltrosAjustes, faceta: FacetaAjustes | null): FiltrosAjustes {
+  if (faceta === "transportadora") return { ...filtros, transportadoraId: undefined };
+  if (faceta === "status") return { ...filtros, status: undefined };
+  if (faceta === "sinal") return { ...filtros, sinal: undefined };
+  return filtros;
+}

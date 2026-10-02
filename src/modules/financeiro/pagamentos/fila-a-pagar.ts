@@ -24,6 +24,11 @@ import { idSchema } from "@/lib/id";
 // cliente numa REFERÊNCIA. Chamar a referência aqui funciona na tela e estoura
 // na Server Action da planilha, que é este mesmo arquivo rodando no servidor.
 import { dentroDoPeriodo } from "@/modules/_shared/filtros-predicados";
+import {
+  filtrarFacetado,
+  selecao,
+  type ResultadoFacetado,
+} from "@/modules/_shared/filtros-facetados";
 import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
 import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
 import { ORIGENS_LANCAMENTO } from "@/modules/financeiro/lancamentos/schemas";
@@ -102,17 +107,15 @@ export const VALORES_FILTROS_A_PAGAR_VAZIOS: ValoresFiltrosAPagar = {
   compraAte: "",
 };
 
-/**
- * `null` quando o filtro está em branco, `Set` quando tem escolha.
- *
- * Duas coisas de propósito: o `null` distingue "todos" de "nenhum marcado" (com
- * lista vazia, `has` recusaria tudo e a fila apareceria zerada), e o `Set` faz a
- * busca ser O(1) — com `includes`, cada uma das ~900 parcelas varreria a lista
- * inteira a cada tecla digitada na busca.
- */
-function conjunto(itens: readonly string[]): ReadonlySet<string> | null {
-  return itens.length === 0 ? null : new Set(itens);
-}
+/** Os filtros de seleção da fila "A pagar", vistos pela faceta. */
+export type FacetaAPagar =
+  | "situacao"
+  | "fornecedor"
+  | "conta"
+  | "categoria"
+  | "centro"
+  | "forma"
+  | "origem";
 
 /**
  * As parcelas da fila que passam pelos filtros da aba "A pagar".
@@ -131,93 +134,101 @@ export function filtrarFilaAPagar(
   valores: ValoresFiltrosAPagar,
   subarvore: ReadonlySet<string> | null,
 ): ParcelaAprovada[] {
+  return facetarFilaAPagar(parcelas, valores, subarvore).linhas;
+}
+
+/**
+ * O mesmo filtro de `filtrarFilaAPagar`, devolvendo também as opções FACETADAS
+ * de cada seletor (ver `_shared/filtros-facetados`): cada um só oferece o que
+ * existe na fila filtrada pelos outros. Busca, valor, datas e mês entram livres.
+ *
+ * `subarvoreDe` abre a subárvore de UMA opção de centro (raiz ou etapa), para
+ * saber se ela ainda tem parcela; só a tela precisa, a planilha não pede opção.
+ */
+export function facetarFilaAPagar(
+  parcelas: readonly ParcelaAprovada[],
+  valores: ValoresFiltrosAPagar,
+  subarvore: ReadonlySet<string> | null,
+  subarvoreDe: (centroId: string) => ReadonlySet<string> = (id) => new Set([id]),
+): ResultadoFacetado<ParcelaAprovada, FacetaAPagar> {
   const termo = valores.busca.trim().toLowerCase();
   const valorDe = valores.valorDe === "" ? null : Number(valores.valorDe);
   const valorAte = valores.valorAte === "" ? null : Number(valores.valorAte);
+  const centrosEscolhidos = new Set(valores.centroIds);
 
-  const fornecedoresEscolhidos = conjunto(valores.fornecedorIds);
-  const contasEscolhidas = conjunto(valores.contaIds);
-  const situacoesEscolhidas = conjunto(valores.situacoes);
-  const categoriasEscolhidas = conjunto(valores.categoriaIds);
-  const formasEscolhidas = conjunto(valores.formaIds);
+  // O centro casa pela SUBÁRVORE, e contra TODOS os centros do rateio:
+  // escolher a manutenção acha a parcela pendurada num equipamento, e um custo
+  // dividido entre duas obras aparece filtrando por qualquer uma.
+  const tocaSubarvore = (parcela: ParcelaAprovada, dentro: ReadonlySet<string>) =>
+    (parcela.centroCustoIds ?? []).some((id) => dentro.has(id));
 
-  return parcelas.filter((parcela) => {
-    if (
-      termo !== "" &&
-      !`${parcela.lancamentoNumero ?? ""} ${parcela.descricao} ${parcela.fornecedorNome}`
-        .toLowerCase()
-        .includes(termo)
-    ) {
-      return false;
-    }
-    // Lista vazia é "todos": a checagem de conjunto só entra quando há escolha,
-    // senão nenhuma parcela passaria com o filtro em branco.
-    if (
-      fornecedoresEscolhidos !== null &&
-      !fornecedoresEscolhidos.has(parcela.fornecedorId ?? "")
-    ) {
-      return false;
-    }
-    if (
-      contasEscolhidas !== null &&
-      !contasEscolhidas.has(parcela.contaBancariaId ?? "")
-    ) {
-      return false;
-    }
-    if (
-      situacoesEscolhidas !== null &&
-      !situacoesEscolhidas.has(parcela.status ?? "aprovado")
-    ) {
-      return false;
-    }
-    if (valorDe !== null && parcela.valor < valorDe) return false;
-    if (valorAte !== null && parcela.valor > valorAte) return false;
-    if (!dentroDoPeriodo(parcela.dataVencimento, valores.vencDe, valores.vencAte)) {
-      return false;
-    }
-    if (!dentroDoPeriodo(parcela.dataProgramada, valores.progDe, valores.progAte)) {
-      return false;
-    }
-    if (
-      categoriasEscolhidas !== null &&
-      !categoriasEscolhidas.has(parcela.categoriaId ?? "")
-    ) {
-      return false;
-    }
-    // O centro casa pela SUBÁRVORE, e contra TODOS os centros do rateio:
-    // escolher a manutenção acha a parcela pendurada num equipamento, e um
-    // custo dividido entre duas obras aparece filtrando por qualquer uma.
-    if (
-      subarvore !== null &&
-      !(parcela.centroCustoIds ?? []).some((id) => subarvore.has(id))
-    ) {
-      return false;
-    }
-    if (
-      formasEscolhidas !== null &&
-      !formasEscolhidas.has(parcela.formaPagamentoId ?? "")
-    ) {
-      return false;
-    }
-    // O campo da tela é yyyy-MM e a coluna é o primeiro dia do mês.
-    if (
-      valores.mes !== "" &&
-      (parcela.mesCompetencia ?? "").slice(0, 7) !== valores.mes
-    ) {
-      return false;
-    }
-    if (valores.origem !== "" && parcela.origem !== valores.origem) return false;
-    if (
-      !dentroDoPeriodo(
-        parcela.dataCompra ?? null,
-        valores.compraDe,
-        valores.compraAte,
-      )
-    ) {
-      return false;
-    }
-    return true;
-  });
+  // Lista vazia é "todos" (a faceta só testa quando há escolha). As chaves
+  // trocam `null` por "" como antes: nenhuma opção tem valor vazio.
+  return filtrarFacetado<ParcelaAprovada, FacetaAPagar>(
+    parcelas,
+    {
+      situacao: {
+        selecionados: valores.situacoes,
+        chave: (parcela) => parcela.status ?? "aprovado",
+      },
+      fornecedor: {
+        selecionados: valores.fornecedorIds,
+        chave: (parcela) => parcela.fornecedorId ?? "",
+      },
+      conta: {
+        selecionados: valores.contaIds,
+        chave: (parcela) => parcela.contaBancariaId ?? "",
+      },
+      categoria: {
+        selecionados: valores.categoriaIds,
+        chave: (parcela) => parcela.categoriaId ?? "",
+      },
+      // Quem manda no filtro de centro é a `subarvore` já resolvida: sem ela
+      // não há filtro, com ela o teste é contra a união toda. "" só marca a
+      // faceta como ligada quando alguém passa subárvore sem `centroIds`.
+      centro: {
+        selecionados:
+          subarvore === null
+            ? []
+            : valores.centroIds.length > 0
+              ? valores.centroIds
+              : [""],
+        casa: (parcela, valor) =>
+          centrosEscolhidos.has(valor) || valor === ""
+            ? subarvore !== null && tocaSubarvore(parcela, subarvore)
+            : tocaSubarvore(parcela, subarvoreDe(valor)),
+      },
+      forma: {
+        selecionados: valores.formaIds,
+        chave: (parcela) => parcela.formaPagamentoId ?? "",
+      },
+      origem: {
+        selecionados: selecao(valores.origem),
+        chave: (parcela) => parcela.origem,
+      },
+    },
+    [
+      (parcela) =>
+        termo === "" ||
+        `${parcela.lancamentoNumero ?? ""} ${parcela.descricao} ${parcela.fornecedorNome}`
+          .toLowerCase()
+          .includes(termo),
+      (parcela) => {
+        if (valorDe !== null && parcela.valor < valorDe) return false;
+        if (valorAte !== null && parcela.valor > valorAte) return false;
+        return (
+          dentroDoPeriodo(parcela.dataVencimento, valores.vencDe, valores.vencAte) &&
+          dentroDoPeriodo(parcela.dataProgramada, valores.progDe, valores.progAte)
+        );
+      },
+      // O campo da tela é yyyy-MM e a coluna é o primeiro dia do mês.
+      (parcela) =>
+        valores.mes === "" ||
+        (parcela.mesCompetencia ?? "").slice(0, 7) === valores.mes,
+      (parcela) =>
+        dentroDoPeriodo(parcela.dataCompra ?? null, valores.compraDe, valores.compraAte),
+    ],
+  );
 }
 
 /** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */

@@ -8,6 +8,10 @@ import {
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import {
+  facetasNoServidor,
+  type FacetasPresentes,
+} from "@/modules/_shared/filtros-facetados";
 import { resolverNomesAuditLog } from "@/lib/trilha-nomes";
 import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import type { TipoFormaPagamento } from "@/modules/_shared/forma-pagamento";
@@ -405,6 +409,255 @@ async function ordensQuitadasSemNota(
   return quitadas;
 }
 
+/** Os filtros da listagem, sem a paginação. */
+type FiltrosOrdens = Omit<ListarOrdensParams, "pagina" | "tamanho">;
+
+/** O pedaço do builder do PostgREST que os filtros das ordens usam. */
+interface ConsultaFiltravelOrdens<T> {
+  eq: (coluna: string, valor: string) => T;
+  gte: (coluna: string, valor: string | number) => T;
+  lte: (coluna: string, valor: string | number) => T;
+  lt: (coluna: string, valor: string) => T;
+  contains: (coluna: string, valor: string[]) => T;
+  not: (coluna: string, operador: string, valor: null) => T;
+  is: (coluna: string, valor: null) => T;
+  or: (filtro: string) => T;
+}
+
+/**
+ * Aplica os filtros da listagem na consulta recebida. Serve a página e as
+ * facetas (`facetasOrdens`), que precisam do MESMO recorte: filtro montado de
+ * um jeito na lista e de outro nas opções ofereceria opção que devolve vazio.
+ *
+ * Síncrona, com os ids de fornecedor da busca já resolvidos: o builder é
+ * "thenable", e uma função async o dispararia no return (ver
+ * `aplicarFiltrosPagas`).
+ */
+function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
+  consultaInicial: T,
+  filtros: FiltrosOrdens,
+  idsFornecedoresBusca: string[],
+): T {
+  let consulta = consultaInicial;
+  if (filtros.status) consulta = consulta.eq("status", filtros.status);
+  if (filtros.fornecedorId) {
+    consulta = consulta.eq("fornecedor_id", filtros.fornecedorId);
+  }
+  if (filtros.de) consulta = consulta.gte("data_compra", filtros.de);
+  if (filtros.ate) consulta = consulta.lte("data_compra", filtros.ate);
+  // A JANELA de competência, e não o mês exato: desde 30/08/2026 o filtro da
+  // barra é intervalo, e o `mes` de um link antigo já chega aqui traduzido para
+  // uma janela de um mês só (ver `janelaDeCompetencia` em compras/_shared/lista).
+  if (filtros.competenciaDe) {
+    consulta = consulta.gte("mes_competencia", filtros.competenciaDe);
+  }
+  if (filtros.competenciaAte) {
+    consulta = consulta.lte("mes_competencia", filtros.competenciaAte);
+  }
+  if (filtros.categoriaId) {
+    // `contains` e não `eq`: o filtro casa a ordem que tem AQUELA categoria em
+    // algum item, e não só a que a tem como predominante. Filtrar por
+    // `categoria_id` escondia a compra de R$ 40 mil de peça que veio junto com
+    // R$ 60 mil de material — a ordem existe, o custo existe, e ela não
+    // aparecia no recorte de peças.
+    consulta = consulta.contains("categoria_ids", [filtros.categoriaId]);
+  }
+  if (filtros.formaPagamentoId) {
+    consulta = consulta.eq("forma_pagamento_id", filtros.formaPagamentoId);
+  }
+  if (filtros.condicaoPagamentoId) {
+    consulta = consulta.eq(
+      "condicao_pagamento_id",
+      filtros.condicaoPagamentoId,
+    );
+  }
+  if (filtros.valorDe !== undefined) {
+    consulta = consulta.gte("valor_total", filtros.valorDe);
+  }
+  if (filtros.valorAte !== undefined) {
+    consulta = consulta.lte("valor_total", filtros.valorAte);
+  }
+  // created_at é timestamptz: o dia do usuário começa às 05:00 UTC (Rio Branco),
+  // então a ponta final é `lt` da meia-noite do dia seguinte.
+  if (filtros.criadaDe) {
+    consulta = consulta.gte("created_at", inicioDoDiaISO(filtros.criadaDe));
+  }
+  if (filtros.criadaAte) {
+    consulta = consulta.lt("created_at", inicioDoDiaISO(filtros.criadaAte, 1));
+  }
+  // Centro de custo e insumo vivem no item, não na OC: o filtro cai no embed e o
+  // `oc_itens=not.is.null` é o que descarta a OC sem nenhum item batendo (mesmo
+  // efeito de um !inner, sem precisar mudar o select).
+  if (filtros.centroCustoId) {
+    consulta = consulta.eq("oc_itens.centro_custo_id", filtros.centroCustoId);
+  }
+  if (filtros.insumoId) {
+    consulta = consulta.eq("oc_itens.insumo_id", filtros.insumoId);
+  }
+  if (filtros.centroCustoId || filtros.insumoId) {
+    consulta = consulta.not("oc_itens", "is", null);
+  }
+  // recebimentos tem unique(ordem_compra_id): o embed é 1-para-1, então nulo
+  // significa exatamente "nota fiscal ainda não registrada".
+  if (filtros.nota === "com") {
+    consulta = consulta.not("recebimentos", "is", null);
+  }
+  if (filtros.nota === "sem") consulta = consulta.is("recebimentos", null);
+  if (filtros.origem === "cotacao") {
+    consulta = consulta.not("cotacao_id", "is", null);
+  }
+  if (filtros.origem === "direta") consulta = consulta.is("cotacao_id", null);
+  if (filtros.autoria === "minhas" && filtros.usuarioLogadoId) {
+    consulta = consulta.eq("created_by", filtros.usuarioLogadoId);
+  }
+
+  if (filtros.busca) {
+    // O número do documento entra na busca junto com o da OC: quem tem a nota
+    // na mão procura pelo número dela, não pelo número que o sistema deu.
+    const padrao = padraoBusca(filtros.busca);
+    const clausulas = [
+      `numero.ilike.${padrao}`,
+      `numero_documento.ilike.${padrao}`,
+    ];
+    if (idsFornecedoresBusca.length > 0) {
+      clausulas.push(`fornecedor_id.in.(${idsFornecedoresBusca.join(",")})`);
+    }
+    consulta = consulta.or(clausulas.join(","));
+  }
+  return consulta;
+}
+
+/** Os filtros de seleção da barra, na chave que a tabela usa. */
+export type FacetaOrdens =
+  | "status"
+  | "fornecedor"
+  | "categoria"
+  | "forma"
+  | "condicao"
+  | "nota"
+  | "origem"
+  | "centro"
+  | "insumo"
+  | "autoria";
+
+/** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
+const PARAMETRO_DA_FACETA: Record<FacetaOrdens, keyof FiltrosOrdens> = {
+  status: "status",
+  fornecedor: "fornecedorId",
+  categoria: "categoriaId",
+  forma: "formaPagamentoId",
+  condicao: "condicaoPagamentoId",
+  nota: "nota",
+  origem: "origem",
+  centro: "centroCustoId",
+  insumo: "insumoId",
+  autoria: "autoria",
+};
+
+/**
+ * O que existe na lista filtrada, por filtro de seleção (ver
+ * `_shared/filtros-facetados`). A tabela é paginada no banco, então só o
+ * servidor sabe quais fornecedores, categorias e status sobram depois dos
+ * filtros: a página traz 25 linhas.
+ *
+ * Traz só as colunas das chaves, sem paginação. São 188 OCs hoje; mesmo com
+ * dez vezes isso a consulta é leve.
+ */
+export async function facetasOrdens(
+  params: FiltrosOrdens,
+): Promise<FacetasPresentes<FacetaOrdens>> {
+  const supabase = await createClient();
+  const idsFornecedoresBusca = params.busca
+    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
+    : [];
+
+  return facetasNoServidor<LinhaFacetaOrdens, FacetaOrdens>(
+    {
+      status: { ativo: !!params.status, chave: (o) => o.status },
+      fornecedor: {
+        ativo: !!params.fornecedorId,
+        chave: (o) => o.fornecedor_id,
+      },
+      categoria: { ativo: !!params.categoriaId, chave: (o) => o.categoria_ids },
+      forma: {
+        ativo: !!params.formaPagamentoId,
+        chave: (o) => o.forma_pagamento_id,
+      },
+      condicao: {
+        ativo: !!params.condicaoPagamentoId,
+        chave: (o) => o.condicao_pagamento_id,
+      },
+      nota: {
+        ativo: !!params.nota,
+        chave: (o) => (temRecebimento(o.recebimentos) ? "com" : "sem"),
+      },
+      origem: {
+        ativo: !!params.origem,
+        chave: (o) => (o.cotacao_id ? "cotacao" : "direta"),
+      },
+      centro: {
+        ativo: !!params.centroCustoId,
+        chave: (o) => o.oc_itens.map((item) => item.centro_custo_id),
+      },
+      insumo: {
+        ativo: !!params.insumoId,
+        chave: (o) => o.oc_itens.map((item) => item.insumo_id),
+      },
+      autoria: {
+        ativo: !!params.autoria,
+        chave: (o) =>
+          params.usuarioLogadoId && o.created_by === params.usuarioLogadoId
+            ? "minhas"
+            : null,
+      },
+    },
+    async (exceto) => {
+      const filtros =
+        exceto === null
+          ? params
+          : { ...params, [PARAMETRO_DA_FACETA[exceto]]: undefined };
+      const { linhas, erro } = await todasAsLinhas((de, ate) =>
+        aplicarFiltrosOrdens(
+          supabase.from("ordens_compra").select(
+            `id, status, fornecedor_id, categoria_ids, forma_pagamento_id,
+               condicao_pagamento_id, cotacao_id, created_by,
+               recebimentos(id), oc_itens(centro_custo_id, insumo_id)`,
+          ),
+          filtros,
+          idsFornecedoresBusca,
+        )
+          .order("id")
+          .range(de, ate),
+      );
+      if (erro)
+        throw new Error(
+          "Não foi possível carregar os filtros das ordens de compra",
+        );
+      return linhas;
+    },
+  );
+}
+
+interface LinhaFacetaOrdens {
+  status: string;
+  fornecedor_id: string | null;
+  categoria_ids: string[] | null;
+  forma_pagamento_id: string | null;
+  condicao_pagamento_id: string | null;
+  cotacao_id: string | null;
+  created_by: string | null;
+  recebimentos: { id: string } | { id: string }[] | null;
+  oc_itens: { centro_custo_id: string | null; insumo_id: string | null }[];
+}
+
+/** O embed 1-para-1 chega como objeto ou lista, conforme a inferência. */
+function temRecebimento(
+  recebimentos: LinhaFacetaOrdens["recebimentos"],
+): boolean {
+  if (Array.isArray(recebimentos)) return recebimentos.length > 0;
+  return recebimentos !== null;
+}
+
 /**
  * Lista as ordens de compra com paginação server-side (range + count exact) e
  * o nome do fornecedor resolvido (join). Todos os filtros de
@@ -455,89 +708,10 @@ export async function listarOrdens(
     .order("id")
     .range(de, ate);
 
-  if (params.status) consulta = consulta.eq("status", params.status);
-  if (params.fornecedorId) {
-    consulta = consulta.eq("fornecedor_id", params.fornecedorId);
-  }
-  if (params.de) consulta = consulta.gte("data_compra", params.de);
-  if (params.ate) consulta = consulta.lte("data_compra", params.ate);
-  // A JANELA de competência, e não o mês exato: desde 30/08/2026 o filtro da
-  // barra é intervalo, e o `mes` de um link antigo já chega aqui traduzido para
-  // uma janela de um mês só (ver `janelaDeCompetencia` em compras/_shared/lista).
-  if (params.competenciaDe) {
-    consulta = consulta.gte("mes_competencia", params.competenciaDe);
-  }
-  if (params.competenciaAte) {
-    consulta = consulta.lte("mes_competencia", params.competenciaAte);
-  }
-  if (params.categoriaId) {
-    // `contains` e não `eq`: o filtro casa a ordem que tem AQUELA categoria em
-    // algum item, e não só a que a tem como predominante. Filtrar por
-    // `categoria_id` escondia a compra de R$ 40 mil de peça que veio junto com
-    // R$ 60 mil de material — a ordem existe, o custo existe, e ela não
-    // aparecia no recorte de peças.
-    consulta = consulta.contains("categoria_ids", [params.categoriaId]);
-  }
-  if (params.formaPagamentoId) {
-    consulta = consulta.eq("forma_pagamento_id", params.formaPagamentoId);
-  }
-  if (params.condicaoPagamentoId) {
-    consulta = consulta.eq("condicao_pagamento_id", params.condicaoPagamentoId);
-  }
-  if (params.valorDe !== undefined) {
-    consulta = consulta.gte("valor_total", params.valorDe);
-  }
-  if (params.valorAte !== undefined) {
-    consulta = consulta.lte("valor_total", params.valorAte);
-  }
-  // created_at é timestamptz: o dia do usuário começa às 05:00 UTC (Rio Branco),
-  // então a ponta final é `lt` da meia-noite do dia seguinte.
-  if (params.criadaDe) {
-    consulta = consulta.gte("created_at", inicioDoDiaISO(params.criadaDe));
-  }
-  if (params.criadaAte) {
-    consulta = consulta.lt("created_at", inicioDoDiaISO(params.criadaAte, 1));
-  }
-  // Centro de custo e insumo vivem no item, não na OC: o filtro cai no embed e o
-  // `oc_itens=not.is.null` é o que descarta a OC sem nenhum item batendo (mesmo
-  // efeito de um !inner, sem precisar mudar o select).
-  if (params.centroCustoId) {
-    consulta = consulta.eq("oc_itens.centro_custo_id", params.centroCustoId);
-  }
-  if (params.insumoId) {
-    consulta = consulta.eq("oc_itens.insumo_id", params.insumoId);
-  }
-  if (params.centroCustoId || params.insumoId) {
-    consulta = consulta.not("oc_itens", "is", null);
-  }
-  // recebimentos tem unique(ordem_compra_id): o embed é 1-para-1, então nulo
-  // significa exatamente "nota fiscal ainda não registrada".
-  if (params.nota === "com") {
-    consulta = consulta.not("recebimentos", "is", null);
-  }
-  if (params.nota === "sem") consulta = consulta.is("recebimentos", null);
-  if (params.origem === "cotacao") {
-    consulta = consulta.not("cotacao_id", "is", null);
-  }
-  if (params.origem === "direta") consulta = consulta.is("cotacao_id", null);
-  if (params.autoria === "minhas" && params.usuarioLogadoId) {
-    consulta = consulta.eq("created_by", params.usuarioLogadoId);
-  }
-
-  if (params.busca) {
-    const padrao = padraoBusca(params.busca);
-    const idsFornecedores = await idsFornecedoresPorNome(supabase, padrao);
-    // O número do documento entra na busca junto com o da OC: quem tem a nota
-    // na mão procura pelo número dela, não pelo número que o sistema deu.
-    const clausulas = [
-      `numero.ilike.${padrao}`,
-      `numero_documento.ilike.${padrao}`,
-    ];
-    if (idsFornecedores.length > 0) {
-      clausulas.push(`fornecedor_id.in.(${idsFornecedores.join(",")})`);
-    }
-    consulta = consulta.or(clausulas.join(","));
-  }
+  const idsFornecedoresBusca = params.busca
+    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
+    : [];
+  consulta = aplicarFiltrosOrdens(consulta, params, idsFornecedoresBusca);
 
   const { data, error, count } = await consulta;
 

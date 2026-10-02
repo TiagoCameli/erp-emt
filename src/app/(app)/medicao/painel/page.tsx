@@ -4,6 +4,7 @@ import { CircleAlert } from "lucide-react";
 import { EmptyState, GradeKpis, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { lerCatalogoDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+import { facetasContratos } from "@/modules/medicao/contratos/queries";
 import { percentualExibicao } from "@/modules/medicao/boletim/formato";
 import { PainelFiltros } from "@/modules/medicao/painel/components/painel-filtros";
 import { PainelTabela } from "@/modules/medicao/painel/components/painel-tabela";
@@ -26,13 +27,15 @@ export default async function PaginaPainel({
   const status = lerCatalogoDaUrl(params.status, STATUS_CONTRATO);
   const tipos = lerCatalogoDaUrl(params.tipo, TIPOS_CONTRATANTE);
 
-  const { painel, erro } = await carregarPainel({ status, tipos });
+  // As opções de cada filtro saem dos contratos que passam no outro: o mesmo recorte da RPC, numa
+  // consulta leve de `mc_contratos` em vez de montar o painel de novo (ver `facetasContratos`).
+  const [{ painel, erro }, facetas] = await Promise.all([carregarPainel({ status, tipos }), facetasContratos({ status, tipos })]);
 
   if (!painel) {
     return (
       <>
         <PageHeader modulo="Medição" titulo={TITULO} descricao={DESCRICAO} />
-        <PainelFiltros status={status} tipos={tipos} />
+        <PainelFiltros status={status} tipos={tipos} facetas={facetas} />
         <EmptyState icone={CircleAlert} titulo="Não foi possível montar o painel" descricao={erro ?? undefined} />
       </>
     );
@@ -44,7 +47,7 @@ export default async function PaginaPainel({
   return (
     <>
       <PageHeader modulo="Medição" titulo={TITULO} descricao={DESCRICAO} />
-      <PainelFiltros status={status} tipos={tipos} />
+      <PainelFiltros status={status} tipos={tipos} facetas={facetas} />
       <GradeKpis id="medicao.painel.resumo" titulo="Resumo" className="mb-4">
         <KPICard titulo="Previsto" valor={<MoneyText valor={t.previsto} />} />
         <KPICard titulo="Acumulado" valor={<MoneyText valor={t.acumulado} />} />

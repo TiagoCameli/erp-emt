@@ -47,7 +47,7 @@ export default async function PaginaObrasCombustivel({
 
   const hoje = dataHojeISO();
   const filtro = filtroGlobalDaUrl(await searchParams);
-  const [base, opcoes] = await Promise.all([carregarBaseCombustivel(), carregarOpcoesFiltroGlobal(filtro)]);
+  const [base, opcoes] = await Promise.all([carregarBaseCombustivel(), carregarOpcoesFiltroGlobal(filtro, "saidas")]);
 
   // O filtro global nas duas listas: o mesmo nas duas, senão o delta compara recortes diferentes.
   const noPeriodo = aplicarFiltroGlobal(base.saidas, filtro);

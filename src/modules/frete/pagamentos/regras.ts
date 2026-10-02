@@ -1,4 +1,5 @@
 import { CASAS_VALOR_OPERACIONAL } from "@/lib/casas-decimais";
+import { filtrarFacetado, selecao, type ResultadoFacetado } from "@/modules/_shared/filtros-facetados";
 import { somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
 import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
@@ -212,19 +213,37 @@ export const FILTROS_PAGAMENTOS_VAZIOS: FiltrosPagamentos = {
   pagoPor: "",
 };
 
-/** Igualdade em tudo, período inclusivo sobre a data; ordem data desc (a origem). */
+/** Os filtros de seleção da lista, pelo id do filtro na tabela. */
+export type FacetaPagamento = "transportadora" | "metodo" | "pagoPor";
+
+/**
+ * Igualdade em tudo, período inclusivo sobre a data; ordem data desc (a origem).
+ * Facetado (ver `_shared/filtros-facetados`): transportadora, método e pago por só
+ * oferecem o que existe nas linhas que passam nos outros. Mês (lista de meses) e
+ * período restringem, sem ter as opções cortadas.
+ */
+export function filtrarPagamentosFacetado<T extends PagamentoFiltravel>(
+  pagamentos: readonly T[],
+  filtros: FiltrosPagamentos,
+): ResultadoFacetado<T, FacetaPagamento> {
+  const resultado = filtrarFacetado<T, FacetaPagamento>(
+    pagamentos,
+    {
+      transportadora: { selecionados: selecao(filtros.transportadoraId), chave: (p) => p.transportadoraId },
+      metodo: { selecionados: selecao(filtros.metodo), chave: (p) => p.metodo },
+      pagoPor: { selecionados: selecao(filtros.pagoPor), chave: (p) => p.pagoPor },
+    },
+    [
+      (p) => !filtros.mes || p.mesReferencia.slice(0, 7) === filtros.mes,
+      (p) => !filtros.de || p.data >= filtros.de,
+      (p) => !filtros.ate || p.data <= filtros.ate,
+    ],
+  );
+  return { ...resultado, linhas: resultado.linhas.sort((a, b) => b.data.localeCompare(a.data)) };
+}
+
 export function filtrarPagamentos<T extends PagamentoFiltravel>(pagamentos: readonly T[], filtros: FiltrosPagamentos): T[] {
-  return pagamentos
-    .filter((p) => {
-      if (filtros.transportadoraId && p.transportadoraId !== filtros.transportadoraId) return false;
-      if (filtros.mes && p.mesReferencia.slice(0, 7) !== filtros.mes) return false;
-      if (filtros.metodo && p.metodo !== filtros.metodo) return false;
-      if (filtros.pagoPor && p.pagoPor !== filtros.pagoPor) return false;
-      if (filtros.de && p.data < filtros.de) return false;
-      if (filtros.ate && p.data > filtros.ate) return false;
-      return true;
-    })
-    .sort((a, b) => b.data.localeCompare(a.data));
+  return filtrarPagamentosFacetado(pagamentos, filtros).linhas;
 }
 
 /** Meses que aparecem nos pagamentos, do mais novo ao mais velho ("AAAA-MM"). */
