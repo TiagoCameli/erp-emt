@@ -8,6 +8,10 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  argsProgramacao,
+  programacaoPagamentoSchema,
+} from "@/modules/rh/_shared/programacao-pagamento";
+import {
   adicionarAoLoteSchema,
   definirVencimentoSchema,
   editarItemSchema,
@@ -145,17 +149,29 @@ export async function enviarParaAprovacao(loteId: string): Promise<ResultadoAcao
   return { ok: true };
 }
 
-export async function aprovarLote(loteId: string): Promise<ResultadoAcao> {
+/**
+ * Aprova o lote com a conta e a data escolhidas no modal (ver
+ * `programacao-pagamento.ts`).
+ */
+export async function aprovarLote(
+  loteId: string,
+  programacao: unknown,
+): Promise<ResultadoAcao> {
   if (!(await checarPermissao("aprovar"))) {
     return { erro: "Você não tem permissão para aprovar o 13º" };
   }
   if (!idSchema.safeParse(loteId).success) {
     return { erro: "Lote inválido" };
   }
+  const prog = programacaoPagamentoSchema.safeParse(programacao);
+  if (!prog.success) {
+    return { erro: "Escolha a conta bancária e uma data válida" };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_aprovar_decimo_terceiro", {
+  const { error } = await supabase.rpc("fn_aprovar_decimo_terceiro_com_pagamento", {
     p_lote: loteId,
+    ...argsProgramacao(prog.data),
   });
 
   if (error) {
