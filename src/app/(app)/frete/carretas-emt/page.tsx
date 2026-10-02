@@ -69,13 +69,24 @@ export default async function PaginaCarretasEmt({
   const rotaUrl = primeiro(params.rota);
   const rota = dados.fretes.some((f) => `${f.origemId}_${f.destinoId}` === rotaUrl) ? rotaUrl : "";
 
-  const painel = montarPainel(dados, { de, ate, placa, tipo, rota }, mesAtual);
+  // O mês clicado num gráfico: recorta KPIs, tabelas, rotas e comparativo. Os gráficos mês a
+  // mês continuam no período inteiro, com a coluna escolhida em destaque, para o clique desfazer.
+  const mesUrl = primeiro(params.mes);
+  const mes = /^\d{4}-(0[1-9]|1[0-2])$/.test(mesUrl) && mesUrl >= de && mesUrl <= ate ? mesUrl : "";
+
+  const periodo = montarPainel(dados, { de, ate, placa, tipo, rota }, mesAtual);
+  const painel = mes ? montarPainel(dados, { de: mes, ate: mes, placa, tipo, rota }, mesAtual) : periodo;
+  // O comparativo mostra todas as carretas, com a escolhida em destaque, para o clique trocar de carreta.
+  const comparativo = placa ? montarPainel(dados, { de: mes || de, ate: mes || ate, placa: "", tipo, rota }, mesAtual).desempenhos : painel.desempenhos;
 
   return (
     <>
       {cabecalho}
       <PainelCarretasEmt
         painel={painel}
+        mesesPeriodo={periodo.meses}
+        mesSelecionado={mes}
+        comparativo={comparativo}
         carretas={dados.carretas.map((k) => ({ placa: k.placa, nome: k.nome }))}
         de={`${de}-01`}
         ate={ultimoDia(ate)}

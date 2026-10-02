@@ -1,6 +1,8 @@
 "use client";
 
 import type * as React from "react";
+import { useRef } from "react";
+import type { MouseHandlerDataParam } from "recharts";
 import {
   Bar,
   BarChart,
@@ -111,10 +113,63 @@ function Dica({ titulo, linhas, rodape }: { titulo: string; linhas: { rotulo: st
   );
 }
 
+// ---------------------------------------------------------------------------
+// Filtro por clique: a coluna clicada recorta o resto da tela
+// ---------------------------------------------------------------------------
+
+/**
+ * O clique filtra a tela pela coluna (o mês, ou a carreta no comparativo). Clicar na coluna
+ * já escolhida desfaz (quem decide é o painel).
+ *
+ * Dois caminhos, porque nenhum cobre tudo sozinho:
+ * - o clique no GRÁFICO vale na faixa inteira da coluna (a mesma que o hover pinta de cinza),
+ *   não só na barra, que num mês fraco tem poucos pixels e no "Produção x gastos" são duas
+ *   pilhas com vão no meio. Ele lê o índice do tooltip, que o Recharts só atualiza no
+ *   mousemove, num quadro à parte: num clique sem hover antes (toque de tablet) chega vazio.
+ *   Vazio não faz nada; `Number(null)` seria 0 e filtrava o primeiro mês (medido no
+ *   Playwright: clicar em ago/26 filtrava jun/26).
+ * - o clique na BARRA entrega a linha dela no `payload`, sem depender do hover.
+ * O clique na barra sobe até o gráfico e o Recharts o repassa um quadro depois; a trava
+ * descarta esse repasse, senão o mesmo clique escolhia e desfazia.
+ */
+export interface SelecaoGrafico {
+  selecionado?: string;
+  onSelecionar?: (chave: string) => void;
+}
+
+/** Com seleção, as colunas que não são a escolhida ficam esmaecidas. */
+export const OPACIDADE_FORA = 0.35;
+
+/** Janela em que o clique do gráfico é o mesmo clique que a barra já tratou. */
+const MESMO_CLIQUE_MS = 400;
+
+function opacidade(chave: string, selecionado: string | undefined): number {
+  return !selecionado || chave === selecionado ? 1 : OPACIDADE_FORA;
+}
+
+function useCliqueColuna<T>(dados: T[], chave: (linha: T) => string, onSelecionar?: (chave: string) => void) {
+  const ultimoDaBarra = useRef(0);
+  if (!onSelecionar) return { barra: undefined, grafico: undefined };
+  return {
+    barra: (item: { payload?: T }) => {
+      if (!item?.payload) return;
+      ultimoDaBarra.current = Date.now();
+      onSelecionar(chave(item.payload));
+    },
+    grafico: (estado: MouseHandlerDataParam) => {
+      if (Date.now() - ultimoDaBarra.current < MESMO_CLIQUE_MS) return;
+      const bruto = estado.activeTooltipIndex ?? estado.activeIndex;
+      if (bruto === null || bruto === undefined || bruto === "") return;
+      const linha = dados[Number(bruto)];
+      if (linha) onSelecionar(chave(linha));
+    },
+  };
+}
+
 /** Ocupa a área que o CartaoGrafico dá (AreaGrafico), que cresce com o card. */
-function Moldura({ children }: { children: React.ReactElement }) {
+function Moldura({ children, clicavel = false }: { children: React.ReactElement; clicavel?: boolean }) {
   return (
-    <div className="h-full w-full">
+    <div className={clicavel ? "h-full w-full cursor-pointer" : "h-full w-full"}>
       <ResponsiveContainer width="100%" height="100%">
         {children}
       </ResponsiveContainer>
@@ -130,22 +185,26 @@ export function PorCarretaMensalGrafico({
   meses,
   series,
   medida,
+  selecionado,
+  onSelecionar,
 }: {
   meses: LinhaMensal[];
   series: SerieCarreta[];
   medida: "viagens" | "producao" | "custo";
-}) {
+} & SelecaoGrafico) {
   const porCarreta = (m: LinhaMensal) =>
     medida === "viagens" ? m.viagensPorCarreta : medida === "producao" ? m.producaoPorCarreta : m.custoPorCarreta;
   const dados = meses.map((m) => ({
+    mes: m.mes,
     rotulo: m.rotulo,
     total: medida === "viagens" ? m.viagens : medida === "producao" ? m.producao : m.custoOperacional,
     ...Object.fromEntries(series.map((s) => [s.chave, porCarreta(m)[s.chave] ?? 0])),
   }));
+  const clique = useCliqueColuna(dados, (d) => d.mes, onSelecionar);
   const formatar = medida === "viagens" ? (v: number) => `${v.toLocaleString("pt-BR")} ${v === 1 ? "viagem" : "viagens"}` : formatarBRL;
   return (
-    <Moldura>
-      <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+    <Moldura clicavel={!!onSelecionar}>
+      <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} onClick={clique.grafico}>
         <CartesianGrid stroke={GRADE} vertical={false} />
         <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={{ stroke: GRADE }} />
         <YAxis
@@ -185,7 +244,13 @@ export function PorCarretaMensalGrafico({
             maxBarSize={44}
             radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
             isAnimationActive={false}
-          />
+            onClick={clique.barra}
+           
+          >
+            {dados.map((d) => (
+              <Cell key={d.mes} fillOpacity={opacidade(d.mes, selecionado)} />
+            ))}
+          </Bar>
         ))}
       </BarChart>
     </Moldura>
@@ -196,17 +261,24 @@ export function PorCarretaMensalGrafico({
 // Produção x gastos, mês a mês
 // ---------------------------------------------------------------------------
 
-export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[]; series: SerieCarreta[] }) {
+export function ProducaoVsGastosGrafico({
+  meses,
+  series,
+  selecionado,
+  onSelecionar,
+}: { meses: LinhaMensal[]; series: SerieCarreta[] } & SelecaoGrafico) {
   const dados = meses.map((m) => ({
+    mes: m.mes,
     rotulo: m.rotulo,
     ...Object.fromEntries(series.flatMap((s) => [[`p_${s.chave}`, m.producaoPorCarreta[s.chave] ?? 0], [`c_${s.chave}`, m.custoPorCarreta[s.chave] ?? 0]])),
     financiamento: m.parcelas + m.investimento,
     resultado: m.resultadoFinal,
     linha: m,
   }));
+  const clique = useCliqueColuna(dados, (d) => d.mes, onSelecionar);
   return (
-    <Moldura>
-      <ComposedChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+    <Moldura clicavel={!!onSelecionar}>
+      <ComposedChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} onClick={clique.grafico}>
         <CartesianGrid stroke={GRADE} vertical={false} />
         <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={{ stroke: GRADE }} />
         <YAxis tick={EIXO} tickLine={false} axisLine={false} width={76} tickFormatter={eixoReais} />
@@ -249,7 +321,13 @@ export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[
             maxBarSize={28}
             radius={i === series.length - 1 ? [4, 4, 0, 0] : 0}
             isAnimationActive={false}
-          />
+            onClick={clique.barra}
+           
+          >
+            {dados.map((d) => (
+              <Cell key={d.mes} fillOpacity={opacidade(d.mes, selecionado)} />
+            ))}
+          </Bar>
         ))}
         {series.map((s) => (
           <Bar
@@ -262,7 +340,13 @@ export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[
             strokeWidth={1}
             maxBarSize={28}
             isAnimationActive={false}
-          />
+            onClick={clique.barra}
+           
+          >
+            {dados.map((d) => (
+              <Cell key={d.mes} fillOpacity={opacidade(d.mes, selecionado)} />
+            ))}
+          </Bar>
         ))}
         <Bar
           dataKey="financiamento"
@@ -274,7 +358,13 @@ export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[
           maxBarSize={28}
           radius={[4, 4, 0, 0]}
           isAnimationActive={false}
-        />
+          onClick={clique.barra}
+         
+        >
+          {dados.map((d) => (
+            <Cell key={d.mes} fillOpacity={opacidade(d.mes, selecionado)} />
+          ))}
+        </Bar>
         <Line
           dataKey="resultado"
           name="Resultado final"
@@ -294,15 +384,18 @@ export function ProducaoVsGastosGrafico({ meses, series }: { meses: LinhaMensal[
 // Resultado acumulado: quando a produção paga a carreta
 // ---------------------------------------------------------------------------
 
-export function ResultadoAcumuladoGrafico({ meses }: { meses: LinhaMensal[] }) {
-  const dados = meses.map((m) => ({ rotulo: m.rotulo, operacional: m.operacionalAcumulado, final: m.resultadoAcumulado }));
+export function ResultadoAcumuladoGrafico({ meses, selecionado, onSelecionar }: { meses: LinhaMensal[] } & SelecaoGrafico) {
+  const dados = meses.map((m) => ({ mes: m.mes, rotulo: m.rotulo, operacional: m.operacionalAcumulado, final: m.resultadoAcumulado }));
+  const rotuloEscolhido = dados.find((d) => d.mes === selecionado)?.rotulo;
+  const clique = useCliqueColuna(dados, (d) => d.mes, onSelecionar);
   return (
-    <Moldura>
-      <LineChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+    <Moldura clicavel={!!onSelecionar}>
+      <LineChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} onClick={clique.grafico}>
         <CartesianGrid stroke={GRADE} vertical={false} />
         <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={{ stroke: GRADE }} />
         <YAxis tick={EIXO} tickLine={false} axisLine={false} width={76} tickFormatter={eixoReais} />
         <ReferenceLine y={0} stroke="var(--muted-foreground)" strokeWidth={1} />
+        {rotuloEscolhido ? <ReferenceLine x={rotuloEscolhido} stroke="var(--foreground)" strokeWidth={1} strokeDasharray="3 3" /> : null}
         <Tooltip
           content={({ active, payload, label }) => {
             const p = payload?.[0]?.payload as { operacional: number; final: number } | undefined;
@@ -330,7 +423,12 @@ export function ResultadoAcumuladoGrafico({ meses }: { meses: LinhaMensal[] }) {
 // Comparativo por carreta
 // ---------------------------------------------------------------------------
 
-export function ComparativoCarretasGrafico({ desempenhos, series }: { desempenhos: Desempenho[]; series: SerieCarreta[] }) {
+export function ComparativoCarretasGrafico({
+  desempenhos,
+  series,
+  selecionado,
+  onSelecionar,
+}: { desempenhos: Desempenho[]; series: SerieCarreta[] } & SelecaoGrafico) {
   const corDe = new Map(series.map((s) => [s.chave, s.cor]));
   const dados = desempenhos.map((d) => ({
     rotulo: d.placa ?? d.nome,
@@ -338,12 +436,14 @@ export function ComparativoCarretasGrafico({ desempenhos, series }: { desempenho
     custo: d.custoOperacional,
     financiamento: d.parcelas + d.investimento,
     cor: corDe.get(d.chave) ?? "var(--muted-foreground)",
+    opacidade: opacidade(d.chave, selecionado),
     d,
   }));
+  const clique = useCliqueColuna(dados, (x) => x.d.chave, onSelecionar);
   const daLegenda = series.filter((s) => desempenhos.some((d) => d.chave === s.chave));
   return (
-    <Moldura>
-      <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+    <Moldura clicavel={!!onSelecionar}>
+      <BarChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} onClick={clique.grafico}>
         <CartesianGrid stroke={GRADE} vertical={false} />
         <XAxis dataKey="rotulo" tick={EIXO} tickLine={false} axisLine={{ stroke: GRADE }} interval={0} />
         <YAxis tick={EIXO} tickLine={false} axisLine={false} width={76} tickFormatter={eixoReais} />
@@ -366,17 +466,21 @@ export function ComparativoCarretasGrafico({ desempenhos, series }: { desempenho
           }}
         />
         <Legend verticalAlign="top" content={() => <LegendaProducaoCusto series={daLegenda} />} />
-        <Bar dataKey="producao" name="Produção" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+        <Bar dataKey="producao" name="Produção" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} onClick={clique.barra}>
           {dados.map((x) => (
-            <Cell key={x.rotulo} fill={x.cor} />
+            <Cell key={x.rotulo} fill={x.cor} fillOpacity={x.opacidade} />
           ))}
         </Bar>
-        <Bar dataKey="custo" name="Custo operacional" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+        <Bar dataKey="custo" name="Custo operacional" maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} onClick={clique.barra}>
           {dados.map((x) => (
-            <Cell key={x.rotulo} fill={tomClaro(x.cor)} />
+            <Cell key={x.rotulo} fill={tomClaro(x.cor)} fillOpacity={x.opacidade} />
           ))}
         </Bar>
-        <Bar dataKey="financiamento" name="Financiamento e aquisição" fill={COR_MEDIDA.financiamento} maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="financiamento" name="Financiamento e aquisição" fill={COR_MEDIDA.financiamento} maxBarSize={36} radius={[4, 4, 0, 0]} isAnimationActive={false} onClick={clique.barra}>
+          {dados.map((x) => (
+            <Cell key={x.rotulo} fillOpacity={x.opacidade} />
+          ))}
+        </Bar>
       </BarChart>
     </Moldura>
   );

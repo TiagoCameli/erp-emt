@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileSpreadsheet, TriangleAlert } from "lucide-react";
+import { FileSpreadsheet, TriangleAlert, X } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -30,6 +30,7 @@ import {
   ROTULO_GRUPO,
   rotuloMes,
   type Desempenho,
+  type LinhaMensal,
   type PainelCarretas,
 } from "@/modules/frete/carretas-emt/calculo";
 
@@ -359,9 +360,24 @@ export interface PainelCarretasProps {
   ate: string;
   /** frete.carretas-emt/editar: marcar alerta de rota como conferido. */
   podeConferirAlertas?: boolean;
+  /** Os meses do período inteiro, para os gráficos mês a mês; `painel` pode ser só o mês clicado. */
+  mesesPeriodo?: LinhaMensal[];
+  /** yyyy-MM clicado num gráfico; vazio = o período inteiro. */
+  mesSelecionado?: string;
+  /** Desempenho de todas as carretas no recorte, para o comparativo destacar a escolhida. */
+  comparativo?: Desempenho[];
 }
 
-export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlertas = false }: PainelCarretasProps) {
+export function PainelCarretasEmt({
+  painel,
+  carretas,
+  de,
+  ate,
+  podeConferirAlertas = false,
+  mesesPeriodo = painel.meses,
+  mesSelecionado = "",
+  comparativo = painel.desempenhos,
+}: PainelCarretasProps) {
   const { setMuitos } = useFiltrosUrl();
   const [exportando, setExportando] = React.useState(false);
   const t = painel.total;
@@ -383,9 +399,25 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
     return [...semOutras, { chave: CHAVE_FROTA, rotulo: "Frota (sem placa)", cor: COR_FROTA }, ...series.filter((s) => s.chave === CHAVE_OUTRAS)];
   }, [series, painel]);
 
+  // Clicar na coluna escolhida desfaz; clicar em outra troca.
+  const selecionarMes = (mes: string) => setMuitos({ mes: mes === mesSelecionado ? null : mes });
+  const selecionarCarreta = (chave: string) => {
+    if (chave === CHAVE_FROTA || chave === CHAVE_OUTRAS) return;
+    setMuitos({ placa: chave === painel.filtro.placa ? null : chave });
+  };
+
   const rotaEscolhida = painel.filtro.rota ? painel.rotas.find((r) => r.chave === painel.filtro.rota) : undefined;
 
-  const semDados = t.viagens === 0 && t.custoOperacional === 0 && t.parcelas === 0 && t.investimento === 0;
+  // O comparativo mostra todas as carretas mesmo com uma escolhida, então leva a cor de todas.
+  const seriesComparativo: SerieCarreta[] = React.useMemo(() => {
+    const lista = carretas.map((k, i) => ({ chave: k.placa, rotulo: k.placa, cor: corDaCarreta(i) }));
+    if (comparativo.some((d) => d.chave === CHAVE_FROTA)) lista.push({ chave: CHAVE_FROTA, rotulo: "Frota (sem placa)", cor: COR_FROTA });
+    return lista;
+  }, [carretas, comparativo]);
+
+  // Pelo período inteiro, não pelo mês clicado: um mês vazio não pode sumir com os gráficos,
+  // senão não sobra coluna para clicar de novo e desfazer.
+  const semDados = mesesPeriodo.every((m) => m.viagens === 0 && m.custoOperacional === 0 && m.parcelas === 0 && m.investimento === 0);
 
   async function exportar() {
     setExportando(true);
@@ -419,7 +451,7 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
                 de={de}
                 ate={ate}
                 rotulo="Mês do frete e do gasto"
-                onPeriodoChange={(novoDe, novoAte) => setMuitos({ de: novoDe || null, ate: novoAte || null })}
+                onPeriodoChange={(novoDe, novoAte) => setMuitos({ de: novoDe || null, ate: novoAte || null, mes: null })}
               />
             ),
           },
@@ -449,10 +481,27 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
           },
         ]}
         acoesDireita={
-          <Button type="button" variant="outline" size="sm" onClick={exportar} disabled={exportando}>
-            <FileSpreadsheet />
-            {exportando ? "Gerando planilha..." : "Exportar Excel"}
-          </Button>
+          <>
+            {/* O mês clicado num gráfico mora aqui, na linha que já existe: um aviso acima dos
+                gráficos empurrava a coluna para fora do mouse e o segundo clique não desfazia. */}
+            {mesSelecionado ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setMuitos({ mes: null })}
+                title="Mostrando só este mês. Clique aqui ou de novo na coluna para ver o período inteiro"
+                aria-label={`Mostrando só ${rotuloMes(mesSelecionado)}. Ver o período inteiro`}
+              >
+                Só {rotuloMes(mesSelecionado)}
+                <X aria-hidden />
+              </Button>
+            ) : null}
+            <Button type="button" variant="outline" size="sm" onClick={exportar} disabled={exportando}>
+              <FileSpreadsheet />
+              {exportando ? "Gerando planilha..." : "Exportar Excel"}
+            </Button>
+          </>
         }
       />
 
@@ -482,13 +531,15 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
         </p>
       ) : null}
 
-      {painel.placasNaoReconhecidas.length > 0 && !painel.filtro.placa ? (
+      {/* Aparece com ou sem carreta escolhida: some ao filtrar, a página subia e o segundo
+          clique no comparativo caía fora da coluna, sem desfazer. */}
+      {painel.placasNaoReconhecidas.length > 0 ? (
         <p className="flex items-start gap-2 rounded-md border border-status-pendente/40 bg-status-pendente/5 px-3 py-2 text-detalhe text-foreground">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-pendente" aria-hidden />
           <span>
             Fretes da EMT TRANSPORTES com placa que não é de nenhuma carreta:{" "}
-            <span className="font-mono">{painel.placasNaoReconhecidas.join(", ")}</span>. Eles entram no total como
-            &quot;Placa não reconhecida&quot;; corrija a placa em Fretes para irem para a carreta certa.
+            <span className="font-mono">{painel.placasNaoReconhecidas.join(", ")}</span>. Sem carreta escolhida, eles
+            entram no total como &quot;Placa não reconhecida&quot;; corrija a placa em Fretes para irem para a carreta certa.
           </span>
         </p>
       ) : null}
@@ -518,12 +569,12 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
         <GradeKpis id="frete.carretas-emt.graficos" titulo="Gráficos" vao="amplo">
           <ItemGrade titulo="Viagens por mês" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Viagens por mês" subtitulo="Fretes da EMT TRANSPORTES, por carreta" altura={288}>
-              <PorCarretaMensalGrafico meses={painel.meses} series={series} medida="viagens" />
+              <PorCarretaMensalGrafico meses={mesesPeriodo} series={series} medida="viagens" selecionado={mesSelecionado} onSelecionar={selecionarMes} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Produção mensal" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Produção mensal" subtitulo="Valor dos fretes, por carreta" altura={288}>
-              <PorCarretaMensalGrafico meses={painel.meses} series={series} medida="producao" />
+              <PorCarretaMensalGrafico meses={mesesPeriodo} series={series} medida="producao" selecionado={mesSelecionado} onSelecionar={selecionarMes} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Custo operacional mensal" larguraPadrao={12}>
@@ -533,7 +584,7 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
               subtitulo="Gastos do Financeiro sem aquisição, mais o diesel do tanque, por carreta"
               altura={288}
             >
-              <PorCarretaMensalGrafico meses={painel.meses} series={seriesCusto} medida="custo" />
+              <PorCarretaMensalGrafico meses={mesesPeriodo} series={seriesCusto} medida="custo" selecionado={mesSelecionado} onSelecionar={selecionarMes} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Produção x gastos" larguraPadrao={12}>
@@ -543,17 +594,22 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
               subtitulo="Produção e custo operacional de cada carreta, mais as parcelas de cada mês; a linha é o resultado final"
               altura={320}
             >
-              <ProducaoVsGastosGrafico meses={painel.meses} series={seriesCusto} />
+              <ProducaoVsGastosGrafico meses={mesesPeriodo} series={seriesCusto} selecionado={mesSelecionado} onSelecionar={selecionarMes} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Resultado acumulado" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Resultado acumulado" subtitulo="Quanto a produção já cobriu do que as carretas custaram" altura={288}>
-              <ResultadoAcumuladoGrafico meses={painel.meses} />
+              <ResultadoAcumuladoGrafico meses={mesesPeriodo} selecionado={mesSelecionado} onSelecionar={selecionarMes} />
             </CartaoGrafico>
           </ItemGrade>
           <ItemGrade titulo="Comparativo por carreta" larguraPadrao={6}>
             <CartaoGrafico className="min-w-0" titulo="Comparativo por carreta" subtitulo="Produção, custo e financiamento no período" altura={288}>
-              <ComparativoCarretasGrafico desempenhos={painel.desempenhos.filter((d) => d.chave !== CHAVE_OUTRAS)} series={seriesCusto} />
+              <ComparativoCarretasGrafico
+                desempenhos={comparativo.filter((d) => d.chave !== CHAVE_OUTRAS)}
+                series={seriesComparativo}
+                selecionado={painel.filtro.placa || undefined}
+                onSelecionar={selecionarCarreta}
+              />
             </CartaoGrafico>
           </ItemGrade>
         </GradeKpis>

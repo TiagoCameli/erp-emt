@@ -254,6 +254,16 @@
   color: inherit !important;
 }
 
+/*
+  Grafico clicavel (Recharts 3): a camada interna `<g tabindex="-1">` recebe o
+  foco no clique do mouse e o navegador desenhava contorno em volta das barras.
+  Nao e foco de teclado: o Tab para no `<svg>` do grafico (tabindex 0), que
+  continua com o anel. Medido em Carretas EMT, clicando numa coluna.
+*/
+.recharts-wrapper g[tabindex="-1"]:focus {
+  outline: none;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
