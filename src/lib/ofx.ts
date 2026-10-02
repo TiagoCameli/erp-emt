@@ -21,7 +21,26 @@ export interface TransacaoOfx {
 export interface ExtratoOfx {
   periodoInicio: string | null;
   periodoFim: string | null;
+  /** Número da conta que o banco escreveu no arquivo (ACCTID), cru. */
+  contaOfx: string | null;
   transacoes: TransacaoOfx[];
+}
+
+/**
+ * Confere se o arquivo é da conta escolhida, pelos dígitos do ACCTID contra o
+ * número cadastrado. Um termina no outro porque cada banco formata de um
+ * jeito: o BB manda "102124-9" para a conta "102.124-9", e há banco que põe
+ * agência ou operação na frente. Sem número de um dos lados, não dá para
+ * conferir e não recusa.
+ */
+export function contaDoArquivoConfere(
+  contaOfx: string | null,
+  numeroCadastrado: string | null,
+): boolean {
+  const doArquivo = (contaOfx ?? "").replace(/\D/g, "");
+  const doCadastro = (numeroCadastrado ?? "").replace(/\D/g, "");
+  if (doArquivo === "" || doCadastro === "") return true;
+  return doArquivo.endsWith(doCadastro) || doCadastro.endsWith(doArquivo);
 }
 
 /** Data ISO yyyy-MM-dd no formato que o Tiago lê: dd/MM/yyyy. */
@@ -70,6 +89,29 @@ export function conferirMesFechado(
   }
 
   return null;
+}
+
+/**
+ * Converte os bytes do arquivo em texto respeitando o charset que o OFX declara.
+ *
+ * O BB manda OFX 1.x com `CHARSET:1252` (Windows-1252). Lido como UTF-8, todo
+ * acento do histórico vira "�": "BB RENDE F�CIL", "TRANSFER�NCIA RECEBIDA" (foi
+ * assim que os extratos importados até 02/10/2026 ficaram gravados). Regra:
+ * cabeçalho dizendo 1252/ISO-8859-1 decodifica assim; sem declaração, tenta
+ * UTF-8 estrito e, se o arquivo não for UTF-8 válido, cai para Windows-1252.
+ */
+export function decodificarOfx(bytes: ArrayBuffer | Uint8Array): string {
+  const dados = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const cabecalho = new TextDecoder("latin1").decode(dados.subarray(0, 600));
+  const declarado =
+    /CHARSET:\s*(1252|ISO-?8859-?1|WINDOWS-?1252)/i.test(cabecalho) ||
+    /encoding=["']?(windows-1252|iso-8859-1)/i.test(cabecalho);
+  if (declarado) return new TextDecoder("windows-1252").decode(dados);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(dados);
+  } catch {
+    return new TextDecoder("windows-1252").decode(dados);
+  }
 }
 
 /** Extrai o conteúdo de uma tag OFX (SGML ou XML): valor até a próxima tag. */
@@ -153,6 +195,7 @@ export function parseOfx(conteudo: string): ExtratoOfx {
   return {
     periodoInicio: trocado ? fimBruto : inicioBruto,
     periodoFim: trocado ? inicioBruto : fimBruto,
+    contaOfx: campo(conteudo, "ACCTID"),
     transacoes,
   };
 }
