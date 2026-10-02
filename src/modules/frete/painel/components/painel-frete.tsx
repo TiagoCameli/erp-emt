@@ -55,6 +55,9 @@ import {
 import { CardsSaldo, corDoSaldoAPagar } from "@/modules/frete/painel/components/cards-saldo";
 import { EvolucaoGrafico, MaterialVsFreteGrafico } from "@/modules/frete/painel/components/graficos";
 import { RankingBarras } from "@/modules/frete/painel/components/ranking-barras";
+import { RotasCarretas } from "@/modules/frete/carretas-emt/components/rotas-carretas";
+import { chaveDaRota } from "@/modules/frete/carretas-emt/rotas";
+import { rotasDoPainel } from "@/modules/frete/painel/rotas";
 import {
   AbastecimentosTabela,
   CustoMaterialFreteTabela,
@@ -147,6 +150,21 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
       opcoes: opcoesLocais(fretesF, nomes),
     };
   }, [dados, filtros, cruzados, nomes]);
+
+  // As rotas seguem todos os filtros menos a própria rota (origem e destino), para a tabela
+  // continuar mostrando as outras e a escolhida ficar acesa no mapa.
+  const rotas = React.useMemo(
+    () => rotasDoPainel(cruzarFretes(calc.bases.fretes, { ...cruzados, origem: undefined, destino: undefined }), dados.mapa, de, ate),
+    [calc.bases.fretes, cruzados, dados.mapa, de, ate],
+  );
+  const rotaSelecionada = cruzados.origem && cruzados.destino ? chaveDaRota(cruzados.origem, cruzados.destino) : "";
+  const selecionarRota = React.useCallback(
+    (chave: string | null) => {
+      const rota = chave ? rotas.find((r) => r.chave === chave) : undefined;
+      setCruzados((atual) => ({ ...atual, origem: rota?.origem.id, destino: rota?.destino.id }));
+    },
+    [rotas],
+  );
 
   const topo = cardsTopo(dados, filtros, cruzados, janela);
   const passivo = React.useMemo(() => passivoEmt(dados.saldos), [dados.saldos]);
@@ -456,6 +474,23 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
           </SecaoDetalhe>
         </ItemGrade>
       </GradeKpis>
+
+      <section className="flex flex-col gap-2">
+        <div>
+          <h2 className="text-secao font-semibold">Rotas dos fretes</h2>
+          <p className="text-detalhe text-muted-foreground">
+            Produção de frete por rota, de todas as transportadoras, com o km pela estrada, o km lançado e o tempo médio de
+            viagem. Clicar numa rota filtra o painel por ela.
+          </p>
+        </div>
+        {rotas.length > 0 ? (
+          <RotasCarretas rotas={rotas} alertas={[]} rotaSelecionada={rotaSelecionada} onSelecionarRota={selecionarRota} podeConferir={false} />
+        ) : (
+          <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-detalhe text-muted-foreground">
+            Nenhum frete com origem e destino nos filtros escolhidos.
+          </p>
+        )}
+      </section>
 
       <div className="flex flex-col gap-4">
         <div>

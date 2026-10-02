@@ -70,7 +70,7 @@ function pedido(over: Partial<PedidoPainel>): PedidoPainel {
   return { id: "pd", data: "2026-03-01", fornecedorId: "britam", itens: [{ insumoId: "brita", quantidade: 100, valorUnitario: 120 }], ...over };
 }
 function dadosCom(over: Partial<DadosPainel>): DadosPainel {
-  return { fretes: [], pagamentos: [], abastecimentos: [], pedidos: [], saldos: [], nomes, transportadoras: ["tA", "tB"], cardsIds: [], ...over };
+  return { fretes: [], pagamentos: [], abastecimentos: [], pedidos: [], saldos: [], nomes, transportadoras: ["tA", "tB"], cardsIds: [], mapa: { localidades: [], tracados: [] }, ...over };
 }
 const semFiltro = { obraId: "", de: "", ate: "" };
 
