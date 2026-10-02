@@ -433,6 +433,7 @@ function TabelaFaltam({
 }) {
   const [busca, setBusca] = React.useState("");
   const [tipo, setTipo] = React.useState("");
+  const [noApp, setNoApp] = React.useState("");
   const [selecionados, setSelecionados] = React.useState<string[]>([]);
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
@@ -450,20 +451,30 @@ function TabelaFaltam({
     return mapa;
   }, [transacoes, candidatos]);
 
-  // Facetado (ver `_shared/filtros-facetados`): o tipo só oferece o que existe
-  // nas transações que a busca deixou.
+  // Facetado (ver `_shared/filtros-facetados`): tipo e "no app" só oferecem o
+  // que existe nas transações que a busca e o outro filtro deixaram.
+  //
+  // "Tem no app" = existe candidato compatível (o que a coluna "O app tem"
+  // mostra): resolve com Casar. "Não tem" = nada parecido no app: é Lançar,
+  // ou Transferência quando é aplicação automática.
   const { linhas: dados, opcoes: opcoesFacetadas } = React.useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       transacoes,
-      { tipo: { selecionados: selecao(tipo), chave: (t) => t.tipo } },
+      {
+        tipo: { selecionados: selecao(tipo), chave: (t) => t.tipo },
+        noApp: {
+          selecionados: selecao(noApp),
+          chave: (t) => (sugestoes.get(t.id) ? "tem" : "nao"),
+        },
+      },
       [
         (t) =>
           !termo ||
           `${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`.toLowerCase().includes(termo),
       ],
     );
-  }, [transacoes, busca, tipo]);
+  }, [transacoes, busca, tipo, noApp, sugestoes]);
 
   const validos = selecionados.filter((id) => transacoes.some((t) => t.id === id));
   const marcadas = transacoes.filter((t) => validos.includes(t.id));
@@ -568,6 +579,28 @@ function TabelaFaltam({
             zerarPagina();
           }}
           placeholder="Buscar no histórico ou valor"
+        />
+      ),
+    },
+    {
+      id: "no-app",
+      rotulo: "No app",
+      fixo: true,
+      temValor: noApp !== "",
+      onLimpar: () => setNoApp(""),
+      elemento: (
+        <FiltroSelect
+          valor={noApp}
+          onValorChange={(v) => {
+            setNoApp(v);
+            zerarPagina();
+          }}
+          opcoes={opcoesFacetadas("noApp", [
+            { valor: "tem", rotulo: "Tem no app" },
+            { valor: "nao", rotulo: "Não tem no app" },
+          ])}
+          placeholder="No app"
+          todosRotulo="Tem e não tem no app"
         />
       ),
     },
