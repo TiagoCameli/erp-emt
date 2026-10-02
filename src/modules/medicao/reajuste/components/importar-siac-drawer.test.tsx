@@ -74,6 +74,18 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 afterEach(limparEstadosTabelaParaTeste);
+afterEach(() => {
+  delete (window as { matchMedia?: unknown }).matchMedia;
+});
+
+/** O `useTelaCelular` lê `matchMedia`, que o jsdom não tem: aqui a tela é de celular. */
+function comoCelular() {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: (consulta: string) => ({ matches: true, media: consulta, addEventListener: () => {}, removeEventListener: () => {} }),
+  });
+}
 
 const texto = (el: Element | null | undefined) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
@@ -106,7 +118,7 @@ async function lerComPrevia(previa = PREVIA_COM_PENDENCIA) {
   const r = renderizar();
   fireEvent.click(screen.getByRole("button", { name: "Ler siac-4a.pdf" }));
   await waitFor(() => expect(lerPdfSiac).toHaveBeenCalledWith(MEDICAO, ARQUIVO));
-  await screen.findByText("Cimento asfáltico CAP 50/70");
+  await screen.findAllByText("60112");
   return r;
 }
 
@@ -206,6 +218,46 @@ describe("ImportarSiacDrawer", () => {
     await waitFor(() => expect(toastSucesso).toHaveBeenCalledWith("Reajuste gravado na 4ª medição"));
     expect(onGravado).toHaveBeenCalled();
     expect(onAbertoChange).toHaveBeenCalledWith(false);
+  });
+
+  it("prévia recusada: a linha volta ao selo da última prévia boa (não fica Escolhido)", async () => {
+    await lerComPrevia();
+    previaReajuste.mockResolvedValue({ erro: "4,0 60112: item casado que não é serviço deste contrato" });
+    fireEvent.click(within(linhaDa("60112")).getByRole("button", { name: "Tirar 04.03.02 da linha 4,0 60112" }));
+    expect(await screen.findByText("4,0 60112: item casado que não é serviço deste contrato")).toBeTruthy();
+    expect(texto(linhaDa("60112").querySelector('[data-coluna="origem"]'))).toBe("Salvo");
+  });
+
+  it("enquanto a prévia está no ar, Ler e o envio de PDF ficam desabilitados", async () => {
+    await lerComPrevia();
+    let responder: (v: unknown) => void = () => {};
+    previaReajuste.mockReturnValue(new Promise((r) => (responder = r)));
+    fireEvent.click(within(linhaDa("60112")).getByRole("button", { name: "Tirar 04.03.02 da linha 4,0 60112" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Ler siac-4a.pdf" })).toBeDisabled());
+    expect(screen.getByRole("button", { name: /Arraste o PDF do Resumo da Medição do SIAC/ })).toBeDisabled();
+    responder({ ok: true, previa: PREVIA_OK });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Ler siac-4a.pdf" })).not.toBeDisabled());
+  });
+
+  it("o botão de tirar item tem área de toque de 24px", async () => {
+    await lerComPrevia();
+    const botao = within(linhaDa("60112")).getByRole("button", { name: "Tirar 04.03.02 da linha 4,0 60112" });
+    expect(botao.className).toContain("size-6");
+  });
+
+  it("no celular, casamento, itens, destino e rateio ficam no card, sem abrir Mais campos", async () => {
+    comoCelular();
+    await lerComPrevia();
+    const card = Array.from(document.body.querySelectorAll("[data-cartao]")).find(
+      (el) => texto(el).includes("51269"),
+    );
+    expect(card).toBeTruthy();
+    const grade = texto(card!.querySelector("dl"));
+    expect(grade).toContain("Conferir");
+    expect(grade).toContain("02.07.05 · R$ 1,26");
+    expect(grade).toContain("Itens casados");
+    expect(grade).toContain("Destino");
+    expect(grade).not.toContain("Unid.");
   });
 
   it("erro do banco na leitura aparece como veio", async () => {

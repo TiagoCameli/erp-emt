@@ -84,6 +84,7 @@ export function HistoricoReajuste({ medicaoId, relatorios, vigente, anexos, pode
         accessorKey: "situacao",
         header: "Situação",
         size: 190,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const r = row.original;
           return (
@@ -106,7 +107,7 @@ export function HistoricoReajuste({ medicaoId, relatorios, vigente, anexos, pode
         id: "diferenca",
         header: "Diferença para o anterior",
         size: 190,
-        meta: { alinharDireita: true, atomico: true },
+        meta: { alinharDireita: true, atomico: true, celular: "destaque" },
         cell: ({ row }) => {
           if (row.original.id !== vigenteId || diferencaVigente === null) return null;
           const d = diferencaReajuste(diferencaVigente);
@@ -142,6 +143,7 @@ export function HistoricoReajuste({ medicaoId, relatorios, vigente, anexos, pode
         id: "exclusao",
         header: "Exclusão",
         size: 260,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const r = row.original;
           if (!r.excluidoEm) return null;
@@ -160,8 +162,9 @@ export function HistoricoReajuste({ medicaoId, relatorios, vigente, anexos, pode
     return [
       ...base,
       {
-        id: "acao",
-        header: () => <span className="sr-only">Excluir</span>,
+        // "acoes": o card do celular reconhece esta coluna como a das ações e põe no canto dele.
+        id: "acoes",
+        header: () => <span className="sr-only">Ações</span>,
         size: 110,
         meta: { alinharDireita: true, atomico: true },
         enableSorting: false,

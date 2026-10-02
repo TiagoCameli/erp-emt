@@ -34,7 +34,7 @@ const colunasLinhas: ColumnDef<LinhaReajuste, unknown>[] = [
     accessorKey: "grupo",
     header: "Grupo",
     size: 70,
-    meta: { fixa: true, atomico: true },
+    meta: { fixa: true, atomico: true, celular: "titulo" },
     cell: ({ row }) => (
       <span className="font-mono" title={row.original.grupoDescricao ?? undefined}>
         {row.original.grupo}
@@ -43,7 +43,7 @@ const colunasLinhas: ColumnDef<LinhaReajuste, unknown>[] = [
   },
   { accessorKey: "codigo", header: "Código SICRO", size: 100, meta: { atomico: true }, cell: ({ row }) => <span className="font-mono">{row.original.codigo}</span> },
   { accessorKey: "descricao", header: "Descrição", size: 280 },
-  { accessorKey: "unidade", header: "Unid.", size: 60, meta: { atomico: true } },
+  { accessorKey: "unidade", header: "Unid.", size: 60, meta: { atomico: true, celular: "oculta" } },
   {
     accessorKey: "valorPi",
     header: "Valor a PI (DNIT)",
@@ -62,14 +62,14 @@ const colunasLinhas: ColumnDef<LinhaReajuste, unknown>[] = [
     accessorKey: "reajuste",
     header: "Reajuste",
     size: 130,
-    meta: { alinharDireita: true, atomico: true },
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
     cell: ({ row }) => <MoneyText valor={row.original.reajuste} />,
   },
   {
     id: "rateio",
     header: "Itens rateados",
     size: 240,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "destaque" },
     cell: ({ row }) => {
       const rateio = row.original.rateio;
       if (rateio.length === 0) return <CelulaVazia />;

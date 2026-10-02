@@ -32,6 +32,9 @@ import { anexo, ARQUIVO_USADO, MEDICAO, REAJUSTE_K9 } from "@/modules/medicao/re
 
 afterEach(cleanup);
 afterEach(limparEstadosTabelaParaTeste);
+afterEach(() => {
+  delete (window as { matchMedia?: unknown }).matchMedia;
+});
 
 const texto = (el: Element | null | undefined) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
@@ -101,5 +104,18 @@ describe("HistoricoReajuste", () => {
 
     renderizar(false);
     expect(screen.queryByRole("button", { name: /Excluir relatório/ })).toBeNull();
+  });
+
+  it("no celular, o Excluir fica no canto do card (coluna acoes), não em Mais campos", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (consulta: string) => ({ matches: true, media: consulta, addEventListener: () => {}, removeEventListener: () => {} }),
+    });
+    renderizar(true);
+    expect(document.body.querySelector("[data-cartao]")).not.toBeNull();
+    const botao = screen.getByRole("button", { name: "Excluir relatório 1" });
+    expect(botao.closest("dl")).toBeNull();
+    expect(screen.queryByText("acao")).toBeNull();
   });
 });

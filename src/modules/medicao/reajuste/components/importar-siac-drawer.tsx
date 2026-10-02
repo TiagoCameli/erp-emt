@@ -79,6 +79,8 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
   const [erro, setErro] = React.useState<string | null>(null);
   const [ocupado, setOcupado] = React.useState<Ocupado>(null);
   const [confirmando, setConfirmando] = React.useState(false);
+  // Só a resposta do último pedido (leitura ou prévia) vale: uma resposta atrasada não apaga outra mais nova.
+  const pedido = React.useRef(0);
 
   const emRelatorio = React.useMemo(() => new Set(arquivosEmRelatorio), [arquivosEmRelatorio]);
   // Arquivos já vistos: o que aparecer depois de um envio é o PDF novo, lido na hora.
@@ -92,10 +94,12 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
   const codigoDoItem = React.useCallback((id: string) => candidatoPorId.get(id)?.codigo ?? "item", [candidatoPorId]);
 
   async function ler(id: string) {
+    const meu = ++pedido.current;
     setOcupado("lendo");
     setErro(null);
     try {
       const r = await lerPdfSiac(medicaoId, id);
+      if (meu !== pedido.current) return;
       if ("erro" in r) {
         setErro(r.erro);
         setLeitura(null);
@@ -108,7 +112,7 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
       setPrevia(r.previa);
       setEditadas(new Set());
     } finally {
-      setOcupado(null);
+      if (meu === pedido.current) setOcupado(null);
     }
   }
 
@@ -136,22 +140,27 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
   async function atualizar(chave: string, nova: Escolhas[string]) {
     if (!arquivoId) return;
     const anteriores = escolhas;
+    const editadasAntes = editadas;
     const novas = { ...escolhas, [chave]: nova };
     setEscolhas(novas);
     setEditadas((antes) => new Set(antes).add(chave));
+    const meu = ++pedido.current;
     setOcupado("previa");
     setErro(null);
     try {
       const r = await previaReajuste(medicaoId, arquivoId, novas);
+      if (meu !== pedido.current) return;
       if ("erro" in r) {
+        // A prévia na tela continua a última boa: escolhas e selos voltam para ela.
         setEscolhas(anteriores);
+        setEditadas(editadasAntes);
         setErro(r.erro);
         toast.error(r.erro);
         return;
       }
       setPrevia(r.previa);
     } finally {
-      setOcupado(null);
+      if (meu === pedido.current) setOcupado(null);
     }
   }
 
@@ -182,10 +191,10 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
 
   // As colunas leem o estado da prévia; recriadas a cada render (a tabela tem poucas dezenas de linhas).
   const colunas: ColumnDef<LinhaPrevia, unknown>[] = [
-    { accessorKey: "grupo", header: "Grupo", size: 70, meta: { fixa: true, atomico: true }, cell: ({ row }) => <span className="font-mono">{row.original.grupo}</span> },
+    { accessorKey: "grupo", header: "Grupo", size: 70, meta: { fixa: true, atomico: true, celular: "titulo" }, cell: ({ row }) => <span className="font-mono">{row.original.grupo}</span> },
     { accessorKey: "codigo", header: "Código SICRO", size: 100, meta: { atomico: true }, cell: ({ row }) => <span className="font-mono">{row.original.codigo}</span> },
     { accessorKey: "descricao", header: "Descrição", size: 260 },
-    { accessorKey: "unidade", header: "Unid.", size: 60, meta: { atomico: true } },
+    { accessorKey: "unidade", header: "Unid.", size: 60, meta: { atomico: true, celular: "oculta" } },
     {
       accessorKey: "valor_pi",
       header: "Valor a PI (DNIT)",
@@ -204,14 +213,14 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
       accessorKey: "reajuste",
       header: "Reajuste",
       size: 130,
-      meta: { alinharDireita: true, atomico: true },
+      meta: { alinharDireita: true, atomico: true, celular: "valor" },
       cell: ({ row }) => <MoneyText valor={row.original.reajuste} />,
     },
     {
       id: "origem",
       header: "Casamento",
       size: 120,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "destaque" },
       cell: ({ row }) => {
         const chave = chaveDe(row.original);
         const tipo = editadas.has(chave)
@@ -227,7 +236,7 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
       id: "itens",
       header: "Itens casados",
       size: 300,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "destaque" },
       cell: ({ row }) => {
         const l = row.original;
         const atual = escolhaDe(l);
@@ -242,7 +251,7 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
                     {codigoDoItem(id)}
                     <button
                       type="button"
-                      className="rounded-sm p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                      className="inline-flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground disabled:opacity-50"
                       aria-label={`Tirar ${codigoDoItem(id)} da linha ${rotuloLinha}`}
                       disabled={ocupado !== null}
                       onClick={() =>
@@ -279,7 +288,7 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
       id: "destino",
       header: "Destino",
       size: 220,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "destaque" },
       cell: ({ row }) => {
         const l = row.original;
         const atual = escolhaDe(l);
@@ -310,7 +319,7 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
       id: "rateio",
       header: "Rateio",
       size: 220,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "destaque" },
       cell: ({ row }) => {
         const rateio = row.original.rateio ?? [];
         if (rateio.length === 0) return <CelulaVazia />;
@@ -356,44 +365,47 @@ export function ImportarSiacDrawer({ aberto, onAbertoChange, medicaoId, numero, 
     >
       <div className="flex flex-col gap-6">
         <SecaoDetalhe titulo="1. PDF do relatório" card>
-          <Anexos
-            entidade={ENTIDADE}
-            entidadeId={medicaoId}
-            anexos={anexos}
-            podeEditar
-            filtro={(a) => !emRelatorio.has(a.arquivoId)}
-            aceitar="application/pdf"
-            validarNovos={(arquivos) => {
-              const aceitos = arquivos.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
-              const recusados = arquivos.filter((f) => !aceitos.includes(f)).map((f) => `${f.name}: só o PDF do relatório SIAC entra aqui`);
-              return { aceitos, recusados };
-            }}
-            onMudou={() => void aoMudarAnexos()}
-            convite="Arraste o PDF do Resumo da Medição do SIAC"
-            legenda="O PDF fica anexado à medição e é lido assim que termina de subir"
-            textoVazio="Nenhum PDF pendente nesta medição"
-          />
-          {pendentesParaLer.length > 0 ? (
-            <ul className="mt-3 flex flex-col gap-2">
-              {pendentesParaLer.map((p) => (
-                <li key={p.arquivoId} className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={p.arquivoId === arquivoId ? "default" : "outline"}
-                    aria-label={`Ler ${p.nome}`}
-                    disabled={ocupado !== null}
-                    onClick={() => void ler(p.arquivoId)}
-                  >
-                    {ocupado === "lendo" ? <LoaderCircle className="animate-spin" /> : <FileSearch />}
-                    Ler
-                  </Button>
-                  <span className="min-w-0 truncate text-detalhe">{p.nome}</span>
-                  <span className="text-legenda text-muted-foreground">anexado em {dataPtBr(p.criadoEm)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          {/* Enquanto a leitura ou a prévia está no ar, nada de PDF novo nem outra leitura. */}
+          <fieldset disabled={ocupado !== null} aria-busy={ocupado !== null} className="m-0 min-w-0 border-0 p-0">
+            <Anexos
+              entidade={ENTIDADE}
+              entidadeId={medicaoId}
+              anexos={anexos}
+              podeEditar
+              filtro={(a) => !emRelatorio.has(a.arquivoId)}
+              aceitar="application/pdf"
+              validarNovos={(arquivos) => {
+                const aceitos = arquivos.filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+                const recusados = arquivos.filter((f) => !aceitos.includes(f)).map((f) => `${f.name}: só o PDF do relatório SIAC entra aqui`);
+                return { aceitos, recusados };
+              }}
+              onMudou={() => void aoMudarAnexos()}
+              convite="Arraste o PDF do Resumo da Medição do SIAC"
+              legenda="O PDF fica anexado à medição e é lido assim que termina de subir"
+              textoVazio="Nenhum PDF pendente nesta medição"
+            />
+            {pendentesParaLer.length > 0 ? (
+              <ul className="mt-3 flex flex-col gap-2">
+                {pendentesParaLer.map((p) => (
+                  <li key={p.arquivoId} className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={p.arquivoId === arquivoId ? "default" : "outline"}
+                      aria-label={`Ler ${p.nome}`}
+                      disabled={ocupado !== null}
+                      onClick={() => void ler(p.arquivoId)}
+                    >
+                      {ocupado === "lendo" ? <LoaderCircle className="animate-spin" /> : <FileSearch />}
+                      Ler
+                    </Button>
+                    <span className="min-w-0 truncate text-detalhe">{p.nome}</span>
+                    <span className="text-legenda text-muted-foreground">anexado em {dataPtBr(p.criadoEm)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </fieldset>
           {erro ? (
             <p className="mt-3 text-detalhe text-status-rejeitado" role="alert">
               {erro}
