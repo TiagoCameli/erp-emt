@@ -421,7 +421,7 @@ export function LoteDetalhe({
                 ) : (
                   <Copy />
                 )}
-                Copiar pedido
+                Copiar mensagem de aprovação
               </Button>
               {podeEditar ? (
                 <Button

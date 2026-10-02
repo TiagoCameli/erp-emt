@@ -447,7 +447,7 @@ export function FolhaDetalheView({
           ) : (
             <Copy />
           )}
-          Copiar pedido
+          Copiar mensagem de aprovação
         </Button>
         {podeEditar ? (
           <Button type="button" variant="outline" onClick={aoVoltarParaRascunho}>

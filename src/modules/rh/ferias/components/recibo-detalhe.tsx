@@ -246,7 +246,7 @@ export function ReciboDetalhe({
                 ) : (
                   <Copy />
                 )}
-                Copiar pedido
+                Copiar mensagem de aprovação
               </Button>
               {podeEditar ? (
                 <Button
