@@ -36,6 +36,8 @@
 --      (5,01, sem diferença); de novo recusa; como dono update, delete e update de linha recusam.
 --   6d recusas na prévia (mensagens exatas). 6e usuário zero sem permissão e fora da lista.
 --   6i O012 manual 1.234,56 provisório na 1ª (mar/2026) enviada. 6j anexos. 6k configuração. 6n fora.
+--   6p (mc_fase6a2_reajuste_trava) faxina apaga o PDF do relatório excluído: arquivo_id nulo, resto igual;
+--      qualquer outra mudança continua recusada.
 --   6o grants. 6z controle: total da 4ª do L09 contra -40.021,27 = DIFERENTE (esperado).
 
 begin;
@@ -554,6 +556,41 @@ begin
         'prov', (select count(*) from public.anexo_vinculos where arquivo_id = v_arq_prov)),
       jsonb_build_object('def', 0, 'l09', 1, 'prov', 1)));
   exception when others then r := r || jsonb_build_object('6j_anexos', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 6p (mc_fase6a2_reajuste_trava). O PDF do definitivo excluído, já desvinculado no 6j3, é apagado pela
+  --    faxina (fn_apagar_arquivo_orfao, sem carência): a FK põe arquivo_id nulo no relatório 2, que continua
+  --    excluído e com o resto igual. Controles: no excluído, mudar outra coluna recusa ("já foi excluído");
+  --    no que vale, mudar outra coluna ou trocar o arquivo por outro recusa (imutável).
+  begin
+    select to_jsonb(r2) - 'arquivo_id' into v_res from public.mc_reajuste_relatorios r2 where r2.id = v_rel2;
+    v_txt := public.fn_apagar_arquivo_orfao(v_arq_def, -1)::text;
+    r := r || jsonb_build_object('6p1_faxina_apaga_pdf', public.fn_mc_prova_confere(jsonb_build_object(
+        'apagou', v_txt::boolean,
+        'arquivo', (select count(*) from public.arquivos where id = v_arq_def),
+        'rel2', (select jsonb_build_array(arquivo_id, excluido_em is not null, motivo_exclusao, arquivo_hash = md5('k9-def.pdf'))
+                   from public.mc_reajuste_relatorios where id = v_rel2),
+        'resto_igual', (select (to_jsonb(r2) - 'arquivo_id') = v_res from public.mc_reajuste_relatorios r2 where r2.id = v_rel2),
+        'vale', (select jsonb_build_array(relatorio_id = v_rel1, total) from public.mc_v_reajuste_medicao where medicao_id = v_m91)),
+      jsonb_build_object('apagou', true, 'arquivo', 0, 'rel2', jsonb_build_array(null, true, 'definitivo lançado errado', true),
+        'resto_igual', true, 'vale', jsonb_build_array(true, 5.01))));
+    begin update public.mc_reajuste_relatorios set observacao = 'outra' where id = v_rel2;
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6p2_excluido_outra_coluna', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: O relatório de reajuste 2 já foi excluído'::text)));
+    begin update public.mc_reajuste_relatorios set arquivo_hash = 'outro' where id = v_rel1;
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6p3_vale_outra_coluna', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: O relatório de reajuste é imutável. Para corrigir, importe de novo; para tirar, exclua com motivo'::text)));
+    begin update public.mc_reajuste_relatorios set arquivo_id = v_arq_outra where id = v_rel1;
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6p4_trocar_arquivo', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: O relatório de reajuste é imutável. Para corrigir, importe de novo; para tirar, exclua com motivo'::text)));
+    begin update public.mc_reajuste_relatorios set arquivo_id = null, observacao = 'junto' where id = v_rel1;
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6p5_nulo_com_outra_coluna', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: O relatório de reajuste é imutável. Para corrigir, importe de novo; para tirar, exclua com motivo'::text)));
+  exception when others then r := r || jsonb_build_object('6p_faxina', 'ERRO: ' || sqlerrm);
   end;
 
   -- 6k. Configuração: recusas e a do L09 lida de volta
