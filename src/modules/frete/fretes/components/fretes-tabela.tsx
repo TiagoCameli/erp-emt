@@ -84,7 +84,7 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
       accessorFn: (f) => `${f.origemNome} → ${f.destinoNome}`,
       header: "Origem → Destino",
       size: 260,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "titulo" },
       cell: ({ row }) => (
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-medium">{row.original.origemNome || "-"}</span>
@@ -126,6 +126,7 @@ export function colunasFretes(podeEditar: boolean): ColumnDef<FreteLinha, unknow
     },
     colunaDinheiro<FreteLinha>("valorTotal", "Valor frete", {
       size: 130,
+      meta: { celular: "valor" },
       cell: ({ row }) => <MoneyText valor={row.original.valorTotal} className="font-semibold" />,
     }),
     colunaDinheiro<FreteLinha>("valorMaterial", "Valor material", { size: 130, meta: { esconderAte: "md" } }),

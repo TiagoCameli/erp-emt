@@ -72,7 +72,7 @@ function colunasPedidos(
       accessorKey: "fornecedorNome",
       header: "Fornecedor",
       size: 420,
-      meta: { naoTruncar: true },
+      meta: { naoTruncar: true, celular: "titulo" },
       cell: ({ row }) => (
         <div className="flex flex-col gap-2 py-0.5">
           <span className="font-medium">{row.original.fornecedorNome}</span>
@@ -89,7 +89,7 @@ function colunasPedidos(
       meta: { alinharDireita: true, atomico: true },
       cell: ({ row }) => <span className="tabular-nums">{row.original.itens.length}</span>,
     },
-    colunaDinheiro<PedidoLinha>("valorTotal", "Valor total", { size: 150 }),
+    colunaDinheiro<PedidoLinha>("valorTotal", "Valor total", { size: 150, meta: { celular: "valor" } }),
   ];
 }
 

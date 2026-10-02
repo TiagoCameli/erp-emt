@@ -41,6 +41,7 @@ export const colunasPagamentos: ColumnDef<PagamentoLinha, unknown>[] = [
     accessorKey: "transportadoraNome",
     header: "Transportadora",
     size: 220,
+    meta: { celular: "titulo" },
     cell: ({ row }) => <span className="font-medium">{row.original.transportadoraNome}</span>,
   },
   {

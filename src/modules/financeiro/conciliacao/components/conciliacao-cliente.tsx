@@ -298,6 +298,7 @@ export function ConciliacaoCliente({
         // (o `max-w-md` que estava aqui não valia nada: a coluna tinha 150px).
         accessorKey: "memo",
         header: "Histórico",
+        meta: { celular: "titulo" },
         size: 380,
         cell: ({ row }) => row.original.memo ?? <CelulaVazia />,
       },

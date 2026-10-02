@@ -40,6 +40,7 @@ export const colunasAjustes: ColumnDef<AjusteLista, unknown>[] = [
     accessorKey: "transportadoraNome",
     header: "Transportadora",
     size: 220,
+    meta: { celular: "titulo" },
     cell: ({ row }) => row.original.transportadoraNome || <CelulaVazia />,
   },
   {

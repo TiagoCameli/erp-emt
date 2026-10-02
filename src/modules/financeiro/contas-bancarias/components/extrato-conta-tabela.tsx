@@ -267,7 +267,10 @@ export function ExtratoContaTabela({
         accessorKey: "contraparte",
         header: "Quem",
         size: 240,
-        meta: { rotulo: "Quem (fornecedor, cliente ou conta)" },
+        meta: {
+          rotulo: "Quem (fornecedor, cliente ou conta)",
+          celular: "titulo",
+        },
         cell: ({ row }) =>
           row.original.contraparte ?? <CelulaVazia />,
       },

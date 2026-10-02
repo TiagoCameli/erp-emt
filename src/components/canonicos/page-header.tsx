@@ -142,7 +142,12 @@ export function PageHeader({
         identidade
       )}
       {acoes ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-2">{acoes}</div>
+        // Celular: as ações viram uma faixa só, abaixo do título, que rola para
+        // o lado. Empilhadas, as cinco ou seis de uma OS ocupavam meia tela
+        // antes do conteúdo.
+        <div className="flex shrink-0 flex-wrap items-center gap-2 max-md:-mx-4 max-md:w-[calc(100%+2rem)] max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 max-md:pb-1 max-md:[&>*]:shrink-0">
+          {acoes}
+        </div>
       ) : null}
     </div>
   );

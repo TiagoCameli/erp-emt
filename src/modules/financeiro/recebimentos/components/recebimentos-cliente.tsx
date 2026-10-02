@@ -564,6 +564,7 @@ export function RecebimentosCliente({
         accessorKey: "lancamentoNumero",
         header: "Lançamento",
         size: 150,
+        meta: { celular: "oculta" },
         cell: ({ row }) =>
           rotuloParcela(
             row.original.lancamentoNumero,
@@ -593,6 +594,7 @@ export function RecebimentosCliente({
         accessorKey: "dataVencimento",
         header: "Vencimento",
         size: 120,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const data = row.original.dataVencimento;
           const vencida = data !== null && data < hoje;
@@ -620,6 +622,7 @@ export function RecebimentosCliente({
         accessorKey: "status",
         header: "Status",
         size: 120,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const info = STATUS_PARCELA[row.original.status];
           return <StatusBadge status={info.badge} rotulo={info.rotulo} />;

@@ -91,7 +91,7 @@ export function SemSuprimentoTabela({ linhas, revisao, podeEditar, veAbastecimen
         size: 180,
         cell: ({ row }) => <span className="font-medium">{row.original.tanqueNome}</span>,
       },
-      { accessorKey: "consumidor", header: "Consumidor", size: 240 },
+      { accessorKey: "consumidor", header: "Consumidor", size: 240, meta: { celular: "titulo" } },
       {
         accessorKey: "litrosSolicitados",
         header: "Solicitados",
@@ -110,7 +110,7 @@ export function SemSuprimentoTabela({ linhas, revisao, podeEditar, veAbastecimen
         accessorKey: "litrosSemSuprimento",
         header: "Faltaram",
         size: 120,
-        meta: { alinharDireita: true, atomico: true },
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
         cell: ({ row }) => <span className="font-medium">{litros(row.original.litrosSemSuprimento)}</span>,
       },
       {
@@ -130,6 +130,7 @@ export function SemSuprimentoTabela({ linhas, revisao, podeEditar, veAbastecimen
         id: "revisao",
         header: "Revisão",
         size: 150,
+        meta: { celular: "destaque" },
         cell: ({ row }) => {
           const r = row.original.revisao;
           if (!r) return <StatusBadge status="pendente_aprovacao" rotulo="Não revisada" />;

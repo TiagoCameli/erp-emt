@@ -249,6 +249,7 @@ export function InsumosTabela({
         accessorKey: "nome",
         header: "Nome",
         size: 420,
+        meta: { celular: "titulo" },
         cell: ({ row }) => (
           <span className="font-medium">{row.original.nome}</span>
         ),

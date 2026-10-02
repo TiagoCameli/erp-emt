@@ -93,7 +93,7 @@ const colunasAplicacao: ColumnDef<ResumoAplicacao, unknown>[] = [
     id: "posicao",
     header: "Posição líquida",
     size: 150,
-    meta: { alinharDireita: true },
+    meta: { alinharDireita: true, celular: "valor" },
     cell: ({ row }) => <MoneyText valor={row.original.posicaoLiquida} className="font-medium" />,
   },
   {
@@ -142,7 +142,7 @@ const colunasMes: ColumnDef<LinhaMes, unknown>[] = [
     meta: { alinharDireita: true, ocultaPorPadrao: false },
     cell: ({ row }) => <Dinheiro valor={row.original.ajusteAbertura} />,
   },
-  { id: "final", header: "Posição final", size: 150, meta: { alinharDireita: true }, cell: ({ row }) => <MoneyText valor={row.original.posicaoFinal} className="font-medium" /> },
+  { id: "final", header: "Posição final", size: 150, meta: { alinharDireita: true, celular: "valor" }, cell: ({ row }) => <MoneyText valor={row.original.posicaoFinal} className="font-medium" /> },
   { id: "pct", header: "% no mês", size: 90, meta: { alinharDireita: true }, cell: ({ row }) => <Pct valor={row.original.rendimentoPct} casas={4} /> },
   { id: "pctCdi", header: "% do CDI", size: 90, meta: { alinharDireita: true }, cell: ({ row }) => <Pct valor={row.original.pctCdi} /> },
 ];
@@ -151,7 +151,7 @@ function colunasMovimento(nomes: Map<string, string>): ColumnDef<MovimentoAplica
   return [
     { id: "data", header: "Data", size: 100, cell: ({ row }) => formatarData(row.original.data) },
     { id: "tipo", header: "Tipo", size: 150, cell: ({ row }) => ROTULO_TIPO_MOVIMENTO[row.original.tipo] },
-    { id: "aplicacao", header: "Aplicação", size: 220, cell: ({ row }) => nomes.get(row.original.aplicacaoId) ?? "" },
+    { id: "aplicacao", header: "Aplicação", size: 220, meta: { celular: "titulo" }, cell: ({ row }) => nomes.get(row.original.aplicacaoId) ?? "" },
     {
       id: "documento",
       header: "Documento",

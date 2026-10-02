@@ -57,7 +57,9 @@ export function FaixasInssTabela({
 
   const colunas = React.useMemo<ColumnDef<FaixaInssLista, unknown>[]>(() => {
     const base: ColumnDef<FaixaInssLista, unknown>[] = [
-      colunaDinheiro<FaixaInssLista>("limiteAte", "Limite até"),
+      colunaDinheiro<FaixaInssLista>("limiteAte", "Limite até", {
+        meta: { celular: "titulo" },
+      }),
       {
         accessorKey: "aliquota",
         header: "Alíquota",

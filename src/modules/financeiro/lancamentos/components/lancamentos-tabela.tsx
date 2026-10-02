@@ -172,6 +172,7 @@ export function montarColunas(
   {
     accessorKey: "tipo",
     header: "Tipo",
+    meta: { celular: "destaque" },
     cell: ({ row }) => (
       <StatusBadge
         status={
@@ -296,6 +297,7 @@ export function montarColunas(
   {
     accessorKey: "dataVencimento",
     header: "Vencimento",
+    meta: { celular: "destaque" },
     cell: ({ row }) => (
       <span className="tabular-nums">
         {row.original.dataVencimento
@@ -336,7 +338,7 @@ export function montarColunas(
     // esta é a listagem com mais coluna do app, e 70px por coluna gorda é o que
     // antecipa o scroll horizontal na tela que o financeiro usa todo dia.
     size: 160,
-    meta: { naoTruncar: true },
+    meta: { naoTruncar: true, celular: "destaque" },
     cell: ({ row }) => {
       // O selo fala de DÍVIDA, não da etapa: aprovado com saldo em aberto lê
       // "A pagar", com a aprovação num selo menor ao lado. A regra mora em
