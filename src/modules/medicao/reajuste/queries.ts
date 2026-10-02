@@ -325,12 +325,16 @@ export async function pdfDaMedicao(medicaoId: string, arquivoId: string): Promis
   return arquivo ? { path: arquivo.path_storage, nome: arquivo.nome_original } : null;
 }
 
-/** PDFs anexados à medição (`mc_reajuste`) que ainda não estão em relatório nenhum (nem excluído). */
+/**
+ * PDFs anexados à medição (`mc_reajuste`) que não estão em relatório que valha (não excluído). O
+ * PDF de um relatório excluído volta a ser pendente: o anexo faz dedup por conteúdo, então reenviar
+ * o mesmo PDF devolve o mesmo arquivo, e é assim que se refaz um rateio errado.
+ */
 export async function pdfsPendentes(medicaoId: string): Promise<PdfPendente[]> {
   const supabase = await createClient();
   const [vinculos, usadosRes] = await Promise.all([
     vinculosDaMedicao(supabase, medicaoId),
-    supabase.from("mc_reajuste_relatorios").select("arquivo_id").eq("medicao_id", medicaoId),
+    supabase.from("mc_reajuste_relatorios").select("arquivo_id").eq("medicao_id", medicaoId).is("excluido_em", null),
   ]);
   falhou(usadosRes.error);
   const usados = new Set(((usadosRes.data ?? []) as { arquivo_id: string | null }[]).map((r) => r.arquivo_id).filter((a) => a !== null));

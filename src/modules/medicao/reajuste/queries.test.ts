@@ -234,8 +234,21 @@ describe("pdfDaMedicao e pdfsPendentes", () => {
     await expect(pdfDaMedicao(MED, "a9")).resolves.toBeNull();
   });
 
-  it("pdfsPendentes tira os arquivos já usados em relatório (inclusive excluído)", async () => {
-    await expect(pdfsPendentes(MED)).resolves.toEqual([{ arquivoId: "a4", nome: "siac-4.pdf", criadoEm: "2026-02-13T10:00:00Z" }]);
+  it("pdfsPendentes tira só os arquivos de relatório NÃO excluído: o PDF de um relatório excluído volta a ser lido", async () => {
+    // O anexo faz dedup por conteúdo: reenviar o mesmo PDF devolve o mesmo arquivo_id, que está no
+    // relatório excluído (r3/a3). Ele tem de voltar como pendente para refazer o rateio.
+    const base = estado.responder;
+    estado.responder = (nome, filtros) => {
+      const r = base(nome, filtros);
+      if (nome !== "mc_reajuste_relatorios" || filtros["excluido_em:is"] !== null) return r;
+      return { ...r, data: (r.data as { excluido_em: string | null }[]).filter((l) => l.excluido_em === null) };
+    };
+    await expect(pdfsPendentes(MED)).resolves.toEqual([
+      { arquivoId: "a3", nome: "siac-3.pdf", criadoEm: "2026-02-12T10:00:00Z" },
+      { arquivoId: "a4", nome: "siac-4.pdf", criadoEm: "2026-02-13T10:00:00Z" },
+    ]);
+    const usados = estado.consultas.find((c) => c.tabela === "mc_reajuste_relatorios");
+    expect(usados?.filtros).toEqual({ medicao_id: MED, "excluido_em:is": null });
   });
 });
 

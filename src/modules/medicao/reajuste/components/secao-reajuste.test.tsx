@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 /**
  * Seção Reajuste do detalhe da medição: o relatório que vale (total, situação, origem, diferença do
@@ -37,23 +37,24 @@ vi.mock("@/modules/medicao/reajuste/actions", () => ({
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { SecaoReajuste } from "@/modules/medicao/reajuste/components/secao-reajuste";
 import { medicaoRecebeReajuste } from "@/modules/medicao/reajuste/formato";
-import { MEDICAO, REAJUSTE_K9, SEM_REAJUSTE } from "@/modules/medicao/reajuste/components/__fixtures__/tela";
-import type { ReajusteMedicao } from "@/modules/medicao/reajuste/tipos";
+import { ARQUIVO, ARQUIVO_USADO, MEDICAO, REAJUSTE_K9, SEM_REAJUSTE, anexo, relatorio } from "@/modules/medicao/reajuste/components/__fixtures__/tela";
+import type { PdfPendente, ReajusteMedicao } from "@/modules/medicao/reajuste/tipos";
+import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 
 afterEach(cleanup);
 afterEach(limparEstadosTabelaParaTeste);
 
 const texto = (el: Element | null | undefined) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
 
-function renderizar(reajuste: ReajusteMedicao, podeEditar: boolean, podeLancar: boolean) {
+function renderizar(reajuste: ReajusteMedicao, podeEditar: boolean, podeLancar: boolean, extra: { pendentes?: PdfPendente[]; anexos?: AnexoDoDocumento[] } = {}) {
   return render(
     <SecaoReajuste
       medicaoId={MEDICAO}
       numero={1}
       valorMedicao="400.00"
       reajuste={reajuste}
-      pendentes={[]}
-      anexos={[]}
+      pendentes={extra.pendentes ?? []}
+      anexos={extra.anexos ?? []}
       podeEditar={podeEditar}
       podeLancar={podeLancar}
     />,
@@ -130,5 +131,26 @@ describe("SecaoReajuste", () => {
     expect(screen.getByText("Manual")).toBeTruthy();
     expect(screen.getByText("Provisório")).toBeTruthy();
     expect(screen.getByText(/sem rateio por item/)).toBeTruthy();
+  });
+
+  it("relatório SIAC excluído libera o PDF: o mesmo arquivo aparece no Importar para ler de novo", () => {
+    // O anexo faz dedup por conteúdo: reenviar o PDF devolve o mesmo arquivo do relatório excluído.
+    const comExcluido: ReajusteMedicao = {
+      ...REAJUSTE_K9,
+      relatorios: [
+        ...REAJUSTE_K9.relatorios,
+        relatorio({ id: "r4", sequencia: 4, arquivoId: ARQUIVO, arquivoNome: "siac-errado.pdf", excluidoEm: "2026-10-02T16:00:00Z", excluidoPorNome: "Tiago", motivoExclusao: "Casamento errado" }),
+      ],
+    };
+    renderizar(comExcluido, true, true, {
+      pendentes: [{ arquivoId: ARQUIVO, nome: "siac-errado.pdf", criadoEm: "2026-10-02T12:00:00Z" }],
+      anexos: [anexo(ARQUIVO, "siac-errado.pdf"), anexo(ARQUIVO_USADO, "siac-def.pdf")],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Importar relatório SIAC" }));
+    const drawer = screen.getByRole("dialog");
+    expect(within(drawer).getByRole("button", { name: "Ler siac-errado.pdf" })).toBeTruthy();
+    // O PDF do relatório que vale (não excluído) continua fora do Anexos do importar.
+    expect(within(drawer).getAllByText("siac-errado.pdf").length).toBeGreaterThan(0);
+    expect(within(drawer).queryByText("siac-def.pdf")).toBeNull();
   });
 });

@@ -126,8 +126,10 @@ export function SecaoReajuste({ medicaoId, numero, valorMedicao, reajuste, pende
 
   const { vigente, relatorios, linhas, indices } = reajuste;
   const relatorioVigente = vigente ? relatorios.find((r) => r.id === vigente.relatorioId) ?? null : null;
+  // Só relatório que vale (não excluído) prende o PDF: o anexo faz dedup por conteúdo, então o mesmo
+  // PDF reenviado volta com o arquivo do relatório excluído, e tem de dar para ler de novo.
   const arquivosEmRelatorio = React.useMemo(
-    () => relatorios.map((r) => r.arquivoId).filter((a): a is string => a !== null),
+    () => relatorios.filter((r) => r.excluidoEm === null).map((r) => r.arquivoId).filter((a): a is string => a !== null),
     [relatorios],
   );
 
