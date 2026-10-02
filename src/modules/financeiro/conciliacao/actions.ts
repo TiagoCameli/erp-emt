@@ -518,3 +518,37 @@ export async function excluirLancamentoDaConciliacao(
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Desfaz vários casamentos de uma vez (o "Para conferir" de boletos cujo
+ * beneficiário no extrato não é o fornecedor do app, por exemplo). Cada um
+ * volta para "faltam no app"; o que falhar não derruba os outros.
+ */
+export async function desconciliarVarios(
+  transacaoIds: string[],
+): Promise<ResultadoLote> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para desconciliar transações" };
+  }
+  const ids = z.array(idSchema).min(1).max(1000).safeParse(transacaoIds);
+  if (!ids.success) return { erro: "Escolha ao menos um movimento" };
+
+  const supabase = await createClient();
+  const falhas: { id: string; erro: string }[] = [];
+  let feitos = 0;
+  for (const id of ids.data) {
+    const { error } = await supabase.rpc("fn_desconciliar_transacao", {
+      p_transacao_id: id,
+    });
+    if (error) {
+      falhas.push({ id, erro: mensagem(error, "Não foi possível desfazer") });
+    } else {
+      feitos += 1;
+    }
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true, feitos, falhas };
+}
