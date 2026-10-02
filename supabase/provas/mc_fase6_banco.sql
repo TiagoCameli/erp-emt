@@ -38,6 +38,8 @@
 --   6i O012 manual 1.234,56 provisório na 1ª (mar/2026) enviada. 6j anexos. 6k configuração. 6n fora.
 --   6p (mc_fase6a2_reajuste_trava) faxina apaga o PDF do relatório excluído: arquivo_id nulo, resto igual;
 --      qualquer outra mudança continua recusada.
+--   6q (mc_fase6a3_reajuste_pdf_unico) PDF de relatório que vale não entra de novo (importar e manual, com o nº
+--      do relatório); o PDF de relatório excluído volta a entrar (importar sequência 3, manual sequência 3).
 --   6o grants. 6z controle: total da 4ª do L09 contra -40.021,27 = DIFERENTE (esperado).
 
 begin;
@@ -425,6 +427,47 @@ begin
     r := r || jsonb_build_object('6c7_trava_excluido', public.fn_mc_prova_confere(to_jsonb(v_txt),
       to_jsonb('recusou: O relatório de reajuste 2 já foi excluído'::text)));
   exception when others then r := r || jsonb_build_object('6c_definitivo', 'ERRO: ' || sqlerrm);
+  end;
+
+  -- 6q (mc_fase6a3_reajuste_pdf_unico). Um PDF vale para um relatório só, enquanto ele não for excluído.
+  --    Aqui o 1 (provisório, k9-prov.pdf) vale e o 2 (definitivo, k9-def.pdf) está excluído.
+  --    q1 gravar de novo com o PDF do 1 recusa; q2 o manual com o mesmo PDF recusa; q3 o PDF do 2 (excluído)
+  --    volta a ser importado: grava a sequência 3 com k9-def.pdf; q4 o manual com o PDF do excluído também
+  --    entra. q3 e q4 rodam dentro de um bloco desfeito (raise), para não mexer nos casos seguintes.
+  begin
+    set local role authenticated;
+    begin perform public.fn_mc_reajuste_importar(v_m91, jsonb_set(v_p_prov, '{linhas,1,destino}', to_jsonb(v_i94)), true);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6q1_importar_pdf_em_uso', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: Este PDF já está no relatório nº 1 desta medição; exclua-o antes de importar de novo.'::text)));
+    begin perform public.fn_mc_reajuste_manual(v_m91, jsonb_build_object('total', '1.00', 'situacao', 'provisorio', 'arquivo_id', v_arq_prov));
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('6q2_manual_pdf_em_uso', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('recusou: Este PDF já está no relatório nº 1 desta medição; exclua-o antes de lançar de novo.'::text)));
+    begin
+      v_res := public.fn_mc_reajuste_importar(v_m91, v_p_def, true);
+      v_txt := (select jsonb_build_array(v_res -> 'sequencia', origem, situacao, total, arquivo_id = v_arq_def)::text
+                  from public.mc_reajuste_relatorios where id = (v_res ->> 'relatorio_id')::uuid);
+      raise exception 'desfaz q3';
+    exception when others then
+      if sqlerrm <> 'desfaz q3' then v_txt := 'recusou: ' || sqlerrm; end if;
+    end;
+    r := r || jsonb_build_object('6q3_reimportar_pdf_do_excluido', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('[3, "siac", "definitivo", 8.00, true]'::text)));
+    begin
+      v_res := to_jsonb(public.fn_mc_reajuste_manual(v_m91, jsonb_build_object('total', '2.00', 'situacao', 'definitivo', 'arquivo_id', v_arq_def)));
+      v_txt := (select jsonb_build_array(sequencia, origem, total, arquivo_id = v_arq_def)::text
+                  from public.mc_reajuste_relatorios where id = (v_res #>> '{}')::uuid);
+      raise exception 'desfaz q4';
+    exception when others then
+      if sqlerrm <> 'desfaz q4' then v_txt := 'recusou: ' || sqlerrm; end if;
+    end;
+    r := r || jsonb_build_object('6q4_manual_pdf_do_excluido', public.fn_mc_prova_confere(to_jsonb(v_txt),
+      to_jsonb('[3, "manual", 2.00, true]'::text)));
+    reset role;
+    r := r || jsonb_build_object('6q5_nada_ficou', public.fn_mc_prova_confere(
+      (select jsonb_build_array(count(*), max(sequencia)) from public.mc_reajuste_relatorios where medicao_id = v_m91), '[2, 2]'::jsonb));
+  exception when others then r := r || jsonb_build_object('6q_pdf_unico', 'ERRO: ' || sqlerrm);
   end;
 
   -- 6d. Recusas na prévia da 1ª (mensagens exatas)
