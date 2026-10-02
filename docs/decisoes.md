@@ -5001,3 +5001,20 @@ importa pela tela.
 - A tela Índices.
 - O demonstrativo de reajuste em xlsx.
 - A data-base da Obra 012, que nenhum documento traz.
+
+## 2026-10-02 - Conciliação bancária por conta, com casamento automático
+
+**Pedido do Tiago (02/10/2026)**, com o OFX e o PDF do BB 102.124-9 de 09/2026: conciliar uma conta por vez, o app casa sozinho e a pessoa pode trocar, o app mostra o que falta no app e o que está no app e não no banco, o que falta é lançado ali com centro de custo, mês de referência e etapa, e o que sobra no app muda de conta ou sai.
+
+**O extrato real decidiu o motor** (`conciliacao/casamento.ts`): 508 movimentos, 414 casam por valor exato em até 3 dias. 67 têm mais de uma parcela com o mesmo valor no mesmo dia, e o desempate é o nome do favorecido no histórico (o banco corta o nome, então a última palavra casa por prefixo). O automático só vincula parcela paga NESTA conta ou transferência. Trocar conta, dar baixa em parcela aberta ou ajustar centavo (dois boletos de setembro divergiam R$ 0,01) é sempre decisão de quem concilia, pela sugestão.
+
+**Decisões:**
+1. Tela em três visões escolhidas pelos cartões do topo (não há barra de abas na página): Faltam no app, No app fora do banco, Casados. O mês está conciliado quando as duas primeiras zeram.
+2. Leitura por `fn_conciliacao_painel` (security definer), não pelas tabelas: quem só tem a Conciliação não lê `lancamento_parcelas` pelo RLS, e abrir o RLS das parcelas daria a tela de pagamentos para quem só concilia.
+3. `fn_conciliacao_casar` é o casamento único: paga nesta conta vincula; paga em outra conta muda a conta; aberta dá baixa na data do extrato (pede a permissão de pagar/receber); diferença só com `p_ajustar`, vira juros (banco a mais) ou desconto (banco a menos). Tudo grava `parcela_eventos` tipo `alterou` com o motivo "Conciliacao do extrato: ...".
+4. Lançar o que falta (`fn_conciliacao_lancar`): nasce pago nesta conta e conciliado, sem fila de aprovação, porque o dinheiro já saiu. Exige `financeiro.lancamentos/criar` (ou recebimentos para entrada) e respeita competência fechada. Em lote, os mesmos dados valem para todos e cada um leva o histórico como descrição.
+5. BB Rende Fácil (aplica e resgata sozinho, o saldo do BB zera todo dia) é transferência para a subconta de investimentos, via `fn_conciliacao_lancar_transferencia`. Precisa de uma aplicação cadastrada em Investimentos.
+6. Fora do banco: `fn_conciliacao_trocar_conta` (motivo obrigatório) e `fn_conciliacao_excluir_lancamento` (só origem manual, motivo, cópia em `arquivo_morto.lancamentos_excluidos_conciliacao`). O que veio de OC, folha ou diária se corrige na origem.
+7. Importar recusa OFX de outra conta (ACCTID contra o número cadastrado) e já roda o casamento automático.
+8. **Travas (revisão, mesmo dia, `20261002200000_conciliacao_por_conta_travas.sql`):** baixa pela conciliação em parcela a pagar só se ela estiver aprovada (a conciliação não é atalho da fila de aprovação); mudar conta ou valor de parcela já paga pede também pagamentos/criar ou recebimentos/editar e respeita competência fechada; diferença ajustável de no máximo R$ 1,00; excluir só lançamento de uma parcela (com várias, apagaria as outras); o painel oferece parcela aberta ou de outra conta com até R$ 1,00 de diferença e filtra as parcelas cedo (130 ms no mês do BB).
+9. **Encoding do OFX:** o BB manda `CHARSET:1252` e o import lia como UTF-8, por isso 100 históricos do BB estão gravados com "�". `decodificarOfx` respeita o charset daqui para frente; os já gravados só se corrigem com o arquivo original (pelo FITID).

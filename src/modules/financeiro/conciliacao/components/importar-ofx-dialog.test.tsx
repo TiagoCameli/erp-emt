@@ -28,6 +28,9 @@ const contas: ContaBancariaOpcao[] = [
     banco: "bb",
     bancoRotulo: "Banco do Brasil",
     ativo: true,
+    numero: null,
+    tipo: "corrente",
+    contaPaiId: null,
   },
 ];
 
@@ -73,6 +76,7 @@ describe("ImportarOfxDialog", () => {
       ok: true,
       inseridas: 280,
       ignoradas: 0,
+      casadas: 0,
       aviso:
         "O arquivo vai de 30/12/2025 a 31/01/2026, que não é um mês fechado. Exporte do dia 1 ao último dia do mês.",
     });
@@ -86,7 +90,7 @@ describe("ImportarOfxDialog", () => {
   });
 
   it("não inventa aviso quando o mês está fechado", async () => {
-    await importar({ ok: true, inseridas: 4, ignoradas: 0, aviso: null });
+    await importar({ ok: true, inseridas: 4, ignoradas: 0, casadas: 0, aviso: null });
 
     expect(await screen.findByText("4 transações importadas")).toBeInTheDocument();
     expect(
