@@ -258,7 +258,9 @@ export function SecaoReajuste({ medicaoId, numero, valorMedicao, reajuste, pende
             onAbertoChange={setManualAberto}
             medicaoId={medicaoId}
             numero={numero}
+            anexos={anexos}
             pendentes={pendentes}
+            arquivosEmRelatorio={arquivosEmRelatorio}
             onLancado={atualizar}
           />
         </>
