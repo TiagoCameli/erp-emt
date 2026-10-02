@@ -49,6 +49,8 @@ async function extrair(bytes: Uint8Array): Promise<PedacoTexto[][]> {
     }
     return paginas;
   } finally {
-    await pdf.cleanup();
+    // destroy() solta o worker e a memória do documento (cleanup() só limpa caches). Neste pdf.js o
+    // destroy fica na tarefa de carga (o PDFDocumentProxy não tem mais o atalho).
+    await pdf.loadingTask.destroy();
   }
 }
