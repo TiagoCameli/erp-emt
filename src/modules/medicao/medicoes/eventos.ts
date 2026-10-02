@@ -8,7 +8,7 @@ export type { EventoMedicao } from "./tipos";
 /**
  * Eventos gravados em `mc_medicao_eventos`: `abrir` (Fase 4), `carga` (carga inicial de L09/L10) e
  * os do ciclo da Fase 5 (fechar, versao, reabrir, enviar, nova_revisao, aprovar, aprovar_revisao,
- * revisao_pos). Mesmo molde de `financeiro/pagamentos/eventos.ts`.
+ * revisao_pos) e os do reajuste da Fase 6 (reajuste, reajuste_excluido). Mesmo molde de `financeiro/pagamentos/eventos.ts`.
  */
 const EVENTOS: Record<string, { titulo: string; tipo: TipoEventoTrilha }> = {
   abrir: { titulo: "Medição aberta", tipo: "criacao" },
@@ -21,6 +21,8 @@ const EVENTOS: Record<string, { titulo: string; tipo: TipoEventoTrilha }> = {
   aprovar_revisao: { titulo: "Revisão pós-aprovação aprovada", tipo: "aprovacao" },
   revisao_pos: { titulo: "Revisão pós-aprovação aberta", tipo: "desaprovacao" },
   carga: { titulo: "Medição trazida na carga inicial", tipo: "criacao" },
+  reajuste: { titulo: "Reajuste registrado", tipo: "documento" },
+  reajuste_excluido: { titulo: "Relatório de reajuste excluído", tipo: "rejeicao" },
 };
 
 /**

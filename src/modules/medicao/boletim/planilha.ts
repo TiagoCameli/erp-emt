@@ -21,8 +21,12 @@ import type { Boletim, QtdsPorMedicao } from "@/modules/medicao/boletim/tipos";
 /** Item, Discriminação, Unid., Preço, Quantidade prevista e Valor previsto: antes das medições. */
 export const COLUNAS_FIXAS_BOLETIM = 6;
 
-/** Valor na Nª, Acumulado, % executada, Saldo e % a medir: depois das medições. */
-const COLUNAS_FINAIS = 5;
+/**
+ * Valor na Nª, Acumulado, % executada, Saldo, % a medir e, da Fase 6, Reajuste na Nª e Reajuste
+ * acumulado: depois das medições. As duas do reajuste ficam no fim para as colunas do layout do DNIT
+ * não mudarem de lugar (a conferência do Lote 09 acha cada coluna pelo título).
+ */
+const COLUNAS_FINAIS = 7;
 
 export const ABA_PLANILHA_BOLETIM = "Boletim";
 
@@ -82,13 +86,15 @@ function numerosDasMedicoes(ate: number | null): number[] {
   return ate === null ? [] : Array.from({ length: ate }, (_, i) => i + 1);
 }
 
-/** Uma linha da planilha: as 6 fixas, uma por medição e as 5 finais. */
+/** Uma linha da planilha: as 6 fixas, uma por medição e as 7 finais. */
 type CelulaBoletim = string | number | null;
+
+type Finais = [CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim];
 
 function linhaDeValores(
   fixas: [CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim],
   medicoes: CelulaBoletim[],
-  finais: [CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim, CelulaBoletim],
+  finais: Finais,
 ): CelulaBoletim[] {
   return [...fixas, ...medicoes, ...finais];
 }
@@ -123,6 +129,8 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
   const rotuloValorNaMedicao =
     boletim.ate === null ? "Valor (R$) Executado na Medição" : `Valor (R$) Executado na ${boletim.ate}ª Medição`;
 
+  const rotuloReajusteNaMedicao = boletim.ate === null ? "Reajuste na medição" : `Reajuste na ${boletim.ate}ª`;
+
   const linhaHeader = worksheet.getRow(linhaContexto + 1);
   linhaHeader.values = linhaDeValores(
     ["Item", "Discriminação", "Unid.", "Preço Unitário", "Quantidade Prevista Total", "Valor (R$) Previsto Total"],
@@ -133,13 +141,15 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
       "Porcentagem Executada (%)",
       "Saldo a Medir (R$)",
       "Porcentagem a Medir (%)",
+      rotuloReajusteNaMedicao,
+      "Reajuste acumulado",
     ],
   );
   estilizarCabecalhoColunas(linhaHeader);
   linhaHeader.alignment = { vertical: "middle", wrapText: true };
   linhaHeader.height = 32;
 
-  // Colunas por posição, a partir de uma conta só (6 fixas + N medições + 5 finais).
+  // Colunas por posição, a partir de uma conta só (6 fixas + N medições + 7 finais).
   const primeiraMedicao = COLUNAS_FIXAS_BOLETIM + 1;
   const primeiraFinal = COLUNAS_FIXAS_BOLETIM + medicoes.length + 1;
   const col = {
@@ -154,6 +164,8 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
     pctExecutado: primeiraFinal + 2,
     saldo: primeiraFinal + 3,
     pctAMedir: primeiraFinal + 4,
+    reajusteMedicao: primeiraFinal + 5,
+    reajusteAcumulado: primeiraFinal + 6,
   };
 
   const formatos = new Map<number, string>([
@@ -165,6 +177,8 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
     [col.pctExecutado, FORMATO_PERCENTUAL],
     [col.saldo, FORMATO_DINHEIRO],
     [col.pctAMedir, FORMATO_PERCENTUAL],
+    [col.reajusteMedicao, FORMATO_DINHEIRO],
+    [col.reajusteAcumulado, FORMATO_DINHEIRO],
   ]);
   for (let c = primeiraMedicao; c < primeiraFinal; c += 1) formatos.set(c, FORMATO_QUANTIDADE);
 
@@ -203,6 +217,8 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
           numeroDoBanco(l.pct_executado),
           numeroDoBanco(l.saldo),
           numeroDoBanco(l.pct_a_medir),
+          numeroDoBanco(l.reajuste_medicao),
+          numeroDoBanco(l.reajuste_acumulado),
         ],
       ),
     );
@@ -221,6 +237,8 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
         numeroDoBanco(total.pct_executado),
         numeroDoBanco(total.saldo),
         numeroDoBanco(total.pct_a_medir),
+        numeroDoBanco(total.reajuste_medicao),
+        numeroDoBanco(total.reajuste_acumulado),
       ],
     ),
   );
@@ -240,7 +258,15 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
         linhaDeValores(
           [item.codigo, item.descricao, item.unidade, null, null, null],
           medicoes.map((n) => qtdDaMedicao(item.qtds, n)),
-          [numeroDoBanco(item.valor_medicao), numeroDoBanco(item.acumulado), null, null, null],
+          [
+            numeroDoBanco(item.valor_medicao),
+            numeroDoBanco(item.acumulado),
+            null,
+            null,
+            null,
+            numeroDoBanco(item.reajuste_medicao),
+            numeroDoBanco(item.reajuste_acumulado),
+          ],
         ),
       );
     }
@@ -254,7 +280,7 @@ export async function montarPlanilhaBoletim(boletim: Boletim): Promise<ExcelJS.W
   worksheet.getColumn(col.preco).width = LARGURAS.quantidade;
   worksheet.getColumn(col.quantidade).width = LARGURAS.quantidade;
   for (let c = primeiraMedicao; c < primeiraFinal; c += 1) worksheet.getColumn(c).width = LARGURAS.medicao;
-  for (const c of [col.previsto, col.valorMedicao, col.acumulado, col.saldo]) {
+  for (const c of [col.previsto, col.valorMedicao, col.acumulado, col.saldo, col.reajusteMedicao, col.reajusteAcumulado]) {
     worksheet.getColumn(c).width = LARGURAS.dinheiro;
   }
   for (const c of [col.pctExecutado, col.pctAMedir]) worksheet.getColumn(c).width = LARGURAS.percentual;

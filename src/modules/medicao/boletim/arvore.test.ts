@@ -8,6 +8,7 @@ function linha(id: string, ordem: number, codigo: string, pai_id: string | null,
     id, ordem, codigo, pai_id, nivel: codigo.split(".").length, descricao: `Linha ${codigo}`, unidade: null,
     tipo: "servico", item_id: `item-${id}`, preco_unitario: null, quantidade_prevista: null, qtds: {},
     previsto: null, valor_medicao: null, acumulado: null, saldo: null, pct_executado: null, pct_a_medir: null,
+    reajuste_medicao: null, reajuste_acumulado: null,
     ...extra,
   };
 }

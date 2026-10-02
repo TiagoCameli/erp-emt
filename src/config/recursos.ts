@@ -618,6 +618,13 @@ export const RECURSOS = [
     acoes: ["ver", "criar", "editar", "aprovar", "desaprovar"],
   },
   {
+    id: "medicao.reajuste",
+    nome: "Reajuste",
+    modulo: "medicao",
+    rota: "/medicao/reajuste",
+    acoes: ["ver", "editar"],
+  },
+  {
     id: "medicao.boletim",
     nome: "Boletim",
     modulo: "medicao",

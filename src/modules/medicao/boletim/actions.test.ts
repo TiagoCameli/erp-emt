@@ -32,10 +32,10 @@ const BOLETIM: Boletim = {
   contrato: { id: ID, codigo: "L09", nome_obra: "BR-364 Lote 09", numero_contrato: "00615/2025", contratante_nome: "DNIT", regra_arredondamento: "item_por_medicao" },
   versao: { id: "v0", numero: 0, vigente_desde: "2025-10-01" },
   ate: 1,
-  medicoes: [{ id: "m1", numero: 1, periodo_inicio: "2025-10-26", periodo_fim: "2025-11-25", status: "aprovada", valor: "10.00" }],
+  medicoes: [{ id: "m1", numero: 1, periodo_inicio: "2025-10-26", periodo_fim: "2025-11-25", status: "aprovada", valor: "10.00", reajuste: null, reajuste_situacao: null }],
   linhas: [],
   fora_da_versao: [],
-  total: { previsto: "100.00", valor_medicao: "10.00", acumulado: "10.00", saldo: "90.00", pct_executado: "0.1", pct_a_medir: "0.9" },
+  total: { previsto: "100.00", valor_medicao: "10.00", acumulado: "10.00", saldo: "90.00", pct_executado: "0.1", pct_a_medir: "0.9", reajuste_medicao: "0", reajuste_acumulado: "0" },
 };
 
 beforeEach(() => {

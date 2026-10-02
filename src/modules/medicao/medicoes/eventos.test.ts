@@ -25,6 +25,8 @@ describe("eventoMedicaoParaTrilha", () => {
       ["aprovar_revisao", "Revisão pós-aprovação aprovada", "aprovacao"],
       ["revisao_pos", "Revisão pós-aprovação aberta", "desaprovacao"],
       ["carga", "Medição trazida na carga inicial", "criacao"],
+      ["reajuste", "Reajuste registrado", "documento"],
+      ["reajuste_excluido", "Relatório de reajuste excluído", "rejeicao"],
     ];
     for (const [evento, titulo, tipo] of casos) {
       const e = eventoMedicaoParaTrilha({ ...base, evento });
@@ -63,6 +65,18 @@ describe("eventoMedicaoParaTrilha", () => {
     });
     expect(e.descricao).toBe("REV02: DNIT pediu correção");
     expect(e.usuario).toBeUndefined();
+  });
+
+  it("reajuste: a descrição é o texto gravado pelo banco, sem mudança de status", () => {
+    const e = eventoMedicaoParaTrilha({
+      ...base,
+      evento: "reajuste",
+      deStatus: "aprovada",
+      paraStatus: "aprovada",
+      motivo: "Relatório SIAC 2, índices definitivos: R$ -40.021,28",
+    });
+    expect(e.titulo).toBe("Reajuste registrado");
+    expect(e.descricao).toBe("Relatório SIAC 2, índices definitivos: R$ -40.021,28");
   });
 
   it("evento desconhecido não quebra: título é o próprio código", () => {

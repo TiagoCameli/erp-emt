@@ -17,6 +17,8 @@ import { AditivosContrato, type AditivoLista } from "@/modules/medicao/contratos
 import { ContratoFormDrawer } from "@/modules/medicao/contratos/components/contrato-form-drawer";
 import { excluirContrato } from "@/modules/medicao/contratos/actions";
 import type { ContratoDetalhe as ContratoDetalheRow } from "@/modules/medicao/contratos/queries";
+import { ConfigReajuste } from "@/modules/medicao/reajuste/components/config-reajuste";
+import type { ConfigReajuste as DadosConfigReajuste } from "@/modules/medicao/reajuste/tipos";
 import {
   ROTULO_REGRA,
   ROTULO_STATUS_CONTRATO,
@@ -43,6 +45,11 @@ export interface ContratoDetalheProps {
   aditivos: AditivoLista[];
   anexos: AnexoDoDocumento[];
   trilha: EventoTrilha[];
+  /**
+   * Seção Reajuste (Fase 6): só vem para quem tem `medicao.reajuste/ver`, lido no servidor;
+   * `podeEditar` é `medicao.reajuste/editar`. Nulo (ou ausente) = a seção não aparece.
+   */
+  reajuste?: { config: DadosConfigReajuste; podeEditar: boolean } | null;
 }
 
 /**
@@ -60,6 +67,7 @@ export function ContratoDetalhe({
   aditivos,
   anexos,
   trilha,
+  reajuste = null,
 }: ContratoDetalheProps) {
   const router = useRouter();
   const [editando, setEditando] = React.useState(false);
@@ -182,6 +190,10 @@ export function ContratoDetalhe({
             <p className="mt-2 whitespace-pre-wrap text-detalhe text-muted-foreground">{contrato.observacoes}</p>
           ) : null}
         </SecaoDetalhe>
+
+        {reajuste ? (
+          <ConfigReajuste contratoId={contrato.id} config={reajuste.config} podeEditar={reajuste.podeEditar && !naLixeira} />
+        ) : null}
 
         <AcessoContrato contratoId={contrato.id} usuarios={usuarios} usuariosAtivos={usuariosAtivos} podeEditar={podeEditarAgora} />
 

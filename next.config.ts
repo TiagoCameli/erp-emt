@@ -29,8 +29,11 @@ const nextConfig: NextConfig = {
    * Isto anda junto com o import DINÂMICO em `rh/folha/actions.ts`: o externo
    * conserta o carregamento, e o dinâmico garante que, se ele voltar a
    * estourar, leve só o botão de PDF — não a aprovação da folha.
+   *
+   * unpdf (leitor do relatório SIAC, Fase 6) também: o pdf.js dele carrega o
+   * worker por import dinâmico e não deve ser empacotado.
    */
-  serverExternalPackages: ["pdfmake"],
+  serverExternalPackages: ["pdfmake", "unpdf"],
 
   experimental: {
     serverActions: {

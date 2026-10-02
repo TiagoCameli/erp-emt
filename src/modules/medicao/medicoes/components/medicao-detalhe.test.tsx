@@ -112,6 +112,19 @@ describe("MedicaoDetalhe", () => {
     expect(screen.getByText("DNIT devolveu")).toBeTruthy();
   });
 
+  it("seção Reajuste (slot do servidor) fica entre Itens e Revisões; sem ela, nada", () => {
+    const { container, unmount } = render(
+      <MedicaoDetalhe medicao={medicao()} passos={[]} podeVerLancamentos={false} secaoReajuste={<section><h2>Reajuste</h2></section>} />,
+    );
+    const titulos = Array.from(container.querySelectorAll("h2")).map((h) => h.textContent);
+    expect(titulos.indexOf("Reajuste")).toBe(titulos.indexOf("Itens") + 1);
+    expect(titulos.indexOf("Revisões")).toBe(titulos.indexOf("Reajuste") + 1);
+    unmount();
+
+    const sem = render(<MedicaoDetalhe medicao={medicao()} passos={[]} podeVerLancamentos={false} />);
+    expect(Array.from(sem.container.querySelectorAll("h2")).map((h) => h.textContent)).not.toContain("Reajuste");
+  });
+
   it("trilha traduz os eventos", () => {
     render(<MedicaoDetalhe medicao={medicao()} passos={[]} podeVerLancamentos={false} />);
     expect(screen.getByText("Medição aberta")).toBeTruthy();

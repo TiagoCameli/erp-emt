@@ -72,6 +72,7 @@ function montar(opcoes: {
   podeEditar?: boolean;
   podeExcluir?: boolean;
   podeRestaurar?: boolean;
+  reajuste?: React.ComponentProps<typeof ContratoDetalhe>["reajuste"];
 } = {}) {
   render(
     <ContratoDetalhe
@@ -84,6 +85,7 @@ function montar(opcoes: {
       aditivos={[]}
       anexos={[]}
       trilha={[]}
+      reajuste={opcoes.reajuste}
     />,
   );
 }
@@ -155,5 +157,24 @@ describe("ContratoDetalhe: período da medição", () => {
     expect(screen.getByText("informado à mão")).toBeTruthy();
     expect(screen.getByText("não usado (período informado à mão)")).toBeTruthy();
     expect(screen.queryByText("26")).toBeNull();
+  });
+});
+
+describe("ContratoDetalhe: seção Reajuste (Fase 6)", () => {
+  const config = { temReajuste: true, dataBase: "2025-01-01", periodicidadeMeses: 12, indiceDescricao: null };
+
+  it("sem o dado (sem medicao.reajuste/ver), a seção não aparece", () => {
+    montar();
+    expect(screen.queryByRole("heading", { name: "Reajuste" })).toBeNull();
+  });
+
+  it("com o dado, mostra a seção; o Editar só com podeEditar e fora da lixeira", () => {
+    montar({ reajuste: { config, podeEditar: true } });
+    const secao = screen.getByRole("heading", { name: "Reajuste" }).closest("section")!;
+    expect(within(secao).getByRole("button", { name: /Editar/ })).toBeTruthy();
+    cleanup();
+    montar({ reajuste: { config, podeEditar: true }, contratoOverrides: { excluido_em: "2026-10-01T00:00:00Z" } });
+    const naLixeira = screen.getByRole("heading", { name: "Reajuste" }).closest("section")!;
+    expect(within(naLixeira).queryByRole("button", { name: /Editar/ })).toBeNull();
   });
 });
