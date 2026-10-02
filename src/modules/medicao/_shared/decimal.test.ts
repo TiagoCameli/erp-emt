@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { absoluto, arredondar, truncar, casasDecimais, comparar, lerDecimal, multiplicar, paraTexto, subtrair } from "./decimal";
+import { absoluto, arredondar, truncar, casasDecimais, comparar, lerDecimal, multiplicar, paraTexto, somar, subtrair } from "./decimal";
 
 const t = (s: string) => lerDecimal(s);
 
@@ -40,5 +40,13 @@ describe("decimal exato", () => {
   it("conta casas", () => {
     expect(casasDecimais("580.8643")).toBe(4);
     expect(casasDecimais("100")).toBe(0);
+  });
+});
+
+describe("somar", () => {
+  it("soma exata com sinais e escalas diferentes (ajustes de quantidade)", () => {
+    expect(paraTexto(somar(t("-2"), t("1.0001")))).toBe("-0.9999");
+    expect(paraTexto(somar(t("0.1"), t("0.2")))).toBe("0.3");
+    expect(paraTexto(somar(t("3"), t("-3")))).toBe("0");
   });
 });

@@ -8263,6 +8263,22 @@ export type Database = {
       };
     };
     Views: {
+      mc_v_alertas: {
+        Row: {
+          codigo: string | null;
+          com_motivo: boolean | null;
+          contrato_id: string | null;
+          data: string | null;
+          gravidade: string | null;
+          item_codigo: string | null;
+          item_id: string | null;
+          referencia: string | null;
+          tipo: string | null;
+          unidade: string | null;
+          valor: string | null;
+        };
+        Relationships: [];
+      };
       mc_v_item_acumulado: {
         Row: {
           contrato_id: string | null;
@@ -9388,6 +9404,15 @@ export type Database = {
         Args: { p_chaves: string[]; p_conferida: boolean; p_motivo?: string };
         Returns: number;
       };
+      fn_mc_ajuste_lancar: {
+        Args: {
+          p_item: string;
+          p_medicao: string;
+          p_motivo: string;
+          p_quantidade: string;
+        };
+        Returns: string;
+      };
       fn_mc_boletim: {
         Args: { p_ate?: number; p_contrato: string };
         Returns: Json;
@@ -9429,6 +9454,24 @@ export type Database = {
       fn_mc_medicao_abrir: {
         Args: { p_contrato: string; p_fim: string; p_inicio: string };
         Returns: string;
+      };
+      fn_mc_medicao_aprovar: {
+        Args: { p_id: string; p_itens: Json; p_tudo_como_medido?: boolean };
+        Returns: undefined;
+      };
+      fn_mc_medicao_enviar: { Args: { p_id: string }; Returns: undefined };
+      fn_mc_medicao_fechar: { Args: { p_id: string }; Returns: undefined };
+      fn_mc_medicao_nova_revisao: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_mc_medicao_reabrir: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_mc_medicao_revisar_aprovada: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
       };
       fn_mc_medicao_sugestao: { Args: { p_contrato: string }; Returns: Json };
       fn_mc_meus_contratos: { Args: never; Returns: string[] };

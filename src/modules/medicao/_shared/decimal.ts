@@ -1,7 +1,8 @@
 /**
- * Aritmética decimal exata (BigInt), só para o DIAGNÓSTICO da importação: conferir a coluna de
- * valor da planilha contra quantidade x preço sem o erro do float. O valor de verdade é sempre o
- * do banco (fn_mc_valor e as views mc_v_*); isto aqui nunca vai para tela como número oficial.
+ * Aritmética decimal exata (BigInt), para o DIAGNÓSTICO da importação (conferir a coluna de valor
+ * da planilha contra quantidade x preço sem o erro do float) e para somar QUANTIDADES só de
+ * exibição (os ajustes da revisão corrente no detalhe da medição). Dinheiro nunca: o valor de
+ * verdade é sempre o do banco (fn_mc_valor e as views mc_v_*, D7).
  *
  * Sem literal 1n: o tsconfig mira ES2017.
  */
@@ -35,6 +36,11 @@ function mesmaEscala(a: Decimal, b: Decimal): [bigint, bigint, number] {
 
 export function multiplicar(a: Decimal, b: Decimal): Decimal {
   return { digitos: a.digitos * b.digitos, escala: a.escala + b.escala };
+}
+
+export function somar(a: Decimal, b: Decimal): Decimal {
+  const [x, y, escala] = mesmaEscala(a, b);
+  return { digitos: x + y, escala };
 }
 
 export function subtrair(a: Decimal, b: Decimal): Decimal {

@@ -49,17 +49,14 @@ function idDaLinha(m: MedicaoLista): string {
 
 export interface MedicoesTabelaProps {
   medicoes: MedicaoLista[];
-  contratoId: string;
-  /** `medicao.lancamentos/ver`, lido no servidor. Sem ela a linha não é clicável (daria 404). */
-  podeVerLancamentos: boolean;
 }
 
 /**
  * Lista de medições do contrato, da mais recente para a mais antiga (a ordem já vem de
- * `carregarMedicoes`). Clique na linha leva para os lançamentos daquela medição, para quem pode
- * vê-los.
+ * `carregarMedicoes`). Clique na linha abre o detalhe da medição (Fase 5): o caminho para os
+ * lançamentos virou botão de lá.
  */
-export function MedicoesTabela({ medicoes, contratoId, podeVerLancamentos }: MedicoesTabelaProps) {
+export function MedicoesTabela({ medicoes }: MedicoesTabelaProps) {
   const router = useRouter();
   return (
     <DataTable
@@ -67,11 +64,7 @@ export function MedicoesTabela({ medicoes, contratoId, podeVerLancamentos }: Med
       columns={colunas}
       data={medicoes}
       idDaLinha={idDaLinha}
-      onRowClick={
-        podeVerLancamentos
-          ? (m) => router.push(`/medicao/lancamentos?contrato=${contratoId}&medicao=${m.numero}`)
-          : undefined
-      }
+      onRowClick={(m) => router.push(`/medicao/medicoes/${m.id}`)}
       cabecalhoFixo
       emptyState={
         <EmptyState
