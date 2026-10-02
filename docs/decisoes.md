@@ -4967,7 +4967,9 @@ importa pela tela.
    - Excluir pede motivo de pelo menos 3 letras.
    - Relatório, linhas, índices e rateio são imutáveis. A única exceção é o `arquivo_id` virar nulo
      quando a faxina apaga o PDF de um relatório excluído.
-5. **Sem relatório** (Obra 012 e outros): total, sentido (positivo/negativo), situação, anexo e
+   - Um PDF que já está num relatório que vale não entra de novo; o banco recusa. Depois de excluir o
+     relatório, o mesmo PDF volta à lista e pode ser lido outra vez, para refazer um rateio errado.
+5. **Sem relatório** (Obra 012 e outros): total, sentido (positivo/negativo), situação, PDF enviado ali mesmo e
    observação, sem rateio por item. O manual conta no total e no cartão, não nas linhas do boletim.
 6. **Onde aparece:**
    - Seção Reajuste no detalhe da medição.
