@@ -1428,6 +1428,31 @@ export async function listarLancamentos(
 }
 
 /**
+ * O select da consulta de facetas: as colunas das chaves e, dos embeds com
+ * apelido, só os que o recorte filtra. Eles existem para filtrar (o PostgREST
+ * só aceita filtro em embed que está no select), e sem filtro cada um traria o
+ * id de todas as parcelas dos ~6 mil lançamentos à toa.
+ */
+function selectDasFacetas(recorte: FiltrosDaConsulta): string {
+  const colunas = [
+    "id, tipo, status, origem, fornecedor_id, categoria_id, forma_pagamento_id",
+    "lancamento_parcelas(status, conta_bancaria_id, data_vencimento)",
+    "lancamento_rateios(centro_custo_id)",
+  ];
+  if (recorte.recorte) colunas.push("recorte_parcelas:lancamento_parcelas(id)");
+  if (recorte.contaBancariaId) {
+    colunas.push("conta_parcelas:lancamento_parcelas(id)");
+  }
+  if (recorte.revisao) {
+    colunas.push(
+      "revisao_pendentes:lancamento_parcelas(id)",
+      "revisao_resolvidas:lancamento_parcelas(id)",
+    );
+  }
+  return colunas.join(", ");
+}
+
+/**
  * O que existe na lista filtrada, por filtro de seleção (ver
  * `_shared/filtros-facetados` e `lancamentos/facetas.ts`). A tabela só tem a
  * página, então quem sabe quais fornecedores, categorias e status sobram depois
@@ -1457,30 +1482,35 @@ export async function facetasLancamentos(
       )
     : { raizes: [], segundoCampo: [] };
 
+  // As leituras auxiliares (atraso, saldo aberto, subárvore, revisão) não
+  // dependem destas facetas: soltá-las reaproveita a resolução do recorte
+  // inteiro, em vez de reler as parcelas abertas uma vez por filtro.
+  let resolvidosDoRecorte: ReturnType<typeof resolverFiltros> | null = null;
+  const naoMexemNaResolucao: FacetaLancamentos[] = [
+    "fornecedor",
+    "categoria",
+    "forma",
+    "origem",
+  ];
+
   return facetasNoServidor<LinhaFacetaLancamentos, FacetaLancamentos>(
     facetasDaListagem(filtros, segundoCampo.length > 0, hojeISO),
     async (exceto) => {
       const recorte =
         exceto === null ? filtros : filtrosSemFaceta(filtros, exceto, raizes);
-      const resolvidos = await resolverFiltros(
-        supabase,
-        recorte,
-        hojeISO,
-        false,
-      );
+      const resolvidos =
+        exceto === null || naoMexemNaResolucao.includes(exceto)
+          ? await (resolvidosDoRecorte ??= resolverFiltros(
+              supabase,
+              filtros,
+              hojeISO,
+              false,
+            ))
+          : await resolverFiltros(supabase, recorte, hojeISO, false);
       if (!resolvidos) return [];
       const { linhas, erro } = await todasAsLinhas((de, ate) =>
         aplicarFiltrosLancamentos(
-          supabase.from("lancamentos").select(
-            `id, tipo, status, origem, fornecedor_id, categoria_id,
-             forma_pagamento_id,
-             lancamento_parcelas(status, conta_bancaria_id, data_vencimento),
-             lancamento_rateios(centro_custo_id),
-             recorte_parcelas:lancamento_parcelas(id),
-             conta_parcelas:lancamento_parcelas(id),
-             revisao_pendentes:lancamento_parcelas(id),
-             revisao_resolvidas:lancamento_parcelas(id)`,
-          ),
+          supabase.from("lancamentos").select(selectDasFacetas(recorte)),
           recorte,
           resolvidos,
           hojeISO,
@@ -1491,7 +1521,8 @@ export async function facetasLancamentos(
       if (erro) {
         throw new Error("Não foi possível carregar os filtros dos lançamentos");
       }
-      return linhas;
+      // O select é montado conforme o recorte, então o tipo não sai inferido.
+      return linhas as unknown as LinhaFacetaLancamentos[];
     },
   );
 }

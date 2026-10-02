@@ -330,4 +330,13 @@ describe("facetas da lista de Saídas", () => {
     expect(presentes.obra).toEqual([OUTRO]);
     expect(presentes.tanque.sort()).toEqual([ID, OUTRO].sort());
   });
+
+  it("placa e operador que não voltam iguais da URL não viram opção", () => {
+    const chaveOperador = CHAVE_DA_FACETA_ABASTECIMENTO.operador;
+    const chavePlaca = CHAVE_DA_FACETA_ABASTECIMENTO.placa;
+    expect(chaveOperador(linha({ motorista: "Zé " }))).toBeNull();
+    expect(chaveOperador(linha({ motorista: "Silva, José" }))).toBeNull();
+    expect(chaveOperador(linha({ motorista: "Zé" }))).toBe("Zé");
+    expect(chavePlaca(linha({ placa: " ABC1D23" }))).toBeNull();
+  });
 });

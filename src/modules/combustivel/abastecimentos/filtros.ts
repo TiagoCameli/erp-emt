@@ -354,7 +354,12 @@ export interface LinhaFacetaAbastecimentos {
 
 /** Texto livre só vira opção se a URL o aceitaria de volta (`textoLivre`). */
 function opcaoDeTexto(valor: string | null): string | null {
-  return valor !== null && valor.trim() !== "" && textoLivre(valor) ? valor : null;
+  // Só vira opção o valor que volta IGUAL da URL: a leitura corta nas vírgulas e
+  // apara cada item, e o filtro é `in` exato. "Zé " ou "A, B" virariam opção que
+  // devolve tabela vazia.
+  if (valor === null || valor.trim() === "" || !textoLivre(valor)) return null;
+  if (valor !== valor.trim() || valor.includes(",")) return null;
+  return valor;
 }
 
 /**
