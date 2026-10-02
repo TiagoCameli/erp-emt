@@ -4,23 +4,35 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { Json } from "@/lib/database.types";
-import { erroAcao } from "@/lib/erros";
+import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
-import { conferirMesFechado, parseOfx } from "@/lib/ofx";
-import { exigirPermissao } from "@/lib/permissoes";
+import { contaDoArquivoConfere, conferirMesFechado, parseOfx } from "@/lib/ofx";
+import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { casarAutomaticamente } from "@/modules/financeiro/conciliacao/casamento";
 import {
-  sugerirParcelas,
-  sugerirTransferencias,
-  type SugestaoConciliacao,
-} from "@/modules/financeiro/conciliacao/queries";
+  candidatosDoPainel,
+  movimentosLivres,
+  periodoDoMes,
+} from "@/modules/financeiro/conciliacao/painel";
+import { carregarPainel } from "@/modules/financeiro/conciliacao/queries";
 
 const RECURSO = "financeiro.conciliacao" as const;
 const ROTA = "/financeiro/conciliacao";
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoImportacao =
-  | { ok: true; inseridas: number; ignoradas: number; aviso: string | null }
+  | {
+      ok: true;
+      inseridas: number;
+      ignoradas: number;
+      /** Quantos movimentos o casamento automático já vinculou. */
+      casadas: number;
+      aviso: string | null;
+    }
+  | { erro: string };
+export type ResultadoLote =
+  | { ok: true; feitos: number; falhas: { id: string; erro: string }[] }
   | { erro: string };
 
 /** Transação no formato que a RPC fn_importar_extrato espera no jsonb. */
@@ -31,16 +43,67 @@ interface TransacaoImportacao {
   fitid: string | null;
 }
 
-/** Forma do retorno jsonb da RPC fn_importar_extrato. */
 const resultadoImportacaoSchema = z.object({
   inseridas: z.number(),
   ignoradas: z.number(),
 });
 
+const resultadoLoteSchema = z.object({
+  casadas: z.number(),
+  falhas: z.array(z.object({ transacao: z.string(), erro: z.string() })),
+});
+
+/** Mensagem do Postgres sem o prefixo técnico, para o toast. */
+function mensagem(e: unknown, padrao: string): string {
+  if (e && typeof e === "object" && "message" in e) {
+    const texto = String((e as { message: unknown }).message ?? "");
+    if (texto) return texto;
+  }
+  return padrao;
+}
+
 /**
- * Importa um extrato OFX: lê o arquivo do FormData, parseia as transações e
- * chama fn_importar_extrato, que dedup pelos FITIDs já importados. Retorna
- * quantas transações foram inseridas e quantas foram ignoradas (duplicadas).
+ * Casa sozinho o que bate na conta e no mês: valor exato, mesmo sentido,
+ * janela de 3 dias, desempate pelo nome do favorecido (`casamento.ts`). Só
+ * vincula parcela paga NESTA conta ou transferência: o que muda o app (outra
+ * conta, baixa, centavo) fica como sugestão para quem concilia.
+ */
+async function casarNoServidor(
+  contaId: string,
+  inicio: string,
+  fim: string,
+): Promise<{ casadas: number; falhas: { id: string; erro: string }[] }> {
+  const painel = await carregarPainel(contaId, inicio, fim);
+  const pares = casarAutomaticamente(
+    movimentosLivres(painel),
+    candidatosDoPainel(painel),
+  );
+  if (pares.length === 0) return { casadas: 0, falhas: [] };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_casar_lote", {
+    p_pares: pares.map((par) => ({
+      transacao: par.transacaoId,
+      especie: par.especie,
+      alvo: par.alvoId,
+    })) as unknown as Json,
+  });
+  if (error) throw error;
+
+  const resultado = resultadoLoteSchema.parse(data);
+  return {
+    casadas: resultado.casadas,
+    falhas: resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })),
+  };
+}
+
+/**
+ * Importa um extrato OFX para a conta escolhida e já roda o casamento
+ * automático no período do arquivo.
+ *
+ * Recusa arquivo de outra conta (ACCTID contra o número cadastrado): com a
+ * conciliação feita uma conta por vez, importar o extrato do BB na Caixa
+ * deixaria as duas erradas sem ninguém notar.
  */
 export async function importarOfx(
   formData: FormData,
@@ -77,6 +140,18 @@ export async function importarOfx(
     return { erro: "Nenhuma transação encontrada no arquivo OFX" };
   }
 
+  const supabase = await createClient();
+  const { data: conta } = await supabase
+    .from("contas_bancarias")
+    .select("nome, conta")
+    .eq("id", contaId)
+    .maybeSingle();
+  if (conta && !contaDoArquivoConfere(extrato.contaOfx, conta.conta)) {
+    return {
+      erro: `Este arquivo é da conta ${extrato.contaOfx ?? "-"}, e não da ${conta.nome}. Escolha a conta certa ou o arquivo certo.`,
+    };
+  }
+
   const transacoes: TransacaoImportacao[] = extrato.transacoes.map(
     (transacao) => ({
       data: transacao.data,
@@ -89,15 +164,15 @@ export async function importarOfx(
   // Quando o OFX não traz DTSTART/DTEND, derivamos o período pela menor e maior
   // data das transações (a ordem do arquivo não é garantidamente cronológica).
   const datas = transacoes.map((transacao) => transacao.data);
-  const inicioFallback = datas.reduce((a, b) => (a < b ? a : b));
-  const fimFallback = datas.reduce((a, b) => (a > b ? a : b));
+  const inicio =
+    extrato.periodoInicio ?? datas.reduce((a, b) => (a < b ? a : b));
+  const fim = extrato.periodoFim ?? datas.reduce((a, b) => (a > b ? a : b));
 
-  const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_importar_extrato", {
     p_conta_id: contaId,
     p_nome: arquivo.name,
-    p_periodo_inicio: extrato.periodoInicio ?? inicioFallback,
-    p_periodo_fim: extrato.periodoFim ?? fimFallback,
+    p_periodo_inicio: inicio,
+    p_periodo_fim: fim,
     p_transacoes: transacoes as unknown as Json,
   });
 
@@ -118,164 +193,103 @@ export async function importarOfx(
     );
   }
 
+  // O casamento automático é parte da importação para quem pode conciliar.
+  // Se falhar, o extrato continua importado: a pessoa casa pelo botão.
+  let casadas = 0;
+  const usuario = await getUsuarioLogado();
+  if (usuario && temPermissao(usuario, RECURSO, "editar")) {
+    try {
+      casadas = (await casarNoServidor(contaId, inicio, fim)).casadas;
+    } catch (e) {
+      logErroServidor("financeiro.conciliacao.importarOfx.casar", e);
+    }
+  }
+
   revalidatePath(ROTA);
   return {
     ok: true,
     inseridas: resumo.data.inseridas,
     ignoradas: resumo.data.ignoradas,
+    casadas,
     // A conferência é do MÊS FECHADO e vale sobre o período que o ARQUIVO
-    // declara, não sobre o que foi deduzido das transações. Avisa depois de
-    // importar, não antes: o arquivo é o que o banco deu, e recusar a
-    // importação deixaria o movimento de fora em vez de à vista.
+    // declara, não sobre o que foi deduzido das transações.
     aviso: conferirMesFechado(extrato.periodoInicio, extrato.periodoFim),
   };
 }
 
-export type ResultadoSugestoes =
-  | { ok: true; sugestoes: SugestaoConciliacao[] }
-  | { erro: string };
-
-/**
- * Busca, sob demanda, o que casa com a transação: parcelas pagas E
- * transferências entre contas (mesma conta, mesmo valor em módulo, data dentro
- * de +/- 3 dias). Usada pelo diálogo de conciliação ao abrir, para não
- * pré-carregar sugestões de toda transação da listagem.
- *
- * As duas buscas vão juntas porque o extrato não distingue: um débito de
- * R$ 450.000,00 tanto pode ser o pagamento de uma parcela quanto o envio de
- * uma transferência, e quem decide é quem está conciliando.
- */
-export async function buscarSugestoes(transacao: {
-  contaBancariaId: string;
-  valor: number;
-  dataMovimento: string;
-}): Promise<ResultadoSugestoes> {
+/** Roda o casamento automático numa conta e mês ("YYYY-MM"). */
+export async function casarAutomatico(
+  contaId: string,
+  mes: string,
+): Promise<ResultadoLote> {
   try {
-    await exigirPermissao(RECURSO, "ver");
+    await exigirPermissao(RECURSO, "editar");
   } catch {
-    return { erro: "Sem permissão para ver as transações" };
+    return { erro: "Sem permissão para conciliar" };
   }
-
-  if (!idSchema.safeParse(transacao.contaBancariaId).success) {
-    return { erro: "Conta bancária inválida" };
-  }
+  if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
+  const periodo = periodoDoMes(mes);
+  if (!periodo) return { erro: "Mês inválido" };
 
   try {
-    const [parcelas, transferencias] = await Promise.all([
-      sugerirParcelas(transacao),
-      sugerirTransferencias(transacao),
-    ]);
-    return {
-      ok: true,
-      sugestoes: [
-        ...parcelas.map(
-          (parcela): SugestaoConciliacao => ({
-            especie: "parcela",
-            id: parcela.id,
-            parcela,
-          }),
-        ),
-        ...transferencias.map(
-          (transferencia): SugestaoConciliacao => ({
-            especie: "transferencia",
-            id: transferencia.id,
-            transferencia,
-          }),
-        ),
-      ],
-    };
+    const { casadas, falhas } = await casarNoServidor(
+      contaId,
+      periodo.inicio,
+      periodo.fim,
+    );
+    revalidatePath(ROTA);
+    return { ok: true, feitos: casadas, falhas };
   } catch (e) {
     return erroAcao(
-      "financeiro.conciliacao.buscarSugestoes",
+      "financeiro.conciliacao.casarAutomatico",
       e,
-      "Não foi possível buscar sugestões para a transação",
+      "Não foi possível casar os movimentos",
     );
   }
 }
 
+const casarSchema = z.object({
+  transacaoId: idSchema,
+  especie: z.enum(["parcela", "transferencia"]),
+  alvoId: idSchema,
+  ajustar: z.boolean(),
+});
+
 /**
- * Concilia uma transação de extrato com uma parcela paga, via RPC.
- *
- * A permissão cobrada aqui é `editar`, a MESMA que `fn_conciliar_transacao`
- * exige no banco. Antes a action pedia `criar`: quem tivesse só `criar` via o
- * botão, clicava e levava a recusa crua do Postgres no fim do caminho.
+ * Casa um movimento com o que a pessoa escolheu. Conforme o candidato, o banco
+ * também muda a conta (paga em outra conta), dá baixa (parcela em aberto) ou
+ * ajusta a diferença como juros/desconto (`ajustar`), sempre com evento na
+ * trilha da parcela.
  */
-export async function conciliar(
-  transacaoId: string,
-  parcelaId: string,
-): Promise<ResultadoAcao> {
+export async function casar(entrada: z.input<typeof casarSchema>): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "editar");
   } catch {
-    return { erro: "Sem permissão para conciliar transações" };
+    return { erro: "Sem permissão para conciliar" };
   }
-
-  if (!idSchema.safeParse(transacaoId).success) {
-    return { erro: "Transação inválida" };
-  }
-  if (!idSchema.safeParse(parcelaId).success) {
-    return { erro: "Parcela inválida" };
-  }
+  const dados = casarSchema.safeParse(entrada);
+  if (!dados.success) return { erro: "Dados do casamento inválidos" };
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_conciliar_transacao", {
-    p_transacao_id: transacaoId,
-    p_parcela_id: parcelaId,
+  const { error } = await supabase.rpc("fn_conciliacao_casar", {
+    p_transacao_id: dados.data.transacaoId,
+    p_especie: dados.data.especie,
+    p_alvo_id: dados.data.alvoId,
+    p_automatica: false,
+    p_ajustar: dados.data.ajustar,
   });
-
   if (error) {
     return erroAcao(
-      "financeiro.conciliacao.conciliar",
+      "financeiro.conciliacao.casar",
       error,
-      error.message || "Não foi possível conciliar a transação",
+      mensagem(error, "Não foi possível casar o movimento"),
     );
   }
-
   revalidatePath(ROTA);
   return { ok: true };
 }
 
-/**
- * Concilia uma transação de extrato com um LADO de uma transferência entre
- * contas, via RPC. O lado sai do sentido do movimento: débito casa com a conta
- * de origem, crédito com a de destino.
- */
-export async function conciliarTransferencia(
-  transacaoId: string,
-  transferenciaId: string,
-): Promise<ResultadoAcao> {
-  try {
-    await exigirPermissao(RECURSO, "editar");
-  } catch {
-    return { erro: "Sem permissão para conciliar transações" };
-  }
-
-  if (!idSchema.safeParse(transacaoId).success) {
-    return { erro: "Transação inválida" };
-  }
-  if (!idSchema.safeParse(transferenciaId).success) {
-    return { erro: "Transferência inválida" };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_conciliar_transferencia", {
-    p_transacao_id: transacaoId,
-    p_transferencia_id: transferenciaId,
-  });
-
-  if (error) {
-    return erroAcao(
-      "financeiro.conciliacao.conciliarTransferencia",
-      error,
-      error.message || "Não foi possível conciliar a transferência",
-    );
-  }
-
-  revalidatePath(ROTA);
-  return { ok: true };
-}
-
-/** Desfaz a conciliação de uma transação de extrato, via RPC. */
+/** Desfaz a conciliação de um movimento: ele volta para "faltam no app". */
 export async function desconciliar(
   transacaoId: string,
 ): Promise<ResultadoAcao> {
@@ -302,6 +316,200 @@ export async function desconciliar(
     );
   }
 
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+const mesCompetenciaSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-01$/, "Informe o mês de referência");
+
+const lancarSchema = z.object({
+  transacaoIds: z.array(idSchema).min(1, "Escolha ao menos um movimento").max(500),
+  /** Só vale quando é um movimento: no lote cada um leva o próprio histórico. */
+  descricao: z.string().trim().max(500).optional(),
+  centroCustoId: idSchema,
+  mesCompetencia: mesCompetenciaSchema,
+  categoriaId: idSchema.optional(),
+  fornecedorId: idSchema.optional(),
+  clienteId: idSchema.optional(),
+  numeroDocumento: z.string().trim().max(60).optional(),
+  observacoes: z.string().trim().max(2000).optional(),
+});
+
+export type LancarEntrada = z.input<typeof lancarSchema>;
+
+/**
+ * Lança o que está no banco e falta no app: cada movimento vira um lançamento
+ * já pago nesta conta e já conciliado, com o centro de custo (ou etapa) e o
+ * mês de referência que a pessoa informou. Em lote, os mesmos dados valem
+ * para todos (as tarifas do mês, por exemplo) e cada um leva o histórico do
+ * banco como descrição.
+ */
+export async function lancarMovimentos(
+  entrada: LancarEntrada,
+): Promise<ResultadoLote> {
+  let usuario;
+  try {
+    usuario = await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  if (
+    !temPermissao(usuario, "financeiro.lancamentos", "criar") &&
+    !temPermissao(usuario, "financeiro.recebimentos", "criar")
+  ) {
+    return { erro: "Sem permissão para criar lançamentos" };
+  }
+
+  const dados = lancarSchema.safeParse(entrada);
+  if (!dados.success) {
+    return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const { transacaoIds, descricao, ...comuns } = dados.data;
+  const supabase = await createClient();
+  const falhas: { id: string; erro: string }[] = [];
+  let feitos = 0;
+  for (const transacaoId of transacaoIds) {
+    const { error } = await supabase.rpc("fn_conciliacao_lancar", {
+      p_transacao_id: transacaoId,
+      p_dados: {
+        ...comuns,
+        descricao: transacaoIds.length === 1 ? descricao : undefined,
+      } as unknown as Json,
+    });
+    if (error) {
+      falhas.push({ id: transacaoId, erro: mensagem(error, "Não foi possível lançar") });
+    } else {
+      feitos += 1;
+    }
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true, feitos, falhas };
+}
+
+const transferirSchema = z.object({
+  transacaoIds: z.array(idSchema).min(1).max(500),
+  contaContraparteId: idSchema,
+  centroCustoId: idSchema.optional(),
+  descricao: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Lança como transferência entre contas (aplicação e resgate do Rende Fácil,
+ * envio para outra conta da empresa). O sentido sai do movimento: débito sai
+ * desta conta, crédito entra nela.
+ */
+export async function transferirMovimentos(
+  entrada: z.input<typeof transferirSchema>,
+): Promise<ResultadoLote> {
+  let usuario;
+  try {
+    usuario = await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  if (!temPermissao(usuario, "financeiro.transferencias", "criar")) {
+    return { erro: "Sem permissão para criar transferências" };
+  }
+
+  const dados = transferirSchema.safeParse(entrada);
+  if (!dados.success) return { erro: "Escolha a outra conta da transferência" };
+
+  const supabase = await createClient();
+  const falhas: { id: string; erro: string }[] = [];
+  let feitos = 0;
+  for (const transacaoId of dados.data.transacaoIds) {
+    const { error } = await supabase.rpc("fn_conciliacao_lancar_transferencia", {
+      p_transacao_id: transacaoId,
+      p_conta_contraparte_id: dados.data.contaContraparteId,
+      p_centro_custo_id: dados.data.centroCustoId,
+      p_descricao: dados.data.descricao,
+    });
+    if (error) {
+      falhas.push({ id: transacaoId, erro: mensagem(error, "Não foi possível lançar") });
+    } else {
+      feitos += 1;
+    }
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true, feitos, falhas };
+}
+
+const motivoSchema = z.string().trim().min(3, "Informe o motivo").max(500);
+
+/**
+ * No app e fora do banco: o pagamento foi registrado na conta errada. Muda a
+ * conta da parcela paga, com motivo na trilha.
+ */
+export async function trocarContaParcela(
+  parcelaId: string,
+  contaId: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  if (!idSchema.safeParse(parcelaId).success) return { erro: "Parcela inválida" };
+  if (!idSchema.safeParse(contaId).success) return { erro: "Escolha a conta certa" };
+  const motivoOk = motivoSchema.safeParse(motivo);
+  if (!motivoOk.success) return { erro: "Informe o motivo da troca de conta" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_trocar_conta", {
+    p_parcela_id: parcelaId,
+    p_conta_id: contaId,
+    p_motivo: motivoOk.data,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.trocarConta",
+      error,
+      mensagem(error, "Não foi possível trocar a conta"),
+    );
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * No app e fora do banco: o pagamento não existiu. Exclui o lançamento
+ * (manual) com motivo; a cópia fica no arquivo morto para restaurar.
+ */
+export async function excluirLancamentoDaConciliacao(
+  parcelaId: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  let usuario;
+  try {
+    usuario = await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  if (!temPermissao(usuario, "financeiro.lancamentos", "excluir")) {
+    return { erro: "Sem permissão para excluir lançamentos" };
+  }
+  if (!idSchema.safeParse(parcelaId).success) return { erro: "Parcela inválida" };
+  const motivoOk = motivoSchema.safeParse(motivo);
+  if (!motivoOk.success) return { erro: "Informe o motivo da exclusão" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_excluir_lancamento", {
+    p_parcela_id: parcelaId,
+    p_motivo: motivoOk.data,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.excluirLancamento",
+      error,
+      mensagem(error, "Não foi possível excluir o lançamento"),
+    );
+  }
   revalidatePath(ROTA);
   return { ok: true };
 }

@@ -41,6 +41,8 @@ export interface ImportarOfxDialogProps {
 interface ResultadoImportacao {
   inseridas: number;
   ignoradas: number;
+  /** Quantos movimentos o casamento automático já vinculou. */
+  casadas: number;
   /** Frase do aviso quando o arquivo não é um mês fechado. */
   aviso: string | null;
 }
@@ -120,6 +122,7 @@ export function ImportarOfxDialog({
     setResultado({
       inseridas: resposta.inseridas,
       ignoradas: resposta.ignoradas,
+      casadas: resposta.casadas,
       aviso: resposta.aviso,
     });
     toast.success(
@@ -160,6 +163,13 @@ export function ImportarOfxDialog({
                     ? "1 transação importada"
                     : `${resultado.inseridas} transações importadas`}
                 </p>
+                {resultado.casadas > 0 ? (
+                  <p className="text-muted-foreground">
+                    {resultado.casadas === 1
+                      ? "1 já casada com o app automaticamente"
+                      : `${resultado.casadas} já casadas com o app automaticamente`}
+                  </p>
+                ) : null}
                 {resultado.ignoradas > 0 ? (
                   <p className="text-muted-foreground">
                     {resultado.ignoradas === 1

@@ -2567,6 +2567,7 @@ export type Database = {
         Row: {
           chave_dedup: string | null;
           conciliada: boolean;
+          conciliacao_automatica: boolean;
           conciliado_em: string | null;
           conciliado_por: string | null;
           conta_bancaria_id: string;
@@ -2584,6 +2585,7 @@ export type Database = {
         Insert: {
           chave_dedup?: string | null;
           conciliada?: boolean;
+          conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
           conta_bancaria_id: string;
@@ -2601,6 +2603,7 @@ export type Database = {
         Update: {
           chave_dedup?: string | null;
           conciliada?: boolean;
+          conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
           conta_bancaria_id?: string;
@@ -8989,6 +8992,42 @@ export type Database = {
           observacao: string;
           reaberturas: number;
         }[];
+      };
+      fn_conciliacao_casar: {
+        Args: {
+          p_ajustar?: boolean;
+          p_alvo_id: string;
+          p_automatica?: boolean;
+          p_especie: string;
+          p_transacao_id: string;
+        };
+        Returns: undefined;
+      };
+      fn_conciliacao_casar_lote: { Args: { p_pares: Json }; Returns: Json };
+      fn_conciliacao_excluir_lancamento: {
+        Args: { p_motivo: string; p_parcela_id: string };
+        Returns: undefined;
+      };
+      fn_conciliacao_lancar: {
+        Args: { p_dados: Json; p_transacao_id: string };
+        Returns: string;
+      };
+      fn_conciliacao_lancar_transferencia: {
+        Args: {
+          p_centro_custo_id?: string;
+          p_conta_contraparte_id: string;
+          p_descricao?: string;
+          p_transacao_id: string;
+        };
+        Returns: string;
+      };
+      fn_conciliacao_painel: {
+        Args: { p_conta_id: string; p_fim: string; p_inicio: string };
+        Returns: Json;
+      };
+      fn_conciliacao_trocar_conta: {
+        Args: { p_conta_id: string; p_motivo: string; p_parcela_id: string };
+        Returns: undefined;
       };
       fn_conciliar_transacao: {
         Args: { p_parcela_id: string; p_transacao_id: string };

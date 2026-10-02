@@ -1,632 +1,945 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Filter,
+  ArrowLeftRight,
+  CheckCheck,
+  FilePlus2,
   Link2,
+  LoaderCircle,
+  Pencil,
+  Trash2,
   Upload,
+  Wand2,
   X,
 } from "lucide-react";
-import { toast } from "@/components/canonicos/toast";
 
 import {
+  BarraSelecao,
   CelulaVazia,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
-  FiltroPeriodo,
   FiltroSelect,
-  FiltroValor,
   GradeKpis,
   KPICard,
   MoneyText,
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/canonicos";
-import { formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
-  dentroDaFaixaValor,
-  dentroDoPeriodo,
-  usePaginacaoCliente,
-} from "@/modules/_shared/filtros-cliente";
-import {
-  buscarSugestoes,
+  casarAutomatico,
   desconciliar,
+  excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
-import type {
-  ContaBancariaOpcao,
-  ExtratoLista,
-  SugestaoConciliacao,
-  TransacaoLista,
-} from "@/modules/financeiro/conciliacao/queries";
-import { ConciliarDialog } from "./conciliar-dialog";
+import {
+  casarAutomaticamente,
+  palavrasEmComum,
+  pareceAplicacaoAutomatica,
+  sugerirParaMovimento,
+  type Sugestao,
+} from "@/modules/financeiro/conciliacao/casamento";
+import {
+  candidatosDoPainel,
+  montarVisoes,
+  movimentosLivres,
+  somar,
+  type CandidatoDoPainel,
+  type ItemForaDoBanco,
+  type PainelConciliacao,
+  type ParcelaLivre,
+  type TransacaoPainel,
+} from "@/modules/financeiro/conciliacao/painel";
+import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
+import { CasarDialog } from "./casar-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
-import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { LancarDrawer, type OpcoesLancamento } from "./lancar-drawer";
+import { TransferirDialog } from "./transferir-dialog";
+import { TrocarContaDialog } from "./trocar-conta-dialog";
+import { ValorMovimento } from "./valor-movimento";
 
-type FiltroConciliacao = "" | "conciliada" | "pendente";
+export type VisaoConciliacao = "faltam" | "fora" | "casados";
 
-export interface ConciliacaoClienteProps {
-  transacoes: TransacaoLista[];
-  extratos: ExtratoLista[];
-  contas: ContaBancariaOpcao[];
-  /** Conta atualmente filtrada via URL ("" = todas). */
-  contaId: string;
-  podeImportar: boolean;
-  podeConciliar: boolean;
-  podeDesconciliar: boolean;
+export interface PermissoesConciliacao {
+  importar: boolean;
+  conciliar: boolean;
+  lancar: boolean;
+  transferir: boolean;
+  excluir: boolean;
 }
 
-/** Valor com sinal e cor: crédito verde (+), débito vermelho (-). */
-function ValorMovimento({ transacao }: { transacao: TransacaoLista }) {
-  const credito = transacao.tipo === "credito";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 tabular-nums",
-        credito ? "text-status-aprovado" : "text-status-rejeitado",
-      )}
-    >
-      {credito ? (
-        <ArrowUpRight className="size-3.5 shrink-0" aria-hidden="true" />
-      ) : (
-        <ArrowDownRight className="size-3.5 shrink-0" aria-hidden="true" />
-      )}
-      <MoneyText valor={Math.abs(transacao.valor)} />
-    </span>
-  );
+export interface ConciliacaoClienteProps {
+  conta: ContaBancariaOpcao;
+  /** Contas que têm extrato, para trocar de conta sem voltar. */
+  contasConciliaveis: ContaBancariaOpcao[];
+  /** Todas as contas ativas (troca de conta, transferência, importação). */
+  contas: ContaBancariaOpcao[];
+  mes: string;
+  meses: string[];
+  periodo: { inicio: string; fim: string };
+  painel: PainelConciliacao;
+  visao: VisaoConciliacao;
+  opcoes: OpcoesLancamento;
+  permissoes: PermissoesConciliacao;
+}
+
+function hrefDe(contaId: string, mes: string, visao: VisaoConciliacao): string {
+  const params = new URLSearchParams({ conta: contaId, mes, ver: visao });
+  return `?${params.toString()}`;
+}
+
+function quantos(n: number, um: string, varios: string): string {
+  return `${n} ${n === 1 ? um : varios}`;
+}
+
+/** Texto curto do que está no app para um movimento casado. */
+function vinculoDe(transacao: TransacaoPainel): string {
+  if (transacao.parcela) {
+    const p = transacao.parcela;
+    return [p.lancamentoNumero, p.nome, p.descricao].filter(Boolean).join(" · ");
+  }
+  if (transacao.transferencia) {
+    const t = transacao.transferencia;
+    return `${t.numero ? `${t.numero} · ` : ""}${t.origemNome ?? "-"} para ${t.destinoNome ?? "-"}`;
+  }
+  return "-";
 }
 
 /**
- * Tela de conciliação: importa OFX, lista as transações do extrato com o
- * valor por sinal/cor, e casa cada transação não conciliada com uma parcela
- * paga (ou desfaz a conciliação). KPIs no topo resumem o estado.
+ * Conciliação de UMA conta num mês. Três visões, escolhidas pelos cartões do
+ * topo:
+ *
+ * - **Faltam no app**: está no extrato e não no app. Casa com o que já existe
+ *   (inclusive pago em outra conta ou ainda em aberto), lança já pago com
+ *   centro de custo e mês de referência, ou lança como transferência.
+ * - **No app, fora do banco**: pago nesta conta no mês e o extrato não mostra.
+ *   Muda para a conta certa ou exclui.
+ * - **Casados**: o que já bateu. O automático fica marcado, e o que casou sem
+ *   o nome confirmar aparece como "Confira".
+ *
+ * A conciliação do mês está fechada quando as duas primeiras visões zeram.
  */
 export function ConciliacaoCliente({
-  transacoes,
-  extratos,
+  conta,
+  contasConciliaveis,
   contas,
-  contaId,
-  podeImportar,
-  podeConciliar,
-  podeDesconciliar,
+  mes,
+  meses,
+  periodo,
+  painel,
+  visao,
+  opcoes,
+  permissoes,
 }: ConciliacaoClienteProps) {
   const router = useRouter();
+  const visoes = React.useMemo(() => montarVisoes(painel, periodo), [painel, periodo]);
+  const candidatos = React.useMemo(() => candidatosDoPainel(painel), [painel]);
+  const paresAutomaticos = React.useMemo(
+    () => casarAutomaticamente(movimentosLivres(painel), candidatos),
+    [painel, candidatos],
+  );
+
   const [importarAberto, setImportarAberto] = React.useState(false);
-  const [conciliarAberto, setConciliarAberto] = React.useState(false);
-  const [transacaoAtiva, setTransacaoAtiva] =
-    React.useState<TransacaoLista | null>(null);
-  const [sugestoes, setSugestoes] = React.useState<SugestaoConciliacao[]>([]);
-  const [carregandoSugestoes, setCarregandoSugestoes] = React.useState(false);
-  const [desconciliarAlvo, setDesconciliarAlvo] =
-    React.useState<TransacaoLista | null>(null);
-  const [conciliacao, setConciliacao] = React.useState<FiltroConciliacao>("");
-  const [busca, setBusca] = useFiltroSessao("busca", "");
-  const [extratoId, setExtratoId] = useFiltroSessao("extratoId", "");
-  const [tipo, setTipo] = useFiltroSessao("tipo", "");
-  const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
-  const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
-  const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
-  const [valorAte, setValorAte] = useFiltroSessao("valorAte", "");
-  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
+  const [casando, setCasando] = React.useState(false);
+  const [casarAlvoId, setCasarAlvoId] = React.useState<string | null>(null);
+  const [lancarIds, setLancarIds] = React.useState<string[] | null>(null);
+  const [transferirIds, setTransferirIds] = React.useState<string[] | null>(null);
+  const [trocarConta, setTrocarConta] = React.useState<ParcelaLivre | null>(null);
+  const [excluirAlvo, setExcluirAlvo] = React.useState<ParcelaLivre | null>(null);
+  const [desfazerAlvo, setDesfazerAlvo] = React.useState<TransacaoPainel | null>(null);
 
-  const opcoesConta = React.useMemo(
-    () =>
-      contas.map((conta) => ({
-        valor: conta.id,
-        rotulo: `${conta.nome} (${conta.bancoRotulo})`,
-      })),
-    [contas],
+  const porId = React.useMemo(
+    () => new Map(painel.transacoes.map((t) => [t.id, t])),
+    [painel.transacoes],
   );
+  const casarAlvo = casarAlvoId ? (porId.get(casarAlvoId) ?? null) : null;
+  const transacoesDe = (ids: string[] | null) =>
+    (ids ?? []).map((id) => porId.get(id)).filter((t): t is TransacaoPainel => !!t);
 
-  // Só os extratos da conta em foco: oferecer extrato de outra conta devolveria
-  // tabela vazia, porque a listagem já vem filtrada por conta no servidor.
-  const opcoesExtrato = React.useMemo(
-    () =>
-      extratos
-        .filter(
-          (extrato) => contaId === "" || extrato.contaBancariaId === contaId,
-        )
-        .map((extrato) => ({
-          valor: extrato.id,
-          rotulo: [
-            extrato.nomeArquivo ?? extrato.contaBancariaNome,
-            extrato.periodoInicio && extrato.periodoFim
-              ? `${formatarData(extrato.periodoInicio)} a ${formatarData(extrato.periodoFim)}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        })),
-    [extratos, contaId],
-  );
+  const somaFaltam = somar(visoes.faltamNoApp.map((t) => t.valor));
+  const somaFora = somar(visoes.foraDoBanco.map((i) => i.valor));
+  const total = painel.transacoes.length;
+  const fechado = visoes.faltamNoApp.length === 0 && visoes.foraDoBanco.length === 0;
 
-  // Trocar filtro volta para a primeira página, senão a pessoa filtra e cai
-  // numa página vazia.
-  function mudarBusca(valor: string) {
-    setBusca(valor);
-    zerarPagina();
+  function trocarConta_(contaId: string) {
+    router.push(`?${new URLSearchParams({ conta: contaId }).toString()}`);
   }
-  function mudarConciliacao(valor: string) {
-    setConciliacao(valor as FiltroConciliacao);
-    zerarPagina();
-  }
-  function mudarExtrato(valor: string) {
-    setExtratoId(valor);
-    zerarPagina();
-  }
-  function mudarTipo(valor: string) {
-    setTipo(valor);
-    zerarPagina();
-  }
-  function mudarPeriodo(de: string, ate: string) {
-    setDataDe(de);
-    setDataAte(ate);
-    zerarPagina();
-  }
-  function mudarValor(de: string, ate: string) {
-    setValorDe(de);
-    setValorAte(ate);
-    zerarPagina();
+  function trocarMes(novo: string) {
+    router.push(hrefDe(conta.id, novo, visao));
   }
 
-  const dados = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
-    return transacoes.filter((transacao) => {
-      if (conciliacao === "conciliada" && !transacao.conciliada) return false;
-      if (conciliacao === "pendente" && transacao.conciliada) return false;
-      if (extratoId !== "" && transacao.extratoId !== extratoId) return false;
-      if (tipo !== "" && transacao.tipo !== tipo) return false;
-      if (!dentroDoPeriodo(transacao.dataMovimento, dataDe, dataAte)) {
-        return false;
-      }
-      // Débito vem negativo do OFX: a faixa compara o módulo, que é o número
-      // que a pessoa lê na tela.
-      if (
-        !dentroDaFaixaValor(Math.abs(transacao.valor), valorDe, valorAte)
-      ) {
-        return false;
-      }
-      if (termo !== "") {
-        const parcela = transacao.parcela;
-        const transferencia = transacao.transferencia;
-        const alvo = `${transacao.memo ?? ""} ${parcela?.lancamentoNumero ?? ""} ${
-          parcela?.lancamentoDescricao ?? ""
-        } ${parcela?.fornecedorNome ?? ""} ${transferencia?.numero ?? ""} ${
-          transferencia?.descricao ?? ""
-        }`;
-        if (!alvo.toLowerCase().includes(termo)) return false;
-      }
-      return true;
-    });
-  }, [
-    transacoes,
-    conciliacao,
-    extratoId,
-    tipo,
-    dataDe,
-    dataAte,
-    valorDe,
-    valorAte,
-    busca,
-  ]);
-
-  const filtrando =
-    contaId !== "" ||
-    conciliacao !== "" ||
-    extratoId !== "" ||
-    tipo !== "" ||
-    dataDe !== "" ||
-    dataAte !== "" ||
-    valorDe !== "" ||
-    valorAte !== "" ||
-    busca.trim() !== "";
-
-  const totalTransacoes = transacoes.length;
-  const totalConciliadas = transacoes.filter((t) => t.conciliada).length;
-  const totalPendentes = totalTransacoes - totalConciliadas;
-
-  /**
-   * A conta é o único filtro server-side desta tela (a consulta traz só as
-   * transações dela). Trocar a conta larga o extrato escolhido, que pertence à
-   * conta antiga, e volta para a primeira página.
-   */
-  function trocarConta(valor: string) {
-    const params = new URLSearchParams(window.location.search);
-    if (valor) params.set("conta", valor);
-    else params.delete("conta");
-    const query = params.toString();
-    setExtratoId("");
-    zerarPagina();
-    router.replace(query ? `?${query}` : "?", { scroll: false });
-  }
-
-  function abrirConciliar(transacao: TransacaoLista) {
-    setTransacaoAtiva(transacao);
-    setSugestoes([]);
-    setCarregandoSugestoes(true);
-    setConciliarAberto(true);
-    void buscarSugestoes({
-      contaBancariaId: transacao.contaBancariaId,
-      valor: transacao.valor,
-      dataMovimento: transacao.dataMovimento,
-    }).then((resposta) => {
-      if ("erro" in resposta) {
-        toast.error(resposta.erro);
-        setSugestoes([]);
-      } else {
-        setSugestoes(resposta.sugestoes);
-      }
-      setCarregandoSugestoes(false);
-    });
-  }
-
-  async function confirmarDesconciliar() {
-    if (!desconciliarAlvo) return;
-    const resposta = await desconciliar(desconciliarAlvo.id);
+  async function rodarAutomatico() {
+    setCasando(true);
+    const resposta = await casarAutomatico(conta.id, mes);
+    setCasando(false);
     if ("erro" in resposta) {
       toast.error(resposta.erro);
       return;
     }
-    toast.success("Conciliação desfeita");
-    setDesconciliarAlvo(null);
+    toast.success(
+      `${quantos(resposta.feitos, "movimento casado", "movimentos casados")}` +
+        (resposta.falhas.length > 0 ? `, ${resposta.falhas.length} não casaram` : ""),
+    );
     router.refresh();
   }
 
-  const colunas: ColumnDef<TransacaoLista, unknown>[] = React.useMemo(
-    () => [
-      {
-        accessorKey: "dataMovimento",
-        header: "Data",
-        size: 120,
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatarData(row.original.dataMovimento)}
-          </span>
-        ),
-      },
-      {
-        // O histórico é o texto que identifica a transação no extrato: é a
-        // coluna mais larga da tela. Quem corta com reticências e põe o texto
-        // inteiro no tooltip é a DataTable, então a célula devolve o texto cru
-        // (o `max-w-md` que estava aqui não valia nada: a coluna tinha 150px).
-        accessorKey: "memo",
-        header: "Histórico",
-        meta: { celular: "titulo" },
-        size: 380,
-        cell: ({ row }) => row.original.memo ?? <CelulaVazia />,
-      },
-      {
-        accessorKey: "valor",
-        header: "Valor",
-        size: 140,
-        meta: { alinharDireita: true },
-        cell: ({ row }) => <ValorMovimento transacao={row.original} />,
-      },
-      {
-        id: "conciliada",
-        header: "Conciliada",
-        // Duas linhas na mesma célula: sem `naoTruncar` a DataTable embrulha
-        // tudo num `truncate`, e é a segunda linha, o lançamento conciliado,
-        // que o Tiago perde. Quem corta o texto longo é a legenda, abaixo.
-        // A largura acompanha o conteúdo, que é mais largo que o cabeçalho.
-        size: 260,
-        meta: { naoTruncar: true },
-        cell: ({ row }) => {
-          const transacao = row.original;
-          if (!transacao.conciliada) {
-            return (
-              <StatusBadge
-                status="pendente_aprovacao"
-                rotulo="Não conciliada"
-              />
-            );
-          }
-          // Duas espécies de vínculo: parcela paga ou lado de transferência.
-          // Sem o segundo braço, uma transação casada com transferência
-          // apareceria como "Não conciliada" mesmo estando conciliada.
-          const { parcela, transferencia } = transacao;
-          const referencia = parcela
-            ? `${
-                parcela.lancamentoNumero
-                  ? `${parcela.lancamentoNumero} · `
-                  : ""
-              }${parcela.lancamentoDescricao} (parcela ${parcela.numeroParcela})`
-            : transferencia
-              ? `${
-                  transferencia.numero ? `${transferencia.numero} · ` : ""
-                }${transferencia.contaOrigemNome} para ${transferencia.contaDestinoNome}`
-              : null;
-          return (
-            // items-center porque o badge é w-fit: sem isso ele encosta na
-            // esquerda e desalinha do cabeçalho centralizado.
-            <div className="flex flex-col items-center gap-0.5">
-              <StatusBadge status="aprovado" rotulo="Conciliada" />
-              {/* A descrição do lançamento é texto livre, então o corte com
-                  reticências mora aqui, e o texto inteiro fica no tooltip. */}
-              {referencia ? (
-                <span
-                  className="max-w-full truncate text-legenda text-muted-foreground"
-                  title={referencia}
-                >
-                  {referencia}
-                </span>
-              ) : null}
-            </div>
-          );
-        },
-      },
-      {
-        id: "acoes",
-        header: "",
-        size: 150,
-        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
-        cell: ({ row }) => {
-          const transacao = row.original;
-          if (transacao.conciliada) {
-            if (!podeDesconciliar) return null;
-            return (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setDesconciliarAlvo(transacao)}
-              >
-                <X />
-                Desconciliar
-              </Button>
-            );
-          }
-          if (!podeConciliar) return null;
-          return (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => abrirConciliar(transacao)}
-            >
-              <Link2 />
-              Conciliar
-            </Button>
-          );
-        },
-      },
-    ],
-    [podeConciliar, podeDesconciliar],
-  );
+  async function confirmarDesfazer() {
+    if (!desfazerAlvo) return;
+    const resposta = await desconciliar(desfazerAlvo.id);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return false;
+    }
+    toast.success("Casamento desfeito: o movimento voltou para Faltam no app");
+    setDesfazerAlvo(null);
+    router.refresh();
+  }
 
-  // Filtros declarados aqui (e não numa FilterBar solta) para entrarem no menu
-  // "Filtros" da tabela, junto com a personalização de colunas. Conta e situação
-  // seguem visíveis; a busca entra visível porque é a busca principal da tela, e
-  // extrato, tipo, período e valor nascem escondidos.
-  const filtros: FiltroConfiguravel[] = [
-    {
-      id: "busca",
-      rotulo: "Busca",
-      fixo: true,
-      // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
-      // deixa o texto da busca filtrando a lista.
-      temValor: busca !== "",
-      onLimpar: () => mudarBusca(""),
-      elemento: (
-        <FiltroBusca
-          valor={busca}
-          onValorChange={mudarBusca}
-          placeholder="Buscar por histórico ou lançamento conciliado"
-        />
-      ),
-    },
-    {
-      id: "conta",
-      rotulo: "Conta bancária",
-      temValor: contaId !== "",
-      onLimpar: () => trocarConta(""),
-      elemento: (
-        <FiltroSelect
-          valor={contaId}
-          onValorChange={trocarConta}
-          opcoes={opcoesConta}
-          placeholder="Conta bancária"
-          todosRotulo="Todas as contas"
-          className="max-w-56"
-        />
-      ),
-    },
-    {
-      id: "situacao",
-      rotulo: "Situação",
-      temValor: conciliacao !== "",
-      onLimpar: () => mudarConciliacao(""),
-      elemento: (
-        <FiltroSelect
-          valor={conciliacao}
-          onValorChange={mudarConciliacao}
-          opcoes={[
-            { valor: "conciliada", rotulo: "Conciliadas" },
-            { valor: "pendente", rotulo: "Pendentes" },
-          ]}
-          placeholder="Situação"
-          todosRotulo="Todas as situações"
-        />
-      ),
-    },
-    {
-      id: "extrato",
-      rotulo: "Extrato importado",
-      ocultoPorPadrao: true,
-      temValor: extratoId !== "",
-      onLimpar: () => mudarExtrato(""),
-      elemento: (
-        <FiltroSelect
-          valor={extratoId}
-          onValorChange={mudarExtrato}
-          opcoes={opcoesExtrato}
-          placeholder="Extrato importado"
-          todosRotulo="Todos os extratos"
-          className="max-w-64"
-        />
-      ),
-    },
-    {
-      id: "tipo",
-      rotulo: "Crédito ou débito",
-      ocultoPorPadrao: true,
-      temValor: tipo !== "",
-      onLimpar: () => mudarTipo(""),
-      elemento: (
-        <FiltroSelect
-          valor={tipo}
-          onValorChange={mudarTipo}
-          opcoes={[
-            { valor: "credito", rotulo: "Créditos (entradas)" },
-            { valor: "debito", rotulo: "Débitos (saídas)" },
-          ]}
-          placeholder="Crédito ou débito"
-          todosRotulo="Créditos e débitos"
-        />
-      ),
-    },
-    {
-      id: "periodo",
-      rotulo: "Período do movimento",
-      ocultoPorPadrao: true,
-      temValor: dataDe !== "" || dataAte !== "",
-      onLimpar: () => mudarPeriodo("", ""),
-      elemento: (
-        <FiltroPeriodo
-          de={dataDe}
-          ate={dataAte}
-          onPeriodoChange={mudarPeriodo}
-          rotulo="Movimento"
-        />
-      ),
-    },
-    {
-      id: "valor",
-      rotulo: "Faixa de valor",
-      ocultoPorPadrao: true,
-      temValor: valorDe !== "" || valorAte !== "",
-      onLimpar: () => mudarValor("", ""),
-      elemento: (
-        <FiltroValor
-          de={valorDe}
-          ate={valorAte}
-          onValorChange={mudarValor}
-          rotulo="Valor"
-        />
-      ),
-    },
-  ];
+  async function confirmarExcluir(motivo?: string) {
+    if (!excluirAlvo) return;
+    const resposta = await excluirLancamentoDaConciliacao(excluirAlvo.id, motivo ?? "");
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return false;
+    }
+    toast.success("Lançamento excluído");
+    setExcluirAlvo(null);
+    router.refresh();
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <GradeKpis id="financeiro.conciliacao.resumo" titulo="Resumo do extrato">
-        <KPICard titulo="Transações" valor={totalTransacoes} />
-        <KPICard
-          titulo="Conciliadas"
-          valor={totalConciliadas}
-          detalhe={
-            totalTransacoes > 0
-              ? `${Math.round((totalConciliadas / totalTransacoes) * 100)}% do extrato`
-              : undefined
-          }
+      <div className="flex flex-wrap items-center gap-2">
+        <FiltroSelect
+          valor={conta.id}
+          onValorChange={(valor) => valor && trocarConta_(valor)}
+          opcoes={contasConciliaveis.map((c) => ({ valor: c.id, rotulo: c.nome }))}
+          placeholder="Conta"
+          className="max-w-72"
         />
-        <KPICard titulo="Pendentes" valor={totalPendentes} />
-      </GradeKpis>
-
-      <DataTable
-        idTabela="financeiro.conciliacao"
-        columns={colunas}
-        data={dados}
-        filtros={filtros}
-        pageIndex={paginacao.pageIndex}
-        pageSize={paginacao.pageSize}
-        onPaginationChange={setPaginacao}
-        toolbar={
-          podeImportar ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setImportarAberto(true)}
-            >
+        <FiltroSelect
+          valor={mes}
+          onValorChange={(valor) => valor && trocarMes(valor)}
+          opcoes={meses.map((m) => ({ valor: m, rotulo: formatarMesAno(`${m}-01`) }))}
+          placeholder="Mês"
+          className="max-w-48"
+        />
+        <div className="ml-auto flex flex-wrap gap-2">
+          {permissoes.conciliar && paresAutomaticos.length > 0 ? (
+            <Button type="button" size="sm" onClick={() => void rodarAutomatico()} disabled={casando}>
+              {casando ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
+              Casar automaticamente ({paresAutomaticos.length})
+            </Button>
+          ) : null}
+          {permissoes.importar ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setImportarAberto(true)}>
               <Upload />
               Importar OFX
             </Button>
-          ) : undefined
-        }
-        emptyState={
-          extratos.length === 0 ? (
-            <EmptyState
-              icone={Upload}
-              titulo="Nenhum extrato importado"
-              descricao="Importe um arquivo OFX do banco para começar a conciliar."
-              acao={
-                podeImportar ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => setImportarAberto(true)}
-                  >
-                    <Upload />
-                    Importar OFX
-                  </Button>
-                ) : undefined
-              }
-              className="border-none bg-transparent"
-            />
-          ) : (
-            <EmptyState
-              icone={filtrando ? Filter : Upload}
-              titulo={
-                filtrando
-                  ? "Nenhuma transação com esses filtros"
-                  : "Nenhuma transação neste extrato"
-              }
-              descricao={
-                filtrando
-                  ? "Ajuste ou limpe os filtros para ver o restante das transações."
-                  : "O extrato importado não tem transações."
-              }
-              className="border-none bg-transparent"
-            />
-          )
-        }
-      />
+          ) : null}
+        </div>
+      </div>
+
+      <GradeKpis>
+        <KPICard
+          titulo="Faltam no app"
+          valor={visoes.faltamNoApp.length}
+          detalhe={
+            visoes.faltamNoApp.length > 0 ? (
+              <>
+                Saldo <MoneyText valor={somaFaltam} /> no extrato
+              </>
+            ) : (
+              "Todo o extrato está no app"
+            )
+          }
+          href={hrefDe(conta.id, mes, "faltam")}
+          className={cn(visao === "faltam" && "border-foreground")}
+        />
+        <KPICard
+          titulo="No app, fora do banco"
+          valor={visoes.foraDoBanco.length}
+          detalhe={
+            visoes.foraDoBanco.length > 0 ? (
+              <>
+                Saldo <MoneyText valor={somaFora} /> lançado no app
+              </>
+            ) : (
+              "Nada sobrando no app"
+            )
+          }
+          href={hrefDe(conta.id, mes, "fora")}
+          className={cn(visao === "fora" && "border-foreground")}
+        />
+        <KPICard
+          titulo="Casados"
+          valor={`${visoes.casados.length} de ${total}`}
+          detalhe={
+            fechado && total > 0
+              ? "Mês conciliado"
+              : total > 0
+                ? `${Math.round((visoes.casados.length / total) * 100)}% do extrato`
+                : undefined
+          }
+          href={hrefDe(conta.id, mes, "casados")}
+          className={cn(visao === "casados" && "border-foreground")}
+        />
+      </GradeKpis>
+
+      {visao === "faltam" ? (
+        <TabelaFaltam
+          transacoes={visoes.faltamNoApp}
+          candidatos={candidatos}
+          permissoes={permissoes}
+          onCasar={setCasarAlvoId}
+          onLancar={setLancarIds}
+          onTransferir={setTransferirIds}
+        />
+      ) : visao === "fora" ? (
+        <TabelaForaDoBanco
+          itens={visoes.foraDoBanco}
+          permissoes={permissoes}
+          onTrocarConta={setTrocarConta}
+          onExcluir={setExcluirAlvo}
+        />
+      ) : (
+        <TabelaCasados
+          transacoes={visoes.casados}
+          permissoes={permissoes}
+          onDesfazer={setDesfazerAlvo}
+        />
+      )}
 
       <ImportarOfxDialog
         key={importarAberto ? "import-aberto" : "import-fechado"}
         aberto={importarAberto}
         onAbertoChange={setImportarAberto}
         contas={contas}
-        contaInicialId={contaId || undefined}
+        contaInicialId={conta.id}
       />
 
-      <ConciliarDialog
-        aberto={conciliarAberto}
-        onAbertoChange={setConciliarAberto}
-        transacao={transacaoAtiva}
-        sugestoes={sugestoes}
-        carregando={carregandoSugestoes}
-        onConciliada={() => setConciliarAberto(false)}
+      <CasarDialog
+        key={`casar-${casarAlvoId ?? ""}`}
+        aberto={casarAlvo !== null}
+        onAbertoChange={(aberto) => !aberto && setCasarAlvoId(null)}
+        transacao={casarAlvo}
+        candidatos={candidatos}
+      />
+
+      <LancarDrawer
+        key={`lancar-${(lancarIds ?? []).join(",")}`}
+        aberto={lancarIds !== null}
+        onAbertoChange={(aberto) => !aberto && setLancarIds(null)}
+        transacoes={transacoesDe(lancarIds)}
+        opcoes={opcoes}
+      />
+
+      <TransferirDialog
+        key={`transferir-${(transferirIds ?? []).join(",")}`}
+        aberto={transferirIds !== null}
+        onAbertoChange={(aberto) => !aberto && setTransferirIds(null)}
+        transacoes={transacoesDe(transferirIds)}
+        conta={conta}
+        contas={contas}
+        centros={opcoes.centros}
+      />
+
+      <TrocarContaDialog
+        key={`trocar-${trocarConta?.id ?? ""}`}
+        aberto={trocarConta !== null}
+        onAbertoChange={(aberto) => !aberto && setTrocarConta(null)}
+        parcela={trocarConta}
+        contaAtualId={conta.id}
+        contas={contas}
       />
 
       <ConfirmDialog
-        aberto={desconciliarAlvo !== null}
-        onAbertoChange={(aberto) => {
-          if (!aberto) setDesconciliarAlvo(null);
-        }}
-        titulo="Desfazer conciliação"
-        descricao="A transação volta a ficar pendente e o lançamento é liberado para nova conciliação. Confirma?"
-        textoConfirmar="Desconciliar"
+        aberto={excluirAlvo !== null}
+        onAbertoChange={(aberto) => !aberto && setExcluirAlvo(null)}
+        titulo="Excluir lançamento"
+        descricao={
+          excluirAlvo
+            ? `${[excluirAlvo.lancamentoNumero, excluirAlvo.nome].filter(Boolean).join(" · ")}, ${formatarBRL(excluirAlvo.valorLiquido)}. O pagamento não saiu do banco e o lançamento sai do app. Fica uma cópia no arquivo morto.`
+            : ""
+        }
+        textoConfirmar="Excluir lançamento"
         variante="destrutivo"
-        onConfirmar={confirmarDesconciliar}
+        exigeMotivo
+        minMotivo={3}
+        onConfirmar={confirmarExcluir}
+      />
+
+      <ConfirmDialog
+        aberto={desfazerAlvo !== null}
+        onAbertoChange={(aberto) => !aberto && setDesfazerAlvo(null)}
+        titulo="Desfazer casamento"
+        descricao="O movimento volta para Faltam no app e o lançamento fica livre para casar com outro. O que o casamento mudou na parcela (conta, baixa, ajuste) continua como está."
+        textoConfirmar="Desfazer"
+        variante="destrutivo"
+        onConfirmar={confirmarDesfazer}
       />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Faltam no app
+// ---------------------------------------------------------------------------
+
+function resumoSugestao(sugestao: Sugestao | undefined): string | null {
+  if (!sugestao) return null;
+  const c = sugestao.candidato;
+  const quem =
+    c.nomes.find((n): n is string => !!n) ?? (c.especie === "transferencia" ? "Transferência" : "");
+  const grupo =
+    c.grupo === "aberta"
+      ? "Em aberto"
+      : c.grupo === "paga_outra_conta"
+        ? "Paga em outra conta"
+        : c.grupo === "transferencia"
+          ? "Transferência"
+          : "Paga nesta conta";
+  const diferenca =
+    sugestao.diferenca !== 0 ? `, difere ${formatarBRL(Math.abs(sugestao.diferenca))}` : "";
+  return `${grupo}: ${quem}${diferenca}`;
+}
+
+function TabelaFaltam({
+  transacoes,
+  candidatos,
+  permissoes,
+  onCasar,
+  onLancar,
+  onTransferir,
+}: {
+  transacoes: TransacaoPainel[];
+  candidatos: CandidatoDoPainel[];
+  permissoes: PermissoesConciliacao;
+  onCasar: (id: string) => void;
+  onLancar: (ids: string[]) => void;
+  onTransferir: (ids: string[]) => void;
+}) {
+  const [busca, setBusca] = React.useState("");
+  const [tipo, setTipo] = React.useState("");
+  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
+
+  const sugestoes = React.useMemo(() => {
+    const mapa = new Map<string, Sugestao<CandidatoDoPainel> | undefined>();
+    for (const t of transacoes) {
+      mapa.set(
+        t.id,
+        sugerirParaMovimento(
+          { id: t.id, dataMovimento: t.dataMovimento, valor: t.valor, memo: t.memo },
+          candidatos,
+        )[0],
+      );
+    }
+    return mapa;
+  }, [transacoes, candidatos]);
+
+  const dados = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return transacoes.filter((t) => {
+      if (tipo && t.tipo !== tipo) return false;
+      if (termo && !`${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`.toLowerCase().includes(termo)) {
+        return false;
+      }
+      return true;
+    });
+  }, [transacoes, busca, tipo]);
+
+  const validos = selecionados.filter((id) => transacoes.some((t) => t.id === id));
+  const marcadas = transacoes.filter((t) => validos.includes(t.id));
+  const sentidos = new Set(marcadas.map((t) => t.tipo));
+  const misturado = sentidos.size > 1;
+
+  const colunas = React.useMemo<ColumnDef<TransacaoPainel, unknown>[]>(
+    () => [
+      {
+        accessorKey: "dataMovimento",
+        header: "Data",
+        size: 110,
+        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.dataMovimento)}</span>,
+      },
+      {
+        accessorKey: "memo",
+        header: "Histórico do banco",
+        size: 380,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => row.original.memo ?? <CelulaVazia />,
+      },
+      {
+        accessorKey: "valor",
+        header: "Valor",
+        size: 140,
+        meta: { alinharDireita: true, celular: "valor" },
+        cell: ({ row }) => <ValorMovimento valor={row.original.valor} />,
+      },
+      {
+        id: "sugestao",
+        header: "O app tem",
+        size: 300,
+        cell: ({ row }) => {
+          if (pareceAplicacaoAutomatica(row.original.memo)) {
+            return <span className="text-muted-foreground">Aplicação automática: lance como transferência</span>;
+          }
+          const texto = resumoSugestao(sugestoes.get(row.original.id));
+          return texto ? (
+            <span className="text-status-pendente" title={texto}>
+              {texto}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Nada parecido: lançar</span>
+          );
+        },
+      },
+      {
+        id: "acoes",
+        header: "",
+        size: 290,
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
+        cell: ({ row }) => {
+          const t = row.original;
+          const aplicacao = pareceAplicacaoAutomatica(t.memo);
+          return (
+            <div className="flex justify-end gap-1">
+              {permissoes.conciliar ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => onCasar(t.id)}>
+                  <Link2 />
+                  Casar
+                </Button>
+              ) : null}
+              {permissoes.conciliar && permissoes.lancar && !aplicacao ? (
+                <Button type="button" size="sm" variant="outline" onClick={() => onLancar([t.id])}>
+                  <FilePlus2 />
+                  Lançar
+                </Button>
+              ) : null}
+              {permissoes.conciliar && permissoes.transferir ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={aplicacao ? "outline" : "ghost"}
+                  onClick={() => onTransferir([t.id])}
+                  aria-label="Lançar como transferência"
+                  title="Lançar como transferência"
+                >
+                  <ArrowLeftRight />
+                  {aplicacao ? "Transferência" : null}
+                </Button>
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ],
+    [sugestoes, permissoes, onCasar, onLancar, onTransferir],
+  );
+
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      temValor: busca !== "",
+      onLimpar: () => setBusca(""),
+      elemento: (
+        <FiltroBusca
+          valor={busca}
+          onValorChange={(v) => {
+            setBusca(v);
+            zerarPagina();
+          }}
+          placeholder="Buscar no histórico ou valor"
+        />
+      ),
+    },
+    {
+      id: "tipo",
+      rotulo: "Entrada ou saída",
+      temValor: tipo !== "",
+      onLimpar: () => setTipo(""),
+      elemento: (
+        <FiltroSelect
+          valor={tipo}
+          onValorChange={(v) => {
+            setTipo(v);
+            zerarPagina();
+          }}
+          opcoes={[
+            { valor: "debito", rotulo: "Saídas" },
+            { valor: "credito", rotulo: "Entradas" },
+          ]}
+          placeholder="Entrada ou saída"
+          todosRotulo="Entradas e saídas"
+        />
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-2">
+      {validos.length > 0 ? (
+        <BarraSelecao
+          quantidade={validos.length}
+          onLimpar={() => setSelecionados([])}
+          resumo={
+            misturado
+              ? "Marque só entradas ou só saídas para lançar juntas"
+              : `Total ${formatarBRL(Math.abs(somar(marcadas.map((t) => t.valor))))}`
+          }
+        >
+          {permissoes.lancar ? (
+            <Button type="button" size="sm" disabled={misturado} onClick={() => onLancar(validos)}>
+              <FilePlus2 />
+              Lançar {validos.length}
+            </Button>
+          ) : null}
+          {permissoes.transferir ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={misturado}
+              onClick={() => onTransferir(validos)}
+            >
+              <ArrowLeftRight />
+              Transferência
+            </Button>
+          ) : null}
+        </BarraSelecao>
+      ) : null}
+      <DataTable
+        idTabela="financeiro.conciliacao.faltam"
+        columns={colunas}
+        data={dados}
+        filtros={filtros}
+        pageIndex={paginacao.pageIndex}
+        pageSize={paginacao.pageSize}
+        onPaginationChange={setPaginacao}
+        selecao={
+          permissoes.conciliar && (permissoes.lancar || permissoes.transferir)
+            ? {
+                idDaLinha: (t: TransacaoPainel) => t.id,
+                selecionados: validos,
+                onSelecionadosChange: setSelecionados,
+              }
+            : undefined
+        }
+        emptyState={
+          <EmptyState
+            icone={CheckCheck}
+            titulo={transacoes.length === 0 ? "Todo o extrato está no app" : "Nenhum movimento com esses filtros"}
+            descricao={
+              transacoes.length === 0
+                ? "Cada movimento do banco neste mês já casou com um lançamento ou transferência."
+                : "Ajuste ou limpe os filtros."
+            }
+            className="border-none bg-transparent"
+          />
+        }
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// No app, fora do banco
+// ---------------------------------------------------------------------------
+
+const ROTULO_ORIGEM: Record<string, string> = {
+  manual: "Manual",
+  oc: "Ordem de compra",
+  diaria: "Diária",
+  folha: "Folha",
+  folha_guia: "Guia da folha",
+  adiantamento: "Adiantamento",
+  rescisao: "Rescisão",
+  decimo_terceiro: "13º",
+  ferias: "Férias",
+  decimo_terceiro_guia: "Guia do 13º",
+  ferias_guia: "Guia de férias",
+  aplicacao: "Aplicação",
+};
+
+function TabelaForaDoBanco({
+  itens,
+  permissoes,
+  onTrocarConta,
+  onExcluir,
+}: {
+  itens: ItemForaDoBanco[];
+  permissoes: PermissoesConciliacao;
+  onTrocarConta: (parcela: ParcelaLivre) => void;
+  onExcluir: (parcela: ParcelaLivre) => void;
+}) {
+  const { paginacao, setPaginacao } = usePaginacaoCliente();
+
+  const colunas = React.useMemo<ColumnDef<ItemForaDoBanco, unknown>[]>(
+    () => [
+      {
+        accessorKey: "data",
+        header: "Pago em",
+        size: 110,
+        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.data)}</span>,
+      },
+      {
+        id: "documento",
+        header: "No app",
+        size: 360,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => {
+          const item = row.original;
+          if (item.especie === "transferencia") {
+            const t = item.transferencia;
+            return `${t.numero ? `${t.numero} · ` : ""}${t.origemNome ?? "-"} para ${t.destinoNome ?? "-"}`;
+          }
+          const p = item.parcela;
+          return [p.lancamentoNumero, p.nome, p.descricao].filter(Boolean).join(" · ");
+        },
+      },
+      {
+        id: "origem",
+        header: "Origem",
+        size: 140,
+        cell: ({ row }) =>
+          row.original.especie === "transferencia"
+            ? "Transferência"
+            : (ROTULO_ORIGEM[row.original.parcela.origem] ?? row.original.parcela.origem),
+      },
+      {
+        accessorKey: "valor",
+        header: "Valor",
+        size: 140,
+        meta: { alinharDireita: true, celular: "valor" },
+        cell: ({ row }) => <ValorMovimento valor={row.original.valor} />,
+      },
+      {
+        id: "acoes",
+        header: "",
+        size: 250,
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
+        cell: ({ row }) => {
+          const item = row.original;
+          if (item.especie === "transferencia") {
+            return (
+              <Button asChild type="button" size="sm" variant="ghost">
+                <Link href="/financeiro/transferencias">Abrir transferências</Link>
+              </Button>
+            );
+          }
+          if (!permissoes.conciliar) return null;
+          const manual = item.parcela.origem === "manual";
+          return (
+            <div className="flex justify-end gap-1">
+              <Button type="button" size="sm" variant="outline" onClick={() => onTrocarConta(item.parcela)}>
+                <Pencil />
+                Mudar conta
+              </Button>
+              {permissoes.excluir && manual ? (
+                <Button type="button" size="sm" variant="ghost" onClick={() => onExcluir(item.parcela)}>
+                  <Trash2 />
+                  Excluir
+                </Button>
+              ) : !manual ? (
+                <span className="self-center text-legenda text-muted-foreground">Exclui na origem</span>
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ],
+    [permissoes, onTrocarConta, onExcluir],
+  );
+
+  return (
+    <DataTable
+      idTabela="financeiro.conciliacao.fora-do-banco"
+      columns={colunas}
+      data={itens}
+      pageIndex={paginacao.pageIndex}
+      pageSize={paginacao.pageSize}
+      onPaginationChange={setPaginacao}
+      emptyState={
+        <EmptyState
+          icone={CheckCheck}
+          titulo="Nada sobrando no app"
+          descricao="Todo pagamento desta conta no mês aparece no extrato."
+          className="border-none bg-transparent"
+        />
+      }
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Casados
+// ---------------------------------------------------------------------------
+
+function precisaConferir(t: TransacaoPainel): boolean {
+  if (!t.automatica || !t.parcela) return false;
+  return palavrasEmComum(t.memo, [t.parcela.nome, t.parcela.descricao]) === 0;
+}
+
+function TabelaCasados({
+  transacoes,
+  permissoes,
+  onDesfazer,
+}: {
+  transacoes: TransacaoPainel[];
+  permissoes: PermissoesConciliacao;
+  onDesfazer: (t: TransacaoPainel) => void;
+}) {
+  const [busca, setBusca] = React.useState("");
+  const [situacao, setSituacao] = React.useState("");
+  const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
+
+  const dados = React.useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return transacoes.filter((t) => {
+      if (situacao === "confira" && !precisaConferir(t)) return false;
+      if (situacao === "automatico" && !t.automatica) return false;
+      if (situacao === "manual" && t.automatica) return false;
+      if (termo && !`${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo)) return false;
+      return true;
+    });
+  }, [transacoes, busca, situacao]);
+
+  const colunas = React.useMemo<ColumnDef<TransacaoPainel, unknown>[]>(
+    () => [
+      {
+        accessorKey: "dataMovimento",
+        header: "Data",
+        size: 110,
+        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.dataMovimento)}</span>,
+      },
+      {
+        accessorKey: "memo",
+        header: "Histórico do banco",
+        size: 320,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => row.original.memo ?? <CelulaVazia />,
+      },
+      {
+        accessorKey: "valor",
+        header: "Valor",
+        size: 140,
+        meta: { alinharDireita: true, celular: "valor" },
+        cell: ({ row }) => <ValorMovimento valor={row.original.valor} />,
+      },
+      {
+        id: "vinculo",
+        header: "No app",
+        size: 320,
+        cell: ({ row }) => vinculoDe(row.original),
+      },
+      {
+        id: "como",
+        header: "Como",
+        size: 130,
+        meta: { naoTruncar: true },
+        cell: ({ row }) =>
+          precisaConferir(row.original) ? (
+            <StatusBadge status="pendente_aprovacao" rotulo="Confira" />
+          ) : row.original.automatica ? (
+            <StatusBadge status="aprovado" rotulo="Automático" />
+          ) : (
+            <StatusBadge status="executado" rotulo="Manual" />
+          ),
+      },
+      {
+        id: "acoes",
+        header: "",
+        size: 130,
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
+        cell: ({ row }) =>
+          permissoes.conciliar ? (
+            <Button type="button" size="sm" variant="ghost" onClick={() => onDesfazer(row.original)}>
+              <X />
+              Desfazer
+            </Button>
+          ) : null,
+      },
+    ],
+    [permissoes, onDesfazer],
+  );
+
+  const qtdConferir = transacoes.filter(precisaConferir).length;
+
+  const filtros: FiltroConfiguravel[] = [
+    {
+      id: "busca",
+      rotulo: "Busca",
+      fixo: true,
+      temValor: busca !== "",
+      onLimpar: () => setBusca(""),
+      elemento: (
+        <FiltroBusca
+          valor={busca}
+          onValorChange={(v) => {
+            setBusca(v);
+            zerarPagina();
+          }}
+          placeholder="Buscar no histórico ou no lançamento"
+        />
+      ),
+    },
+    {
+      id: "como",
+      rotulo: "Como casou",
+      fixo: true,
+      temValor: situacao !== "",
+      onLimpar: () => setSituacao(""),
+      elemento: (
+        <FiltroSelect
+          valor={situacao}
+          onValorChange={(v) => {
+            setSituacao(v);
+            zerarPagina();
+          }}
+          opcoes={[
+            { valor: "confira", rotulo: `Para conferir (${qtdConferir})` },
+            { valor: "automatico", rotulo: "Automático" },
+            { valor: "manual", rotulo: "Manual" },
+          ]}
+          placeholder="Como casou"
+          todosRotulo="Todos"
+        />
+      ),
+    },
+  ];
+
+  return (
+    <DataTable
+      idTabela="financeiro.conciliacao.casados"
+      columns={colunas}
+      data={dados}
+      filtros={filtros}
+      pageIndex={paginacao.pageIndex}
+      pageSize={paginacao.pageSize}
+      onPaginationChange={setPaginacao}
+      emptyState={
+        <EmptyState
+          icone={Link2}
+          titulo={transacoes.length === 0 ? "Nada casado ainda" : "Nenhum casamento com esses filtros"}
+          descricao={
+            transacoes.length === 0
+              ? "Use Casar automaticamente, ou case cada movimento em Faltam no app."
+              : "Ajuste ou limpe os filtros."
+          }
+          className="border-none bg-transparent"
+        />
+      }
+    />
   );
 }

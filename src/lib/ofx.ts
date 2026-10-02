@@ -21,7 +21,26 @@ export interface TransacaoOfx {
 export interface ExtratoOfx {
   periodoInicio: string | null;
   periodoFim: string | null;
+  /** Número da conta que o banco escreveu no arquivo (ACCTID), cru. */
+  contaOfx: string | null;
   transacoes: TransacaoOfx[];
+}
+
+/**
+ * Confere se o arquivo é da conta escolhida, pelos dígitos do ACCTID contra o
+ * número cadastrado. Um termina no outro porque cada banco formata de um
+ * jeito: o BB manda "102124-9" para a conta "102.124-9", e há banco que põe
+ * agência ou operação na frente. Sem número de um dos lados, não dá para
+ * conferir e não recusa.
+ */
+export function contaDoArquivoConfere(
+  contaOfx: string | null,
+  numeroCadastrado: string | null,
+): boolean {
+  const doArquivo = (contaOfx ?? "").replace(/\D/g, "");
+  const doCadastro = (numeroCadastrado ?? "").replace(/\D/g, "");
+  if (doArquivo === "" || doCadastro === "") return true;
+  return doArquivo.endsWith(doCadastro) || doCadastro.endsWith(doArquivo);
 }
 
 /** Data ISO yyyy-MM-dd no formato que o Tiago lê: dd/MM/yyyy. */
@@ -153,6 +172,7 @@ export function parseOfx(conteudo: string): ExtratoOfx {
   return {
     periodoInicio: trocado ? fimBruto : inicioBruto,
     periodoFim: trocado ? inicioBruto : fimBruto,
+    contaOfx: campo(conteudo, "ACCTID"),
     transacoes,
   };
 }
