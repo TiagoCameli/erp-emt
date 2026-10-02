@@ -14,6 +14,7 @@ import {
   MoneyText,
   useFiltrosUrl,
   usePersonalizacaoFiltros,
+  type PropsItemDaGrade,
 } from "@/components/canonicos";
 import { CartaoGrafico } from "@/modules/combustivel/painel/components/cartao-grafico";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,17 @@ function Tabela({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Secao({ titulo, descricao, children, acoes }: { titulo: string; descricao?: string; children: React.ReactNode; acoes?: React.ReactNode }) {
+/**
+ * Bloco de tabela do painel. Aceita a identidade de card (`PropsItemDaGrade`)
+ * porque mora na grade personalizável: cada pessoa muda o tamanho, a ordem e
+ * tira da tela, e com altura escolhida a tabela rola por dentro.
+ */
+function Secao({
+  titulo,
+  descricao,
+  children,
+  acoes,
+}: { titulo: string; descricao?: string; children: React.ReactNode; acoes?: React.ReactNode } & PropsItemDaGrade) {
   return (
     <section className="space-y-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -548,37 +559,41 @@ export function PainelCarretasEmt({ painel, carretas, de, ate, podeConferirAlert
         </GradeKpis>
       )}
 
-      <Secao
-        titulo="Relatório de desempenho"
-        descricao={`${rotuloMes(painel.filtro.de)} a ${rotuloMes(painel.filtro.ate)}. Frota é o gasto lançado na raiz "001 - Carretas EMT", sem placa.`}
-      >
-        <RelatorioPorCarreta painel={painel} />
-      </Secao>
+      <GradeKpis id="frete.carretas-emt.tabelas" titulo="Tabelas" vao="amplo">
+        <Secao
+          larguraPadrao={12}
+          titulo="Relatório de desempenho"
+          descricao={`${rotuloMes(painel.filtro.de)} a ${rotuloMes(painel.filtro.ate)}. Frota é o gasto lançado na raiz "001 - Carretas EMT", sem placa.`}
+        >
+          <RelatorioPorCarreta painel={painel} />
+        </Secao>
 
-      <Secao titulo="Mês a mês" descricao="Parcelas pelo mês de vencimento; gastos pelo mês de competência; fretes pela data do frete">
-        <TabelaMensal painel={painel} />
-      </Secao>
+        <Secao larguraPadrao={12} titulo="Mês a mês" descricao="Parcelas pelo mês de vencimento; gastos pelo mês de competência; fretes pela data do frete">
+          <TabelaMensal painel={painel} />
+        </Secao>
 
-      <Secao titulo="Financiamentos" descricao="Posição de hoje, na fração de cada carreta; o contrato de três carretas aparece uma vez">
-        <TabelaContratos painel={painel} />
-      </Secao>
+        <Secao larguraPadrao={12} titulo="Financiamentos" descricao="Posição de hoje, na fração de cada carreta; o contrato de três carretas aparece uma vez">
+          <TabelaContratos painel={painel} />
+        </Secao>
 
-      <Secao titulo="Gastos por categoria" descricao="Lançamentos do Financeiro nas carretas no período, sem os financiamentos">
-        <TabelaCategorias painel={painel} />
-      </Secao>
+        <Secao larguraPadrao={12} titulo="Gastos por categoria" descricao="Lançamentos do Financeiro nas carretas no período, sem os financiamentos">
+          <TabelaCategorias painel={painel} />
+        </Secao>
 
-      <Secao
-        titulo="Rotas das carretas"
-        descricao="Produção de frete por rota no período, com o km pela estrada, o km lançado e o tempo médio de viagem"
-      >
-        <RotasCarretas
-          rotas={painel.rotas}
-          alertas={painel.alertas}
-          rotaSelecionada={painel.filtro.rota ?? ""}
-          onSelecionarRota={(rota) => setMuitos({ rota })}
-          podeConferir={podeConferirAlertas}
-        />
-      </Secao>
+        <Secao
+          larguraPadrao={12}
+          titulo="Rotas das carretas"
+          descricao="Produção de frete por rota no período, com o km pela estrada, o km lançado e o tempo médio de viagem"
+        >
+          <RotasCarretas
+            rotas={painel.rotas}
+            alertas={painel.alertas}
+            rotaSelecionada={painel.filtro.rota ?? ""}
+            onSelecionarRota={(rota) => setMuitos({ rota })}
+            podeConferir={podeConferirAlertas}
+          />
+        </Secao>
+      </GradeKpis>
     </div>
   );
 }

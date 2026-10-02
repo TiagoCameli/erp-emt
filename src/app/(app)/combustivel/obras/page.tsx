@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { EmptyState, GradeKpis, MoneyText } from "@/components/canonicos";
+import { EmptyState, GradeKpis, ItemGrade, MoneyText } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
@@ -116,32 +116,36 @@ export default async function PaginaObrasCombustivel({
       {linhas.length === 0 ? (
         <EmptyState titulo="Nenhuma obra com saída no período" descricao="Ajuste os filtros ou amplie o período" />
       ) : (
-        <TabelaRanking
-          titulo="Ranking de obras"
-          subtitulo={`${plural(linhas.length, "obra", "obras")} com saída no período`}
-          linhas={linhas}
-          chave={(l) => l.id}
-          cabecalhoNome="Obra"
-          nome={(l) => nomeObra(l.id)}
-          colunas={[
-            { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
-            { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
-            { cabecalho: "R$/L", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorL) },
-            { cabecalho: "Equip.", celula: (l) => l.qtdEquipamentos },
-            {
-              cabecalho: "% do total",
-              alinhar: "esquerda",
-              className: "w-44",
-              celula: (l) => <BarraPercentual pct={l.pctTotal} />,
-            },
-            {
-              cabecalho: "Tend.",
-              alinhar: "esquerda",
-              className: "w-20",
-              celula: (l) => <CelulaTendencia serie={l.spark} suficiente={temPontosDeTendencia(l.spark)} />,
-            },
-          ]}
-        />
+        <GradeKpis id="combustivel.obras.tabelas" titulo="Tabelas" vao="amplo">
+          <ItemGrade titulo="Ranking de obras" idCard="ranking" larguraPadrao={12}>
+            <TabelaRanking
+              titulo="Ranking de obras"
+              subtitulo={`${plural(linhas.length, "obra", "obras")} com saída no período`}
+              linhas={linhas}
+              chave={(l) => l.id}
+              cabecalhoNome="Obra"
+              nome={(l) => nomeObra(l.id)}
+              colunas={[
+                { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
+                { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
+                { cabecalho: "R$/L", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorL) },
+                { cabecalho: "Equip.", celula: (l) => l.qtdEquipamentos },
+                {
+                  cabecalho: "% do total",
+                  alinhar: "esquerda",
+                  className: "w-44",
+                  celula: (l) => <BarraPercentual pct={l.pctTotal} />,
+                },
+                {
+                  cabecalho: "Tend.",
+                  alinhar: "esquerda",
+                  className: "w-20",
+                  celula: (l) => <CelulaTendencia serie={l.spark} suficiente={temPontosDeTendencia(l.spark)} />,
+                },
+              ]}
+            />
+          </ItemGrade>
+        </GradeKpis>
       )}
     </>
   );

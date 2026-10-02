@@ -24,6 +24,7 @@
  */
 
 import type { FreteBase, PedidoBase } from "@/modules/frete/_shared/pedreira-dados";
+import type { Localidade, TracadoRota } from "@/modules/frete/carretas-emt/calculo";
 import {
   agregarPedidos,
   agregarTransporte,
@@ -96,6 +97,8 @@ export interface DadosPainel {
   transportadoras: string[];
   /** Fornecedores escolhidos nos cards, na ordem salva. */
   cardsIds: string[];
+  /** Coordenada dos locais dos fretes e traçado de cada rota, para o mapa das rotas. */
+  mapa: { localidades: Localidade[]; tracados: TracadoRota[] };
 }
 
 export const PAGADOR_EMT = "EMT Construtora";

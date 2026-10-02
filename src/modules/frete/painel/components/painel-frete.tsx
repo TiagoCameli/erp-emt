@@ -55,6 +55,9 @@ import {
 import { CardsSaldo, corDoSaldoAPagar } from "@/modules/frete/painel/components/cards-saldo";
 import { EvolucaoGrafico, MaterialVsFreteGrafico } from "@/modules/frete/painel/components/graficos";
 import { RankingBarras } from "@/modules/frete/painel/components/ranking-barras";
+import { RotasCarretas } from "@/modules/frete/carretas-emt/components/rotas-carretas";
+import { chaveDaRota } from "@/modules/frete/carretas-emt/rotas";
+import { rotasDoPainel } from "@/modules/frete/painel/rotas";
 import {
   AbastecimentosTabela,
   CustoMaterialFreteTabela,
@@ -148,6 +151,21 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
     };
   }, [dados, filtros, cruzados, nomes]);
 
+  // As rotas seguem todos os filtros menos a própria rota (origem e destino), para a tabela
+  // continuar mostrando as outras e a escolhida ficar acesa no mapa.
+  const rotas = React.useMemo(
+    () => rotasDoPainel(cruzarFretes(calc.bases.fretes, { ...cruzados, origem: undefined, destino: undefined }), dados.mapa, de, ate),
+    [calc.bases.fretes, cruzados, dados.mapa, de, ate],
+  );
+  const rotaSelecionada = cruzados.origem && cruzados.destino ? chaveDaRota(cruzados.origem, cruzados.destino) : "";
+  const selecionarRota = React.useCallback(
+    (chave: string | null) => {
+      const rota = chave ? rotas.find((r) => r.chave === chave) : undefined;
+      setCruzados((atual) => ({ ...atual, origem: rota?.origem.id, destino: rota?.destino.id }));
+    },
+    [rotas],
+  );
+
   const topo = cardsTopo(dados, filtros, cruzados, janela);
   const passivo = React.useMemo(() => passivoEmt(dados.saldos), [dados.saldos]);
   const cards = React.useMemo(() => cardsDeSaldo(dados.cardsIds, nomes.fornecedor, dados.saldos), [dados.cardsIds, nomes.fornecedor, dados.saldos]);
@@ -156,6 +174,11 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
     [dados.cardsIds, nomes, dados.transportadoras],
   );
   const obras = React.useMemo(() => opcoesObras(dados.fretes, nomes), [dados.fretes, nomes]);
+
+  // Calculadas aqui para a tabela vazia ficar fora da grade (sem card em branco).
+  const empresaMetodo = pagamentosEmpresaMetodo(calc.pagamentosF);
+  const abastecimentos = abastecimentosPorEmpresa(calc.abastF, nomes);
+  const pagamentosEmpresa = pagamentosPorEmpresa(calc.pagamentosF, calc.abastF);
 
   const chips = (Object.keys(cruzados) as DimensaoCruzada[]).filter((d) => cruzados[d]);
   const temFiltroTopo = obraId !== "" || de !== "" || ate !== "";
@@ -457,6 +480,27 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         </ItemGrade>
       </GradeKpis>
 
+      <GradeKpis id="frete.painel.rotas" titulo="Rotas dos fretes" vao="amplo">
+        <ItemGrade titulo="Rotas dos fretes" larguraPadrao={12}>
+          <section className="flex flex-col gap-2">
+            <div>
+              <h2 className="text-secao font-semibold">Rotas dos fretes</h2>
+              <p className="text-detalhe text-muted-foreground">
+                Produção de frete por rota, de todas as transportadoras, com o km pela estrada, o km lançado e o tempo médio de
+                viagem. Clicar numa rota filtra o painel por ela.
+              </p>
+            </div>
+            {rotas.length > 0 ? (
+              <RotasCarretas rotas={rotas} alertas={[]} rotaSelecionada={rotaSelecionada} onSelecionarRota={selecionarRota} podeConferir={false} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-4 py-8 text-center text-detalhe text-muted-foreground">
+                Nenhum frete com origem e destino nos filtros escolhidos.
+              </p>
+            )}
+          </section>
+        </ItemGrade>
+      </GradeKpis>
+
       <div className="flex flex-col gap-4">
         <div>
           <p className="text-legenda uppercase tracking-wide text-muted-foreground">Compras de material</p>
@@ -555,37 +599,68 @@ export function PainelFrete({ dados, opcoesCards, podeConfigurarCards, veAbastec
         </GradeKpis>
       </div>
 
-      <ResumoTransportadoraTabela calcular={(f) => resumoPorTransportadora(calc.fretesF, f, nomes)} opcoes={calc.opcoes} />
-      <EmpresaMetodoTabela dados={pagamentosEmpresaMetodo(calc.pagamentosF)} />
-      <AbastecimentosTabela dados={abastecimentosPorEmpresa(calc.abastF, nomes)} semPermissao={!veAbastecimentos} />
-      <SaldoPedreiraTabela
-        calcular={(f) => tabelaSaldoPedreira(calc.pedidosF, calc.fretesF, f, sempreVisiveis, nomes)}
-        destinos={calc.opcoes.destinos}
-        nomes={nomes}
-      />
-      <CustoMaterialFreteTabela calcular={(f) => custoMaterialFrete(calc.fretesF, calc.pedidosAgregados, f, nomes)} nomes={nomes} />
-      <GastoTransporteTabela calcular={(f) => gastoTransportePorPedreira(calc.fretesF, f, nomes)} opcoes={calc.opcoes} nomes={nomes} />
-      <MaterialTransportadoTabela calcular={(f) => materialTransportado(calc.fretesF, f)} opcoes={calc.opcoes} nomes={nomes} />
-      <PagamentosEmpresaTabela dados={pagamentosPorEmpresa(calc.pagamentosF, calc.abastF)} />
+      {/* Tabelas: cada uma é um card da grade, a pessoa muda o tamanho, a ordem
+          e tira da tela; com altura escolhida a tabela rola por dentro. As que
+          somem sem dado ficam fora da grade para não deixar card vazio. */}
+      <GradeKpis id="frete.painel.tabelas" titulo="Tabelas" vao="amplo">
+        <ItemGrade titulo="Resumo por transportadora" larguraPadrao={12}>
+          <ResumoTransportadoraTabela calcular={(f) => resumoPorTransportadora(calc.fretesF, f, nomes)} opcoes={calc.opcoes} />
+        </ItemGrade>
+        {empresaMetodo.linhas.length > 0 ? (
+          <ItemGrade titulo="Pagamentos por empresa e método" larguraPadrao={12}>
+            <EmpresaMetodoTabela dados={empresaMetodo} />
+          </ItemGrade>
+        ) : null}
+        {!veAbastecimentos || abastecimentos.empresas.length > 0 ? (
+          <ItemGrade titulo="Abastecimentos em tanque externo" larguraPadrao={12}>
+            <AbastecimentosTabela dados={abastecimentos} semPermissao={!veAbastecimentos} />
+          </ItemGrade>
+        ) : null}
+        <ItemGrade titulo="Pedidos de material por fornecedor" larguraPadrao={12}>
+          <SaldoPedreiraTabela
+            calcular={(f) => tabelaSaldoPedreira(calc.pedidosF, calc.fretesF, f, sempreVisiveis, nomes)}
+            destinos={calc.opcoes.destinos}
+            nomes={nomes}
+          />
+        </ItemGrade>
+        <ItemGrade titulo="Custo material + frete por pedreira e local de entrega" larguraPadrao={12}>
+          <CustoMaterialFreteTabela calcular={(f) => custoMaterialFrete(calc.fretesF, calc.pedidosAgregados, f, nomes)} nomes={nomes} />
+        </ItemGrade>
+        <ItemGrade titulo="Gasto com transporte por material e pedreira" larguraPadrao={12}>
+          <GastoTransporteTabela calcular={(f) => gastoTransportePorPedreira(calc.fretesF, f, nomes)} opcoes={calc.opcoes} nomes={nomes} />
+        </ItemGrade>
+        <ItemGrade titulo="Material transportado" larguraPadrao={12}>
+          <MaterialTransportadoTabela calcular={(f) => materialTransportado(calc.fretesF, f)} opcoes={calc.opcoes} nomes={nomes} />
+        </ItemGrade>
+        {pagamentosEmpresa.linhas.length > 0 ? (
+          <ItemGrade titulo="Pagamentos por empresa" larguraPadrao={12}>
+            <PagamentosEmpresaTabela dados={pagamentosEmpresa} />
+          </ItemGrade>
+        ) : null}
 
-      <SecaoDetalhe titulo="Gasto por obra">
-        {(() => {
-          const linhas = gastoPorObra(calc.fretesF, nomes);
-          if (linhas.length === 0) return <p className="text-detalhe text-muted-foreground">Sem dados</p>;
-          return (
-            <ul className="divide-y divide-border rounded-md border border-border bg-card text-detalhe">
-              {linhas.map((l) => (
-                <li key={l.id} className="flex items-center justify-between px-3 py-2">
-                  <span>{l.nome}</span>
-                  <MoneyText valor={l.valor} className="font-medium" />
-                </li>
-              ))}
-            </ul>
-          );
-        })()}
-      </SecaoDetalhe>
+        <ItemGrade titulo="Gasto por obra" larguraPadrao={12}>
+          <SecaoDetalhe titulo="Gasto por obra">
+            {(() => {
+              const linhas = gastoPorObra(calc.fretesF, nomes);
+              if (linhas.length === 0) return <p className="text-detalhe text-muted-foreground">Sem dados</p>;
+              return (
+                <ul className="divide-y divide-border rounded-md border border-border bg-card text-detalhe">
+                  {linhas.map((l) => (
+                    <li key={l.id} className="flex items-center justify-between px-3 py-2">
+                      <span>{l.nome}</span>
+                      <MoneyText valor={l.valor} className="font-medium" />
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+          </SecaoDetalhe>
+        </ItemGrade>
 
-      <UltimoPrecoTabela linhas={ultimoPrecoPorMaterial(calc.pedidosF, calc.fretesF, nomes)} />
+        <ItemGrade titulo="Último preço por material" larguraPadrao={12}>
+          <UltimoPrecoTabela linhas={ultimoPrecoPorMaterial(calc.pedidosF, calc.fretesF, nomes)} />
+        </ItemGrade>
+      </GradeKpis>
     </div>
   );
 }

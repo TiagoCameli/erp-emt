@@ -7,8 +7,10 @@ import { ReciboDetalhe } from "@/modules/rh/ferias/components/recibo-detalhe";
 import {
   rotuloRecibo,
   STATUS_RECIBO_INFO,
+  vencimentoPadraoRecibo,
 } from "@/modules/rh/ferias/recibo-formato";
 import { buscarRecibo } from "@/modules/rh/ferias/recibo-queries";
+import { listarContasParaAprovacaoRh } from "@/modules/rh/_shared/contas-aprovacao";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
 
@@ -38,6 +40,12 @@ export default async function PaginaReciboFerias({
   if (!recibo) notFound();
 
   const info = STATUS_RECIBO_INFO[recibo.statusRecibo];
+  const podeAprovar = temPermissao(usuario, RECURSO, "aprovar");
+  // Contas só para quem vai aprovar um recibo pendente.
+  const contasAprovacao =
+    podeAprovar && recibo.statusRecibo === "pendente_aprovacao"
+      ? await listarContasParaAprovacaoRh()
+      : [];
 
   return (
     <>
@@ -65,8 +73,19 @@ export default async function PaginaReciboFerias({
       <ReciboDetalhe
         recibo={recibo}
         podeEditar={temPermissao(usuario, RECURSO, "editar")}
-        podeAprovar={temPermissao(usuario, RECURSO, "aprovar")}
+        podeAprovar={podeAprovar}
         podeDesaprovar={temPermissao(usuario, RECURSO, "desaprovar")}
+        aprovacao={{
+          contas: contasAprovacao,
+          podeProgramarData: temPermissao(
+            usuario,
+            "financeiro.aprovacao-pagamentos",
+            "aprovar",
+          ),
+          vencimento:
+            recibo.dataVencimento ??
+            (recibo.dataInicio ? vencimentoPadraoRecibo(recibo.dataInicio) : null),
+        }}
       />
     </>
   );

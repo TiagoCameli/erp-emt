@@ -54,6 +54,29 @@ export interface AprovarDialogProps {
     dataProgramada: string | null,
     contaId: string | null,
   ) => Promise<void>;
+  /*
+   * Os campos abaixo existem para a aprovação de folha, 13º e férias, que gera
+   * os pagamentos ali mesmo (pedido do Tiago, 02/10/2026: "no mesmo estilo da
+   * área de aprovação de pagamentos, escolhendo a conta bancária e a data").
+   * Sem eles, o modal é o da fila de pagamentos, sem mudança nenhuma.
+   */
+  /** Título no lugar de "Aprovar pagamento". */
+  titulo?: string;
+  /** Texto do botão de confirmar no lugar de "Aprovar pagamento". */
+  rotuloConfirmar?: string;
+  /** Texto embaixo do título, no lugar do valor + explicação de parcela. */
+  descricao?: React.ReactNode;
+  /** Sem conta escolhida o botão fica desabilitado (o RH nasce sem conta). */
+  contaObrigatoria?: boolean;
+  /** Ajuda embaixo do campo de conta, no lugar da de parcela. */
+  ajudaConta?: string;
+  /**
+   * Quando vem, a data não é escolhida aqui e este texto explica por quê (quem
+   * aprova a folha sem aprovar pagamento: a data é escolhida no Financeiro).
+   */
+  semEscolhaDeData?: string;
+  /** Sem vencimento definido: a data deixa de ser opcional. */
+  dataObrigatoria?: boolean;
 }
 
 /** Rótulo da conta no campo: nome + banco, igual ao drawer de pagamento. */
@@ -88,7 +111,16 @@ export function AprovarDialog({
   contaAtualId,
   contaAtualNome,
   onConfirmar,
+  titulo,
+  rotuloConfirmar,
+  descricao,
+  contaObrigatoria = false,
+  ajudaConta,
+  semEscolhaDeData,
+  dataObrigatoria = false,
 }: AprovarDialogProps) {
+  const escolheData = semEscolhaDeData === undefined;
+  const exigeData = escolheData && dataObrigatoria;
   const [outraData, setOutraData] = React.useState(false);
   const [data, setData] = React.useState("");
   const [conta, setConta] = React.useState("");
@@ -99,13 +131,15 @@ export function AprovarDialog({
   if (aberto !== abertoAnterior) {
     setAbertoAnterior(aberto);
     if (aberto) {
-      setOutraData(false);
+      setOutraData(exigeData);
       setData(vencimento ?? dataHojeISO());
       setConta(contaAtualId ?? "");
     }
   }
 
-  const aviso = outraData && data ? avisoFimDeSemana(data) : null;
+  // Data obrigatória não depende do checkbox (que nem aparece nesse caso).
+  const usaData = escolheData && (outraData || exigeData);
+  const aviso = usaData && data ? avisoFimDeSemana(data) : null;
   const lote = quantidade > 1;
 
   // A conta atual entra na lista mesmo se não estiver entre as ativas: conta
@@ -135,7 +169,10 @@ export function AprovarDialog({
         () =>
           // Só manda a conta quando é troca de verdade: mandar a mesma de volta
           // faria o banco revalidar uma conta que pode ter sido desativada depois.
-          onConfirmar(outraData ? data : null, trocouConta ? conta : null),
+          onConfirmar(
+            usaData ? data : null,
+            trocouConta ? conta : null,
+          ),
       );
     } finally {
       setSalvando(false);
@@ -147,12 +184,17 @@ export function AprovarDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {lote ? `Aprovar ${quantidade} pagamentos` : "Aprovar pagamento"}
+            {titulo ??
+              (lote ? `Aprovar ${quantidade} pagamentos` : "Aprovar pagamento")}
           </DialogTitle>
           <DialogDescription>
-            {formatarBRL(valorTotal)}
-            {lote ? ` em ${quantidade} parcelas` : ""}. Aprovar autoriza o
-            pagamento para uma data: antes dela, o pagamento fica bloqueado.
+            {descricao ?? (
+              <>
+                {formatarBRL(valorTotal)}
+                {lote ? ` em ${quantidade} parcelas` : ""}. Aprovar autoriza o
+                pagamento para uma data: antes dela, o pagamento fica bloqueado.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -163,7 +205,14 @@ export function AprovarDialog({
               className="mt-0.5 size-4 shrink-0 text-muted-foreground"
             />
             <p className="text-detalhe text-muted-foreground">
-              {outraData ? (
+              {!escolheData ? (
+                <>{semEscolhaDeData}</>
+              ) : exigeData ? (
+                <>
+                  Ainda não há vencimento definido: escolha a data do
+                  pagamento. Ela também vira o vencimento.
+                </>
+              ) : usaData ? (
                 <>
                   Data escolhida agora, registrada como definida na aprovação.
                 </>
@@ -192,21 +241,23 @@ export function AprovarDialog({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="aprovar-outra-data"
-              checked={outraData}
-              onCheckedChange={(marcado) => setOutraData(marcado === true)}
-              disabled={salvando}
-            />
-            <Label htmlFor="aprovar-outra-data" className="font-normal">
-              {lote
-                ? "Usar uma única data para todas"
-                : "Autorizar para outra data"}
-            </Label>
-          </div>
+          {escolheData && !exigeData ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="aprovar-outra-data"
+                checked={outraData}
+                onCheckedChange={(marcado) => setOutraData(marcado === true)}
+                disabled={salvando}
+              />
+              <Label htmlFor="aprovar-outra-data" className="font-normal">
+                {lote
+                  ? "Usar uma única data para todas"
+                  : "Autorizar para outra data"}
+              </Label>
+            </div>
+          ) : null}
 
-          {outraData ? (
+          {usaData ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="aprovar-data">Data programada de pagamento</Label>
               <Input
@@ -248,13 +299,14 @@ export function AprovarDialog({
               className="w-full"
             />
             <p className="text-legenda text-muted-foreground">
-              {lote
+              {ajudaConta ??
+                (lote
                 ? conta === ""
                   ? `Sem escolher, cada um dos ${quantidade} pagamentos sai da conta do próprio lançamento.`
                   : `A conta escolhida vale para os ${quantidade} pagamentos selecionados, só nesta aprovação.`
                 : trocouConta
                   ? "Trocar a conta aqui vale só para esta parcela: as outras do lançamento continuam na conta original."
-                  : "Conta que veio do lançamento. Trocar aqui vale só para esta parcela."}
+                  : "Conta que veio do lançamento. Trocar aqui vale só para esta parcela.")}
             </p>
           </div>
         </div>
@@ -273,17 +325,20 @@ export function AprovarDialog({
           <Button
             type="button"
             onClick={() => void confirmar()}
-            disabled={salvando || (outraData && data === "")}
+            disabled={
+              salvando ||
+              (usaData && data === "") ||
+              (contaObrigatoria && conta === "")
+            }
           >
             {salvando ? (
               <>
                 <LoaderCircle className="animate-spin" />
                 Aprovando...
               </>
-            ) : lote ? (
-              `Aprovar ${quantidade} pagamentos`
             ) : (
-              "Aprovar pagamento"
+              (rotuloConfirmar ??
+              (lote ? `Aprovar ${quantidade} pagamentos` : "Aprovar pagamento"))
             )}
           </Button>
         </DialogFooter>

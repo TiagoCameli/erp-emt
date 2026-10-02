@@ -178,25 +178,35 @@ function SecaoRelatorio({
 }
 
 /**
- * Gráfico do relatório numa grade de um card só, para a pessoa poder aumentar,
+ * Gráfico do relatório numa grade personalizável, para a pessoa poder aumentar,
  * diminuir ou esconder. A moldura é coluna flex para o gráfico crescer junto.
+ *
+ * `depois` são outros cards da MESMA grade, logo abaixo do gráfico (a tabela do
+ * relatório, em `ItemGrade`): ficam na ordem de hoje, gráfico e depois tabela,
+ * e a pessoa mexe nos dois juntos.
  */
 function PainelGrafico({
   id,
   titulo,
+  tituloGrade = titulo,
+  depois,
   children,
 }: {
   id: string;
   titulo: string;
+  /** Nome da grade quando ela leva mais que o gráfico. Ausente = `titulo`. */
+  tituloGrade?: string;
+  depois?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <GradeKpis id={id} titulo={titulo} vao="amplo">
+    <GradeKpis id={id} titulo={tituloGrade} vao="amplo">
       <ItemGrade titulo={titulo} idCard="grafico" larguraPadrao={12}>
         <div className="flex flex-col rounded-lg border border-border bg-card p-4">
           {children}
         </div>
       </ItemGrade>
+      {depois}
     </GradeKpis>
   );
 }
@@ -374,11 +384,15 @@ async function ConteudoDre({
           descricao="Não há receitas nem despesas com mês de referência neste recorte."
         />
       ) : (
-        <DreTabela
-          dre={dre}
-          periodo={periodo}
-          podeVerLancamentos={podeVerLancamentos}
-        />
+        <GradeKpis id="financeiro.relatorios.dre.tabela" titulo="Tabela do DRE" vao="amplo">
+          <ItemGrade titulo="Tabela do DRE" idCard="tabela" larguraPadrao={12}>
+            <DreTabela
+              dre={dre}
+              periodo={periodo}
+              podeVerLancamentos={podeVerLancamentos}
+            />
+          </ItemGrade>
+        </GradeKpis>
       )}
     </>
   );
@@ -421,19 +435,22 @@ async function ConteudoAging({
           descricao="Não há parcelas pendentes ou aprovadas para envelhecer."
         />
       ) : (
-        <>
-          <PainelGrafico
-            id="financeiro.relatorios.aging.grafico"
-            titulo="Gráfico do aging"
-          >
-            <AgingGrafico
-              aPagar={dados.aPagar}
-              aReceber={dados.aReceber}
-              podeVerLancamentos={podeVerLancamentos}
-            />
-          </PainelGrafico>
-          <AgingTabela aging={dados} podeVerLancamentos={podeVerLancamentos} />
-        </>
+        <PainelGrafico
+          id="financeiro.relatorios.aging.grafico"
+          titulo="Gráfico do aging"
+          tituloGrade="Gráfico e tabela do aging"
+          depois={
+            <ItemGrade titulo="Tabela do aging" idCard="tabela" larguraPadrao={12}>
+              <AgingTabela aging={dados} podeVerLancamentos={podeVerLancamentos} />
+            </ItemGrade>
+          }
+        >
+          <AgingGrafico
+            aPagar={dados.aPagar}
+            aReceber={dados.aReceber}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </PainelGrafico>
       )}
     </>
   );
@@ -495,10 +512,18 @@ async function ConteudoPosicaoBancaria({
           }
         />
       </GradeKpis>
-      <PosicaoBancariaTabela
-        posicao={posicao}
-        podeVerLancamentos={podeVerLancamentos}
-      />
+      <GradeKpis
+        id="financeiro.relatorios.posicao-bancaria.tabela"
+        titulo="Tabela da posição bancária"
+        vao="amplo"
+      >
+        <ItemGrade titulo="Saldo por conta" idCard="tabela" larguraPadrao={12}>
+          <PosicaoBancariaTabela
+            posicao={posicao}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </ItemGrade>
+      </GradeKpis>
     </>
   );
 }
@@ -568,26 +593,32 @@ async function ConteudoCreditos({
           baixo lista TODO crédito marcado (inclusive os 10 financiamentos de
           equipamento, que ficaram no centro do bem), e esta é só o dinheiro
           emprestado. */}
-      {contratos.contratos.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <h3 className="text-corpo font-medium text-foreground">
-              Contratos do centro de Empréstimos
-            </h3>
-            <p className="text-legenda text-muted-foreground">
-              Tomado e pago de cada contrato. As duas colunas ficam lado a lado
-              porque não se comparam ainda: parte das prestações antigas está nos
-              extratos e não foi lançada.
-            </p>
-          </div>
-          <ContratosEmprestimoTabela contratos={contratos} />
-        </div>
-      ) : null}
+      <GradeKpis id="financeiro.relatorios.creditos.tabela" titulo="Tabelas de créditos" vao="amplo">
+        {contratos.contratos.length > 0 ? (
+          <ItemGrade titulo="Contratos do centro de Empréstimos" idCard="contratos" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-corpo font-medium text-foreground">
+                  Contratos do centro de Empréstimos
+                </h3>
+                <p className="text-legenda text-muted-foreground">
+                  Tomado e pago de cada contrato. As duas colunas ficam lado a lado
+                  porque não se comparam ainda: parte das prestações antigas está nos
+                  extratos e não foi lançada.
+                </p>
+              </div>
+              <ContratosEmprestimoTabela contratos={contratos} />
+            </div>
+          </ItemGrade>
+        ) : null}
 
-      <CreditosTabela
-        creditos={dados}
-        podeVerLancamentos={podeVerLancamentos}
-      />
+        <ItemGrade titulo="Créditos por lançamento" idCard="creditos" larguraPadrao={12}>
+          <CreditosTabela
+            creditos={dados}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </ItemGrade>
+      </GradeKpis>
 
       <div className="flex flex-col gap-3">
         <h3 className="text-corpo font-medium text-foreground">
@@ -596,13 +627,17 @@ async function ConteudoCreditos({
         <PainelGrafico
           id="financeiro.relatorios.creditos.grafico"
           titulo="O que vence pela frente"
+          depois={
+            <ItemGrade titulo="Tabela do que vence pela frente" idCard="tabela" larguraPadrao={12}>
+              <CreditosPorMesTabela
+                meses={dados.proximosMeses}
+                total={dados.totalProximosMeses}
+              />
+            </ItemGrade>
+          }
         >
           <CreditosGrafico meses={dados.proximosMeses} />
         </PainelGrafico>
-        <CreditosPorMesTabela
-          meses={dados.proximosMeses}
-          total={dados.totalProximosMeses}
-        />
       </div>
     </>
   );
@@ -655,34 +690,42 @@ async function ConteudoInvestimentos({
         />
       </GradeKpis>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-corpo font-medium text-foreground">
-            Saldo por aplicação
-          </h3>
-          <p className="text-legenda text-muted-foreground">
-            Saldo aplicado é tudo o que foi aplicado menos o que foi resgatado,
-            no histórico inteiro. O período recorta só as colunas do período.
-          </p>
-        </div>
-        <AplicacoesTabela dados={dados} />
-      </div>
+      <GradeKpis id="financeiro.relatorios.investimentos.tabela" titulo="Tabelas de investimentos" vao="amplo">
+        <ItemGrade titulo="Saldo por aplicação" idCard="aplicacoes" larguraPadrao={12}>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-corpo font-medium text-foreground">
+                Saldo por aplicação
+              </h3>
+              <p className="text-legenda text-muted-foreground">
+                Saldo aplicado é tudo o que foi aplicado menos o que foi resgatado,
+                no histórico inteiro. O período recorta só as colunas do período.
+              </p>
+            </div>
+            <AplicacoesTabela dados={dados} />
+          </div>
+        </ItemGrade>
 
-      {dados.meses.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-corpo font-medium text-foreground">Mês a mês</h3>
-          <InvestimentosPorMesTabela dados={dados} />
-        </div>
-      ) : null}
+        {dados.meses.length > 0 ? (
+          <ItemGrade titulo="Mês a mês" idCard="mes-a-mes" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-corpo font-medium text-foreground">Mês a mês</h3>
+              <InvestimentosPorMesTabela dados={dados} />
+            </div>
+          </ItemGrade>
+        ) : null}
 
-      {dados.movimentos.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-corpo font-medium text-foreground">
-            Aplicações e resgates
-          </h3>
-          <MovimentosInvestimentoTabela dados={dados} />
-        </div>
-      ) : null}
+        {dados.movimentos.length > 0 ? (
+          <ItemGrade titulo="Aplicações e resgates" idCard="movimentos" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-corpo font-medium text-foreground">
+                Aplicações e resgates
+              </h3>
+              <MovimentosInvestimentoTabela dados={dados} />
+            </div>
+          </ItemGrade>
+        ) : null}
+      </GradeKpis>
     </>
   );
 }
@@ -891,13 +934,19 @@ async function ConteudoCustoCc({
         </PainelGrafico>
       )}
 
-      <CustoCcTabela
-        custo={custo}
-        periodo={periodo}
-        filtros={filtrosDoDrill}
-        podeVerLancamentos={podeVerLancamentos}
-        variacao={variacao}
-      />
+      {/* Grade própria, e não dentro da do gráfico: o gráfico troca de grade
+          conforme o modo (série ou barras), e a tabela é a mesma nos dois. */}
+      <GradeKpis id="financeiro.relatorios.custo-cc.tabela" titulo="Tabela do custo por centro" vao="amplo">
+        <ItemGrade titulo="Tabela do custo por centro" idCard="tabela" larguraPadrao={12}>
+          <CustoCcTabela
+            custo={custo}
+            periodo={periodo}
+            filtros={filtrosDoDrill}
+            podeVerLancamentos={podeVerLancamentos}
+            variacao={variacao}
+          />
+        </ItemGrade>
+      </GradeKpis>
     </>
   );
 }
@@ -1006,29 +1055,35 @@ async function ConteudoCustoReceita({
           Central, que o corte por centro financeiro não pegava. Hoje a RPC só
           devolve categoria operacional, então não há o que mostrar. */}
 
+      {/* As duas tabelas nascem lado a lado (meia linha cada): são de dinheiros
+          opostos e se leem em par. */}
       <PainelGrafico
         id="financeiro.relatorios.custo-receita.grafico"
         titulo="Custo e receita por mês"
+        tituloGrade="Gráfico e tabelas de custo x receita"
+        depois={
+          <>
+            <ItemGrade titulo="Custo por centro" idCard="tabela-custo" larguraPadrao={6}>
+              <CustoReceitaTabela
+                linhas={custos}
+                lado="custo"
+                meses={meses}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+            </ItemGrade>
+            <ItemGrade titulo="Receita por centro" idCard="tabela-receita" larguraPadrao={6}>
+              <CustoReceitaTabela
+                linhas={receitas}
+                lado="receita"
+                meses={meses}
+                podeVerLancamentos={podeVerLancamentos}
+              />
+            </ItemGrade>
+          </>
+        }
       >
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
       </PainelGrafico>
-
-      {/* Lado a lado no desktop, empilhado no mobile: as duas tabelas são de
-          dinheiros opostos e se leem em par. */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CustoReceitaTabela
-          linhas={custos}
-          lado="custo"
-          meses={meses}
-          podeVerLancamentos={podeVerLancamentos}
-        />
-        <CustoReceitaTabela
-          linhas={receitas}
-          lado="receita"
-          meses={meses}
-          podeVerLancamentos={podeVerLancamentos}
-        />
-      </div>
     </>
   );
 }
@@ -1093,12 +1148,16 @@ async function ConteudoCustoGrupo({
           detalhe="Abra o grupo para ver subcategoria e insumo"
         />
       </GradeKpis>
-      <CustoGrupoTabela
-        custo={custo}
-        periodo={periodo}
-        recorte={recorte}
-        podeVerLancamentos={podeVerLancamentos}
-      />
+      <GradeKpis id="financeiro.relatorios.custo-grupo.tabela" titulo="Tabela do custo por grupo" vao="amplo">
+        <ItemGrade titulo="Tabela do custo por grupo" idCard="tabela" larguraPadrao={12}>
+          <CustoGrupoTabela
+            custo={custo}
+            periodo={periodo}
+            recorte={recorte}
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        </ItemGrade>
+      </GradeKpis>
     </>
   );
 }

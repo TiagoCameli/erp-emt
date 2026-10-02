@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { EmptyState, GradeKpis, MoneyText } from "@/components/canonicos";
+import { EmptyState, GradeKpis, ItemGrade, MoneyText } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
@@ -175,35 +175,39 @@ export default async function PaginaEquipamentosCombustivel({
             />
           </GradeKpis>
 
-          <TabelaRanking
-            titulo={proprios ? "Ranking de equipamentos" : "Ranking de carretas"}
-            subtitulo={`${plural(linhas.length, proprios ? "equipamento" : "placa", proprios ? "equipamentos" : "placas")} no período${veSaidas ? " · o nome abre as saídas do recorte" : ""}${proprios ? " · linha hachurada = atribuir" : ""}`}
-            linhas={linhas}
-            chave={(l) => l.id}
-            cabecalhoNome={proprios ? "Equipamento" : "Placa"}
-            nome={(l) => (proprios || l.sentinela ? nome(l) : <span className="font-mono">{l.id}</span>)}
-            meta={meta}
-            href={veSaidas ? (l) => linkSaidasDoConsumidor(l.id, { modo, ...pontasDoPeriodo(filtro.periodo) }, sentinelas, params) : undefined}
-            destacar={(l) => l.sentinela}
-            colunas={[
-              { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
-              { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
-              { cabecalho: "R$/L", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorL) },
-              { cabecalho: "Saídas", celula: (l) => l.qtdSaidas },
-              {
-                cabecalho: "% do total",
-                alinhar: "esquerda",
-                className: "w-44",
-                celula: (l) => <BarraPercentual pct={l.pctTotal} aviso={l.sentinela} />,
-              },
-              {
-                cabecalho: "Tend.",
-                alinhar: "esquerda",
-                className: "w-20",
-                celula: (l) => <CelulaTendencia serie={l.spark} suficiente={temPontosDeTendencia(l.spark)} />,
-              },
-            ]}
-          />
+          <GradeKpis id="combustivel.equipamentos.tabelas" titulo="Tabelas" vao="amplo">
+            <ItemGrade titulo={proprios ? "Ranking de equipamentos" : "Ranking de carretas"} idCard="ranking" larguraPadrao={12}>
+              <TabelaRanking
+                titulo={proprios ? "Ranking de equipamentos" : "Ranking de carretas"}
+                subtitulo={`${plural(linhas.length, proprios ? "equipamento" : "placa", proprios ? "equipamentos" : "placas")} no período${veSaidas ? " · o nome abre as saídas do recorte" : ""}${proprios ? " · linha hachurada = atribuir" : ""}`}
+                linhas={linhas}
+                chave={(l) => l.id}
+                cabecalhoNome={proprios ? "Equipamento" : "Placa"}
+                nome={(l) => (proprios || l.sentinela ? nome(l) : <span className="font-mono">{l.id}</span>)}
+                meta={meta}
+                href={veSaidas ? (l) => linkSaidasDoConsumidor(l.id, { modo, ...pontasDoPeriodo(filtro.periodo) }, sentinelas, params) : undefined}
+                destacar={(l) => l.sentinela}
+                colunas={[
+                  { cabecalho: "Litros", celula: (l) => formatarLitros(l.litros) },
+                  { cabecalho: "Custo", celula: (l) => <MoneyText valor={l.custo} /> },
+                  { cabecalho: "R$/L", className: "text-muted-foreground", celula: (l) => formatarRPorL(l.rPorL) },
+                  { cabecalho: "Saídas", celula: (l) => l.qtdSaidas },
+                  {
+                    cabecalho: "% do total",
+                    alinhar: "esquerda",
+                    className: "w-44",
+                    celula: (l) => <BarraPercentual pct={l.pctTotal} aviso={l.sentinela} />,
+                  },
+                  {
+                    cabecalho: "Tend.",
+                    alinhar: "esquerda",
+                    className: "w-20",
+                    celula: (l) => <CelulaTendencia serie={l.spark} suficiente={temPontosDeTendencia(l.spark)} />,
+                  },
+                ]}
+              />
+            </ItemGrade>
+          </GradeKpis>
         </>
       )}
     </>

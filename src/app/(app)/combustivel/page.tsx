@@ -197,7 +197,7 @@ export default async function VisaoGeralCombustivel({
           />
         </GradeKpis>
 
-        {/* Os gráficos numa grade só, que cada pessoa arruma. A largura padrão é a de antes. */}
+        {/* Os gráficos e a tabela numa grade só, que cada pessoa arruma. A largura padrão é a de antes. */}
         <GradeKpis id="combustivel.painel.graficos" titulo="Gráficos" vao="amplo">
           <ItemGrade titulo="Evolução temporal" larguraPadrao={8}>
             <EvolucaoTemporal
@@ -225,14 +225,19 @@ export default async function VisaoGeralCombustivel({
               <HeatmapDiaHora dados={painel.heatmap} />
             </ItemGrade>
           ) : null}
+          {/* A tabela também é card da grade (tamanho, ordem, tirar da tela); com altura
+              escolhida rola por dentro. Sem saída no recorte ela não aparece. */}
+          {painel.ultimas.length > 0 ? (
+            <ItemGrade titulo="Últimos abastecimentos" idCard="ultimos-abastecimentos" larguraPadrao={12}>
+              <UltimosAbastecimentos
+                modo={filtro.modo}
+                saidas={painel.ultimas}
+                total={kpis.qtdSaidas}
+                hrefVerTodos={hrefComPeriodo("/combustivel/abastecimentos", url, filtro.periodo)}
+              />
+            </ItemGrade>
+          ) : null}
         </GradeKpis>
-
-        <UltimosAbastecimentos
-          modo={filtro.modo}
-          saidas={painel.ultimas}
-          total={kpis.qtdSaidas}
-          hrefVerTodos={hrefComPeriodo("/combustivel/abastecimentos", url, filtro.periodo)}
-        />
       </div>
     </>
   );

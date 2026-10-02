@@ -32,3 +32,13 @@ export function rotuloRecibo(
   const [anoF, mesF, diaF] = dataFim.split("-");
   return `Férias de ${nome}, ${diaI}/${mesI} a ${diaF}/${mesF}/${anoF}`;
 }
+
+/**
+ * Vencimento do recibo quando ninguém escolheu data: dois dias antes do início
+ * do gozo, o mesmo `data_inicio - 2` da fn_aprovar_recibo_ferias. Datas civis
+ * em UTC, sem fuso na conta.
+ */
+export function vencimentoPadraoRecibo(dataInicio: string): string {
+  const [ano, mes, dia] = dataInicio.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia - 2)).toISOString().slice(0, 10);
+}

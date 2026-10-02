@@ -16,16 +16,19 @@ export const VERSAO_LAYOUT_GRADE = 1;
 /** A grade tem 12 colunas. Largura de card é quantas delas ele ocupa. */
 export const COLUNAS_GRADE = 12;
 
-/** Menos que isso o número do card não cabe nem em R$ 0,00. */
-export const LARGURA_MINIMA_GRADE = 2;
+/**
+ * Menor largura, em colunas de 12 (≈8% da linha). A largura é contínua: o
+ * arrasto aceita qualquer fração entre isso e a linha inteira.
+ */
+export const LARGURA_MINIMA_GRADE = 1;
 
 /** Altura mínima de um card redimensionado, em px. */
-export const ALTURA_MINIMA_GRADE = 80;
+export const ALTURA_MINIMA_GRADE = 60;
 
 /** Altura máxima, em px. Acima disso o card vira a página. */
 export const ALTURA_MAXIMA_GRADE = 1200;
 
-/** O que o menu oferece de largura. O arrasto aceita qualquer coluna entre 2 e 12. */
+/** Atalhos de largura do menu. O arrasto aceita qualquer valor, sem degrau. */
 export const LARGURAS_GRADE: { colunas: number; rotulo: string }[] = [
   { colunas: 3, rotulo: "1/4 da linha" },
   { colunas: 4, rotulo: "1/3 da linha" },
@@ -44,7 +47,11 @@ export const ALTURAS_GRADE: { px: number; rotulo: string }[] = [
 ];
 
 export interface TamanhoItemGrade {
-  /** Colunas de 12. Ausente = a largura padrão da tela. */
+  /**
+   * Colunas de 12, com fração (6,37 é pouco mais de metade). Ausente = a largura
+   * padrão da tela. Continua "colunas" e não porcentagem para o layout já salvo,
+   * que era inteiro, seguir valendo sem conversão.
+   */
   largura?: number;
   /** Altura em px. Ausente = a altura do conteúdo. */
   altura?: number;
@@ -108,12 +115,19 @@ function listaDeIds(bruto: unknown, idsValidos: Set<string>): string[] {
   return limpo;
 }
 
+/** Trava entre o mínimo e a linha inteira. Duas casas: mais que isso é subpixel. */
 export function limitarLargura(colunas: number): number {
-  return Math.min(COLUNAS_GRADE, Math.max(LARGURA_MINIMA_GRADE, Math.round(colunas)));
+  const limitada = Math.min(COLUNAS_GRADE, Math.max(LARGURA_MINIMA_GRADE, colunas));
+  return Math.round(limitada * 100) / 100;
 }
 
 export function limitarAltura(px: number): number {
   return Math.min(ALTURA_MAXIMA_GRADE, Math.max(ALTURA_MINIMA_GRADE, Math.round(px)));
+}
+
+/** Largura em porcentagem da linha, para mostrar durante o arrasto ("48%"). */
+export function porcentagemDaLargura(colunas: number): number {
+  return Math.round((limitarLargura(colunas) / COLUNAS_GRADE) * 100);
 }
 
 function saneiaTamanhos(
@@ -212,24 +226,30 @@ export function moverUmPasso(
 }
 
 /**
- * Converte uma largura em px (vinda do arrasto) para colunas, considerando o
- * espaço entre os cards: 12 colunas e 11 vãos somam a largura da grade.
+ * Converte a largura em px (do arrasto) para colunas, contínua.
+ *
+ * O card de fração P da linha ocupa `P × (grade + vão) − vão` (ver
+ * `baseDaLargura`); aqui é a conta inversa, então o card acompanha o mouse
+ * pixel a pixel, sem degrau.
  */
 export function colunasDaLargura(px: number, larguraGrade: number, vao: number): number {
   if (larguraGrade <= 0) return COLUNAS_GRADE;
-  const coluna = (larguraGrade - vao * (COLUNAS_GRADE - 1)) / COLUNAS_GRADE;
-  return limitarLargura((px + vao) / (coluna + vao));
+  const fracao = (px + vao) / (larguraGrade + vao);
+  return limitarLargura(fracao * COLUNAS_GRADE);
 }
 
 /**
- * `flex-basis` CSS de um card de N colunas, com o vão da grade em `--vao-grade`.
- * O meio pixel a menos é folga de arredondamento: três cards de 4 colunas somam
- * exatamente 100%, e o navegador que arredondar um subpixel para cima quebraria
- * o terceiro para a linha de baixo.
+ * `flex-basis` CSS de um card de N colunas (com fração), com o vão da grade em
+ * `--vao-grade`. Fração P da linha = `P% − vão × (1 − P)`: cards cujas frações
+ * somam 1 enchem a linha exata, com os vãos entre eles. O meio pixel a menos é
+ * folga de arredondamento: sem ele o navegador que arredondar um subpixel para
+ * cima quebraria o último card para a linha de baixo.
  */
 export function baseDaLargura(colunas: number): string {
-  const n = limitarLargura(colunas);
-  return `calc((100% - ${COLUNAS_GRADE - 1} * var(--vao-grade)) / ${COLUNAS_GRADE} * ${n} + ${n - 1} * var(--vao-grade) - 0.5px)`;
+  const fracao = limitarLargura(colunas) / COLUNAS_GRADE;
+  const pct = Math.round(fracao * 10000) / 100;
+  const resto = Math.round((1 - fracao) * 10000) / 10000;
+  return `calc(${pct}% - var(--vao-grade) * ${resto} - 0.5px)`;
 }
 
 /**

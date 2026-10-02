@@ -15,7 +15,9 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { AprovarComPagamentoDialog } from "@/modules/rh/_shared/components/aprovar-com-pagamento-dialog";
+import type { AprovacaoComPagamento } from "@/modules/rh/_shared/programacao-pagamento";
 import { rotuloVinculo } from "@/modules/rh/decimo-terceiro/formato";
 import { mensagemDeAprovacao } from "@/modules/rh/ferias/mensagem-aprovacao";
 import {
@@ -37,6 +39,8 @@ export interface ReciboDetalheProps {
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
+  /** Contas, data e vencimento do modal de aprovação (como na Aprovação de pagamentos). */
+  aprovacao: AprovacaoComPagamento;
 }
 
 export function ReciboDetalhe({
@@ -44,8 +48,10 @@ export function ReciboDetalhe({
   podeEditar,
   podeAprovar,
   podeDesaprovar,
+  aprovacao,
 }: ReciboDetalheProps) {
   const router = useRouter();
+  const [dialogAprovar, setDialogAprovar] = React.useState(false);
   const [editando, setEditando] = React.useState(false);
   const [copiandoPedido, setCopiandoPedido] = React.useState(false);
 
@@ -160,22 +166,39 @@ export function ReciboDetalhe({
         podeEditar={podeEditar}
       />
 
+      <AprovarComPagamentoDialog
+        aberto={dialogAprovar}
+        onAbertoChange={setDialogAprovar}
+        titulo={`Aprovar as férias de ${recibo.colaboradorNome}`}
+        descricao={
+          <>
+            {formatarBRL(recibo.valorLiquido)} líquido, de{" "}
+            {formatarData(recibo.dataInicio)} a {formatarData(recibo.dataFim)}.
+            Aprovar gera o pagamento no Financeiro.
+          </>
+        }
+        rotuloConfirmar="Aprovar recibo"
+        valorTotal={recibo.valorLiquido}
+        aprovacao={aprovacao}
+        onConfirmar={async (programacao) => {
+          const r = await aprovarRecibo(recibo.id, programacao);
+          if ("erro" in r) {
+            toast.error(r.erro);
+            return;
+          }
+          setDialogAprovar(false);
+          toast.success("Recibo aprovado. A conta a pagar foi gerada.");
+          atualizar();
+        }}
+      />
+
       <ApprovalBar
         status={recibo.statusRecibo}
         rotulo={info.rotulo}
         podeAprovar={podeAprovar}
         podeDesaprovar={podeDesaprovar}
-        onAprovar={() =>
-          comAvisoDeFalha("recibo-ferias.aprovar", async () => {
-            const r = await aprovarRecibo(recibo.id);
-            if ("erro" in r) {
-              toast.error(r.erro);
-              return;
-            }
-            toast.success("Recibo aprovado. A conta a pagar foi gerada.");
-            atualizar();
-          })
-        }
+        // Aprovar abre o modal: aprovar é escolher a conta e a data.
+        onAprovar={() => setDialogAprovar(true)}
         onRejeitar={(motivo) =>
           comAvisoDeFalha("recibo-ferias.rejeitar", async () => {
             const r = await rejeitarRecibo({ feriasId: recibo.id, motivo });
@@ -223,7 +246,7 @@ export function ReciboDetalhe({
                 ) : (
                   <Copy />
                 )}
-                Copiar pedido
+                Copiar mensagem de aprovação
               </Button>
               {podeEditar ? (
                 <Button

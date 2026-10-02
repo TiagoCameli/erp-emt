@@ -27,7 +27,9 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { AprovarComPagamentoDialog } from "@/modules/rh/_shared/components/aprovar-com-pagamento-dialog";
+import type { AprovacaoComPagamento } from "@/modules/rh/_shared/programacao-pagamento";
 import {
   aprovarLote,
   desaprovarLote,
@@ -61,6 +63,8 @@ export interface LoteDetalheProps {
   podeEditar: boolean;
   podeAprovar: boolean;
   podeDesaprovar: boolean;
+  /** Contas, data e vencimento do modal de aprovação (como na Aprovação de pagamentos). */
+  aprovacao: AprovacaoComPagamento;
 }
 
 export function LoteDetalhe({
@@ -69,8 +73,10 @@ export function LoteDetalhe({
   podeEditar,
   podeAprovar,
   podeDesaprovar,
+  aprovacao,
 }: LoteDetalheProps) {
   const router = useRouter();
+  const [dialogAprovar, setDialogAprovar] = React.useState(false);
   const [emEdicao, setEmEdicao] = React.useState<ItemDoLote | null>(null);
   const [paraTirar, setParaTirar] = React.useState<ItemDoLote | null>(null);
   const [adicionarAberto, setAdicionarAberto] = React.useState(false);
@@ -335,22 +341,39 @@ export function LoteDetalhe({
         podeEditar={podeEditar}
       />
 
+      <AprovarComPagamentoDialog
+        aberto={dialogAprovar}
+        onAbertoChange={setDialogAprovar}
+        titulo={`Aprovar o 13º ${lote.ano} (${lote.parcela}ª parcela)`}
+        descricao={
+          <>
+            {formatarBRL(lote.valorLiquido)} líquido para {preenchidos}{" "}
+            {preenchidos === 1 ? "colaborador" : "colaboradores"}. Aprovar gera
+            os pagamentos no Financeiro.
+          </>
+        }
+        rotuloConfirmar="Aprovar 13º"
+        valorTotal={lote.valorLiquido}
+        aprovacao={aprovacao}
+        onConfirmar={async (programacao) => {
+          const r = await aprovarLote(lote.id, programacao);
+          if ("erro" in r) {
+            toast.error(r.erro);
+            return;
+          }
+          setDialogAprovar(false);
+          toast.success("13º aprovado. As contas a pagar foram geradas.");
+          atualizar();
+        }}
+      />
+
       <ApprovalBar
         status={lote.status}
         rotulo={info.rotulo}
         podeAprovar={podeAprovar}
         podeDesaprovar={podeDesaprovar}
-        onAprovar={() =>
-          comAvisoDeFalha("13o.aprovar", async () => {
-            const r = await aprovarLote(lote.id);
-            if ("erro" in r) {
-              toast.error(r.erro);
-              return;
-            }
-            toast.success("13º aprovado. As contas a pagar foram geradas.");
-            atualizar();
-          })
-        }
+        // Aprovar abre o modal: aprovar é escolher a conta e a data.
+        onAprovar={() => setDialogAprovar(true)}
         onRejeitar={(motivo) =>
           comAvisoDeFalha("13o.rejeitar", async () => {
             const r = await rejeitarLote({ loteId: lote.id, motivo });
@@ -398,7 +421,7 @@ export function LoteDetalhe({
                 ) : (
                   <Copy />
                 )}
-                Copiar pedido
+                Copiar mensagem de aprovação
               </Button>
               {podeEditar ? (
                 <Button

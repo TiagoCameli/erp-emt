@@ -37,6 +37,7 @@ import {
   moverNaOrdem,
   moverUmPasso,
   ordemDaGrade,
+  porcentagemDaLargura,
   preservarForaDaTela,
   type LayoutGrade,
   type TamanhoItemGrade,
@@ -175,19 +176,29 @@ export function GradePersonalizavel({
     const atual = layout.tamanhos[id] ?? {};
     let ultimo: TamanhoItemGrade = { ...atual };
 
+    // Um quadro por vez: o mouse dispara mais eventos que a tela desenha, e
+    // re-renderizar a grade a cada um deixava o arrasto aos trancos.
+    let quadro: number | null = null;
+
     function aoMover(e: PointerEvent) {
+      // Sem degrau: largura contínua e altura no pixel, do jeito que a mão parar.
       const tamanho: TamanhoItemGrade = { ...atual };
       if (borda !== "baixo") {
         tamanho.largura = colunasDaLargura(caixa.width + e.clientX - inicioX, larguraGrade, vaoPx);
       }
       if (borda !== "direita") {
-        tamanho.altura = limitarAltura(Math.round((caixa.height + e.clientY - inicioY) / 8) * 8);
+        tamanho.altura = limitarAltura(caixa.height + e.clientY - inicioY);
       }
       ultimo = tamanho;
-      setPrevia({ id, tamanho });
+      if (quadro !== null) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = null;
+        setPrevia({ id, tamanho: ultimo });
+      });
     }
 
     function aoSoltar() {
+      if (quadro !== null) cancelAnimationFrame(quadro);
       alca.removeEventListener("pointermove", aoMover);
       alca.removeEventListener("pointerup", aoSoltar);
       alca.removeEventListener("pointercancel", aoSoltar);
@@ -259,7 +270,7 @@ export function GradePersonalizavel({
           <p className="text-legenda text-muted-foreground">
             {titulo ? <span className="font-medium text-foreground">{titulo}: </span> : null}
             arraste pelo <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> para
-            mudar a ordem e puxe a borda direita ou de baixo para mudar o tamanho.
+            mudar a ordem e puxe a borda direita, a de baixo ou o canto para o tamanho que quiser.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <DropdownMenu>
@@ -339,7 +350,10 @@ export function GradePersonalizavel({
                 inert={editando}
                 className={cn(
                   "flex min-h-0 flex-1 flex-col [&>*]:flex-1",
-                  altura !== undefined && "overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden",
+                  // Com altura escolhida o conteúdo ROLA por dentro do card em vez de
+                  // ser cortado: tabela comprida num card baixo continua inteira, só
+                  // que com barra de rolagem. O card (o filho) mantém a moldura.
+                  altura !== undefined && "overflow-hidden [&>*]:min-h-0 [&>*]:overflow-auto",
                   editando && "select-none",
                 )}
               >
@@ -376,6 +390,14 @@ export function GradePersonalizavel({
                     className="absolute -right-2 -bottom-2 size-4 cursor-nwse-resize rounded-sm border-r-2 border-b-2 border-muted-foreground hover:border-ring"
                     onPointerDown={(e) => iniciarRedimensionar(e, id, "canto")}
                   />
+                  {previa?.id === id ? (
+                    // A medida enquanto arrasta: sem degrau, a pessoa precisa de
+                    // um número para acertar dois cards do mesmo tamanho.
+                    <span className="pointer-events-none absolute right-3 bottom-3 z-20 rounded-md bg-foreground px-1.5 py-0.5 text-legenda font-medium text-background tabular-nums shadow">
+                      {largura === undefined ? "Automática" : `${porcentagemDaLargura(largura)}% da linha`}
+                      {altura === undefined ? "" : ` · ${altura} px`}
+                    </span>
+                  ) : null}
                 </>
               ) : null}
             </div>

@@ -26,6 +26,28 @@ function pontos(v: unknown): [number, number][] {
   );
 }
 
+/**
+ * Localidades (com coordenada) e traçados das rotas, das linhas do banco: o Painel do Frete lê as
+ * duas tabelas direto, sem a RPC das carretas.
+ */
+export function paraMapaDeRotas(localidades: unknown, tracados: unknown): Pick<DadosCarretas, "localidades" | "tracados"> {
+  return {
+    localidades: lista(localidades).map((l) => ({
+      id: texto(l.id),
+      nome: texto(l.nome),
+      latitude: coordenada(l.latitude),
+      longitude: coordenada(l.longitude),
+    })),
+    tracados: lista(tracados).map((t) => ({
+      origemId: texto(t.origem_localidade_id ?? t.origem_id),
+      destinoId: texto(t.destino_localidade_id ?? t.destino_id),
+      kmMapa: numero(t.km_mapa),
+      horasMapa: t.horas_mapa === null || t.horas_mapa === undefined ? null : numero(t.horas_mapa),
+      pontos: pontos(t.tracado),
+    })),
+  };
+}
+
 /** Converte o JSON da RPC (números em texto) no formato do cálculo. */
 export function paraDadosCarretas(bruto: unknown): DadosCarretas | null {
   if (typeof bruto !== "object" || bruto === null) return null;
