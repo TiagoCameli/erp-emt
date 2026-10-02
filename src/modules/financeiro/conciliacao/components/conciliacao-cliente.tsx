@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
+  ArrowLeft,
   ArrowLeftRight,
   CheckCheck,
   FilePlus2,
@@ -40,6 +41,7 @@ import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
   casarAutomatico,
   desconciliar,
+  desconciliarVarios,
   excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
 import {
@@ -108,7 +110,9 @@ function quantos(n: number, um: string, varios: string): string {
 function vinculoDe(transacao: TransacaoPainel): string {
   if (transacao.parcela) {
     const p = transacao.parcela;
-    return [p.lancamentoNumero, p.nome, p.descricao].filter(Boolean).join(" · ");
+    return [p.lancamentoNumero, p.nome, p.descricao]
+      .filter(Boolean)
+      .join(" · ");
   }
   if (transacao.transferencia) {
     const t = transacao.transferencia;
@@ -144,7 +148,10 @@ export function ConciliacaoCliente({
   permissoes,
 }: ConciliacaoClienteProps) {
   const router = useRouter();
-  const visoes = React.useMemo(() => montarVisoes(painel, periodo), [painel, periodo]);
+  const visoes = React.useMemo(
+    () => montarVisoes(painel, periodo),
+    [painel, periodo],
+  );
   const candidatos = React.useMemo(() => candidatosDoPainel(painel), [painel]);
   const paresAutomaticos = React.useMemo(
     () => casarAutomaticamente(movimentosLivres(painel), candidatos),
@@ -155,10 +162,18 @@ export function ConciliacaoCliente({
   const [casando, setCasando] = React.useState(false);
   const [casarAlvoId, setCasarAlvoId] = React.useState<string | null>(null);
   const [lancarIds, setLancarIds] = React.useState<string[] | null>(null);
-  const [transferirIds, setTransferirIds] = React.useState<string[] | null>(null);
-  const [trocarConta, setTrocarConta] = React.useState<ParcelaLivre | null>(null);
-  const [excluirAlvo, setExcluirAlvo] = React.useState<ParcelaLivre | null>(null);
-  const [desfazerAlvo, setDesfazerAlvo] = React.useState<TransacaoPainel | null>(null);
+  const [transferirIds, setTransferirIds] = React.useState<string[] | null>(
+    null,
+  );
+  const [trocarConta, setTrocarConta] = React.useState<ParcelaLivre | null>(
+    null,
+  );
+  const [excluirAlvo, setExcluirAlvo] = React.useState<ParcelaLivre | null>(
+    null,
+  );
+  const [desfazerAlvo, setDesfazerAlvo] =
+    React.useState<TransacaoPainel | null>(null);
+  const [desfazerIds, setDesfazerIds] = React.useState<string[] | null>(null);
 
   const porId = React.useMemo(
     () => new Map(painel.transacoes.map((t) => [t.id, t])),
@@ -166,12 +181,15 @@ export function ConciliacaoCliente({
   );
   const casarAlvo = casarAlvoId ? (porId.get(casarAlvoId) ?? null) : null;
   const transacoesDe = (ids: string[] | null) =>
-    (ids ?? []).map((id) => porId.get(id)).filter((t): t is TransacaoPainel => !!t);
+    (ids ?? [])
+      .map((id) => porId.get(id))
+      .filter((t): t is TransacaoPainel => !!t);
 
   const somaFaltam = somar(visoes.faltamNoApp.map((t) => t.valor));
   const somaFora = somar(visoes.foraDoBanco.map((i) => i.valor));
   const total = painel.transacoes.length;
-  const fechado = visoes.faltamNoApp.length === 0 && visoes.foraDoBanco.length === 0;
+  const fechado =
+    visoes.faltamNoApp.length === 0 && visoes.foraDoBanco.length === 0;
 
   function trocarConta_(contaId: string) {
     router.push(`?${new URLSearchParams({ conta: contaId }).toString()}`);
@@ -190,7 +208,9 @@ export function ConciliacaoCliente({
     }
     toast.success(
       `${quantos(resposta.feitos, "movimento casado", "movimentos casados")}` +
-        (resposta.falhas.length > 0 ? `, ${resposta.falhas.length} não casaram` : ""),
+        (resposta.falhas.length > 0
+          ? `, ${resposta.falhas.length} não casaram`
+          : ""),
     );
     router.refresh();
   }
@@ -207,9 +227,32 @@ export function ConciliacaoCliente({
     router.refresh();
   }
 
+  async function confirmarDesfazerVarios() {
+    if (!desfazerIds) return;
+    const resposta = await desconciliarVarios(desfazerIds);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return false;
+    }
+    if (resposta.falhas.length > 0) {
+      toast.error(
+        `${resposta.feitos} desfeito(s), ${resposta.falhas.length} com erro: ${resposta.falhas[0]?.erro}`,
+      );
+    } else {
+      toast.success(
+        `${quantos(resposta.feitos, "casamento desfeito", "casamentos desfeitos")}: voltaram para Faltam no app`,
+      );
+    }
+    setDesfazerIds(null);
+    router.refresh();
+  }
+
   async function confirmarExcluir(motivo?: string) {
     if (!excluirAlvo) return;
-    const resposta = await excluirLancamentoDaConciliacao(excluirAlvo.id, motivo ?? "");
+    const resposta = await excluirLancamentoDaConciliacao(
+      excluirAlvo.id,
+      motivo ?? "",
+    );
     if ("erro" in resposta) {
       toast.error(resposta.erro);
       return false;
@@ -222,29 +265,51 @@ export function ConciliacaoCliente({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
+        <Button asChild type="button" size="sm" variant="outline">
+          <Link href="/financeiro/conciliacao">
+            <ArrowLeft />
+            Contas
+          </Link>
+        </Button>
         <FiltroSelect
           valor={conta.id}
           onValorChange={(valor) => valor && trocarConta_(valor)}
-          opcoes={contasConciliaveis.map((c) => ({ valor: c.id, rotulo: c.nome }))}
+          opcoes={contasConciliaveis.map((c) => ({
+            valor: c.id,
+            rotulo: c.nome,
+          }))}
           placeholder="Conta"
           className="max-w-72 max-md:max-w-full max-md:basis-full"
         />
         <FiltroSelect
           valor={mes}
           onValorChange={(valor) => valor && trocarMes(valor)}
-          opcoes={meses.map((m) => ({ valor: m, rotulo: formatarMesAno(`${m}-01`) }))}
+          opcoes={meses.map((m) => ({
+            valor: m,
+            rotulo: formatarMesAno(`${m}-01`),
+          }))}
           placeholder="Mês"
           className="max-w-48 max-md:max-w-full max-md:basis-full"
         />
         <div className="flex flex-wrap gap-2 md:ml-auto">
           {permissoes.conciliar && paresAutomaticos.length > 0 ? (
-            <Button type="button" size="sm" onClick={() => void rodarAutomatico()} disabled={casando}>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void rodarAutomatico()}
+              disabled={casando}
+            >
               {casando ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
               Casar automaticamente ({paresAutomaticos.length})
             </Button>
           ) : null}
           {permissoes.importar ? (
-            <Button type="button" size="sm" variant="outline" onClick={() => setImportarAberto(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setImportarAberto(true)}
+            >
               <Upload />
               Importar OFX
             </Button>
@@ -319,6 +384,7 @@ export function ConciliacaoCliente({
           transacoes={visoes.casados}
           permissoes={permissoes}
           onDesfazer={setDesfazerAlvo}
+          onDesfazerVarios={setDesfazerIds}
         />
       )}
 
@@ -382,6 +448,16 @@ export function ConciliacaoCliente({
       />
 
       <ConfirmDialog
+        aberto={desfazerIds !== null}
+        onAbertoChange={(aberto) => !aberto && setDesfazerIds(null)}
+        titulo={`Desfazer ${quantos(desfazerIds?.length ?? 0, "casamento", "casamentos")}`}
+        descricao="Os movimentos voltam para Faltam no app e os lançamentos ficam livres para casar com outros. O que os casamentos mudaram nas parcelas (conta, baixa, ajuste) continua como está."
+        textoConfirmar="Desfazer"
+        variante="destrutivo"
+        onConfirmar={confirmarDesfazerVarios}
+      />
+
+      <ConfirmDialog
         aberto={desfazerAlvo !== null}
         onAbertoChange={(aberto) => !aberto && setDesfazerAlvo(null)}
         titulo="Desfazer casamento"
@@ -402,7 +478,8 @@ function resumoSugestao(sugestao: Sugestao | undefined): string | null {
   if (!sugestao) return null;
   const c = sugestao.candidato;
   const quem =
-    c.nomes.find((n): n is string => !!n) ?? (c.especie === "transferencia" ? "Transferência" : "");
+    c.nomes.find((n): n is string => !!n) ??
+    (c.especie === "transferencia" ? "Transferência" : "");
   const grupo =
     c.grupo === "aberta"
       ? "Em aberto"
@@ -412,7 +489,9 @@ function resumoSugestao(sugestao: Sugestao | undefined): string | null {
           ? "Transferência"
           : "Paga nesta conta";
   const diferenca =
-    sugestao.diferenca !== 0 ? `, difere ${formatarBRL(Math.abs(sugestao.diferenca))}` : "";
+    sugestao.diferenca !== 0
+      ? `, difere ${formatarBRL(Math.abs(sugestao.diferenca))}`
+      : "";
   return `${grupo}: ${quem}${diferenca}`;
 }
 
@@ -443,7 +522,12 @@ function TabelaFaltam({
       mapa.set(
         t.id,
         sugerirParaMovimento(
-          { id: t.id, dataMovimento: t.dataMovimento, valor: t.valor, memo: t.memo },
+          {
+            id: t.id,
+            dataMovimento: t.dataMovimento,
+            valor: t.valor,
+            memo: t.memo,
+          },
           candidatos,
         )[0],
       );
@@ -471,12 +555,16 @@ function TabelaFaltam({
       [
         (t) =>
           !termo ||
-          `${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`.toLowerCase().includes(termo),
+          `${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`
+            .toLowerCase()
+            .includes(termo),
       ],
     );
   }, [transacoes, busca, tipo, noApp, sugestoes]);
 
-  const validos = selecionados.filter((id) => transacoes.some((t) => t.id === id));
+  const validos = selecionados.filter((id) =>
+    transacoes.some((t) => t.id === id),
+  );
   const marcadas = transacoes.filter((t) => validos.includes(t.id));
   const sentidos = new Set(marcadas.map((t) => t.tipo));
   const misturado = sentidos.size > 1;
@@ -487,7 +575,11 @@ function TabelaFaltam({
         accessorKey: "dataMovimento",
         header: "Data",
         size: 110,
-        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.dataMovimento)}</span>,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarData(row.original.dataMovimento)}
+          </span>
+        ),
       },
       {
         accessorKey: "memo",
@@ -509,7 +601,11 @@ function TabelaFaltam({
         size: 300,
         cell: ({ row }) => {
           if (pareceAplicacaoAutomatica(row.original.memo)) {
-            return <span className="text-muted-foreground">Aplicação automática: lance como transferência</span>;
+            return (
+              <span className="text-muted-foreground">
+                Aplicação automática: lance como transferência
+              </span>
+            );
           }
           const texto = resumoSugestao(sugestoes.get(row.original.id));
           return texto ? (
@@ -532,13 +628,25 @@ function TabelaFaltam({
           return (
             <div className="flex flex-wrap justify-end gap-1">
               {permissoes.conciliar ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => onCasar(t.id)} title="Casar">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onCasar(t.id)}
+                  title="Casar"
+                >
                   <Link2 />
                   <span className="max-md:sr-only">Casar</span>
                 </Button>
               ) : null}
               {permissoes.conciliar && permissoes.lancar && !aplicacao ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => onLancar([t.id])} title="Lançar">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onLancar([t.id])}
+                  title="Lançar"
+                >
                   <FilePlus2 />
                   <span className="max-md:sr-only">Lançar</span>
                 </Button>
@@ -553,7 +661,9 @@ function TabelaFaltam({
                   title="Lançar como transferência"
                 >
                   <ArrowLeftRight />
-                  {aplicacao ? <span className="max-md:sr-only">Transferência</span> : null}
+                  {aplicacao ? (
+                    <span className="max-md:sr-only">Transferência</span>
+                  ) : null}
                 </Button>
               ) : null}
             </div>
@@ -640,7 +750,12 @@ function TabelaFaltam({
           }
         >
           {permissoes.lancar ? (
-            <Button type="button" size="sm" disabled={misturado} onClick={() => onLancar(validos)}>
+            <Button
+              type="button"
+              size="sm"
+              disabled={misturado}
+              onClick={() => onLancar(validos)}
+            >
               <FilePlus2 />
               Lançar {validos.length}
             </Button>
@@ -679,7 +794,11 @@ function TabelaFaltam({
         emptyState={
           <EmptyState
             icone={CheckCheck}
-            titulo={transacoes.length === 0 ? "Todo o extrato está no app" : "Nenhum movimento com esses filtros"}
+            titulo={
+              transacoes.length === 0
+                ? "Todo o extrato está no app"
+                : "Nenhum movimento com esses filtros"
+            }
             descricao={
               transacoes.length === 0
                 ? "Cada movimento do banco neste mês já casou com um lançamento ou transferência."
@@ -731,7 +850,11 @@ function TabelaForaDoBanco({
         accessorKey: "data",
         header: "Pago em",
         size: 110,
-        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.data)}</span>,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarData(row.original.data)}
+          </span>
+        ),
       },
       {
         id: "documento",
@@ -745,7 +868,9 @@ function TabelaForaDoBanco({
             return `${t.numero ? `${t.numero} · ` : ""}${t.origemNome ?? "-"} para ${t.destinoNome ?? "-"}`;
           }
           const p = item.parcela;
-          return [p.lancamentoNumero, p.nome, p.descricao].filter(Boolean).join(" · ");
+          return [p.lancamentoNumero, p.nome, p.descricao]
+            .filter(Boolean)
+            .join(" · ");
         },
       },
       {
@@ -755,7 +880,8 @@ function TabelaForaDoBanco({
         cell: ({ row }) =>
           row.original.especie === "transferencia"
             ? "Transferência"
-            : (ROTULO_ORIGEM[row.original.parcela.origem] ?? row.original.parcela.origem),
+            : (ROTULO_ORIGEM[row.original.parcela.origem] ??
+              row.original.parcela.origem),
       },
       {
         accessorKey: "valor",
@@ -774,7 +900,9 @@ function TabelaForaDoBanco({
           if (item.especie === "transferencia") {
             return (
               <Button asChild type="button" size="sm" variant="ghost">
-                <Link href="/financeiro/transferencias">Abrir transferências</Link>
+                <Link href="/financeiro/transferencias">
+                  Abrir transferências
+                </Link>
               </Button>
             );
           }
@@ -784,22 +912,37 @@ function TabelaForaDoBanco({
           return (
             <div className="flex flex-wrap justify-end gap-1">
               {permissoes.mexerNoPago ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => onTrocarConta(item.parcela)} title="Mudar conta">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onTrocarConta(item.parcela)}
+                  title="Mudar conta"
+                >
                   <Pencil />
                   <span className="max-md:sr-only">Mudar conta</span>
                 </Button>
               ) : null}
               {!umaParcela ? (
                 <span className="self-center text-legenda text-muted-foreground">
-                  Parcela {item.parcela.numeroParcela}/{item.parcela.qtdParcelas}: corrija em Lançamentos
+                  Parcela {item.parcela.numeroParcela}/
+                  {item.parcela.qtdParcelas}: corrija em Lançamentos
                 </span>
               ) : permissoes.excluir && manual ? (
-                <Button type="button" size="sm" variant="ghost" onClick={() => onExcluir(item.parcela)} title="Excluir">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onExcluir(item.parcela)}
+                  title="Excluir"
+                >
                   <Trash2 />
                   <span className="max-md:sr-only">Excluir</span>
                 </Button>
               ) : !manual ? (
-                <span className="self-center text-legenda text-muted-foreground">Exclui na origem</span>
+                <span className="self-center text-legenda text-muted-foreground">
+                  Exclui na origem
+                </span>
               ) : null}
             </div>
           );
@@ -842,13 +985,19 @@ function TabelaCasados({
   transacoes,
   permissoes,
   onDesfazer,
+  onDesfazerVarios,
 }: {
   transacoes: TransacaoPainel[];
   permissoes: PermissoesConciliacao;
   onDesfazer: (t: TransacaoPainel) => void;
+  onDesfazerVarios: (ids: string[]) => void;
 }) {
   const [busca, setBusca] = React.useState("");
   const [situacao, setSituacao] = React.useState("");
+  const [selecionados, setSelecionados] = React.useState<string[]>([]);
+  const validos = selecionados.filter((id) =>
+    transacoes.some((t) => t.id === id),
+  );
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
 
   // Facetado: "como casou" só oferece o que existe nas transações da busca.
@@ -869,7 +1018,11 @@ function TabelaCasados({
                   : true,
         },
       },
-      [(t) => !termo || `${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo)],
+      [
+        (t) =>
+          !termo ||
+          `${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo),
+      ],
     );
   }, [transacoes, busca, situacao]);
 
@@ -879,7 +1032,11 @@ function TabelaCasados({
         accessorKey: "dataMovimento",
         header: "Data",
         size: 110,
-        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.dataMovimento)}</span>,
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarData(row.original.dataMovimento)}
+          </span>
+        ),
       },
       {
         accessorKey: "memo",
@@ -922,7 +1079,13 @@ function TabelaCasados({
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) =>
           permissoes.conciliar ? (
-            <Button type="button" size="sm" variant="ghost" onClick={() => onDesfazer(row.original)} title="Desfazer">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onDesfazer(row.original)}
+              title="Desfazer"
+            >
               <X />
               <span className="max-md:sr-only">Desfazer</span>
             </Button>
@@ -978,26 +1141,69 @@ function TabelaCasados({
   ];
 
   return (
-    <DataTable
-      idTabela="financeiro.conciliacao.casados"
-      columns={colunas}
-      data={dados}
-      filtros={filtros}
-      pageIndex={paginacao.pageIndex}
-      pageSize={paginacao.pageSize}
-      onPaginationChange={setPaginacao}
-      emptyState={
-        <EmptyState
-          icone={Link2}
-          titulo={transacoes.length === 0 ? "Nada casado ainda" : "Nenhum casamento com esses filtros"}
-          descricao={
-            transacoes.length === 0
-              ? "Use Casar automaticamente, ou case cada movimento em Faltam no app."
-              : "Ajuste ou limpe os filtros."
-          }
-          className="border-none bg-transparent"
-        />
-      }
-    />
+    <div className="flex flex-col gap-2">
+      {validos.length > 0 ? (
+        <BarraSelecao
+          quantidade={validos.length}
+          onLimpar={() => setSelecionados([])}
+          resumo={`Total ${formatarBRL(
+            Math.abs(
+              somar(
+                transacoes
+                  .filter((t) => validos.includes(t.id))
+                  .map((t) => t.valor),
+              ),
+            ),
+          )}`}
+        >
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              onDesfazerVarios(validos);
+              setSelecionados([]);
+            }}
+          >
+            <X />
+            Desfazer {validos.length}
+          </Button>
+        </BarraSelecao>
+      ) : null}
+      <DataTable
+        idTabela="financeiro.conciliacao.casados"
+        columns={colunas}
+        data={dados}
+        filtros={filtros}
+        pageIndex={paginacao.pageIndex}
+        pageSize={paginacao.pageSize}
+        onPaginationChange={setPaginacao}
+        selecao={
+          permissoes.conciliar
+            ? {
+                idDaLinha: (t: TransacaoPainel) => t.id,
+                selecionados: validos,
+                onSelecionadosChange: setSelecionados,
+              }
+            : undefined
+        }
+        emptyState={
+          <EmptyState
+            icone={Link2}
+            titulo={
+              transacoes.length === 0
+                ? "Nada casado ainda"
+                : "Nenhum casamento com esses filtros"
+            }
+            descricao={
+              transacoes.length === 0
+                ? "Use Casar automaticamente, ou case cada movimento em Faltam no app."
+                : "Ajuste ou limpe os filtros."
+            }
+            className="border-none bg-transparent"
+          />
+        }
+      />
+    </div>
   );
 }
