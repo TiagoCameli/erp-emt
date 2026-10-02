@@ -12,6 +12,7 @@ import {
   buscarLote,
   listarColaboradoresForaDoLote,
 } from "@/modules/rh/decimo-terceiro/queries";
+import { listarContasParaAprovacaoRh } from "@/modules/rh/_shared/contas-aprovacao";
 
 const RECURSO = "rh.decimo-terceiro-ferias" as const;
 
@@ -45,6 +46,12 @@ export default async function PaginaLoteDecimoTerceiro({
   if (!lote) notFound();
 
   const info = STATUS_LOTE_INFO[lote.status];
+  const podeAprovar = temPermissao(usuario, RECURSO, "aprovar");
+  // Contas só para quem vai aprovar um lote pendente.
+  const contasAprovacao =
+    podeAprovar && lote.status === "pendente_aprovacao"
+      ? await listarContasParaAprovacaoRh()
+      : [];
 
   return (
     <>
@@ -70,8 +77,18 @@ export default async function PaginaLoteDecimoTerceiro({
         lote={lote}
         paraAdicionar={paraAdicionar}
         podeEditar={temPermissao(usuario, RECURSO, "editar")}
-        podeAprovar={temPermissao(usuario, RECURSO, "aprovar")}
+        podeAprovar={podeAprovar}
         podeDesaprovar={temPermissao(usuario, RECURSO, "desaprovar")}
+        aprovacao={{
+          contas: contasAprovacao,
+          podeProgramarData: temPermissao(
+            usuario,
+            "financeiro.aprovacao-pagamentos",
+            "aprovar",
+          ),
+          // Mesmo padrão da fn_aprovar_decimo_terceiro: 20/12 do ano.
+          vencimento: lote.dataVencimento ?? `${lote.ano}-12-20`,
+        }}
       />
     </>
   );

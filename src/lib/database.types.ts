@@ -8767,7 +8767,23 @@ export type Database = {
         Args: { p_lote: string };
         Returns: undefined;
       };
+      fn_aprovar_decimo_terceiro_com_pagamento: {
+        Args: {
+          p_conta_id?: string;
+          p_data_programada?: string;
+          p_lote: string;
+        };
+        Returns: undefined;
+      };
       fn_aprovar_folha: { Args: { p_folha: string }; Returns: undefined };
+      fn_aprovar_folha_com_pagamento: {
+        Args: {
+          p_conta_id?: string;
+          p_data_programada?: string;
+          p_folha: string;
+        };
+        Returns: undefined;
+      };
       fn_aprovar_ordem_compra: {
         Args: { p_oc_id: string };
         Returns: undefined;
@@ -8783,6 +8799,14 @@ export type Database = {
       fn_aprovar_ponto: { Args: { p_ponto: string }; Returns: undefined };
       fn_aprovar_recibo_ferias: {
         Args: { p_ferias: string };
+        Returns: undefined;
+      };
+      fn_aprovar_recibo_ferias_com_pagamento: {
+        Args: {
+          p_conta_id?: string;
+          p_data_programada?: string;
+          p_ferias: string;
+        };
         Returns: undefined;
       };
       fn_aprovar_rescisao: { Args: { p_rescisao: string }; Returns: undefined };
@@ -8973,6 +8997,10 @@ export type Database = {
       fn_conciliar_transferencia: {
         Args: { p_transacao_id: string; p_transferencia_id: string };
         Returns: undefined;
+      };
+      fn_contas_para_aprovacao_rh: {
+        Args: never;
+        Returns: { banco: string; id: string; nome: string }[];
       };
       fn_criar_ferias: {
         Args: {

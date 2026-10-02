@@ -15,6 +15,8 @@ import {
 } from "@/modules/rh/folha/queries";
 import { buscarParametros } from "@/modules/rh/parametros-folha/queries";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { listarContasParaAprovacaoRh } from "@/modules/rh/_shared/contas-aprovacao";
+import { vencimentoFolha } from "@/modules/rh/folha/vencimento";
 
 /**
  * As Server Actions desta página rodam na função DELA, e aqui moram as três
@@ -81,6 +83,18 @@ export default async function PaginaFolhaDetalhe({
   const podeDesaprovar = temPermissao(usuario, "rh.folha", "desaprovar");
   const podeVerLancamento = temPermissao(usuario, "financeiro.lancamentos", "ver");
 
+  // Modal de aprovação: só quem vai aprovar uma folha pendente precisa das
+  // contas, então as outras visitas não pagam a leitura.
+  const contasAprovacao =
+    podeAprovar && folha.status === "pendente_aprovacao"
+      ? await listarContasParaAprovacaoRh()
+      : [];
+  // Mesma ordem da fn_aprovar_folha: a data da folha manda, o dia dos
+  // Parâmetros é o padrão.
+  const vencimentoSalario =
+    folha.dataVencimento ??
+    vencimentoFolha(folha.competencia, parametros?.diaPagamentoSalario ?? null);
+
   return (
     <FolhaDetalheView
       folha={folha}
@@ -104,6 +118,15 @@ export default async function PaginaFolhaDetalhe({
       podeAprovar={podeAprovar}
       podeDesaprovar={podeDesaprovar}
       podeVerLancamento={podeVerLancamento}
+      aprovacao={{
+        contas: contasAprovacao,
+        podeProgramarData: temPermissao(
+          usuario,
+          "financeiro.aprovacao-pagamentos",
+          "aprovar",
+        ),
+        vencimento: vencimentoSalario,
+      }}
     />
   );
 }

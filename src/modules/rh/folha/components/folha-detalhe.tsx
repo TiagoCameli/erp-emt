@@ -40,7 +40,12 @@ import {
   ROTULO_VINCULO,
   type Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
+import { AprovarComPagamentoDialog } from "@/modules/rh/_shared/components/aprovar-com-pagamento-dialog";
 import { STATUS_FOLHA } from "@/modules/rh/_shared/formato";
+import type {
+  AprovacaoComPagamento,
+  ProgramacaoPagamento,
+} from "@/modules/rh/_shared/programacao-pagamento";
 import {
   aprovarFolha,
   desaprovarFolha,
@@ -140,6 +145,8 @@ export interface FolhaDetalheViewProps {
   podeDesaprovar: boolean;
   /** Permissão de ver lançamento (financeiro.lancamentos:ver), pro link da seção de lançamentos. */
   podeVerLancamento: boolean;
+  /** Contas, data e vencimento do modal de aprovação (como na Aprovação de pagamentos). */
+  aprovacao: AprovacaoComPagamento;
 }
 
 /**
@@ -164,8 +171,10 @@ export function FolhaDetalheView({
   podeAprovar,
   podeDesaprovar,
   podeVerLancamento,
+  aprovacao,
 }: FolhaDetalheViewProps) {
   const router = useRouter();
+  const [dialogAprovar, setDialogAprovar] = React.useState(false);
   const info = STATUS_FOLHA[folha.status];
 
   const rascunho = folha.status === "rascunho";
@@ -303,12 +312,18 @@ export function FolhaDetalheView({
     semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
 
-  async function aoAprovar() {
-    const resultado = await aprovarFolha(folha.id);
+  /** O Aprovar da barra abre o modal: aprovar é escolher a conta e a data. */
+  function aoAprovar() {
+    setDialogAprovar(true);
+  }
+
+  async function aoConfirmarAprovacao(programacao: ProgramacaoPagamento) {
+    const resultado = await aprovarFolha(folha.id, programacao);
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return;
     }
+    setDialogAprovar(false);
     toast.success("Folha aprovada. Lançamentos gerados no Financeiro");
     semDerrubarSucesso("rh.folha.detalhe", () => router.refresh());
   }
@@ -524,6 +539,23 @@ export function FolhaDetalheView({
           acoesExtras={acoesDaEspera}
         />
       ) : null}
+
+      <AprovarComPagamentoDialog
+        aberto={dialogAprovar}
+        onAbertoChange={setDialogAprovar}
+        titulo={`Aprovar a folha de ${formatarCompetencia(folha.competencia)}`}
+        descricao={
+          <>
+            {formatarBRL(folha.valorLiquido)} líquido para {folha.itens.length}{" "}
+            {folha.itens.length === 1 ? "colaborador" : "colaboradores"}.
+            Aprovar gera os pagamentos no Financeiro.
+          </>
+        }
+        rotuloConfirmar="Aprovar folha"
+        valorTotal={folha.valorLiquido}
+        aprovacao={aprovacao}
+        onConfirmar={aoConfirmarAprovacao}
+      />
 
       {semDescontosLegais ? (
         <div className="rounded-md border border-status-pendente/30 bg-status-pendente/5 px-4 py-3">

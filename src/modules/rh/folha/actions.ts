@@ -25,6 +25,10 @@ import {
 import { STATUS_FOLHA, type StatusFolha } from "@/modules/rh/_shared/formato";
 import { buscarFolha } from "@/modules/rh/folha/queries";
 import {
+  argsProgramacao,
+  programacaoPagamentoSchema,
+} from "@/modules/rh/_shared/programacao-pagamento";
+import {
   documentoDoResumo,
   nomeDoArquivo,
 } from "@/modules/rh/folha/resumo-pdf";
@@ -359,11 +363,18 @@ export async function enviarFolhaParaAprovacao(
 }
 
 /**
- * Aprova a folha via fn_aprovar_folha. É a aprovação que gera os lançamentos no
- * Financeiro (salário por colaborador e as guias por grupo de recolhimento), e
- * a mensagem de erro do banco vai direto pro toast.
+ * Aprova a folha via fn_aprovar_folha_com_pagamento. É a aprovação que gera os
+ * lançamentos no Financeiro (salário por colaborador e as guias por grupo de
+ * recolhimento), e a mensagem de erro do banco vai direto pro toast.
+ *
+ * `programacao` é o que quem aprova escolheu no modal, como na Aprovação de
+ * pagamentos: a conta que paga (salário e guias) e, se quiser, outra data para
+ * o salário.
  */
-export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
+export async function aprovarFolha(
+  id: string,
+  programacao: unknown,
+): Promise<ResultadoAcao> {
   return semLancar("rh.folha.aprovar", async () => {
     if (!(await checarPermissao("aprovar"))) {
       return { erro: "Sem permissão para aprovar a folha" };
@@ -371,10 +382,15 @@ export async function aprovarFolha(id: string): Promise<ResultadoAcao> {
 
     const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Folha inválida" };
+    const prog = programacaoPagamentoSchema.safeParse(programacao);
+    if (!prog.success) {
+      return { erro: "Escolha a conta bancária e uma data válida" };
+    }
 
     const supabase = await createClient();
-    const { error } = await supabase.rpc("fn_aprovar_folha", {
+    const { error } = await supabase.rpc("fn_aprovar_folha_com_pagamento", {
       p_folha: idValido.data,
+      ...argsProgramacao(prog.data),
     });
 
     if (error) {

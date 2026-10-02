@@ -8,6 +8,10 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  argsProgramacao,
+  programacaoPagamentoSchema,
+} from "@/modules/rh/_shared/programacao-pagamento";
+import {
   definirVencimentoReciboSchema,
   editarReciboSchema,
   lancarFeriasSchema,
@@ -245,18 +249,29 @@ export async function voltarReciboParaRascunho(
   return { ok: true };
 }
 
-/** Aprova o recibo: gera a conta a pagar e as guias. */
-export async function aprovarRecibo(feriasId: string): Promise<ResultadoAcao> {
+/**
+ * Aprova o recibo: gera a conta a pagar e as guias, com a conta e a data
+ * escolhidas no modal (ver `programacao-pagamento.ts`).
+ */
+export async function aprovarRecibo(
+  feriasId: string,
+  programacao: unknown,
+): Promise<ResultadoAcao> {
   if (!(await checarPermissao("aprovar"))) {
     return { erro: "Você não tem permissão para aprovar o recibo" };
   }
   if (!idSchema.safeParse(feriasId).success) {
     return { erro: "Registro inválido" };
   }
+  const prog = programacaoPagamentoSchema.safeParse(programacao);
+  if (!prog.success) {
+    return { erro: "Escolha a conta bancária e uma data válida" };
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_aprovar_recibo_ferias", {
+  const { error } = await supabase.rpc("fn_aprovar_recibo_ferias_com_pagamento", {
     p_ferias: feriasId,
+    ...argsProgramacao(prog.data),
   });
 
   if (error) {
