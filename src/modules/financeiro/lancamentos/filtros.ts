@@ -346,7 +346,8 @@ export function lerFiltrosLancamentos(
   // O "entra no resultado?" dos relatórios (D4, 03/10/2026), medido pela
   // categoria do RATEIO caindo na do lançamento: os drills de custo mandam os
   // dois `sem_*`, e o DRE manda a natureza do bloco clicado. Natureza fora do
-  // catálogo cai na validação, como todo filtro desta tela.
+  // catálogo é descartada, como em todo filtro de catálogo desta tela; se só
+  // vier valor inválido, a lista abre sem corte de natureza.
   const naturezas = lerCatalogoDaUrl(params.natureza, NATUREZAS_CATEGORIA);
   const semMovimentacao = params.sem_movimentacao === "1" ? true : undefined;
   const semInvestimento = params.sem_investimento === "1" ? true : undefined;

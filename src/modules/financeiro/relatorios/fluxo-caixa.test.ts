@@ -150,6 +150,23 @@ describe("montarFluxoCaixa: saldo acumulado", () => {
     expect(fluxo.saldoProjetado).toMatchObject({ tipo: "calculado", mes: "2026-12" });
   });
 
+  it("o que venceu e não foi pago entra no ponto de partida", () => {
+    // Um a pagar de agosto ainda em aberto não está no saldo de hoje: sem isto
+    // ele nunca entraria na projeção e o saldo ficaria inflado.
+    const comAtraso = montarFluxoCaixa({
+      linhas: [
+        { mes: "2026-08", tipo: "a_pagar", realizado: false, total: 10_000 },
+        { mes: "2026-08", tipo: "a_receber", realizado: true, total: 999 },
+        { mes: "2026-10", tipo: "a_pagar", realizado: false, total: 1_000 },
+      ],
+      mesCorrente: CORRENTE,
+      saldoInicial: 50_000,
+    });
+    expect(mes(comAtraso, "2026-08").saldoAcumulado).toBeNull();
+    expect(mes(comAtraso, "2026-10").saldoAcumulado).toBe(39_000);
+    expect(comAtraso.saldoProjetado).toMatchObject({ tipo: "calculado", valor: 39_000 });
+  });
+
   it("sem conta visível, diz isso em vez de projetar a partir de zero", () => {
     const semSaldo = montarFluxoCaixa({
       linhas: LINHAS,

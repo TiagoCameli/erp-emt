@@ -207,7 +207,7 @@ export function montarFluxoCaixa({
   const podeAcumular = saldoInicial !== null && !comCorteDeCentro;
   const acumuladoPorMes = new Map<string, number>();
   if (podeAcumular) {
-    let saldo = paraCentavos(saldoInicial);
+    let saldo = partidaEmCentavos(saldoInicial, porMes, mesesOrdenados, mesCorrente);
     for (const mes of mesesOrdenados) {
       if (mes < mesCorrente) continue;
       saldo += liquidoDe(porMes.get(mes) ?? acumuladorVazio(), "projetado");
@@ -282,6 +282,29 @@ export function montarFluxoCaixa({
 }
 
 /**
+ * De onde o acumulado parte: o saldo de hoje mais o que está ATRASADO.
+ *
+ * Parcela vencida e não paga continua no mês do vencimento, que já passou. Ela
+ * não está no saldo (não foi paga) e, sem isto, também nunca entraria na
+ * projeção: um a pagar de agosto em aberto deixaria o saldo projetado maior
+ * justamente no cartão em que se decide o que pagar. O previsto dos meses
+ * passados entra, então, no ponto de partida.
+ */
+function partidaEmCentavos(
+  saldoInicial: number,
+  porMes: Map<string, Acumulador>,
+  mesesOrdenados: readonly string[],
+  mesCorrente: string,
+): number {
+  let saldo = paraCentavos(saldoInicial);
+  for (const mes of mesesOrdenados) {
+    if (mes >= mesCorrente) break;
+    saldo += liquidoDe(porMes.get(mes) ?? acumuladorVazio(), "projetado");
+  }
+  return saldo;
+}
+
+/**
  * O saldo no ÚLTIMO mês da janela.
  *
  * O último mês é a ponta de cima da janela quando ela tem uma (a janela padrão
@@ -316,7 +339,7 @@ function saldoNoFimDaJanela({
       : mesCorrente);
   if (mesFinal < mesCorrente) return { tipo: "janela_no_passado" };
 
-  let saldo = paraCentavos(saldoInicial);
+  let saldo = partidaEmCentavos(saldoInicial, porMes, mesesOrdenados, mesCorrente);
   for (const mes of mesesOrdenados) {
     if (mes < mesCorrente || mes > mesFinal) continue;
     saldo += liquidoDe(porMes.get(mes) ?? acumuladorVazio(), "projetado");

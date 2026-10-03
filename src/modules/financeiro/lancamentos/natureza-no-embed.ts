@@ -25,8 +25,11 @@
  * os dois ramos se juntam num `or` do topo, que o PostgREST aceita com embed
  * dentro (`or=(a.not.is.null,and(b.not.is.null,categoria_id...))`).
  *
- * A lista que viaja na URL é a das categorias RECUSADAS, não a das aceitas: são
- * 7 hoje (4 de movimentação e 3 de investimento) contra mais de cem aceitas.
+ * Viaja na URL a lista MAIS CURTA: as recusadas (`not.in`) quando o corte é
+ * `sem_movimentacao`/`sem_investimento` (7 hoje, contra mais de cem aceitas), e
+ * as aceitas (`in`) quando o pedido é uma natureza só, como no drill do DRE.
+ * Mandar as recusadas nesse caso poria uns cem uuids duas vezes na URL e passaria
+ * dos 8 KB que proxy e CDN cortam (ver `lib/lotes-de-ids.ts`).
  *
  * Os embeds existem SÓ para filtrar, como `recorte_parcelas`: o
  * `lancamento_rateios` do select continua inteiro, porque é ele que dá nome à
@@ -87,6 +90,8 @@ export interface CategoriaComNatureza {
 export interface FiltroDeNatureza {
   /** Categorias cuja natureza NÃO foi aceita. */
   recusadas: string[];
+  /** Categorias cuja natureza foi aceita. */
+  aceitas: string[];
   /**
    * Rateio e lançamento SEM categoria contam como `operacional` (é o
    * `coalesce(cat.natureza, 'operacional')` das funções). Aceito quando a
@@ -108,13 +113,13 @@ export function filtroDeNatureza(
   categorias: readonly CategoriaComNatureza[],
 ): FiltroDeNatureza {
   const aceitasTexto = aceitas as readonly string[];
+  const aceita = (categoria: CategoriaComNatureza) =>
+    aceitasTexto.includes(categoria.natureza ?? "operacional");
   return {
     recusadas: categorias
-      .filter(
-        (categoria) =>
-          !aceitasTexto.includes(categoria.natureza ?? "operacional"),
-      )
+      .filter((categoria) => !aceita(categoria))
       .map((categoria) => categoria.id),
+    aceitas: categorias.filter(aceita).map((categoria) => categoria.id),
     semCategoriaAceita: aceitasTexto.includes("operacional"),
   };
 }
@@ -131,6 +136,21 @@ export interface ConsultaComNatureza<T> {
   is: (coluna: string, valor: null) => T;
   not: (coluna: string, operador: string, valor: string | null) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+  filter: (coluna: string, operador: string, valor: string) => T;
+}
+
+/**
+ * A lista de categorias que vai na URL, a mais curta das duas. `in` com as
+ * aceitas só quando ela é menor E não vazia: `in.()` é sintaxe inválida.
+ */
+function listaMaisCurta(
+  filtro: FiltroDeNatureza,
+): { operador: "in" | "not.in"; lista: string } | null {
+  if (filtro.aceitas.length > 0 && filtro.aceitas.length < filtro.recusadas.length) {
+    return { operador: "in", lista: `(${filtro.aceitas.join(",")})` };
+  }
+  if (filtro.recusadas.length === 0) return null;
+  return { operador: "not.in", lista: `(${filtro.recusadas.join(",")})` };
 }
 
 /**
@@ -140,15 +160,16 @@ export interface ConsultaComNatureza<T> {
  * aceito), e aí o ramo 2 é só "existe rateio sem categoria".
  */
 function categoriaDoPaiAceita(filtro: FiltroDeNatureza): string | null {
-  const lista = `(${filtro.recusadas.join(",")})`;
-  if (filtro.recusadas.length === 0) {
+  const corte = listaMaisCurta(filtro);
+  if (!corte) {
     return filtro.semCategoriaAceita ? null : "categoria_id.not.is.null";
   }
-  // `not.in` sozinho recusa o nulo (em SQL, `null not in (...)` é nulo), e é
-  // exatamente o que se quer quando a operacional NÃO foi aceita.
+  // `in`/`not.in` sozinho recusa o nulo (em SQL, `null not in (...)` é nulo), e
+  // é exatamente o que se quer quando a operacional NÃO foi aceita.
+  const condicao = `categoria_id.${corte.operador}.${corte.lista}`;
   return filtro.semCategoriaAceita
-    ? `or(categoria_id.is.null,categoria_id.not.in.${lista})`
-    : `categoria_id.not.in.${lista}`;
+    ? `or(categoria_id.is.null,${condicao})`
+    : condicao;
 }
 
 /**
@@ -167,12 +188,11 @@ export function aplicarNaturezaNoRateio<T extends ConsultaComNatureza<T>>(
 
   // Ramo 1: o rateio tem categoria, e ela é aceita.
   consulta = consulta.not(`${comCategoria}.categoria_id`, "is", null);
-  if (filtro.recusadas.length > 0) {
-    consulta = consulta.not(
-      `${comCategoria}.categoria_id`,
-      "in",
-      `(${filtro.recusadas.join(",")})`,
-    );
+  const corte = listaMaisCurta(filtro);
+  if (corte?.operador === "in") {
+    consulta = consulta.filter(`${comCategoria}.categoria_id`, "in", corte.lista);
+  } else if (corte) {
+    consulta = consulta.not(`${comCategoria}.categoria_id`, "in", corte.lista);
   }
   // Ramo 2: o rateio herda a categoria do lançamento.
   consulta = consulta.is(`${semCategoria}.categoria_id`, null);

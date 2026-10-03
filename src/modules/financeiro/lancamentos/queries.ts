@@ -1166,11 +1166,14 @@ async function resolverFiltros(
     semInvestimento: params.semInvestimento,
   });
   // Nenhuma natureza aceita (pedido contraditório, como `natureza=movimentacao`
-  // com `sem_movimentacao=1`): lista vazia, sem ir ao banco.
-  if (aceitas !== null && aceitas.length === 0) return null;
-  const naturezaDoFiltroP = aceitas
-    ? filtroDeNaturezaDaLista(supabase, aceitas)
-    : null;
+  // com `sem_movimentacao=1`): lista vazia. A volta é DEPOIS do `Promise.all`,
+  // porque as outras leituras já foram disparadas e uma rejeição delas sem
+  // ninguém esperando viraria erro solto no servidor.
+  const naturezaContraditoria = aceitas !== null && aceitas.length === 0;
+  const naturezaDoFiltroP =
+    aceitas && !naturezaContraditoria
+      ? filtroDeNaturezaDaLista(supabase, aceitas)
+      : null;
 
   const [
     idsAtraso,
@@ -1180,6 +1183,7 @@ async function resolverFiltros(
     saldoInicialData,
     categoriasDeMovimentacao,
     idsEmprestimoTomado,
+    naturezaDoFiltro,
   ] = await Promise.all([
     idsAtrasoP,
     idsSaldoAbertoP,
@@ -1188,8 +1192,9 @@ async function resolverFiltros(
     saldoInicialDataP,
     categoriasDeMovimentacaoP,
     idsEmprestimoTomadoP,
+    naturezaDoFiltroP,
   ]);
-  const naturezaDoFiltro = await naturezaDoFiltroP;
+  if (naturezaContraditoria) return null;
   if (idsAtraso) listasDeIds.push(idsAtraso);
   if (idsSaldoAberto) listasDeIds.push(idsSaldoAberto);
 

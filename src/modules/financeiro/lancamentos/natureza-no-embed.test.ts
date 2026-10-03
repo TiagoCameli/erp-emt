@@ -29,6 +29,9 @@ class ConsultaFalsa implements ConsultaComNatureza<ConsultaFalsa> {
   or(filtro: string) {
     return this.anotar("or", filtro);
   }
+  filter(coluna: string, operador: string, valor: string) {
+    return this.anotar("filter", coluna, operador, valor);
+  }
 }
 
 const OPERACIONAL = "11111111-1111-4111-8111-111111111111";
@@ -113,13 +116,34 @@ describe("aplicarNaturezaNoRateio", () => {
       filtroDeNatureza(["investimento"], CADASTRO),
     );
     expect(consulta.chamadas.at(-1)).toBe(
-      `or natureza_rateios.not.is.null,and(natureza_rateios_herdados.not.is.null,categoria_id.not.in.(${OPERACIONAL},${EMPRESTIMO},${TARIFA}))`,
+      `or natureza_rateios.not.is.null,and(natureza_rateios_herdados.not.is.null,categoria_id.in.(${EQUIPAMENTO}))`,
     );
+  });
+
+  it("uma natureza só manda as ACEITAS, para a URL não passar de 8 KB", () => {
+    // O drill do DRE pede `natureza=investimento`: as recusadas seriam quase o
+    // cadastro inteiro, duas vezes na URL.
+    const cadastroGrande = [
+      ...CADASTRO,
+      ...Array.from({ length: 150 }, (_, i) => ({
+        id: `55555555-5555-4555-8555-${String(i).padStart(12, "0")}`,
+        natureza: "operacional",
+      })),
+    ];
+    const consulta = aplicarNaturezaNoRateio(
+      new ConsultaFalsa(),
+      filtroDeNatureza(["investimento"], cadastroGrande),
+    );
+    expect(consulta.chamadas).toContain(
+      `filter natureza_rateios.categoria_id in (${EQUIPAMENTO})`,
+    );
+    expect(consulta.chamadas.join(" ").length).toBeLessThan(500);
   });
 
   it("nada recusado e operacional aceita: o ramo 2 é só existir rateio herdado", () => {
     const consulta = aplicarNaturezaNoRateio(new ConsultaFalsa(), {
       recusadas: [],
+      aceitas: [OPERACIONAL],
       semCategoriaAceita: true,
     });
     expect(
