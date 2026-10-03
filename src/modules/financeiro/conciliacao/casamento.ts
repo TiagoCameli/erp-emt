@@ -214,6 +214,9 @@ function sentidoDo(movimento: MovimentoCasavel): Sentido {
  *     um só movimento livre e um só candidato com esse valor e sentido. Sai
  *     com `confira: true`, que na tela vira o selo "Confira".
  *
+ * (c) transferência entre contas sem nome no histórico: uma única de mesmo
+ *     valor no mesmo dia do movimento, e ela com um único movimento no dia.
+ *
  * A disputa é contada pelos dois lados: um candidato disputado por mais de um
  * movimento sem nome nunca casa sozinho, mesmo que sobre só ele. O defeito
  * que isto fecha: dois PIX de R$ 500,00 no mesmo dia, um só lançado, nenhum
@@ -293,6 +296,19 @@ export function casarAutomaticamente(
       if ((porCandidato.get(unico.chaveCandidato) ?? []).length === 1) {
         escolhido = unico;
         confira = true;
+      }
+    }
+
+    if (!escolhido && comNome.length === 0) {
+      // (c) transferência entre contas no MESMO dia (Tiago, 03/10/2026:
+      // "transferências entre contas no mesmo dia e com o mesmo valor são bem
+      // raras"): uma só de mesmo valor no dia do movimento, e ela com um só
+      // movimento de mesmo valor no dia dela. Vale só para transferência:
+      // pagamento de mesmo valor no mesmo dia é comum (salários).
+      const noDia = opcoes.filter((o) => o.dias === 0);
+      if (noDia.length === 1 && noDia[0].candidato.especie === "transferencia") {
+        const doDia = (porCandidato.get(noDia[0].chaveCandidato) ?? []).filter((o) => o.dias === 0);
+        if (doDia.length === 1) escolhido = noDia[0];
       }
     }
 
