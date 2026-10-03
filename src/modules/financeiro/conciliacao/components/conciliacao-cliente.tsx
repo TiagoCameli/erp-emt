@@ -499,6 +499,12 @@ function ConciliacaoConta({
               <>
                 Banco <MoneyText valor={saldo.banco} /> · App{" "}
                 <MoneyText valor={saldo.app} />
+                {saldo.antesDoCorte && saldo.corte ? (
+                  <span className="block">
+                    Antes do saldo inicial de {formatarData(saldo.corte)}: o app calcula
+                    para trás, e a diferença pode vir de qualquer mês até lá
+                  </span>
+                ) : null}
               </>
             ) : saldo?.temSaldoNoArquivo ? (
               "Saldo: sem permissão para ver os valores"

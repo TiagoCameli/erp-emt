@@ -101,6 +101,13 @@ const saldoSchema = z.object({
   diferenca: numero.nullable(),
   /** Null quando o OFX não trouxe saldo. */
   bate: z.boolean().nullable(),
+  /** Data do saldo inicial da conta (corte da migração). */
+  corte: z.string().nullable().optional().transform((c) => c ?? null),
+  /**
+   * A data é anterior ao corte: o saldo do app foi calculado para trás a
+   * partir do saldo inicial, e a diferença pode vir de qualquer mês até o corte.
+   */
+  antesDoCorte: z.boolean().optional().transform((a) => a ?? false),
 });
 
 export type SaldoPainel = z.infer<typeof saldoSchema>;
