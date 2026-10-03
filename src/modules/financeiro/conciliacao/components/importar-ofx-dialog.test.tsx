@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { importarOfx } from "@/modules/financeiro/conciliacao/actions";
 import { ImportarOfxDialog } from "@/modules/financeiro/conciliacao/components/importar-ofx-dialog";
@@ -135,5 +135,32 @@ describe("ImportarOfxDialog", () => {
     expect(
       screen.getByText("PIX - ENVIADO - DIARIA BELTRANO"),
     ).toBeInTheDocument();
+  });
+
+  it("sugere o mês mais completo do arquivo e envia o intervalo escolhido", async () => {
+    vi.mocked(importarOfx).mockResolvedValue({
+      ok: true, inseridas: 2, ignoradas: 0, ignorados: [], casadas: 0, aviso: null,
+    });
+    render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={contas} contaInicialId={CONTA_ID} />);
+    const entrada = document.body.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!entrada) throw new Error("o seletor de arquivo sumiu do diálogo");
+    const ofx = [
+      "<OFX><DTSTART>20241230<DTEND>20250131",
+      "<STMTTRN><DTPOSTED>20241230<TRNAMT>-1.00<FITID>a<MEMO>X</STMTTRN>",
+      "<STMTTRN><DTPOSTED>20250102<TRNAMT>-2.00<FITID>b<MEMO>Y</STMTTRN>",
+      "<STMTTRN><DTPOSTED>20250131<TRNAMT>-3.00<FITID>c<MEMO>Z</STMTTRN></OFX>",
+    ].join("");
+    fireEvent.change(entrada, { target: { files: [new File([ofx], "01.2025 BB.ofx")] } });
+
+    const campoDe = await screen.findByLabelText("Usar movimentos de");
+    await waitFor(() => expect(campoDe).toHaveValue("2025-01-01"));
+    expect(screen.getByLabelText("até")).toHaveValue("2025-01-31");
+    expect(screen.getByText(/2 de 3 movimentos entram/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Importar extrato/ }));
+    await waitFor(() => expect(importarOfx).toHaveBeenCalled());
+    const enviado = vi.mocked(importarOfx).mock.calls[0][0] as FormData;
+    expect(enviado.get("de")).toBe("2025-01-01");
+    expect(enviado.get("ate")).toBe("2025-01-31");
   });
 });

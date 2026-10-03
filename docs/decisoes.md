@@ -5080,3 +5080,7 @@ A ação `excluir` não foi concedida a ninguém: quem administra marca na matri
 ## 2026-10-03 - Conciliação: remoção das funções antigas
 
 Autorizado pelo Tiago ("pode continuar"). Em duas etapas, pela lição de 27/08: primeiro o código deixa de chamar (o automático passa a usar `fn_conciliacao_casar_lote(p_pares, p_automatica => true)`; as provas saem das assinaturas antigas), e só depois do deploy a migration `20261003240000_conciliacao_remove_funcoes_antigas.sql` remove `fn_importar_extrato`, `fn_conciliacao_casar(..., p_ajustar boolean)` e `fn_conciliacao_casar_lote(jsonb)`. Todas as provas da conciliação passam com a remoção aplicada. Também nesta data: o Tiago recebeu a ação `financeiro.conciliacao/excluir`.
+
+## 2026-10-03 - Importar OFX escolhendo o intervalo do arquivo
+
+**Pedido do Tiago:** o BB exporta de 30/12 a 31/01 e o aviso pedia "mês fechado"; ele quer escolher de quando a quando usar do arquivo. **Decisão:** o diálogo lê o OFX no navegador ao escolher o arquivo, mostra o período e os movimentos, e oferece "Usar movimentos de / até", já com o mês mais completo do arquivo (`sugerirIntervalo`: 30/12 a 31/01 vira 01/01 a 31/01). Só os movimentos do intervalo entram e o período gravado é o intervalo (`recortarExtrato`). O saldo final do arquivo só é gravado se o intervalo termina no último dia do arquivo; num recorte que para antes, ele não confere e o mês fica "sem saldo".

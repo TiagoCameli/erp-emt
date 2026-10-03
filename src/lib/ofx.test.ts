@@ -5,6 +5,8 @@ import {
   parseOfx,
   conferirMovimentosNoPeriodo,
   numerarRepetidos,
+  recortarExtrato,
+  sugerirIntervalo,
 } from "@/lib/ofx";
 
 /**
@@ -361,5 +363,40 @@ describe("conferirMovimentosNoPeriodo (Bloco C)", () => {
     expect(
       conferirMovimentosNoPeriodo(extrato(null, null, ["2026-09-30"])),
     ).toBeNull();
+  });
+});
+
+describe("intervalo da importação", () => {
+  const mov = (data: string) => ({ data, valor: -1, memo: null, fitid: data, tipo: "debito" as const });
+  const arquivo = {
+    periodoInicio: "2024-12-30",
+    periodoFim: "2025-01-31",
+    contaOfx: null,
+    saldoFinal: 1000,
+    saldoFinalData: "2025-01-31",
+    transacoes: [mov("2024-12-30"), mov("2024-12-31"), mov("2025-01-02"), mov("2025-01-31")],
+  };
+
+  it("sugere o mês que o arquivo mais cobre: 30/12 a 31/01 vira janeiro inteiro", () => {
+    expect(sugerirIntervalo(arquivo)).toEqual({ de: "2025-01-01", ate: "2025-01-31" });
+  });
+
+  it("arquivo de um mês só sugere o próprio período", () => {
+    expect(sugerirIntervalo({ ...arquivo, periodoInicio: "2026-09-01", periodoFim: "2026-09-30" })).toEqual({
+      de: "2026-09-01",
+      ate: "2026-09-30",
+    });
+  });
+
+  it("recorta os movimentos e mantém o saldo quando o intervalo vai até o fim do arquivo", () => {
+    const r = recortarExtrato(arquivo, "2025-01-01", "2025-01-31");
+    expect(r.transacoes.map((t) => t.data)).toEqual(["2025-01-02", "2025-01-31"]);
+    expect(r).toMatchObject({ periodoInicio: "2025-01-01", periodoFim: "2025-01-31", saldoFinal: 1000 });
+  });
+
+  it("intervalo que para antes do fim do arquivo descarta o saldo, que não confere", () => {
+    const r = recortarExtrato(arquivo, "2024-12-30", "2024-12-31");
+    expect(r.transacoes).toHaveLength(2);
+    expect(r).toMatchObject({ saldoFinal: null, saldoFinalData: null });
   });
 });
