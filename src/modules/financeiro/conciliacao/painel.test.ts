@@ -9,6 +9,7 @@ import {
   statusDoMes,
   painelSchema,
   periodoDoMes,
+  periodoDosExtratos,
   somar,
   type PainelConciliacao,
   type ParcelaLivre,
@@ -176,6 +177,8 @@ describe("statusDoMes", () => {
     app: bate ? 100 : 90,
     diferenca: bate ? 0 : 10,
     bate,
+    corte: null,
+    antesDoCorte: false,
   });
 
   it("só declara conciliado com as listas zeradas e o saldo batendo", () => {
@@ -216,5 +219,22 @@ describe("resumoUltimosMeses (Bloco F)", () => {
       ]),
     ).toBe("out/26 aberto · jan/26 1 pendente");
     expect(mesCurto("2025-12")).toBe("dez/25");
+  });
+});
+
+describe("periodoDosExtratos (todos os meses)", () => {
+  it("vai do início do primeiro extrato ao fim do último, em qualquer ordem", () => {
+    expect(
+      periodoDosExtratos([
+        { periodoInicio: "2025-03-01", periodoFim: "2025-03-31" },
+        { periodoInicio: "2025-01-01", periodoFim: "2025-01-31" },
+        { periodoInicio: "2026-09-01", periodoFim: "2026-09-30" },
+      ]),
+    ).toEqual({ inicio: "2025-01-01", fim: "2026-09-30" });
+  });
+
+  it("sem extrato com período devolve null", () => {
+    expect(periodoDosExtratos([])).toBeNull();
+    expect(periodoDosExtratos([{ periodoInicio: null, periodoFim: null }])).toBeNull();
   });
 });

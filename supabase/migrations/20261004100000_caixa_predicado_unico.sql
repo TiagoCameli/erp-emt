@@ -294,37 +294,63 @@ as $function$
 $function$;
 
 -- Saldo do app numa data, que a conciliacao compara com o LEDGERBAL do OFX.
+-- Parte da versao de 20261003260000 (saldo para tras antes do corte) e so troca
+-- a fonte das parcelas pela view: sem o filtro de natureza, a prestacao de
+-- emprestimo paga na conta entra no saldo, como no extrato.
 create or replace function public.fn_conciliacao_saldo_app_interno(p_conta_id uuid, p_data date)
- returns numeric
- language sql
- stable security definer
- set search_path to ''
+returns numeric
+language plpgsql
+stable
+security definer
+set search_path to ''
 as $function$
-  with c as (
-    select id, saldo_inicial, saldo_inicial_data from public.contas_bancarias where id = p_conta_id
-  ),
-  parcelas as (
-    select coalesce(sum(case when v.tipo = 'a_receber' then v.valor_liquido else -v.valor_liquido end), 0) as total
+declare
+  v_inicial numeric;
+  v_corte date;
+  v_total numeric;
+begin
+  select saldo_inicial, saldo_inicial_data into v_inicial, v_corte
+  from public.contas_bancarias where id = p_conta_id;
+
+  if v_corte is null or p_data >= v_corte then
+    -- Para frente: saldo inicial + o que veio depois do corte ate a data.
+    select coalesce(sum(m.v), 0) into v_total from (
+      select case when v.tipo = 'a_receber' then v.valor_liquido else -v.valor_liquido end as v
+      from public.vw_parcelas_caixa v
+      where v.conta_bancaria_id = p_conta_id
+        and v.no_saldo
+        and (v.data_pagamento is null or v.data_pagamento <= p_data)
+      union all
+      select t.valor from public.transferencias_contas t
+      where t.conta_destino_id = p_conta_id
+        and (v_corte is null or t.data_transferencia > v_corte) and t.data_transferencia <= p_data
+      union all
+      select -(t.valor + t.tarifa) from public.transferencias_contas t
+      where t.conta_origem_id = p_conta_id
+        and (v_corte is null or t.data_transferencia > v_corte) and t.data_transferencia <= p_data
+    ) m;
+    return round(v_inicial + v_total, 2);
+  end if;
+
+  -- Para tras: saldo inicial - o que aconteceu depois da data ate o corte.
+  select coalesce(sum(m.v), 0) into v_total from (
+    select case when v.tipo = 'a_receber' then v.valor_liquido else -v.valor_liquido end as v
     from public.vw_parcelas_caixa v
-    join c on c.id = v.conta_bancaria_id
-    where v.no_saldo
-      and (v.data_pagamento is null or v.data_pagamento <= p_data)
-  ),
-  entradas as (
-    select coalesce(sum(t.valor), 0) as total
-    from public.transferencias_contas t join c on c.id = t.conta_destino_id
-    where (c.saldo_inicial_data is null or t.data_transferencia > c.saldo_inicial_data)
-      and t.data_transferencia <= p_data
-  ),
-  saidas as (
-    select coalesce(sum(t.valor + t.tarifa), 0) as total
-    from public.transferencias_contas t join c on c.id = t.conta_origem_id
-    where (c.saldo_inicial_data is null or t.data_transferencia > c.saldo_inicial_data)
-      and t.data_transferencia <= p_data
-  )
-  select round(c.saldo_inicial + parcelas.total + entradas.total - saidas.total, 2)
-  from c, parcelas, entradas, saidas
+    where v.conta_bancaria_id = p_conta_id
+      and v.status = 'pago'
+      and v.data_pagamento > p_data and v.data_pagamento <= v_corte
+    union all
+    select t.valor from public.transferencias_contas t
+    where t.conta_destino_id = p_conta_id and t.data_transferencia > p_data and t.data_transferencia <= v_corte
+    union all
+    select -(t.valor + t.tarifa) from public.transferencias_contas t
+    where t.conta_origem_id = p_conta_id and t.data_transferencia > p_data and t.data_transferencia <= v_corte
+  ) m;
+  return round(v_inicial - v_total, 2);
+end;
 $function$;
+
+revoke all on function public.fn_conciliacao_saldo_app_interno(uuid, date) from public, anon, authenticated;
 
 -- Fluxo de caixa com quatro series. `tipo` devolve a serie: a_pagar, a_receber,
 -- emprestimo_tomado, amortizacao. O corte por centro continua pelo tipo do

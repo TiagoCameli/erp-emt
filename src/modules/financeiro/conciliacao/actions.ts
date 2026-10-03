@@ -13,6 +13,7 @@ import {
   decodificarOfx,
   numerarRepetidos,
   parseOfx,
+  recortarExtrato,
 } from "@/lib/ofx";
 import {
   exigirPermissao,
@@ -25,6 +26,8 @@ import {
   candidatosDoPainel,
   movimentosLivres,
   periodoDoMes,
+  periodoDosExtratos,
+  TODOS_OS_MESES,
 } from "@/modules/financeiro/conciliacao/painel";
 import { carregarPainel } from "@/modules/financeiro/conciliacao/queries";
 
@@ -171,7 +174,24 @@ export async function importarOfx(
     );
   }
 
-  const extrato = parseOfx(texto);
+  const arquivoInteiro = parseOfx(texto);
+
+  // Intervalo escolhido no diálogo: só os movimentos de `de` a `ate` entram, e
+  // o período gravado é o intervalo (o BB manda de 30/12 a 31/01; quem concilia
+  // janeiro usa de 01/01 a 31/01). Sem intervalo, vale o arquivo inteiro.
+  const de = formData.get("de");
+  const ate = formData.get("ate");
+  const dataIso = /^\d{4}-\d{2}-\d{2}$/;
+  let extrato = arquivoInteiro;
+  if (typeof de === "string" && typeof ate === "string" && de && ate) {
+    if (!dataIso.test(de) || !dataIso.test(ate) || de > ate) {
+      return { erro: "Intervalo de datas inválido" };
+    }
+    extrato = recortarExtrato(arquivoInteiro, de, ate);
+    if (extrato.transacoes.length === 0) {
+      return { erro: "Nenhum movimento do arquivo cai no intervalo escolhido" };
+    }
+  }
   if (extrato.transacoes.length === 0) {
     return { erro: "Nenhuma transação encontrada no arquivo OFX" };
   }
@@ -271,7 +291,17 @@ export async function casarAutomatico(
     return { erro: "Sem permissão para conciliar" };
   }
   if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
-  const periodo = periodoDoMes(mes);
+  let periodo = periodoDoMes(mes);
+  if (mes === TODOS_OS_MESES) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("extratos_ofx")
+      .select("periodo_inicio, periodo_fim")
+      .eq("conta_bancaria_id", contaId);
+    periodo = periodoDosExtratos(
+      (data ?? []).map((e) => ({ periodoInicio: e.periodo_inicio, periodoFim: e.periodo_fim })),
+    );
+  }
   if (!periodo) return { erro: "Mês inválido" };
 
   try {

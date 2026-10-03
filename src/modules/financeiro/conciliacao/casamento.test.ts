@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   casarAutomaticamente,
+  nomeConfere,
   palavrasEmComum,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
@@ -37,7 +38,7 @@ describe("palavrasEmComum", () => {
       palavrasEmComum("PIX - ENVIADO - 01/09 19:22 JOSE AUGUSTO DA SILVA PRA", [
         "José Augusto da Silva Prado",
       ]),
-    ).toBe(4);
+    ).toBe(3); // JOSE e SILVA são nomes comuns: meia palavra cada
   });
 
   it("não conta palavra de histórico e de razão social que não identifica ninguém", () => {
@@ -286,5 +287,97 @@ describe("sugestoesSeguras (Bloco E)", () => {
   it("parcela a pagar em aberto sem aprovação fica de fora", () => {
     expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva", false)])).toEqual([]);
     expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva")])).toHaveLength(1);
+  });
+});
+
+describe("nome comum não identifica sozinho", () => {
+  const memo = "PIX - ENVIADO - 02/05 16:05 EDILSON FRANCA DA SILVA";
+
+  it("só o SILVA não confere; nome e sobrenome do favorecido conferem", () => {
+    expect(nomeConfere(memo, ["ANTONIO DA SILVA SOUZA - SANTIM"])).toBe(false);
+    expect(nomeConfere(memo, ["EDILSON FRANÇA SILVA"])).toBe(true);
+    expect(palavrasEmComum(memo, ["EDILSON FRANÇA SILVA"])).toBe(2.5);
+  });
+
+  it("caso real de 02/05/2025: casa sozinho com o Edilson, não com o Antonio", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -1518, memo, "2025-05-02")],
+      [
+        parcela("antonio", 1518, "ANTONIO DA SILVA SOUZA - SANTIM", "2025-05-02"),
+        parcela("edilson", 1518, "EDILSON FRANÇA SILVA", "2025-05-02"),
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "edilson", nomeBate: true, confira: false })]);
+  });
+
+  it("dois nomes comuns juntos conferem (JOSE + SILVA)", () => {
+    expect(nomeConfere("PIX JOSE DA SILVA", ["Jose Silva Construcoes"])).toBe(true);
+  });
+});
+
+describe("nome comum cortado pelo banco", () => {
+  const memo = "PIX - ENVIADO - 30/05 11:50 CLELTON PEREIRA DE OLIVEIR";
+
+  it("OLIVEIR (cortado) casa com OLIVEIRA e vale meia palavra", () => {
+    expect(nomeConfere(memo, ["MARIA RAIMUNDA MIRANDA DE OLIVEIRA"])).toBe(false);
+    expect(palavrasEmComum(memo, ["CLELTON PEREIRA OLIVEIRA"])).toBe(2);
+  });
+
+  it("caso real de 30/05/2025: casa sozinho com o Clelton", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -1404.15, memo, "2025-05-30")],
+      [
+        parcela("clelton", 1404.15, "CLELTON PEREIRA OLIVEIRA", "2025-05-30"),
+        parcela("maria", 1404.15, "MARIA RAIMUNDA MIRANDA DE OLIVEIRA", "2025-05-30"),
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "clelton", nomeBate: true })]);
+  });
+});
+
+describe("transferência entre contas no mesmo dia (regra c)", () => {
+  const trf = (id: string, data: string): CandidatoCasavel => ({
+    especie: "transferencia",
+    grupo: "transferencia",
+    id,
+    valor: 10000,
+    data,
+    sentido: "credito",
+    nomes: ["BANCO DO BRASIL 30.893-5 para BANCO DO BRASIL 102.124-9", "Transferência entre contas"],
+  });
+  const recebida = (id: string, data: string) =>
+    mov(id, 10000, `TRANSFERÊNCIA RECEBIDA - ${data.slice(8)}/${data.slice(5, 7)} E M T CONSTRUTORA`, data);
+
+  it("caso real de 21 e 22/07/2025: cada movimento casa com a transferência do seu dia", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m21", "2025-07-21"), recebida("m22", "2025-07-22")],
+      [trf("t21", "2025-07-21"), trf("t22", "2025-07-22")],
+    );
+    const porMovimento = Object.fromEntries(pares.map((p) => [p.transacaoId, p.alvoId]));
+    expect(porMovimento).toEqual({ m21: "t21", m22: "t22" });
+  });
+
+  it("duas transferências iguais no mesmo dia: nenhuma casa sozinha", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m1", "2025-07-21")],
+      [trf("t1", "2025-07-21"), trf("t2", "2025-07-21")],
+    );
+    expect(pares).toEqual([]);
+  });
+
+  it("dois movimentos iguais no mesmo dia para uma transferência: nenhum casa", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m1", "2025-07-21"), recebida("m2", "2025-07-21")],
+      [trf("t1", "2025-07-21"), trf("t2", "2025-07-22")],
+    );
+    expect(pares.filter((p) => p.alvoId === "t1")).toEqual([]);
+  });
+
+  it("pagamento de mesmo valor no mesmo dia não usa esta regra", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -500, "PIX FULANO", "2025-07-21")],
+      [parcela("p1", 500, "Ciclano", "2025-07-21"), parcela("p2", 500, "Beltrano", "2025-07-22")],
+    );
+    expect(pares).toEqual([]);
   });
 });
