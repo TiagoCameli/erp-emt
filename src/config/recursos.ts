@@ -479,7 +479,8 @@ export const RECURSOS = [
     nome: "Conciliação",
     modulo: "financeiro",
     rota: "/financeiro/conciliacao",
-    acoes: ["ver", "criar", "editar"],
+    // excluir = desfazer uma importação de extrato (Bloco G, 03/10/2026).
+    acoes: ["ver", "criar", "editar", "excluir"],
   },
   {
     id: "financeiro.relatorios",

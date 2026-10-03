@@ -6,6 +6,10 @@ import {
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
 import {
+  importacoesSchema,
+  type Importacao,
+} from "@/modules/financeiro/conciliacao/importacoes";
+import {
   painelSchema,
   type MesDaConta,
   type PainelConciliacao,
@@ -222,4 +226,18 @@ export async function carregarPainel(
     throw new Error("A conciliação da conta veio num formato inesperado");
   }
   return painel.data;
+}
+
+/** O histórico de importações de extrato, mais recentes primeiro (Bloco G). */
+export async function listarImportacoes(): Promise<Importacao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_importacoes");
+  if (error) {
+    throw new Error("Não foi possível carregar as importações");
+  }
+  const lista = importacoesSchema.safeParse(data);
+  if (!lista.success) {
+    throw new Error("As importações vieram num formato inesperado");
+  }
+  return lista.data;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { Landmark, Upload } from "lucide-react";
 
 import { EmptyState, GradeKpis, KPICard } from "@/components/canonicos";
@@ -33,7 +34,12 @@ export function EscolherConta({ contas, todasContas, resumos, podeImportar }: Es
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">Escolha a conta que vai conciliar.</p>
+        <p className="text-sm text-muted-foreground">
+          Escolha a conta que vai conciliar.{" "}
+          <Link href="/financeiro/conciliacao/importacoes" className="foco-anel underline underline-offset-2">
+            Ver todas as importações
+          </Link>
+        </p>
         {podeImportar ? (
           <Button type="button" size="sm" onClick={() => setImportarAberto(true)}>
             <Upload />
@@ -60,7 +66,7 @@ export function EscolherConta({ contas, todasContas, resumos, podeImportar }: Es
                 valor={pendentes > 0 ? `${pendentes} pendentes` : resumo?.qtdExtratos ? "Em dia" : "Sem extrato"}
                 detalhe={
                   resumo && resumo.meses.length > 0
-                    ? resumoUltimosMeses(resumo.meses)
+                    ? `${resumoUltimosMeses(resumo.meses)} · ${resumo.qtdExtratos} ${resumo.qtdExtratos === 1 ? "importação" : "importações"}`
                     : "Nenhum extrato importado"
                 }
                 href={`?${new URLSearchParams({ conta: conta.id }).toString()}`}

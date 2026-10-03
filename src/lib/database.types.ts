@@ -2694,6 +2694,8 @@ export type Database = {
           nome_arquivo: string | null;
           periodo_fim: string | null;
           periodo_inicio: string | null;
+          qtd_ignoradas: number | null;
+          qtd_inseridas: number | null;
           saldo_final: number | null;
           saldo_final_data: string | null;
         };
@@ -2706,6 +2708,8 @@ export type Database = {
           nome_arquivo?: string | null;
           periodo_fim?: string | null;
           periodo_inicio?: string | null;
+          qtd_ignoradas?: number | null;
+          qtd_inseridas?: number | null;
           saldo_final?: number | null;
           saldo_final_data?: string | null;
         };
@@ -2718,6 +2722,8 @@ export type Database = {
           nome_arquivo?: string | null;
           periodo_fim?: string | null;
           periodo_inicio?: string | null;
+          qtd_ignoradas?: number | null;
+          qtd_inseridas?: number | null;
           saldo_final?: number | null;
           saldo_final_data?: string | null;
         };
@@ -9456,6 +9462,11 @@ export type Database = {
       };
       fn_conciliacao_reabrir_mes: {
         Args: { p_conta_id: string; p_mes: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_conciliacao_importacoes: { Args: never; Returns: Json };
+      fn_conciliacao_excluir_extrato: {
+        Args: { p_extrato_id: string; p_motivo: string };
         Returns: undefined;
       };
       fn_conciliacao_importar: {

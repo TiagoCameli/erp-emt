@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
+  History,
   ArrowLeftRight,
   CheckCheck,
   FilePlus2,
@@ -362,6 +363,14 @@ function ConciliacaoConta({
               Casar automaticamente ({paresAutomaticos.length})
             </Button>
           ) : null}
+          <Button asChild size="sm" variant="outline">
+            <Link
+              href={`/financeiro/conciliacao/importacoes?${new URLSearchParams({ conta: conta.id }).toString()}`}
+            >
+              <History />
+              Importações
+            </Link>
+          </Button>
           {permissoes.importar ? (
             <Button
               type="button"
