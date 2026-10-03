@@ -22,8 +22,13 @@ interface CreditosTabelaProps {
 const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
 
 /**
- * Um contrato por linha: quanto foi contratado, quanto já foi pago, quanto
- * ainda se deve, em quantas parcelas e quando vence a próxima.
+ * Um contrato por linha: quanto somam as prestações, quanto já foi pago, quanto
+ * falta vencer, em quantas parcelas e quando vence a próxima.
+ *
+ * "Total das prestações" e "Prestações a vencer" (antes "Contratado" e "Saldo
+ * devedor", D2 de 03/10/2026) porque são somas de PRESTAÇÃO, com os juros
+ * futuros dentro: o principal que o banco cobraria para quitar hoje é menor, e
+ * o nome antigo deixava ler um pelo outro.
  *
  * O clique leva ao LANÇAMENTO, e não a uma lista filtrada: cada contrato é um
  * documento só, com as parcelas dele. É lá que se paga, se anexa o contrato e
@@ -45,11 +50,11 @@ export function CreditosTabela({
               Contrato
             </TableHead>
             <TableHead className={`${CABECALHO} text-right`}>
-              Contratado
+              Total das prestações
             </TableHead>
             <TableHead className={`${CABECALHO} text-right`}>Pago</TableHead>
             <TableHead className={`${CABECALHO} text-right`}>
-              Saldo devedor
+              Prestações a vencer
             </TableHead>
             <TableHead className={`${CABECALHO} text-right`}>
               Parcelas
@@ -219,7 +224,7 @@ export function CreditosPorMesTabela({
 
 /**
  * Os contratos do centro de Empréstimos, um por etapa: quanto o banco liberou,
- * quanto já foi amortizado e o que falta.
+ * quanto já foi amortizado, o que falta e os juros embutidos nas prestações.
  *
  * Morava dentro de `relatorios/page.tsx`, montada em `<table>` cru com `<tfoot>`
  * próprio, ao lado desta mesma tela que já fazia o mesmo trabalho com o `Table`
@@ -229,6 +234,11 @@ export function CreditosPorMesTabela({
  * `tomado` e `pago` NÃO se comparam ainda: parte das prestações antigas está nos
  * extratos e não foi lançada. As duas colunas ficam lado a lado justamente para
  * essa lacuna aparecer.
+ *
+ * "Juros embutidos" é pago mais a pagar, menos tomado (D2, 03/10/2026): a
+ * prestação é um rateio só, então os juros não aparecem no DRE, e é aqui que se
+ * vê quanto custa o dinheiro. Contrato com uma perna só fica com traço, e não
+ * com um juro inventado (ver `EmprestimoContrato.jurosEmbutidos`).
  */
 export function ContratosEmprestimoTabela({
   contratos,
@@ -253,6 +263,9 @@ export function ContratosEmprestimoTabela({
               A pagar
             </TableHead>
             <TableHead scope="col" className={`${CABECALHO} text-right`}>
+              Juros embutidos
+            </TableHead>
+            <TableHead scope="col" className={`${CABECALHO} text-right`}>
               Parcelas
             </TableHead>
             <TableHead scope="col" className={`${CABECALHO} text-center`}>
@@ -274,6 +287,21 @@ export function ContratosEmprestimoTabela({
               </TableCell>
               <TableCell className="py-2 text-right">
                 <MoneyText valor={contrato.aPagar} className="text-detalhe" />
+              </TableCell>
+              <TableCell className="py-2 text-right">
+                {contrato.jurosEmbutidos === null ? (
+                  <span
+                    className="text-detalhe text-muted-foreground"
+                    title="Falta a entrada ou as prestações deste contrato no ERP"
+                  >
+                    —
+                  </span>
+                ) : (
+                  <MoneyText
+                    valor={contrato.jurosEmbutidos}
+                    className="text-detalhe"
+                  />
+                )}
               </TableCell>
               <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
                 {contrato.parcelas === 0
@@ -306,6 +334,12 @@ export function ContratosEmprestimoTabela({
             <TableCell className="py-2 text-right">
               <MoneyText
                 valor={contratos.totalAPagar}
+                className="text-detalhe font-semibold"
+              />
+            </TableCell>
+            <TableCell className="py-2 text-right">
+              <MoneyText
+                valor={contratos.totalJurosEmbutidos}
                 className="text-detalhe font-semibold"
               />
             </TableCell>

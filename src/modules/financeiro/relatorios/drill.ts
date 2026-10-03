@@ -1,6 +1,9 @@
+import type { Natureza } from "@/modules/financeiro/relatorios/calculo";
 import {
   escreverRecorte,
+  tipoDaSerie,
   type FaixaAgingRecorte,
+  type SerieFluxo,
   type TipoLancamentoRecorte,
 } from "@/modules/financeiro/lancamentos/recorte";
 
@@ -74,6 +77,12 @@ export interface FiltrosDoRelatorioDeCusto {
    * tela — e é por isso que o teste trava o parâmetro em vez de confiar no olho.
    */
   excluirPrevisto?: boolean;
+  /**
+   * O relatório está somando o CAPEX ("Incluir investimentos" marcado)? Então a
+   * lista não pode tirá-lo: viaja só o `sem_movimentacao`, sem o
+   * `sem_investimento`.
+   */
+  incluirInvestimento?: boolean;
 }
 
 /**
@@ -92,6 +101,12 @@ export interface RecorteCustoGrupo {
   /** Já traduzido pela escada da tela: a etapa quando há uma, senão a raiz. */
   centroCustoId?: string;
   categoriaId?: string;
+  /**
+   * "Incluir investimentos" marcado na barra. Mora no recorte, e não solto,
+   * porque desce para os mesmos quatro lugares: os cartões, os três níveis da
+   * tabela e o link do drill.
+   */
+  incluirInvestimento?: boolean;
 }
 
 /** Lista de valores no formato da URL, ou `undefined` quando não filtra nada. */
@@ -134,8 +149,36 @@ function periodoNaUrl(
 /**
  * Filtros que os relatórios de custo aplicam SEMPRE (ver `fn_rel_custo_*`), e que
  * precisam viajar para o total da lista fechar com a célula.
+ *
+ * `sem_movimentacao` e `sem_investimento` são o "entra no resultado?" da decisão
+ * D4 (03/10/2026): a família de custo corta as duas naturezas, medidas pela
+ * categoria do RATEIO caindo na do lançamento, e a lista aplica o mesmo corte
+ * pelo mesmo critério (ver `lancamentos/recorte-no-embed.ts`). Sem eles, o
+ * clique num centro abria a lista com a prestação do empréstimo e a escavadeira
+ * comprada, que a célula não somou.
+ *
+ * Exportado para o teste travar que todo drill de RESULTADO os leva, e que os de
+ * CAIXA (fluxo, aging, conta) não levam: o caixa inclui movimentação (D1).
  */
-const IMPLICITOS_CUSTO = { tipo: "a_pagar", sem_cancelado: "1" } as const;
+export const IMPLICITOS_CUSTO = {
+  tipo: "a_pagar",
+  sem_cancelado: "1",
+  sem_movimentacao: "1",
+  sem_investimento: "1",
+} as const;
+
+/**
+ * Os implícitos do custo, com o CAPEX de volta quando o relatório o está
+ * somando. Só o `sem_investimento` cai: a movimentação continua fora de
+ * qualquer jeito, porque nenhuma tela de custo a soma.
+ */
+function implicitosDoCusto(
+  incluirInvestimento?: boolean,
+): Record<string, string | undefined> {
+  return incluirInvestimento
+    ? { ...IMPLICITOS_CUSTO, sem_investimento: undefined }
+    : { ...IMPLICITOS_CUSTO };
+}
 
 /**
  * Custo por centro de custo: a linha da tabela, a barra do gráfico e o mês da
@@ -157,7 +200,7 @@ export function drillCentroCusto({
   filtros: FiltrosDoRelatorioDeCusto;
 }): string {
   return montar({
-    ...IMPLICITOS_CUSTO,
+    ...implicitosDoCusto(filtros.incluirInvestimento),
     centro: lista(centroCustoIds),
     ...periodoNaUrl(periodo),
     categoria: lista(filtros.categoriaIds),
@@ -183,15 +226,30 @@ export function drillCustoReceita({
   centroCustoId,
   meses,
   tipo,
+  incluirInvestimento,
 }: {
   centroCustoId: string;
   /** yyyy-MM, os meses que a célula somou. */
   meses: readonly string[];
   tipo: TipoLancamentoRecorte;
+  /** "Incluir investimentos" marcado: só mexe no lado do custo. */
+  incluirInvestimento?: boolean;
 }): string {
+  // Os dois lados cortam natureza diferente, e é a mesma assimetria da
+  // `fn_rel_custo_receita`: o custo é tudo menos movimentação e investimento; a
+  // receita é SÓ operacional (juro recebido é resultado da empresa, não
+  // produção da obra).
+  const natureza =
+    tipo === "a_pagar"
+      ? {
+          sem_movimentacao: "1",
+          sem_investimento: incluirInvestimento ? undefined : "1",
+        }
+      : { natureza: "operacional" };
   return montar({
     tipo,
     sem_cancelado: "1",
+    ...natureza,
     centro: centroCustoId,
     comp_in: meses.length > 0 ? meses.map((mes) => `${mes}-01`).join(",") : undefined,
   });
@@ -209,16 +267,26 @@ export function drillCategoriaCompetencia({
   categoriaId,
   periodo,
   tipo,
+  natureza,
 }: {
   categoriaId: string;
   periodo: PeriodoCompetencia;
   tipo: TipoLancamentoRecorte;
+  /**
+   * A natureza do BLOCO clicado. Viaja em `natureza=` em vez do par
+   * `sem_movimentacao`/`sem_investimento` porque o DRE mostra os quatro blocos:
+   * a linha de Pagamento de Empréstimo, no bloco de movimentação, abriria a
+   * lista vazia com o par. Com a natureza do bloco, a lista corta pela categoria
+   * do RATEIO, que é a mesma régua da `fn_rel_dre`.
+   */
+  natureza: Natureza;
 }): string {
   return montar({
     categoria: categoriaId,
     ...periodoNaUrl(periodo),
     tipo,
     sem_cancelado: "1",
+    natureza,
   });
 }
 
@@ -257,7 +325,7 @@ export function drillGrupoInsumo({
     );
   }
   return montar({
-    ...IMPLICITOS_CUSTO,
+    ...implicitosDoCusto(recorte.incluirInvestimento),
     ...periodoNaUrl(periodo),
     // A lista de lançamentos filtra centro pela SUBÁRVORE (ver
     // `subarvoreDosCentros`), que é a mesma regra da RPC do relatório
@@ -273,6 +341,13 @@ export function drillGrupoInsumo({
  * (que reusa a expressão de `fn_rel_fluxo_caixa`) e NÃO como `mes`, que é
  * competência.
  *
+ * A SÉRIE viaja no recorte (`fluxo:mes:situação:série`) desde que o fluxo ganhou
+ * quatro (D1, 03/10/2026): clicar em "Amortizações" tem de abrir só as
+ * prestações de empréstimo, e não as saídas operacionais do mesmo mês. O `tipo`
+ * vai junto, derivado da série, para a barra de filtros da lista mostrar o lado
+ * certo. Nenhum filtro de natureza viaja: o caixa inclui movimentação, e a série
+ * já diz qual parte dela.
+ *
  * Os CENTROS do lado clicado viajam junto, e é o que faz a lista abrir com o
  * mesmo total da barra: com centro escolhido, a barra soma a FATIA do rateio, e a
  * lista de Lançamentos também mede pela fatia quando recebe `centro=` (ver
@@ -281,23 +356,23 @@ export function drillGrupoInsumo({
  */
 export function drillFluxoCaixa({
   mes,
-  tipo,
+  serie,
   realizado,
   centroIds,
 }: {
   mes: string;
-  tipo: TipoLancamentoRecorte;
+  serie: SerieFluxo;
   realizado: boolean;
   /**
-   * Centros JÁ EFETIVOS do lado clicado: os do custo quando a barra é de saída,
-   * os da receita quando é de entrada. Vazio = o relatório não filtrou aquele
-   * lado, e a lista abre sem recorte de centro.
+   * Centros JÁ EFETIVOS do lado clicado: os do custo quando a barra é de saída
+   * (a pagar e amortização), os da receita quando é de entrada. Vazio = o
+   * relatório não filtrou aquele lado, e a lista abre sem recorte de centro.
    */
   centroIds?: string[];
 }): string {
   return montar({
-    tipo,
-    recorte: escreverRecorte({ tipo: "fluxo", mes, realizado }),
+    tipo: tipoDaSerie(serie),
+    recorte: escreverRecorte({ tipo: "fluxo", mes, realizado, serie }),
     centro: lista(centroIds),
   });
 }

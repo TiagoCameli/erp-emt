@@ -9449,7 +9449,7 @@ export type Database = {
           fechada: boolean;
           fechado_em: string;
           fechado_por: string;
-          incompletos: number;
+          sem_categoria: number;
           lancamentos: number;
           mes: string;
           observacao: string;

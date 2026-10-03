@@ -183,6 +183,7 @@ export default async function GestaoPage({
     centroIds: filtros.centroIds,
     etapaIds: filtros.etapaIds,
     categoriaIds: filtros.categoriaIds,
+    incluirInvestimento: filtros.incluirInvestimento,
   });
 
   const periodo = `${rotuloMesCurto(janela.meses[0])} a ${rotuloMesCurto(
@@ -361,7 +362,10 @@ export default async function GestaoPage({
           detalhe={semRecorte(
             ler(
               financeiro,
-              (d) => `${d.pagoNoMes.contagem} pagamento(s) no caixa`,
+              // Desde a D1 (03/10/2026) a prestação de empréstimo conta: saiu
+              // da conta, é caixa. Dizer isso evita ler o número como custo.
+              (d) =>
+                `${d.pagoNoMes.contagem} pagamento(s) no caixa, prestações de empréstimo incluídas`,
             ),
           )}
           href={links.pagoNoMes}

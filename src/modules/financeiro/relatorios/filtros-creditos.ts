@@ -23,10 +23,11 @@ import {
  *
  * Já a SITUAÇÃO se resolve por construção: quitado é o contrato sem parcela em
  * aberto (`proximo_vencimento` nulo, que é o `min(data_vencimento) filter (where
- * status <> 'pago')` da RPC), e `fn_rel_creditos_por_mes` só soma parcela com
- * `status <> 'pago'` e vencimento não nulo. Um contrato quitado contribui zero
- * para os próximos meses — então filtrar "quitado" zera aquele bloco em vez de
- * discordar dele, e filtrar "em aberto" não tira nada de lá.
+ * status in ('pendente','em_revisao','aprovado'))` da RPC), e
+ * `fn_rel_creditos_por_mes` só soma parcela nesses mesmos status, com vencimento
+ * não nulo. Um contrato quitado contribui zero para os próximos meses, então
+ * filtrar "quitado" ZERA aquele bloco (ver `recortarCreditosPorSituacao`), e
+ * filtrar "em aberto" não tira nada de lá.
  *
  * Módulo puro: nada de banco, nada de React.
  */
@@ -84,11 +85,12 @@ export function passaNaSituacao(
  * números que não se explicam um ao outro. Aqui os cartões passam a somar
  * exatamente as linhas que ficaram, que é a regra do módulo.
  *
- * `proximosMeses` NÃO é recortado, e é de propósito: ele é a curva de
- * vencimentos, e todo vencimento futuro vem de contrato em aberto — filtrar por
- * "quitado" devolveria uma curva vazia, que é a resposta certa, e por
- * "em aberto" devolveria a mesma curva. Recalculá-lo seria trabalho para chegar
- * onde já se está.
+ * `proximosMeses` não precisa de recálculo: é a curva de vencimentos, e todo
+ * vencimento futuro vem de contrato em aberto. "Em aberto" devolve a mesma
+ * curva; "quitado" a ZERA, e isso tem de ser feito aqui: a curva vem de outra
+ * RPC, sem o contrato de cada parcela, então ela não se esvazia sozinha. Até
+ * 03/10/2026 este comentário dizia que esvaziava, e a tela mostrava "Vence em
+ * 12 meses" com milhões embaixo de uma tabela só de contratos quitados.
  */
 export function recortarCreditosPorSituacao<
   T extends {
@@ -96,6 +98,8 @@ export function recortarCreditosPorSituacao<
     totalContratado: number;
     totalPago: number;
     totalSaldo: number;
+    proximosMeses: readonly unknown[];
+    totalProximosMeses: number;
   },
 >(dados: T, situacao: FiltrosCreditos["situacao"]): T {
   if (situacao === "") return dados;
@@ -110,6 +114,9 @@ export function recortarCreditosPorSituacao<
     totalContratado: somar(contratos, (c) => c.valorContratado),
     totalPago: somar(contratos, (c) => c.totalPago),
     totalSaldo: somar(contratos, (c) => c.saldoDevedor),
+    ...(situacao === "quitado"
+      ? { proximosMeses: [], totalProximosMeses: 0 }
+      : {}),
   };
 }
 

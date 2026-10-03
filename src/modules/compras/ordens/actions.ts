@@ -780,8 +780,8 @@ export async function contarImpactoReclassificacao(
  *    está comprando, sem precisar de acesso a Cadastros),
  *  - recusa quando a categoria mudou desde que a tela carregou, em vez de deixar
  *    a segunda pessoa desfazer a primeira em silêncio,
- *  - recusa categoria de natureza `movimentacao`, que tiraria a compra do saldo
- *    bancário, e
+ *  - recusa categoria de natureza `movimentacao`, que tiraria a compra do custo
+ *    das obras e do resultado, e
  *  - reclassifica o rateio dos lançamentos que as ordens antigas já geraram.
  *
  * Uma chamada por insumo, e não um laço no banco: assim uma recusa nomeia o

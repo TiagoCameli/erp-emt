@@ -173,8 +173,14 @@ describe("nomes dos parâmetros das RPCs de custo", () => {
     janela: JANELA,
     centros: [OBRA, OUTRA],
     categorias: [CATEGORIA],
+    incluirInvestimento: false,
   };
-  const SEM_FILTRO = { janela: JANELA, centros: [], categorias: [] };
+  const SEM_FILTRO = {
+    janela: JANELA,
+    centros: [],
+    categorias: [],
+    incluirInvestimento: false,
+  };
 
   /** Os argumentos com que a RPC foi chamada. */
   function argumentos(): Record<string, unknown> {
@@ -242,6 +248,19 @@ describe("nomes dos parâmetros das RPCs de custo", () => {
       expect(args.p_categorias).toBeUndefined();
     });
 
+    it(`${caso.nome} leva o "Incluir investimentos" para o banco`, async () => {
+      // O mesmo valor em TODAS as RPCs de custo do painel: ligado numa e não na
+      // outra, o total por mês para de fechar com o por centro e o por grupo.
+      rpc.mockResolvedValue({ data: [], error: null });
+      await caso.chamar({ ...COM_FILTRO, incluirInvestimento: true });
+      expect(argumentos().p_incluir_investimento).toBe(true);
+
+      rpc.mockClear();
+      rpc.mockResolvedValue({ data: [], error: null });
+      await caso.chamar(COM_FILTRO);
+      expect(argumentos().p_incluir_investimento).toBe(false);
+    });
+
     it(`${caso.nome} manda o período da janela, e não conta meses para trás`, async () => {
       rpc.mockResolvedValue({ data: [], error: null });
 
@@ -305,7 +324,7 @@ describe("filtrosDoBanco", () => {
 
   it("a etapa escolhida SUBSTITUI a raiz dela", async () => {
     const { centros } = filtrosDoBanco(
-      { janela: JANELA, centroIds: [MANUT], etapaIds: [ETAPA], categoriaIds: [] },
+      { janela: JANELA, centroIds: [MANUT], etapaIds: [ETAPA], categoriaIds: [], incluirInvestimento: false },
       CADASTRO,
     );
     // Mandar as duas traria as outras 60 máquinas junto do equipamento pedido.
@@ -314,7 +333,7 @@ describe("filtrosDoBanco", () => {
 
   it("etapa órfã (raiz não escolhida) é descartada", async () => {
     const { centros } = filtrosDoBanco(
-      { janela: JANELA, centroIds: [OBRA], etapaIds: [ETAPA], categoriaIds: [] },
+      { janela: JANELA, centroIds: [OBRA], etapaIds: [ETAPA], categoriaIds: [], incluirInvestimento: false },
       CADASTRO,
     );
     expect(centros).toEqual([OBRA]);
@@ -327,7 +346,7 @@ describe("filtrosDoBanco", () => {
    */
   it("sem o cadastro, ainda honra as raízes cruas da URL", async () => {
     const { centros } = filtrosDoBanco(
-      { janela: JANELA, centroIds: [OBRA], etapaIds: [ETAPA], categoriaIds: [] },
+      { janela: JANELA, centroIds: [OBRA], etapaIds: [ETAPA], categoriaIds: [], incluirInvestimento: false },
       [],
     );
     expect(centros).toEqual([OBRA]);
@@ -335,7 +354,7 @@ describe("filtrosDoBanco", () => {
 
   it("sem escolha nenhuma, a lista fica vazia (= todos)", async () => {
     const { centros, categorias } = filtrosDoBanco(
-      { janela: JANELA, centroIds: [], etapaIds: [], categoriaIds: [] },
+      { janela: JANELA, centroIds: [], etapaIds: [], categoriaIds: [], incluirInvestimento: false },
       CADASTRO,
     );
     expect(centros).toEqual([]);

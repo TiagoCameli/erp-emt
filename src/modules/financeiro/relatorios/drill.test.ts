@@ -8,6 +8,7 @@ import {
   drillContaBancaria,
   drillFluxoCaixa,
   drillGrupoInsumo,
+  IMPLICITOS_CUSTO,
   ROTA_LANCAMENTOS,
 } from "@/modules/financeiro/relatorios/drill";
 
@@ -38,7 +39,7 @@ function params(url: string): Record<string, string> {
  * deles passaria despercebida — e é exatamente por isso que o teste existe.
  */
 describe("drillCentroCusto", () => {
-  it("carrega centro, mês, tipo a_pagar e sem_cancelado", () => {
+  it("carrega centro, mês, tipo a_pagar, sem_cancelado e o corte de resultado", () => {
     const url = drillCentroCusto({
       centroCustoIds: [CENTRO],
       periodo: { mes: "2026-07" },
@@ -49,7 +50,23 @@ describe("drillCentroCusto", () => {
       mes: "2026-07",
       tipo: "a_pagar",
       sem_cancelado: "1",
+      sem_movimentacao: "1",
+      sem_investimento: "1",
     });
+  });
+
+  it("com Incluir investimentos, tira só o `sem_investimento`", () => {
+    // A movimentação continua fora de qualquer jeito: nenhuma tela de custo a
+    // soma, nem com o checkbox ligado.
+    const p = params(
+      drillCentroCusto({
+        centroCustoIds: [CENTRO],
+        periodo: { mes: "2026-07" },
+        filtros: { incluirInvestimento: true },
+      }),
+    );
+    expect(p.sem_movimentacao).toBe("1");
+    expect(p.sem_investimento).toBeUndefined();
   });
 
   it("traduz o período de/até em faixa de mês de referência", () => {
@@ -238,6 +255,7 @@ describe("drillCategoriaCompetencia", () => {
           categoriaId: CATEGORIA,
           periodo: { mes: "2026-07" },
           tipo: "a_receber",
+          natureza: "operacional",
         }),
       ),
     ).toEqual({
@@ -245,7 +263,25 @@ describe("drillCategoriaCompetencia", () => {
       mes: "2026-07",
       tipo: "a_receber",
       sem_cancelado: "1",
+      natureza: "operacional",
     });
+  });
+
+  it("a linha de um bloco FORA do resultado leva a natureza dele", () => {
+    // Com o par `sem_movimentacao`/`sem_investimento`, a linha de Pagamento de
+    // Empréstimo (bloco de movimentação) abriria a lista vazia. A natureza do
+    // bloco corta pela categoria do rateio, a mesma régua da `fn_rel_dre`.
+    const p = params(
+      drillCategoriaCompetencia({
+        categoriaId: CATEGORIA,
+        periodo: { mes: "2026-07" },
+        tipo: "a_pagar",
+        natureza: "investimento",
+      }),
+    );
+    expect(p.natureza).toBe("investimento");
+    expect(p.sem_investimento).toBeUndefined();
+    expect(p.sem_movimentacao).toBeUndefined();
   });
 
   it("a linha de despesa vai como a_pagar", () => {
@@ -255,6 +291,7 @@ describe("drillCategoriaCompetencia", () => {
           categoriaId: CATEGORIA,
           periodo: { mes: "2026-07" },
           tipo: "a_pagar",
+          natureza: "operacional",
         }),
       ).tipo,
     ).toBe("a_pagar");
@@ -270,6 +307,7 @@ describe("drillCategoriaCompetencia", () => {
           categoriaId: CATEGORIA,
           periodo: { de: "2026-01", ate: "2026-03" },
           tipo: "a_pagar",
+          natureza: "operacional",
         }),
       ),
     ).toEqual({
@@ -278,6 +316,7 @@ describe("drillCategoriaCompetencia", () => {
       comp_ate: "2026-03-31",
       tipo: "a_pagar",
       sem_cancelado: "1",
+      natureza: "operacional",
     });
   });
 
@@ -288,12 +327,14 @@ describe("drillCategoriaCompetencia", () => {
           categoriaId: CATEGORIA,
           periodo: {},
           tipo: "a_receber",
+          natureza: "financeira",
         }),
       ),
     ).toEqual({
       categoria: CATEGORIA,
       tipo: "a_receber",
       sem_cancelado: "1",
+      natureza: "financeira",
     });
   });
 });
@@ -306,6 +347,8 @@ describe("drillGrupoInsumo", () => {
       mes: "2026-07",
       tipo: "a_pagar",
       sem_cancelado: "1",
+      sem_movimentacao: "1",
+      sem_investimento: "1",
     });
   });
 
@@ -327,7 +370,21 @@ describe("drillGrupoInsumo", () => {
       categoria: CATEGORIA,
       tipo: "a_pagar",
       sem_cancelado: "1",
+      sem_movimentacao: "1",
+      sem_investimento: "1",
     });
+  });
+
+  it("com Incluir investimentos no recorte, o CAPEX vai junto", () => {
+    const p = params(
+      drillGrupoInsumo({
+        grupoId: null,
+        periodo: { mes: "2026-07" },
+        recorte: { incluirInvestimento: true },
+      }),
+    );
+    expect(p.sem_movimentacao).toBe("1");
+    expect(p.sem_investimento).toBeUndefined();
   });
 
   it("sem recorte, não inventa filtro de centro nem de categoria", () => {
@@ -363,9 +420,9 @@ describe("drillGrupoInsumo", () => {
 describe("drillFluxoCaixa", () => {
   it("realizado vira recorte de fluxo pago", () => {
     expect(
-      params(drillFluxoCaixa({ mes: "2026-07", tipo: "a_pagar", realizado: true })),
+      params(drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true })),
     ).toEqual({
-      recorte: "fluxo:2026-07:realizado",
+      recorte: "fluxo:2026-07:realizado:a_pagar",
       tipo: "a_pagar",
     });
   });
@@ -373,19 +430,46 @@ describe("drillFluxoCaixa", () => {
   it("previsto vira recorte de fluxo previsto", () => {
     expect(
       params(
-        drillFluxoCaixa({ mes: "2026-07", tipo: "a_receber", realizado: false }),
+        drillFluxoCaixa({ mes: "2026-07", serie: "a_receber", realizado: false }),
       ),
     ).toEqual({
-      recorte: "fluxo:2026-07:previsto",
+      recorte: "fluxo:2026-07:previsto:a_receber",
       tipo: "a_receber",
     });
+  });
+
+  it("as séries de movimentação viajam no recorte, com o tipo do lado delas", () => {
+    // Desde a D1 o fluxo tem quatro séries. Clicar em "Amortizações" abre só as
+    // prestações, e nenhum filtro de natureza vai junto: o caixa inclui
+    // movimentação.
+    expect(
+      params(
+        drillFluxoCaixa({ mes: "2026-11", serie: "amortizacao", realizado: false }),
+      ),
+    ).toEqual({
+      recorte: "fluxo:2026-11:previsto:amortizacao",
+      tipo: "a_pagar",
+    });
+    const tomado = params(
+      drillFluxoCaixa({
+        mes: "2026-07",
+        serie: "emprestimo_tomado",
+        realizado: true,
+      }),
+    );
+    expect(tomado).toEqual({
+      recorte: "fluxo:2026-07:realizado:emprestimo_tomado",
+      tipo: "a_receber",
+    });
+    expect(tomado.sem_movimentacao).toBeUndefined();
+    expect(tomado.sem_investimento).toBeUndefined();
   });
 
   it("não manda mes de competência num drill de caixa", () => {
     // Regime de CAIXA: `mes` é competência, e mandá-lo aqui daria outra lista sem
     // erro nenhum. O recorte carrega o mês do caixa, que é coisa diferente.
     const p = params(
-      drillFluxoCaixa({ mes: "2026-07", tipo: "a_pagar", realizado: true }),
+      drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true }),
     );
     expect(p.mes).toBeUndefined();
     expect(p.venc_de).toBeUndefined();
@@ -400,13 +484,13 @@ describe("drillFluxoCaixa", () => {
       params(
         drillFluxoCaixa({
           mes: "2026-07",
-          tipo: "a_pagar",
+          serie: "a_pagar",
           realizado: true,
           centroIds: [CENTRO, OUTRO_CENTRO],
         }),
       ),
     ).toEqual({
-      recorte: "fluxo:2026-07:realizado",
+      recorte: "fluxo:2026-07:realizado:a_pagar",
       tipo: "a_pagar",
       centro: `${CENTRO},${OUTRO_CENTRO}`,
     });
@@ -419,7 +503,7 @@ describe("drillFluxoCaixa", () => {
     const p = params(
       drillFluxoCaixa({
         mes: "2026-07",
-        tipo: "a_receber",
+        serie: "a_receber",
         realizado: false,
         centroIds: [],
       }),
@@ -493,11 +577,109 @@ describe("drillCustoReceita", () => {
     expect(p.comp_in).toBe("2026-07-01");
   });
 
+  it("o custo corta movimentação e investimento; a receita, só operacional", () => {
+    // A mesma assimetria da `fn_rel_custo_receita`: juro recebido é resultado
+    // da empresa, não produção da obra, então a receita não é "tudo menos".
+    const custo = params(
+      drillCustoReceita({ centroCustoId: CENTRO, meses: ["2026-07"], tipo: "a_pagar" }),
+    );
+    expect(custo.sem_movimentacao).toBe("1");
+    expect(custo.sem_investimento).toBe("1");
+    expect(custo.natureza).toBeUndefined();
+
+    const receita = params(
+      drillCustoReceita({ centroCustoId: CENTRO, meses: ["2026-07"], tipo: "a_receber" }),
+    );
+    expect(receita.natureza).toBe("operacional");
+    expect(receita.sem_movimentacao).toBeUndefined();
+  });
+
+  it("com Incluir investimentos, o CAPEX entra só no lado do custo", () => {
+    const custo = params(
+      drillCustoReceita({
+        centroCustoId: CENTRO,
+        meses: ["2026-07"],
+        tipo: "a_pagar",
+        incluirInvestimento: true,
+      }),
+    );
+    expect(custo.sem_movimentacao).toBe("1");
+    expect(custo.sem_investimento).toBeUndefined();
+  });
+
   it("sem mes nenhum, nao manda a chave dos meses", () => {
     const p = params(
       drillCustoReceita({ centroCustoId: CENTRO, meses: [], tipo: "a_pagar" }),
     );
     expect(p.comp_in).toBeUndefined();
     expect(p.centro).toBe(CENTRO);
+  });
+});
+
+/**
+ * A trava do corte de RESULTADO em todos os drills (decisão D4, 03/10/2026).
+ *
+ * Todo relatório de resultado corta movimentação e investimento pela categoria
+ * do rateio; se o drill dele deixar de mandar o corte, a lista abre com a
+ * prestação do empréstimo e a escavadeira comprada embaixo de uma célula que
+ * não as somou, sem erro em lugar nenhum. E o caixa (D1) INCLUI movimentação:
+ * um drill de caixa que mandasse o corte esconderia a prestação paga do extrato.
+ */
+describe("corte de resultado nos drills", () => {
+  const PERIODO = { mes: "2026-07" };
+
+  const DE_CUSTO: [string, string][] = [
+    [
+      "custo por centro",
+      drillCentroCusto({ centroCustoIds: [CENTRO], periodo: PERIODO, filtros: {} }),
+    ],
+    ["custo por grupo (sem insumo)", drillGrupoInsumo({ grupoId: null, periodo: PERIODO })],
+    [
+      "custo x receita (custo)",
+      drillCustoReceita({ centroCustoId: CENTRO, meses: ["2026-07"], tipo: "a_pagar" }),
+    ],
+  ];
+
+  it.each(DE_CUSTO)("%s manda sem_movimentacao e sem_investimento", (_, url) => {
+    const p = params(url);
+    expect(p.sem_movimentacao).toBe("1");
+    expect(p.sem_investimento).toBe("1");
+  });
+
+  it("IMPLICITOS_CUSTO carrega os dois cortes", () => {
+    expect(IMPLICITOS_CUSTO).toMatchObject({
+      sem_movimentacao: "1",
+      sem_investimento: "1",
+    });
+  });
+
+  it.each([
+    "operacional",
+    "financeira",
+    "movimentacao",
+    "investimento",
+  ] as const)("o DRE do bloco %s leva a natureza do bloco", (natureza) => {
+    const p = params(
+      drillCategoriaCompetencia({
+        categoriaId: CATEGORIA,
+        periodo: PERIODO,
+        tipo: "a_pagar",
+        natureza,
+      }),
+    );
+    expect(p.natureza).toBe(natureza);
+  });
+
+  const DE_CAIXA: [string, string][] = [
+    ["fluxo de caixa", drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true })],
+    ["aging", drillAging({ faixa: "v_1_7", tipo: "a_pagar" })],
+    ["posição bancária", drillContaBancaria({ contaId: CONTA, tipo: "a_pagar" })],
+  ];
+
+  it.each(DE_CAIXA)("%s NÃO corta natureza nenhuma", (_, url) => {
+    const p = params(url);
+    expect(p.sem_movimentacao).toBeUndefined();
+    expect(p.sem_investimento).toBeUndefined();
+    expect(p.natureza).toBeUndefined();
   });
 });

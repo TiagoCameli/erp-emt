@@ -64,8 +64,17 @@ import {
 } from "@/modules/financeiro/_shared/centro-de-custo";
 import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
 import {
-  aplicarNaturezaOperacional,
+  aplicarNaturezaNoRateio,
+  filtroDeNatureza,
+  naturezasAceitas,
+  SELECT_NATUREZA,
+  type ConsultaComNatureza,
+  type FiltroDeNatureza,
+  type NaturezaCategoria,
+} from "@/modules/financeiro/lancamentos/natureza-no-embed";
+import {
   aplicarRecorteNoEmbed,
+  aplicarSerieDoFluxo,
   recorteNoEmbed,
   type ConsultaComEmbed,
 } from "@/modules/financeiro/lancamentos/recorte-no-embed";
@@ -192,6 +201,15 @@ export interface ListarLancamentosParams {
    * relatório que está somando sem previsto abrir a MESMA fatia.
    */
   semPrevisto?: boolean;
+  /**
+   * Corte de NATUREZA pela categoria do rateio (caindo na do lançamento), o
+   * mesmo "entra no resultado?" das funções de custo e do DRE. Os três se
+   * combinam; ver `natureza-no-embed.ts`. Os drills de RESULTADO mandam
+   * `sem_movimentacao` e `sem_investimento`; os de caixa não mandam nada.
+   */
+  naturezas?: NaturezaCategoria[];
+  semMovimentacao?: boolean;
+  semInvestimento?: boolean;
   /**
    * Só lançamentos que a empresa ainda deve: alguma parcela em aberto (nem paga
    * nem cancelada), e o próprio lançamento não cancelado.
@@ -799,10 +817,13 @@ async function saldoInicialDaConta(
 /**
  * As categorias de natureza `movimentacao`.
  *
- * Aplicação e resgate do principal não são caixa entrando nem saindo, e os três
- * recortes as descartam. A regra mora na CATEGORIA do lançamento, então o filtro
- * do embed (que é de parcela) não a alcança: ela vira um filtro do pai, por lista
- * de ids — e essa lista é curta (4 hoje), ao contrário da de lançamentos.
+ * Desde a D1 (03/10/2026) a movimentação que passa pela conta ENTRA no caixa, e
+ * o aging e a conta paga não filtram natureza. Só o recorte do fluxo ainda lê
+ * esta lista: é ela que separa as séries (a saída de movimentação é
+ * `amortizacao`) e tira o ajuste de aplicação, como `serie_fluxo` faz no banco.
+ * A regra mora na CATEGORIA do lançamento, então o filtro do embed (que é de
+ * parcela) não a alcança: ela vira um filtro do pai, por lista de ids, curta
+ * (4 hoje), ao contrário da de lançamentos.
  */
 async function idsDeCategoriaDeMovimentacao(
   supabase: ClienteSupabase,
@@ -818,6 +839,33 @@ async function idsDeCategoriaDeMovimentacao(
     );
   }
   return (data ?? []).map((categoria) => categoria.id);
+}
+
+/**
+ * O filtro de natureza pronto para a consulta, ou `null` quando a URL não pediu
+ * corte de natureza. Lê o cadastro de categorias (dezenas de linhas) uma vez.
+ *
+ * Função PRÓPRIA, e não a `idsDeCategoriaDeMovimentacao` acima: aquela serve o
+ * recorte do fluxo de caixa, que separa séries; esta serve os drills de
+ * resultado. São perguntas diferentes, e dividir a função amarraria uma à
+ * outra no dia em que uma das regras mudar.
+ */
+async function filtroDeNaturezaDaLista(
+  supabase: ClienteSupabase,
+  aceitas: readonly NaturezaCategoria[],
+): Promise<FiltroDeNatureza> {
+  const { data, error } = await supabase
+    .from("categorias_financeiras")
+    .select("id, natureza");
+
+  if (error) {
+    // Erro não pode virar "sem filtro": a lista abriria com a movimentação e o
+    // CAPEX que a célula do relatório não somou.
+    throw new Error(
+      `Não foi possível ler a natureza das categorias: ${error.message}`,
+    );
+  }
+  return filtroDeNatureza(aceitas, data ?? []);
 }
 
 /**
@@ -842,8 +890,14 @@ async function valoresDoRecorte(
     // `undefined` e não `null`: os parâmetros da RPC são opcionais com default
     // null no banco, e é assim que os tipos gerados os descrevem.
     p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
+    // No fluxo, a série clicada (as quatro de `fn_rel_fluxo_caixa`); ausente
+    // traz todas. No aging, o tipo do lançamento.
     p_tipo_lancamento:
-      recorte.tipo === "aging" ? recorte.tipoLancamento : undefined,
+      recorte.tipo === "aging"
+        ? recorte.tipoLancamento
+        : recorte.tipo === "fluxo"
+          ? recorte.serie
+          : undefined,
     p_mes: recorte.tipo === "fluxo" ? recorte.mes : undefined,
     p_realizado: recorte.tipo === "fluxo" ? recorte.realizado : undefined,
     p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
@@ -861,6 +915,33 @@ async function valoresDoRecorte(
       paraReais(paraCentavos(linha.valor_no_recorte)),
     ]),
   );
+}
+
+/**
+ * Os lançamentos da série `emprestimo_tomado` no mês e situação do recorte.
+ *
+ * É a mesma RPC da medida, perguntada pela outra série: o que separa empréstimo
+ * tomado de resgate é o rateio no centro de Empréstimos, e repetir a subida da
+ * árvore aqui seria a segunda cópia da regra. Poucos ids (um por contrato
+ * liberado no mês), então cabem no filtro do pai.
+ */
+async function idsDeEmprestimoTomado(
+  supabase: ClienteSupabase,
+  recorte: Extract<Recorte, { tipo: "fluxo" }>,
+): Promise<string[]> {
+  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
+    p_tipo_recorte: "fluxo",
+    p_tipo_lancamento: "emprestimo_tomado",
+    p_mes: recorte.mes,
+    p_realizado: recorte.realizado,
+  });
+
+  if (error) {
+    throw new Error(
+      `Não foi possível ler os empréstimos tomados do recorte: ${error.message}`,
+    );
+  }
+  return [...new Set((data ?? []).map((linha) => linha.lancamento_id))];
 }
 
 /**
@@ -954,7 +1035,12 @@ interface FiltrosResolvidos {
   valoresCentro: Map<string, number> | null;
   valoresRecorte: Map<string, number> | null;
   saldoInicialData: string | null;
+  /** O corte de natureza pelo rateio, quando a URL pediu. */
+  naturezaDoFiltro: FiltroDeNatureza | null;
+  /** Só no recorte do fluxo: as categorias que separam as séries. */
   categoriasDeMovimentacao: string[];
+  /** Só no recorte do fluxo com série de entrada. Ver `idsDeEmprestimoTomado`. */
+  idsEmprestimoTomado: string[];
   revisaoDoFiltro: RevisaoNoEmbed | null;
 }
 
@@ -1057,11 +1143,34 @@ async function resolverFiltros(
     params.recorte?.tipo === "conta_paga" && params.contaBancariaId
       ? saldoInicialDaConta(supabase, params.contaBancariaId)
       : null;
-  // As categorias de natureza `movimentacao` (4 hoje): os três recortes as
-  // descartam, e a regra mora no lançamento, não na parcela.
-  const categoriasDeMovimentacaoP = params.recorte
+  // As categorias de natureza `movimentacao` (4 hoje), só para o fluxo: desde
+  // a D1 o caixa inclui movimentação, e o aging e a conta paga não filtram
+  // natureza. O fluxo ainda precisa delas para separar as séries.
+  const recorteFluxo =
+    params.recorte?.tipo === "fluxo" ? params.recorte : null;
+  const categoriasDeMovimentacaoP = recorteFluxo
     ? idsDeCategoriaDeMovimentacao(supabase)
     : [];
+  const idsEmprestimoTomadoP =
+    recorteFluxo &&
+    (recorteFluxo.serie === "a_receber" ||
+      recorteFluxo.serie === "emprestimo_tomado")
+      ? idsDeEmprestimoTomado(supabase, recorteFluxo)
+      : [];
+  // O corte de natureza dos drills de resultado. Disparado junto com as outras
+  // leituras e esperado logo abaixo, fora da desestruturação de propósito: é
+  // uma leitura independente, e não tem por que mexer na fila das outras.
+  const aceitas = naturezasAceitas({
+    naturezas: params.naturezas,
+    semMovimentacao: params.semMovimentacao,
+    semInvestimento: params.semInvestimento,
+  });
+  // Nenhuma natureza aceita (pedido contraditório, como `natureza=movimentacao`
+  // com `sem_movimentacao=1`): lista vazia, sem ir ao banco.
+  if (aceitas !== null && aceitas.length === 0) return null;
+  const naturezaDoFiltroP = aceitas
+    ? filtroDeNaturezaDaLista(supabase, aceitas)
+    : null;
 
   const [
     idsAtraso,
@@ -1070,6 +1179,7 @@ async function resolverFiltros(
     valoresRecorte,
     saldoInicialData,
     categoriasDeMovimentacao,
+    idsEmprestimoTomado,
   ] = await Promise.all([
     idsAtrasoP,
     idsSaldoAbertoP,
@@ -1077,7 +1187,9 @@ async function resolverFiltros(
     valoresRecorteP,
     saldoInicialDataP,
     categoriasDeMovimentacaoP,
+    idsEmprestimoTomadoP,
   ]);
+  const naturezaDoFiltro = await naturezaDoFiltroP;
   if (idsAtraso) listasDeIds.push(idsAtraso);
   if (idsSaldoAberto) listasDeIds.push(idsSaldoAberto);
 
@@ -1092,13 +1204,26 @@ async function resolverFiltros(
   // a resposta certa é lista vazia, não a lista inteira.
   if (subarvoreCentro && subarvoreCentro.length === 0) return null;
 
+  // Série do fluxo que com certeza não tem lançamento: lista vazia, sem ir ao
+  // banco de novo. Mesma condição em que `aplicarSerieDoFluxo` devolve null.
+  if (
+    (recorteFluxo?.serie === "amortizacao" &&
+      categoriasDeMovimentacao.length === 0) ||
+    (recorteFluxo?.serie === "emprestimo_tomado" &&
+      idsEmprestimoTomado.length === 0)
+  ) {
+    return null;
+  }
+
   return {
     idsFiltrados,
     subarvoreCentro,
     valoresCentro,
     valoresRecorte,
     saldoInicialData,
+    naturezaDoFiltro,
     categoriasDeMovimentacao,
+    idsEmprestimoTomado,
     revisaoDoFiltro,
   };
 }
@@ -1106,7 +1231,8 @@ async function resolverFiltros(
 /** O pedaço do builder do PostgREST que os filtros da listagem usam. */
 interface ConsultaFiltravelLancamentos<T>
   extends ConsultaComEmbed<T>,
-    ConsultaComSondaDeRevisao<T> {
+    ConsultaComSondaDeRevisao<T>,
+    ConsultaComNatureza<T> {
   eq: (coluna: string, valor: string) => T;
   neq: (coluna: string, valor: string) => T;
   gte: (coluna: string, valor: string | number) => T;
@@ -1134,10 +1260,18 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
     idsFiltrados,
     subarvoreCentro,
     saldoInicialData,
+    naturezaDoFiltro,
     categoriasDeMovimentacao,
+    idsEmprestimoTomado,
     revisaoDoFiltro,
   } = resolvidos;
   if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
+  // Natureza pela categoria do RATEIO, nos dois embeds aliasados de
+  // `natureza-no-embed.ts`. Mesmo par embed + `not.is.null` do centro, logo
+  // abaixo, e pelo mesmo motivo: nada de lista de lançamentos na URL.
+  if (naturezaDoFiltro) {
+    consulta = aplicarNaturezaNoRateio(consulta, naturezaDoFiltro);
+  }
   // Centro de custo vive no RATEIO, não no lançamento: o filtro cai no embed e o
   // `lancamento_rateios=not.is.null` é o que descarta o lançamento sem nenhum
   // rateio batendo — mesmo efeito de um `!inner`, o mesmo par que a listagem de
@@ -1166,7 +1300,18 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
         contaBancariaId: params.contaBancariaId,
       }),
     );
-    consulta = aplicarNaturezaOperacional(consulta, categoriasDeMovimentacao);
+    // Só o fluxo separa por série. Aging e conta paga não filtram natureza:
+    // desde a D1 a movimentação que passa pela conta é caixa.
+    if (params.recorte.tipo === "fluxo") {
+      consulta =
+        aplicarSerieDoFluxo(consulta, params.recorte.serie, {
+          categoriasDeMovimentacao,
+          idsEmprestimoTomado,
+        }) ??
+        // `resolverFiltros` já devolve vazio antes de chegar aqui; a trava
+        // garante que série vazia nunca vira "sem filtro".
+        consulta.in("id", []);
+    }
   }
   // A conta bancária tem embed PRÓPRIO, e não o mesmo do recorte, para o
   // significado não mudar: hoje "tem parcela nesta conta" E "tem parcela no
@@ -1313,6 +1458,8 @@ export async function listarLancamentos(
        lancamento_rateios(centro_custo_id, centros_custo(nome)),
        recorte_parcelas:lancamento_parcelas(id),
        conta_parcelas:lancamento_parcelas(id),
+       natureza_rateios:lancamento_rateios(id),
+       natureza_rateios_herdados:lancamento_rateios(id),
        revisao_pendentes:lancamento_parcelas(id),
        revisao_resolvidas:lancamento_parcelas(id)`,
       { count: "exact" },
@@ -1440,6 +1587,13 @@ function selectDasFacetas(recorte: FiltrosDaConsulta): string {
     "lancamento_rateios(centro_custo_id)",
   ];
   if (recorte.recorte) colunas.push("recorte_parcelas:lancamento_parcelas(id)");
+  if (
+    recorte.naturezas?.length ||
+    recorte.semMovimentacao ||
+    recorte.semInvestimento
+  ) {
+    colunas.push(SELECT_NATUREZA);
+  }
   if (recorte.contaBancariaId) {
     colunas.push("conta_parcelas:lancamento_parcelas(id)");
   }

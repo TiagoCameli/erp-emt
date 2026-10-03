@@ -9,7 +9,7 @@
 --    investimento de volta quando a tela marca "Incluir investimentos".
 -- 3. fn_rel_dre ganha a coluna `retencao` (receita bruta = total + retencao).
 -- 4. fn_competencias_painel: "Custo do mes" com o mesmo WHERE do custo por
---    centro.
+--    centro, e a coluna `incompletos` (status previsto) vira `sem_categoria`.
 -- Funcoes que mudam de assinatura sao recriadas (drop + create) com o mesmo
 -- grant de antes: execute para authenticated, nada para anon.
 
@@ -873,7 +873,7 @@ grant execute on function public.fn_rel_custo_receita(date[], uuid[], uuid[], bo
 drop function public.fn_competencias_painel(integer);
 
 create function public.fn_competencias_painel(p_meses integer default 13, p_incluir_investimento boolean default false)
- returns table(mes date, fechada boolean, fechado_em timestamp with time zone, fechado_por uuid, observacao text, custo numeric, lancamentos integer, incompletos integer, excecoes integer, reaberturas integer)
+ returns table(mes date, fechada boolean, fechado_em timestamp with time zone, fechado_por uuid, observacao text, custo numeric, lancamentos integer, sem_categoria integer, excecoes integer, reaberturas integer)
  language sql
  stable security definer
  set search_path to ''
@@ -924,10 +924,13 @@ as $function$
       select count(*)::int from public.lancamentos l
       where l.mes_competencia = m.mes::date and l.status <> 'cancelado'
     ) as lancamentos,
+    -- "Sem categoria" no lugar de "Incompletos" (Tiago, 03/10/2026): o que o
+    -- DRE e o custo nao conseguem classificar.
     (
       select count(*)::int from public.lancamentos l
-      where l.mes_competencia = m.mes::date and l.status = 'previsto'
-    ) as incompletos,
+      where l.mes_competencia = m.mes::date and l.status <> 'cancelado'
+        and l.categoria_id is null
+    ) as sem_categoria,
     (
       select count(*)::int from public.competencia_eventos e
       where e.mes = m.mes::date and e.tipo = 'excecao'

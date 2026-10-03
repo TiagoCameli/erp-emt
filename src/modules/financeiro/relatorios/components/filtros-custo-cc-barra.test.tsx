@@ -68,6 +68,7 @@ const VAZIO: FiltrosCustoCc = {
   status: [],
   tiposCentro: [],
   excluirPrevisto: false,
+  incluirInvestimento: false,
   comparar: false,
 };
 
@@ -188,5 +189,40 @@ describe("FiltrosCustoCcBarra: o eixo de tempo", () => {
     fireEvent.click(vida());
 
     expect(ultimaQuery().get("modo")).toBeNull();
+  });
+});
+
+describe("FiltrosCustoCcBarra: incluir investimentos", () => {
+  const caixa = () => screen.getByLabelText("Incluir investimentos");
+
+  it("aparece na barra, desmarcada por padrão", () => {
+    // Fixa, e não escondida no menu: é a escolha que muda o significado do
+    // número (com ou sem máquina e terreno comprados).
+    montar();
+    expect(caixa().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("marcar escreve `com_investimento=1` e mantém o resto da URL", () => {
+    navegador.query = `rel=custo-cc&centro=${OBRA}`;
+    montar({ centroIds: [OBRA] });
+
+    fireEvent.click(caixa());
+
+    const query = ultimaQuery();
+    expect(query.get("com_investimento")).toBe("1");
+    expect(query.get("centro")).toBe(OBRA);
+    expect(query.get("rel")).toBe("custo-cc");
+  });
+
+  it("desmarcar REMOVE o parâmetro, em vez de escrever zero", () => {
+    // Ausente é o padrão do banco: um link antigo continua abrindo o número
+    // que sempre abriu.
+    navegador.query = "com_investimento=1";
+    montar({ incluirInvestimento: true });
+    expect(caixa().getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(caixa());
+
+    expect(ultimaQuery().has("com_investimento")).toBe(false);
   });
 });

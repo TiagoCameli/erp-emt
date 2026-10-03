@@ -68,6 +68,7 @@ const CUSTO_CC_VAZIO: FiltrosCustoCc = {
   tiposCentro: [],
   excluirPrevisto: false,
   comparar: false,
+  incluirInvestimento: false,
 };
 
 const CUSTO_RECEITA_VAZIO: FiltrosCustoReceita = {
@@ -77,6 +78,7 @@ const CUSTO_RECEITA_VAZIO: FiltrosCustoReceita = {
   centrosReceita: [],
   etapasCusto: [],
   etapasReceita: [],
+  incluirInvestimento: false,
 };
 
 beforeEach(() => {
@@ -148,6 +150,7 @@ describe("Limpar filtros preserva o relatório aberto", () => {
           centroId: OBRA,
           etapaId: "",
           categoriaId: "",
+          incluirInvestimento: false,
         }}
         centrosCusto={[
           {

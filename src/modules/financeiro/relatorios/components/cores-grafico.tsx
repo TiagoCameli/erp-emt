@@ -15,6 +15,9 @@ export type EntidadeGrafico =
   | "custo"
   | "receita"
   | "saldo"
+  | "saldo_acumulado"
+  | "emprestimo_tomado"
+  | "amortizacao"
   | "agregado";
 
 /**
@@ -42,6 +45,21 @@ export const COR_ENTIDADE: Record<EntidadeGrafico, string> = {
   a_receber: "var(--color-chart-3)",
   receita: "var(--color-chart-3)",
   saldo: "var(--color-chart-2)",
+  /**
+   * O saldo acumulado do fluxo de caixa, que é outra coisa que o líquido do mês
+   * (`saldo`): carrega o mês anterior e parte do saldo das contas. Na cor do
+   * texto, para ser a linha mais forte do gráfico sem gastar mais um matiz.
+   */
+  saldo_acumulado: "var(--color-foreground)",
+  /**
+   * As duas séries de movimentação do fluxo (D1, 03/10/2026). A paleta da marca
+   * não tem mais dois matizes que se separem do verde e do asfalto para quem não
+   * enxerga cor, então elas usam a paleta `--viz-*`, que já passou no validador
+   * (luz, croma, daltonismo e contraste) nos dois temas: o roxo do financiamento
+   * para o dinheiro que o banco liberou, e o laranja para a prestação que volta.
+   */
+  emprestimo_tomado: "var(--viz-financiamento)",
+  amortizacao: "var(--viz-custo)",
   /** "Outros" e afins: um agregado não é uma entidade, e não clica. */
   agregado: "var(--color-status-rascunho)",
 };

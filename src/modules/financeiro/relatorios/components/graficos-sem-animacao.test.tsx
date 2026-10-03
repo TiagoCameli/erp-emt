@@ -150,24 +150,47 @@ function renderizarAging() {
   );
 }
 
+/** Um mês do fluxo com tudo zerado, para cada caso preencher só o que importa. */
+const MES_FLUXO_VAZIO = {
+  aReceberRealizado: 0,
+  aReceberProjetado: 0,
+  emprestimoTomadoRealizado: 0,
+  emprestimoTomadoProjetado: 0,
+  aPagarRealizado: 0,
+  aPagarProjetado: 0,
+  amortizacaoRealizado: 0,
+  amortizacaoProjetado: 0,
+  entradas: 0,
+  saidas: 0,
+  liquido: 0,
+  saldoAcumulado: null,
+};
+
 const MESES_FLUXO = [
   {
+    ...MES_FLUXO_VAZIO,
     mes: "2026-06",
     rotulo: "06/2026",
-    entradasRealizado: 1_120_000,
-    entradasProjetado: 0,
-    saidasRealizado: 980_450.33,
-    saidasProjetado: 0,
-    saldo: 139_549.67,
+    aReceberRealizado: 1_120_000,
+    aPagarRealizado: 980_450.33,
+    entradas: 1_120_000,
+    saidas: 980_450.33,
+    liquido: 139_549.67,
   },
   {
+    ...MES_FLUXO_VAZIO,
     mes: "2026-07",
     rotulo: "07/2026",
-    entradasRealizado: 640_000,
-    entradasProjetado: 410_000,
-    saidasRealizado: 505_300.1,
-    saidasProjetado: 322_000,
-    saldo: 222_699.9,
+    aReceberRealizado: 640_000,
+    aReceberProjetado: 410_000,
+    emprestimoTomadoRealizado: 2_298_000,
+    aPagarRealizado: 505_300.1,
+    aPagarProjetado: 322_000,
+    amortizacaoProjetado: 380_821.67,
+    entradas: 3_348_000,
+    saidas: 1_208_121.77,
+    liquido: 2_139_878.23,
+    saldoAcumulado: 4_925_294.55,
   },
 ];
 
@@ -181,13 +204,14 @@ describe("a série nasce com forma no primeiro quadro", () => {
     expect(barrasComForma(container)).toBe(4);
   });
 
-  it("fluxo de caixa: as quatro séries de barra e a linha do saldo", () => {
+  it("fluxo de caixa: as quatro séries de barra e as linhas", () => {
     const { container } = render(
       <FluxoCaixaGrafico meses={MESES_FLUXO} podeVerLancamentos />,
     );
 
-    // 06/2026 tem duas barras com valor, 07/2026 tem quatro.
-    expect(barrasComForma(container)).toBe(6);
+    // 06/2026 tem duas barras com valor, 07/2026 tem seis (as quatro séries,
+    // duas delas com realizado e projetado).
+    expect(barrasComForma(container)).toBe(8);
     expect(gruposDeBarra(container)).toBe(barrasComForma(container));
 
     esperarLinhaInteira(container.querySelector(".recharts-line-curve"));
@@ -300,16 +324,25 @@ describe("legenda", () => {
     );
     const cores = coresDaLegenda(container);
 
-    const realizadas = cores.get("Entradas realizadas");
-    const projetadas = cores.get("Entradas projetadas");
+    const realizadas = cores.get("Entradas operacionais realizadas");
+    const projetadas = cores.get("Entradas operacionais projetadas");
     expect(realizadas).toBeTruthy();
     expect(projetadas).toBeTruthy();
     // O ícone da Legend lê o `fill` e ignora o `fillOpacity`: com opacidade os
     // dois quadrados saíam idênticos, e a legenda deixava de dizer qual dinheiro
     // já entrou.
     expect(projetadas).not.toBe(realizadas);
-    expect(cores.get("Saídas projetadas")).not.toBe(
-      cores.get("Saídas realizadas"),
+    expect(cores.get("Saídas operacionais projetadas")).not.toBe(
+      cores.get("Saídas operacionais realizadas"),
+    );
+    // As séries de movimentação têm cor própria, diferente do operacional do
+    // mesmo lado: senão a prestação do empréstimo se perderia no custo da obra.
+    expect(cores.get("Amortizações realizadas")).toBe(COR_ENTIDADE.amortizacao);
+    expect(cores.get("Amortizações realizadas")).not.toBe(
+      cores.get("Saídas operacionais realizadas"),
+    );
+    expect(cores.get("Empréstimos tomados realizados")).toBe(
+      COR_ENTIDADE.emprestimo_tomado,
     );
     // E o projetado continua sendo a MESMA entidade: o tom claro é derivado da
     // cor dela, não uma cor nova.

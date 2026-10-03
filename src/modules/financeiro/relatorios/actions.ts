@@ -13,6 +13,7 @@ import {
   periodoDoModo as periodoDoModoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
 import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
+import { sufixoInvestimento } from "@/modules/financeiro/relatorios/filtro-investimento";
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import {
   janelaDoFluxo,
@@ -94,6 +95,7 @@ export async function insumosDaSubcategoria(
   categoriaId: string,
   periodo: PeriodoCompetencia,
   centroCustoId?: string,
+  incluirInvestimento?: boolean,
 ): Promise<
   { insumos: { nome: string; quantidade: number; valor: number }[] } | { erro: string }
 > {
@@ -113,6 +115,9 @@ export async function insumosDaSubcategoria(
   const insumos = await custoPorInsumo(idValido.data, {
     ...pontasDaRpc(periodo),
     centroCustoId,
+    // Só o literal `true` liga: a ação é pública, e qualquer outra coisa vinda
+    // do navegador fica no padrão do relatório (CAPEX fora).
+    incluirInvestimento: incluirInvestimento === true,
   });
 
   return { insumos };
@@ -284,7 +289,7 @@ async function abaDoRelatorio(
       // banco. Fora dele, `periodoDoModoCc` resolve sozinho.
       const primeirosMeses =
         filtros.modo === "vida" && centroIds.length > 0
-          ? await primeirosMesesDosCentros(centroIds)
+          ? await primeirosMesesDosCentros(centroIds, filtros.incluirInvestimento)
           : null;
       const primeiroMes =
         primeirosMeses && primeirosMeses.size > 0
@@ -301,8 +306,13 @@ async function abaDoRelatorio(
         status: filtros.status,
         excluirPrevisto: filtros.excluirPrevisto,
         tiposCentro: filtros.tiposCentro,
+        incluirInvestimento: filtros.incluirInvestimento,
       });
-      return abaCustoCc(custo, descreverPeriodo(periodo, filtros.modo));
+      return abaCustoCc(
+        custo,
+        descreverPeriodo(periodo, filtros.modo) +
+          sufixoInvestimento(filtros.incluirInvestimento),
+      );
     }
 
     case "custo-receita": {
@@ -325,8 +335,13 @@ async function abaDoRelatorio(
           filtros.centrosReceita,
           filtros.etapasReceita,
         ),
+        incluirInvestimento: filtros.incluirInvestimento,
       });
-      return abaCustoReceita(linhas, `${mesesEfetivos.length} mês(es)`);
+      return abaCustoReceita(
+        linhas,
+        `${mesesEfetivos.length} mês(es)` +
+          sufixoInvestimento(filtros.incluirInvestimento),
+      );
     }
 
     case "custo-grupo": {
@@ -342,8 +357,13 @@ async function abaDoRelatorio(
           filtros.etapaId ? [filtros.etapaId] : [],
         )[0],
         categoriaId: filtros.categoriaId || undefined,
+        incluirInvestimento: filtros.incluirInvestimento,
       });
-      return abaCustoGrupo(dados, descreverPeriodo(periodo, filtros.modo));
+      return abaCustoGrupo(
+        dados,
+        descreverPeriodo(periodo, filtros.modo) +
+          sufixoInvestimento(filtros.incluirInvestimento),
+      );
     }
 
     case "extrato-fornecedor": {

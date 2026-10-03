@@ -16,7 +16,10 @@ import {
   listarFormasPagamento,
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
-import { rotuloMes } from "@/modules/financeiro/relatorios/calculo";
+import {
+  cartoesDoDre,
+  rotuloMes,
+} from "@/modules/financeiro/relatorios/calculo";
 import {
   drillCentroCusto,
   type FiltrosDoRelatorioDeCusto,
@@ -75,6 +78,7 @@ import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
+import type { SaldoProjetado } from "@/modules/financeiro/relatorios/fluxo-caixa";
 import { CreditosGrafico } from "@/modules/financeiro/relatorios/components/creditos-grafico";
 import {
   ContratosEmprestimoTabela,
@@ -211,6 +215,60 @@ function PainelGrafico({
   );
 }
 
+/**
+ * O saldo no fim da janela, a partir do saldo de hoje das contas correntes e
+ * caixa (ver `fluxo-caixa.ts`). Cada motivo de não haver saldo tem a sua frase,
+ * e nenhum vira R$ 0,00: zero é um saldo, e um saldo inventado leva a decisão de
+ * pagamento errada.
+ *
+ * `idCard` fixo porque o título leva o mês, e a grade personalizável guarda a
+ * posição do cartão pelo id: sem ele, a virada do mês esqueceria onde a pessoa o
+ * pôs.
+ */
+function CartaoSaldoProjetado({
+  saldo,
+  contasNoSaldo,
+}: {
+  saldo: SaldoProjetado;
+  contasNoSaldo: { contas: number; ocultas: number };
+}) {
+  if (saldo.tipo !== "calculado") {
+    const detalhe: Record<typeof saldo.tipo, string> = {
+      sem_saldo_visivel:
+        "Não há saldo de conta visível para você: sem ele não há de onde projetar",
+      com_centro:
+        "Indisponível com centro escolhido: a fatia de uma obra não se soma ao saldo da empresa",
+      janela_no_passado:
+        "A janela termina antes do mês corrente: não há mês futuro para projetar",
+    };
+    return (
+      <KPICard
+        idCard="saldo-projetado"
+        titulo="Saldo projetado"
+        valor={<span className="text-muted-foreground">Sem saldo</span>}
+        detalhe={detalhe[saldo.tipo]}
+      />
+    );
+  }
+  const plural = contasNoSaldo.contas === 1 ? "conta" : "contas";
+  return (
+    <KPICard
+      idCard="saldo-projetado"
+      titulo={`Saldo projetado em ${rotuloMes(saldo.mes)}`}
+      valor={<MoneyText valor={saldo.valor} />}
+      detalhe={
+        <>
+          Saldo de hoje <MoneyText valor={saldo.saldoInicial} /> em{" "}
+          {contasNoSaldo.contas} {plural} corrente e caixa, mais o previsto
+          {contasNoSaldo.ocultas > 0
+            ? `; ${contasNoSaldo.ocultas} sem saldo visível ficaram fora`
+            : ""}
+        </>
+      }
+    />
+  );
+}
+
 async function ConteudoFluxoCaixa({
   janela,
   centrosCusto,
@@ -267,36 +325,67 @@ async function ConteudoFluxoCaixa({
     <>
       <GradeKpis id="financeiro.relatorios.fluxo-caixa" titulo="Fluxo de caixa">
         <KPICard
-          titulo="Entradas (a receber)"
-          valor={<MoneyText valor={dados.totalEntradas} />}
+          titulo="Entradas operacionais"
+          valor={<MoneyText valor={dados.series.a_receber.total} />}
           detalhe={
             <>
-              Realizado <MoneyText valor={dados.totalRealizadoEntradas} />
+              Realizado <MoneyText valor={dados.series.a_receber.realizado} />
               {fatiaReceita ? ` · ${fatiaReceita.toLowerCase()}` : ""}
             </>
           }
         />
         <KPICard
-          titulo="Saídas (a pagar)"
-          valor={<MoneyText valor={dados.totalSaidas} />}
+          titulo="Saídas operacionais"
+          valor={<MoneyText valor={dados.series.a_pagar.total} />}
           detalhe={
             <>
-              Realizado <MoneyText valor={dados.totalRealizadoSaidas} />
+              Realizado <MoneyText valor={dados.series.a_pagar.realizado} />
               {fatiaCusto ? ` · ${fatiaCusto.toLowerCase()}` : ""}
             </>
           }
         />
         <KPICard
-          titulo="Saldo projetado"
-          valor={<MoneyText valor={dados.saldoProjetado} />}
+          titulo="Empréstimos tomados"
+          valor={<MoneyText valor={dados.series.emprestimo_tomado.total} />}
           detalhe={
-            // Os dois lados se escolhem separados, então o saldo pode estar
-            // somando a fatia de uma obra com o total da empresa. Quem lê o
-            // número precisa saber disso ANTES de decidir pagamento.
-            (centrosCusto.length > 0) !== (centrosReceita.length > 0)
-              ? "Entradas menos saídas — um dos lados está recortado por centro"
-              : "Entradas menos saídas no período"
+            <>
+              Realizado{" "}
+              <MoneyText valor={dados.series.emprestimo_tomado.realizado} />
+              {fatiaReceita ? ` · ${fatiaReceita.toLowerCase()}` : ""}
+            </>
           }
+        />
+        <KPICard
+          titulo="Amortizações"
+          valor={<MoneyText valor={dados.series.amortizacao.total} />}
+          detalhe={
+            <>
+              Realizado <MoneyText valor={dados.series.amortizacao.realizado} />
+              {fatiaCusto ? ` · ${fatiaCusto.toLowerCase()}` : ""}
+            </>
+          }
+        />
+        <KPICard
+          titulo="Líquido da janela"
+          valor={<MoneyText valor={dados.liquidoJanela} />}
+          detalhe={
+            <>
+              Entradas <MoneyText valor={dados.totalEntradas} /> menos saídas{" "}
+              <MoneyText valor={dados.totalSaidas} />, as quatro séries
+              {/*
+                Os dois lados se escolhem separados, então o líquido pode estar
+                somando a fatia de uma obra com o total da empresa. Quem lê o
+                número precisa saber disso ANTES de decidir pagamento.
+              */}
+              {(centrosCusto.length > 0) !== (centrosReceita.length > 0)
+                ? "; um dos lados está recortado por centro"
+                : ""}
+            </>
+          }
+        />
+        <CartaoSaldoProjetado
+          saldo={dados.saldoProjetado}
+          contasNoSaldo={dados.contasNoSaldo}
         />
         <KPICard
           titulo="Meses com movimento"
@@ -320,12 +409,17 @@ async function ConteudoFluxoCaixa({
 }
 
 /**
- * O mês só está vazio se NENHUM dos três blocos do DRE tiver linha. Olhar só o
+ * O mês só está vazio se NENHUM dos quatro blocos do DRE tiver linha. Olhar só o
  * operacional mostraria "sem lançamentos no mês" num mês em que a conta girou
  * milhões em aplicação — o extrato teria movimento e a tela diria que não há.
  */
 function temLancamentoNoDre(dre: DreGerencial): boolean {
-  return [dre.operacional, dre.financeiro, dre.movimentacao].some(
+  return [
+    dre.operacional,
+    dre.financeiro,
+    dre.investimento,
+    dre.movimentacao,
+  ].some(
     (bloco) => bloco.receitas.length > 0 || bloco.despesas.length > 0,
   );
 }
@@ -355,6 +449,10 @@ async function ConteudoDre({
 
   const dre = await dreGerencial({ inicio, fim });
   const descricao = descreverPeriodo(periodo);
+  // Os cartões saem do MESMO agrupamento da tabela, em centavos, e fecham entre
+  // si: receita operacional - despesa operacional + resultado financeiro =
+  // resultado do período (ver `cartoesDoDre`, com teste).
+  const cartoes = cartoesDoDre(dre);
   return (
     <>
       <GradeKpis id="financeiro.relatorios.dre" titulo="DRE">
@@ -362,21 +460,49 @@ async function ConteudoDre({
             financeira da conta não entra, senão o cartão de receita mostraria a
             varredura noturna do banco como faturamento. */}
         <KPICard
-          titulo="Receitas"
-          valor={<MoneyText valor={dre.operacional.totalReceitas} />}
-          detalhe="Lançamentos a receber no período"
+          idCard="receita-operacional"
+          titulo="Receita operacional"
+          valor={<MoneyText valor={cartoes.receitaOperacional} />}
+          detalhe={
+            dre.operacional.retencaoReceitas > 0 ? (
+              <>
+                Líquida. Retido na fonte{" "}
+                <MoneyText valor={dre.operacional.retencaoReceitas} />
+              </>
+            ) : (
+              "Líquida, sem retenção na fonte no período"
+            )
+          }
         />
         <KPICard
-          titulo="Despesas"
-          valor={<MoneyText valor={dre.operacional.totalDespesas} />}
-          detalhe="Lançamentos a pagar no período"
+          idCard="despesa-operacional"
+          titulo="Despesa operacional"
+          valor={<MoneyText valor={cartoes.despesaOperacional} />}
+          detalhe="Sem investimentos e sem movimentação"
         />
         <KPICard
-          titulo="Resultado"
-          valor={<MoneyText valor={dre.resultado} />}
-          detalhe={`${dre.resultado >= 0 ? "Superávit" : "Déficit"} · ${descricao}`}
+          idCard="resultado-financeiro"
+          titulo="Resultado financeiro"
+          valor={<MoneyText valor={cartoes.resultadoFinanceiro} />}
+          detalhe="Juros e rendimentos menos tarifas e juros pagos"
+        />
+        <KPICard
+          idCard="resultado-periodo"
+          titulo="Resultado do período"
+          valor={<MoneyText valor={cartoes.resultadoDoPeriodo} />}
+          detalhe={`${cartoes.resultadoDoPeriodo >= 0 ? "Superávit" : "Déficit"} · ${descricao}`}
         />
       </GradeKpis>
+      {/* Indicador e não cartão: os quatro de cima fecham entre si, e um quinto
+          ao lado deles convidaria a somá-lo no resultado, que é justamente o
+          que o CAPEX não é (decisão D3, 03/10/2026). */}
+      <p className="text-detalhe text-muted-foreground">
+        Investimentos no período, fora do resultado:{" "}
+        <MoneyText
+          valor={cartoes.investimentosNoPeriodo}
+          className="font-medium text-foreground"
+        />
+      </p>
       {!temLancamentoNoDre(dre) ? (
         <EmptyState
           icone={BarChart3}
@@ -563,9 +689,9 @@ async function ConteudoCreditos({
     <>
       <GradeKpis id="financeiro.relatorios.creditos" titulo="Créditos">
         <KPICard
-          titulo="Saldo devedor"
+          titulo="Prestações a vencer"
           valor={<MoneyText valor={dados.totalSaldo} />}
-          detalhe="Soma das parcelas ainda não pagas"
+          detalhe="Soma das prestações ainda não pagas, com os juros dentro"
         />
         <KPICard
           titulo="Vence em 12 meses"
@@ -604,7 +730,9 @@ async function ConteudoCreditos({
                 <p className="text-legenda text-muted-foreground">
                   Tomado e pago de cada contrato. As duas colunas ficam lado a lado
                   porque não se comparam ainda: parte das prestações antigas está nos
-                  extratos e não foi lançada.
+                  extratos e não foi lançada. Juros embutidos é o que as prestações
+                  somam acima do tomado (pago mais a pagar, menos tomado); contrato
+                  com prestação antiga fora do ERP mostra juros menor do que é.
                 </p>
               </div>
               <ContratosEmprestimoTabela contratos={contratos} />
@@ -762,7 +890,7 @@ async function ConteudoCustoCc({
   // dela (o recorte por centro é feito na RPC da série).
   const primeirosMeses =
     filtros.modo === "vida" && centroIds.length > 0
-      ? await primeirosMesesDosCentros(centroIds)
+      ? await primeirosMesesDosCentros(centroIds, filtros.incluirInvestimento)
       : undefined;
   const primeiroMes =
     primeirosMeses && primeirosMeses.size > 0
@@ -793,6 +921,7 @@ async function ConteudoCustoCc({
     semForma: filtros.semForma,
     status: filtros.status,
     excluirPrevisto: filtros.excluirPrevisto,
+    incluirInvestimento: filtros.incluirInvestimento,
   };
 
   const filtrosDaRpc = {
@@ -808,6 +937,7 @@ async function ConteudoCustoCc({
     status: filtros.status,
     excluirPrevisto: filtros.excluirPrevisto,
     tiposCentro: filtros.tiposCentro,
+    incluirInvestimento: filtros.incluirInvestimento,
   };
 
   const comparar = filtros.comparar && comparacaoPermitida(filtros.modo);
@@ -963,6 +1093,7 @@ async function ConteudoCustoReceita({
   centrosCusto,
   centrosReceita,
   meses,
+  incluirInvestimento,
   podeVerLancamentos,
 }: {
   /**
@@ -975,6 +1106,8 @@ async function ConteudoCustoReceita({
   centrosCusto: string[];
   centrosReceita: string[];
   meses: string[];
+  /** CAPEX de volta no lado do custo ("Incluir investimentos"). */
+  incluirInvestimento: boolean;
   podeVerLancamentos: boolean;
 }) {
   if (meses.length === 0) {
@@ -991,6 +1124,7 @@ async function ConteudoCustoReceita({
     meses,
     centrosCusto,
     centrosReceita,
+    incluirInvestimento,
   });
 
   if (linhas.length === 0) {
@@ -1069,6 +1203,7 @@ async function ConteudoCustoReceita({
                 lado="custo"
                 meses={meses}
                 podeVerLancamentos={podeVerLancamentos}
+                incluirInvestimento={incluirInvestimento}
               />
             </ItemGrade>
             <ItemGrade titulo="Receita por centro" idCard="tabela-receita" larguraPadrao={6}>
@@ -1354,7 +1489,7 @@ export default async function RelatoriosPage({
         <SecaoRelatorio
           exportar={relatorio}
           titulo="Fluxo de caixa"
-          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado). Não usa o mês de referência. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro — um lançamento dividido entre duas obras entra em cada uma pela parte dela."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. Empréstimos tomados e amortizações entram em série própria, separados do operacional. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O saldo projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
         >
           <FiltrosFluxoCaixaBarra
             filtros={filtrosFluxo}
@@ -1421,6 +1556,7 @@ export default async function RelatoriosPage({
                 filtrosCustoGrupo.etapaId ? [filtrosCustoGrupo.etapaId] : [],
               )[0],
               categoriaId: filtrosCustoGrupo.categoriaId || undefined,
+              incluirInvestimento: filtrosCustoGrupo.incluirInvestimento,
             }}
             podeVerLancamentos={podeVerLancamentos}
           />
@@ -1520,6 +1656,7 @@ export default async function RelatoriosPage({
               filtrosCustoReceita.etapasReceita,
             )}
             meses={mesesCustoReceita}
+            incluirInvestimento={filtrosCustoReceita.incluirInvestimento}
             podeVerLancamentos={podeVerLancamentos}
           />
         </SecaoRelatorio>

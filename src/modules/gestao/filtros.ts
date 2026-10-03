@@ -12,6 +12,9 @@ import {
 // escrito (duas implementações divergem no primeiro detalhe que alguém
 // acrescenta de um lado, e a tela abre sem erro mostrando outro conjunto).
 import { lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+// O MESMO parâmetro das telas de custo do Financeiro: o cartão "Custo do mês"
+// leva para o Custo por centro, e o recorte tem de chegar lá sem tradução.
+import { lerIncluirInvestimento } from "@/modules/financeiro/relatorios/filtro-investimento";
 
 /**
  * Contrato da URL do painel de Gestão: centros de custo, período por mês de
@@ -63,6 +66,12 @@ export interface FiltrosPainel {
   etapaIds: string[];
   /** Categorias financeiras do lançamento, ou vazio para todas. */
   categoriaIds: string[];
+  /**
+   * Trazer o CAPEX de volta para o custo ("Incluir investimentos"). Falso por
+   * padrão (decisão D3, 03/10/2026). Vale para todos os cortes de custo do
+   * painel juntos, senão o gráfico por mês e o por centro discordam.
+   */
+  incluirInvestimento: boolean;
 }
 
 /** O que a barra de filtros mostra de volta (lista vazia = sem filtro). */
@@ -73,6 +82,7 @@ export interface ValoresFiltrosPainel {
   /** Mês inicial no formato do input (yyyy-MM). */
   mesDe: string;
   mesAte: string;
+  incluirInvestimento: boolean;
 }
 
 export interface LeituraFiltrosPainel {
@@ -135,13 +145,14 @@ export function lerFiltrosPainel(
   const centroIds = lerUuidsDaUrl(params.centro);
   const etapaIds = lerUuidsDaUrl(params.etapa);
   const categoriaIds = lerUuidsDaUrl(params.categoria);
+  const incluirInvestimento = lerIncluirInvestimento(params.com_investimento);
   const mesDe = parametroMes(params.mes_de);
   const mesAte = parametroMes(params.mes_ate);
 
   const { janela, escolhido } = janelaDosFiltros(mesDe, mesAte, mesHoje);
 
   return {
-    filtros: { janela, centroIds, etapaIds, categoriaIds },
+    filtros: { janela, centroIds, etapaIds, categoriaIds, incluirInvestimento },
     valores: {
       // Só o que passou na validação volta para a barra: parâmetro inválido na
       // URL não pode aparecer preenchido como se estivesse valendo.
@@ -150,6 +161,7 @@ export function lerFiltrosPainel(
       categoria: categoriaIds,
       mesDe: mesDe ?? "",
       mesAte: mesAte ?? "",
+      incluirInvestimento,
     },
     // Período não conta como recorte para o aviso: os blocos que ignoram o
     // filtro são fotos do momento (a pagar em aberto, OCs a aprovar), e "hoje"
