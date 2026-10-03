@@ -167,6 +167,8 @@ export function candidatosDoPainel(
     valor: parcela.valorLiquido,
     sentido: sentidoDaParcela(parcela),
     nomes: [parcela.nome, parcela.razaoSocial, parcela.descricao],
+    // A conciliação só dá baixa em parcela a pagar já aprovada.
+    podeBaixar: !(grupo === "aberta" && parcela.tipo === "a_pagar" && parcela.status !== "aprovado"),
     registro: parcela,
   });
 

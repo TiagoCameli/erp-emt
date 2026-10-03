@@ -5054,3 +5054,9 @@ importa pela tela.
 6. Automático e lote nunca aplicam ajuste.
 
 **Efeito no BB 102.124-9 de 09/2026:** os dois boletos com R$ 0,01 (RB TRATOR e AMAZONIA PNEUS/PIMPAO) passam a pedir a escolha entre financeiro e custo.
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco E: aceitar sugestões seguras em lote
+
+**Decisão:** faixa 2 da regra ("um clique com revisão"). `sugestoesSeguras` (pura, `casamento.ts`): valor exato, mesmo sentido, nome do favorecido no histórico, um único candidato com nome para o movimento, candidato de "paga em outra conta" ou "em aberto" que o banco aceitaria baixar (a pagar só aprovada), e que não é a melhor sugestão de nenhum outro movimento. A tela oferece "Revisar N sugestões seguras": lista com uma caixa marcada por linha e o efeito no app escrito ("muda da Caixa para o BB", "dá baixa em LAN-... na data do extrato"). Confirmar manda para `fn_conciliacao_casar_lote(p_pares, p_automatica)`, sobrecarga nova sem default, com `false`: é decisão humana, não automático, e nunca ajusta valor. A coluna "O app tem" ganha o selo "Segura".
+
+**Efeito no BB 102.124-9 de 09/2026:** nenhuma sugestão segura. As 71 sugestões são de "paga nesta conta" com mais de um candidato, que ficam de fora por regra, e as pagas em outra conta e abertas do mês não têm o nome confirmado no histórico.

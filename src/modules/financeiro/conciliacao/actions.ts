@@ -610,3 +610,50 @@ export async function desconciliarVarios(
   revalidatePath(ROTA);
   return { ok: true, feitos, falhas };
 }
+
+const parSchema = z.object({
+  transacaoId: idSchema,
+  especie: z.enum(["parcela", "transferencia"]),
+  alvoId: idSchema,
+});
+
+/**
+ * Aceita em lote as sugestões seguras que a pessoa revisou (Bloco E). Vai
+ * com `p_automatica = false`: é decisão humana, troca a conta ou dá baixa
+ * como no casar manual, e nunca ajusta valor.
+ */
+export async function aceitarSugestoes(
+  pares: z.input<typeof parSchema>[],
+): Promise<ResultadoLote> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = z.array(parSchema).min(1).max(1000).safeParse(pares);
+  if (!dados.success) return { erro: "Escolha ao menos uma sugestão" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_casar_lote", {
+    p_pares: dados.data.map((p) => ({
+      transacao: p.transacaoId,
+      especie: p.especie,
+      alvo: p.alvoId,
+    })) as unknown as Json,
+    p_automatica: false,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.aceitarSugestoes",
+      error,
+      mensagem(error, "Não foi possível aceitar as sugestões"),
+    );
+  }
+  const resultado = resultadoLoteSchema.parse(data);
+  revalidatePath(ROTA);
+  return {
+    ok: true,
+    feitos: resultado.casadas,
+    falhas: resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })),
+  };
+}
