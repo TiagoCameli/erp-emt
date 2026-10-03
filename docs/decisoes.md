@@ -5019,6 +5019,14 @@ importa pela tela.
 8. **Travas (revisão, mesmo dia, `20261002200000_conciliacao_por_conta_travas.sql`):** baixa pela conciliação em parcela a pagar só se ela estiver aprovada (a conciliação não é atalho da fila de aprovação); mudar conta ou valor de parcela já paga pede também pagamentos/criar ou recebimentos/editar e respeita competência fechada; diferença ajustável de no máximo R$ 1,00; excluir só lançamento de uma parcela (com várias, apagaria as outras); o painel oferece parcela aberta ou de outra conta com até R$ 1,00 de diferença e filtra as parcelas cedo (130 ms no mês do BB).
 9. **Encoding do OFX:** o BB manda `CHARSET:1252` e o import lia como UTF-8, por isso 100 históricos do BB estão gravados com "�". `decodificarOfx` respeita o charset daqui para frente; os já gravados só se corrigem com o arquivo original (pelo FITID).
 
+## 2026-10-03 - Conciliação 100% precisa, Bloco A: o automático só casa com certeza
+
+**Pedido do Tiago (03/10/2026):** a conciliação tem que ser 100% precisa; velocidade vem de o automático só fazer o que é impossível errar, nunca de arriscar mais.
+
+**Decisão** (`casarAutomaticamente`, `conciliacao/casamento.ts`): par automático exige valor exato, mesmo sentido, janela de 3 dias, candidato elegível (paga nesta conta ou transferência) e uma de duas: (a) nome do favorecido no histórico, único dos dois lados (um candidato com nome para o movimento e um movimento com nome para o candidato); (b) sem nome, mas valor único nos dois lados dentro da janela, marcado `confira` ("Confira" na tela). A disputa conta dos dois lados: candidato disputado por mais de um movimento sem nome nunca casa sozinho. O resto fica como sugestão.
+
+**Efeito no BB 102.124-9 de 09/2026** (foto do painel de 02/10): automático de 414 para 359 (281 por nome, 78 por valor único); sugestões de 16 para 71; sem par algum, 77 nos dois.
+
 ## 2026-10-03 - Conciliação 100% precisa, Bloco B: o mês só fecha com o saldo do banco
 
 **Decisão:** o parser lê `LEDGERBAL` (`BALAMT`, `DTASOF`) e o extrato guarda `saldo_final`/`saldo_final_data`. "Mês conciliado" exige Faltam no app = 0, Fora do banco = 0 **e** saldo do banco = saldo do app no último dia do período (`statusDoMes`). Sem saldo no OFX o mês nunca se declara fechado.
