@@ -57,7 +57,10 @@ export interface ParCasado {
   alvoId: string;
   dias: number;
   nomeBate: boolean;
-  /** Casou sem o nome confirmar e havia outro candidato possível: vale olhar. */
+  /**
+   * Casou pela regra (b): o nome não bate, mas o valor é único nos dois lados
+   * dentro da janela. Na tela vira o selo "Confira".
+   */
   confira: boolean;
 }
 
@@ -149,15 +152,29 @@ function sentidoDo(movimento: MovimentoCasavel): Sentido {
 }
 
 /**
- * Casamento automático: só valor EXATO, mesmo sentido, dentro da janela, e só
- * com parcela paga nesta conta ou transferência (os grupos que não mudam nada
- * no app). Cada candidato casa com um movimento só.
+ * Casamento automático: só o que é IMPOSSÍVEL errar (regra do Tiago,
+ * 03/10/2026: "100% precisa; se tiver que escolher entre casar mais e errar
+ * menos, erre menos e deixe como sugestão").
  *
- * Ordem de preferência entre os pares possíveis: o nome que bate pesa mais que
- * a data (dois PIX de R$ 1.499,43 no mesmo dia só se separam pelo nome), e
- * entre iguais vale a data mais próxima. Atribuição gulosa pelos melhores
- * pares primeiro, que para este tamanho (centenas) é exata o bastante e
- * previsível para quem confere.
+ * Um par só casa sozinho se for valor exato em centavos, mesmo sentido,
+ * dentro da janela, candidato elegível (paga nesta conta ou transferência) E
+ * uma das duas:
+ *
+ * (a) o nome do favorecido aparece no histórico, esse candidato é o ÚNICO com
+ *     nome batendo para o movimento, e o movimento é o ÚNICO com nome batendo
+ *     para o candidato (dois PIX iguais para a mesma pessoa, com um só
+ *     lançado, ficam para a pessoa decidir);
+ * (b) o nome não bate, mas o valor é único NOS DOIS LADOS dentro da janela:
+ *     um só movimento livre e um só candidato com esse valor e sentido. Sai
+ *     com `confira: true`, que na tela vira o selo "Confira".
+ *
+ * A disputa é contada pelos dois lados: um candidato disputado por mais de um
+ * movimento sem nome nunca casa sozinho, mesmo que sobre só ele. O defeito
+ * que isto fecha: dois PIX de R$ 500,00 no mesmo dia, um só lançado, nenhum
+ * nome; o primeiro da lista casava e o outro ia para "Faltam no app", onde
+ * alguém lançaria de novo.
+ *
+ * Tudo que não passa continua aparecendo em `sugerirParaMovimento`.
  */
 export function casarAutomaticamente(
   movimentos: readonly MovimentoCasavel[],
@@ -179,60 +196,69 @@ export function casarAutomaticamente(
   interface Possivel {
     movimento: MovimentoCasavel;
     candidato: CandidatoCasavel;
+    chaveCandidato: string;
     dias: number;
-    nome: number;
-    ordem: number;
+    nomeBate: boolean;
   }
-  const possiveis: Possivel[] = [];
-  const opcoesPorMovimento = new Map<string, number>();
-  movimentos.forEach((movimento, ordem) => {
+  const porMovimento = new Map<string, Possivel[]>();
+  const porCandidato = new Map<string, Possivel[]>();
+  for (const movimento of movimentos) {
     const chave = `${sentidoDo(movimento)}:${centavos(movimento.valor)}`;
-    const lista = porValor.get(chave) ?? [];
-    let opcoes = 0;
-    for (const candidato of lista) {
+    for (const candidato of porValor.get(chave) ?? []) {
       const dias = diasEntre(candidato.data, movimento.dataMovimento);
       if (dias > janelaDias) continue;
-      opcoes += 1;
-      possiveis.push({
+      const chaveCandidato = `${candidato.especie}:${candidato.id}`;
+      const possivel: Possivel = {
         movimento,
         candidato,
+        chaveCandidato,
         dias,
-        nome: palavrasEmComum(movimento.memo, candidato.nomes),
-        ordem,
-      });
+        nomeBate: palavrasEmComum(movimento.memo, candidato.nomes) > 0,
+      };
+      const doMovimento = porMovimento.get(movimento.id);
+      if (doMovimento) doMovimento.push(possivel);
+      else porMovimento.set(movimento.id, [possivel]);
+      const doCandidato = porCandidato.get(chaveCandidato);
+      if (doCandidato) doCandidato.push(possivel);
+      else porCandidato.set(chaveCandidato, [possivel]);
     }
-    opcoesPorMovimento.set(movimento.id, opcoes);
-  });
+  }
 
-  possiveis.sort(
-    (a, b) =>
-      Number(b.nome > 0) - Number(a.nome > 0) ||
-      a.dias - b.dias ||
-      b.nome - a.nome ||
-      a.ordem - b.ordem ||
-      a.candidato.data.localeCompare(b.candidato.data),
-  );
-
-  const movimentoUsado = new Set<string>();
-  const candidatoUsado = new Set<string>();
   const pares: ParCasado[] = [];
-  for (const possivel of possiveis) {
-    if (movimentoUsado.has(possivel.movimento.id)) continue;
-    const chaveCandidato = `${possivel.candidato.especie}:${possivel.candidato.id}`;
-    if (candidatoUsado.has(chaveCandidato)) continue;
-    movimentoUsado.add(possivel.movimento.id);
-    candidatoUsado.add(chaveCandidato);
-    const nomeBate = possivel.nome > 0;
+  const candidatoUsado = new Set<string>();
+  for (const movimento of movimentos) {
+    const opcoes = porMovimento.get(movimento.id) ?? [];
+    if (opcoes.length === 0) continue;
+
+    let escolhido: Possivel | null = null;
+    let confira = false;
+
+    const comNome = opcoes.filter((o) => o.nomeBate);
+    if (comNome.length === 1) {
+      // (a) nome único dos dois lados.
+      const unico = comNome[0];
+      const disputaComNome = (porCandidato.get(unico.chaveCandidato) ?? []).filter(
+        (o) => o.nomeBate,
+      ).length;
+      if (disputaComNome === 1) escolhido = unico;
+    } else if (comNome.length === 0 && opcoes.length === 1) {
+      // (b) sem nome: valor único nos dois lados.
+      const unico = opcoes[0];
+      if ((porCandidato.get(unico.chaveCandidato) ?? []).length === 1) {
+        escolhido = unico;
+        confira = true;
+      }
+    }
+
+    if (!escolhido || candidatoUsado.has(escolhido.chaveCandidato)) continue;
+    candidatoUsado.add(escolhido.chaveCandidato);
     pares.push({
-      transacaoId: possivel.movimento.id,
-      especie: possivel.candidato.especie,
-      alvoId: possivel.candidato.id,
-      dias: possivel.dias,
-      nomeBate,
-      confira:
-        !nomeBate &&
-        ((opcoesPorMovimento.get(possivel.movimento.id) ?? 0) > 1 ||
-          possivel.dias > 0),
+      transacaoId: movimento.id,
+      especie: escolhido.candidato.especie,
+      alvoId: escolhido.candidato.id,
+      dias: escolhido.dias,
+      nomeBate: escolhido.nomeBate,
+      confira,
     });
   }
   return pares;
