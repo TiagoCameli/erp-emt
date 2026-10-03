@@ -49,6 +49,7 @@ import {
   palavrasEmComum,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
+  sugestoesSeguras,
   type Sugestao,
 } from "@/modules/financeiro/conciliacao/casamento";
 import {
@@ -66,6 +67,7 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
+import { RevisarSegurasDialog } from "./revisar-seguras-dialog";
 import { LancarDrawer, type OpcoesLancamento } from "./lancar-drawer";
 import { TransferirDialog } from "./transferir-dialog";
 import { TrocarContaDialog } from "./trocar-conta-dialog";
@@ -417,6 +419,7 @@ export function ConciliacaoCliente({
 
       {visao === "faltam" ? (
         <TabelaFaltam
+          contaNome={conta.nome}
           transacoes={visoes.faltamNoApp}
           candidatos={candidatos}
           permissoes={permissoes}
@@ -548,6 +551,7 @@ function resumoSugestao(sugestao: Sugestao | undefined): string | null {
 }
 
 function TabelaFaltam({
+  contaNome,
   transacoes,
   candidatos,
   permissoes,
@@ -555,6 +559,7 @@ function TabelaFaltam({
   onLancar,
   onTransferir,
 }: {
+  contaNome: string;
   transacoes: TransacaoPainel[];
   candidatos: CandidatoDoPainel[];
   permissoes: PermissoesConciliacao;
@@ -566,7 +571,27 @@ function TabelaFaltam({
   const [tipo, setTipo] = React.useState("");
   const [noApp, setNoApp] = React.useState("");
   const [selecionados, setSelecionados] = React.useState<string[]>([]);
+  const [revisarAberto, setRevisarAberto] = React.useState(false);
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
+
+  // Faixa 2 (Bloco E): o que dá para aceitar em lote com revisão.
+  const seguras = React.useMemo(
+    () =>
+      sugestoesSeguras(
+        transacoes.map((t) => ({
+          id: t.id,
+          dataMovimento: t.dataMovimento,
+          valor: t.valor,
+          memo: t.memo,
+        })),
+        candidatos,
+      ),
+    [transacoes, candidatos],
+  );
+  const idsSeguros = React.useMemo(
+    () => new Set(seguras.map((s) => s.movimento.id)),
+    [seguras],
+  );
 
   const sugestoes = React.useMemo(() => {
     const mapa = new Map<string, Sugestao<CandidatoDoPainel> | undefined>();
@@ -662,6 +687,9 @@ function TabelaFaltam({
           const texto = resumoSugestao(sugestoes.get(row.original.id));
           return texto ? (
             <span className="text-status-pendente" title={texto}>
+              {idsSeguros.has(row.original.id) ? (
+                <StatusBadge status="aprovado" rotulo="Segura" className="mr-1.5" />
+              ) : null}
               {texto}
             </span>
           ) : (
@@ -723,7 +751,7 @@ function TabelaFaltam({
         },
       },
     ],
-    [sugestoes, permissoes, onCasar, onLancar, onTransferir],
+    [sugestoes, idsSeguros, permissoes, onCasar, onLancar, onTransferir],
   );
 
   const filtros: FiltroConfiguravel[] = [
@@ -791,6 +819,26 @@ function TabelaFaltam({
 
   return (
     <div className="flex flex-col gap-2">
+      {permissoes.conciliar && seguras.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+          <span>
+            {seguras.length === 1
+              ? "1 sugestão segura: valor exato, nome no extrato e nenhum outro candidato."
+              : `${seguras.length} sugestões seguras: valor exato, nome no extrato e nenhum outro candidato.`}
+          </span>
+          <Button type="button" size="sm" onClick={() => setRevisarAberto(true)}>
+            <CheckCheck />
+            Revisar {seguras.length} {seguras.length === 1 ? "sugestão segura" : "sugestões seguras"}
+          </Button>
+        </div>
+      ) : null}
+      <RevisarSegurasDialog
+        key={revisarAberto ? `revisar-${seguras.length}` : "revisar-fechado"}
+        aberto={revisarAberto}
+        onAbertoChange={setRevisarAberto}
+        seguras={seguras}
+        contaNome={contaNome}
+      />
       {validos.length > 0 ? (
         <BarraSelecao
           quantidade={validos.length}

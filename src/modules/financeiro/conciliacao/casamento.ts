@@ -49,6 +49,11 @@ export interface CandidatoCasavel {
   sentido: Sentido;
   /** Nomes que podem aparecer no histórico (fantasia, razão social, descrição). */
   nomes: (string | null)[];
+  /**
+   * False quando o banco recusaria a baixa (parcela a pagar ainda não
+   * aprovada). Fica de fora das sugestões seguras.
+   */
+  podeBaixar?: boolean;
 }
 
 export interface ParCasado {
@@ -329,4 +334,59 @@ export function pareceAplicacaoAutomatica(memo: string | null): boolean {
     texto.includes("APLICACAO") ||
     texto.includes("RESGATE")
   );
+}
+
+/** Uma sugestão que dá para aceitar em lote, revisando a lista. */
+export interface SugestaoSegura<C extends CandidatoCasavel = CandidatoCasavel> {
+  movimento: MovimentoCasavel;
+  candidato: C;
+}
+
+/**
+ * Sugestões que dá para aceitar em lote com um clique de revisão (faixa 2 da
+ * regra do Tiago, 03/10/2026). Segura é a que não tem outra leitura:
+ *
+ * - valor exato, mesmo sentido, nome do favorecido no histórico;
+ * - UM único candidato com nome batendo para o movimento (em qualquer grupo);
+ * - o candidato é de "paga em outra conta" ou "em aberto" (paga nesta conta e
+ *   transferência o automático já trata) e o banco aceitaria a baixa;
+ * - e esse candidato não é a melhor sugestão de nenhum outro movimento.
+ *
+ * Sem nome nunca é segura, dois candidatos com nome nunca é segura, candidato
+ * disputado nunca é seguro.
+ */
+export function sugestoesSeguras<C extends CandidatoCasavel>(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly C[],
+): SugestaoSegura<C>[] {
+  const chave = (c: CandidatoCasavel) => `${c.especie}:${c.id}`;
+  const listas = movimentos.map((movimento) => ({
+    movimento,
+    sugestoes: sugerirParaMovimento(movimento, candidatos),
+  }));
+
+  // Quantas vezes cada candidato é a melhor sugestão de algum movimento, ou
+  // aparece com nome e valor exato para ele: é a disputa.
+  const disputa = new Map<string, number>();
+  for (const { sugestoes } of listas) {
+    const vistos = new Set<string>();
+    const melhor = sugestoes[0];
+    if (melhor) vistos.add(chave(melhor.candidato));
+    for (const s of sugestoes) {
+      if (s.diferenca === 0 && s.nomeBate) vistos.add(chave(s.candidato));
+    }
+    for (const k of vistos) disputa.set(k, (disputa.get(k) ?? 0) + 1);
+  }
+
+  const seguras: SugestaoSegura<C>[] = [];
+  for (const { movimento, sugestoes } of listas) {
+    const comNome = sugestoes.filter((s) => s.diferenca === 0 && s.nomeBate);
+    if (comNome.length !== 1) continue;
+    const unica = comNome[0];
+    if (unica.candidato.grupo !== "paga_outra_conta" && unica.candidato.grupo !== "aberta") continue;
+    if (unica.candidato.podeBaixar === false) continue;
+    if ((disputa.get(chave(unica.candidato)) ?? 0) !== 1) continue;
+    seguras.push({ movimento, candidato: unica.candidato });
+  }
+  return seguras;
 }

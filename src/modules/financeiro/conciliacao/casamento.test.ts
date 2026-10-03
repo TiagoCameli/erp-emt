@@ -5,6 +5,7 @@ import {
   palavrasEmComum,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
+  sugestoesSeguras,
   type CandidatoCasavel,
   type MovimentoCasavel,
 } from "./casamento";
@@ -235,5 +236,55 @@ describe("casarAutomaticamente: só com certeza (Bloco A)", () => {
       [parcela("p1", 500, "Ciclano da Silva", "2026-09-15")],
     );
     expect(pares).toEqual([]);
+  });
+});
+
+describe("sugestoesSeguras (Bloco E)", () => {
+  const pix = (id: string, memo: string) => mov(id, -500, memo, "2026-09-15");
+  const outra = (id: string, nome: string) => parcela(id, 500, nome, "2026-09-15", "paga_outra_conta");
+  const aberta = (id: string, nome: string, podeBaixar = true) => ({
+    ...parcela(id, 500, nome, "2026-09-15", "aberta"),
+    podeBaixar,
+  });
+
+  it("nome único, valor exato, paga em outra conta: segura", () => {
+    const r = sugestoesSeguras([pix("m1", "PIX - ENVIADO - CICLANO DA SILVA")], [outra("p1", "Ciclano da Silva")]);
+    expect(r.map((s) => [s.movimento.id, s.candidato.id])).toEqual([["m1", "p1"]]);
+  });
+
+  it("sem nome nunca é segura", () => {
+    expect(sugestoesSeguras([pix("m1", "PIX - ENVIADO - FULANO")], [outra("p1", "Ciclano")])).toEqual([]);
+  });
+
+  it("dois candidatos com nome nunca é segura", () => {
+    expect(
+      sugestoesSeguras(
+        [pix("m1", "PIX - ENVIADO - CICLANO DA SILVA")],
+        [outra("p1", "Ciclano da Silva"), aberta("p2", "Ciclano da Silva")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("candidato disputado por dois movimentos nunca é seguro", () => {
+    expect(
+      sugestoesSeguras(
+        [pix("m1", "PIX - ENVIADO - CICLANO DA SILVA"), pix("m2", "PIX - ENVIADO - CICLANO DA SILVA")],
+        [outra("p1", "Ciclano da Silva")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("valor diferente não é segura, nem paga nesta conta (o automático trata)", () => {
+    expect(
+      sugestoesSeguras([mov("m1", -500.01, "PIX CICLANO DA SILVA")], [outra("p1", "Ciclano da Silva")]),
+    ).toEqual([]);
+    expect(
+      sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [parcela("p1", 500, "Ciclano da Silva", "2026-09-15")]),
+    ).toEqual([]);
+  });
+
+  it("parcela a pagar em aberto sem aprovação fica de fora", () => {
+    expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva", false)])).toEqual([]);
+    expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva")])).toHaveLength(1);
   });
 });
