@@ -48,7 +48,7 @@ export type ResultadoLote =
   | { ok: true; feitos: number; falhas: { id: string; erro: string }[] }
   | { erro: string };
 
-/** Transação no formato que a RPC fn_importar_extrato espera no jsonb. */
+/** Transação no formato que a RPC fn_conciliacao_importar espera no jsonb. */
 interface TransacaoImportacao {
   data: string;
   valor: number;
@@ -121,6 +121,8 @@ async function casarNoServidor(
       especie: par.especie,
       alvo: par.alvoId,
     })) as unknown as Json,
+    // O automático: o banco só aceita parcela paga nesta conta, valor exato.
+    p_automatica: true,
   });
   if (error) throw error;
 

@@ -8,7 +8,7 @@
 --   3. custo, banco a mais, rateios 70/30 -> parcela e lancamento 100,01,
 --      rateios 70,01 e 30,00 (o ultimo absorve), juros e desconto zero
 --   4. custo em lancamento de folha -> recusado com a explicacao
---   5. assinatura antiga (p_ajustar = true) continua valendo como financeiro
+--   5. financeiro de novo (a assinatura antiga com p_ajustar foi removida em 03/10/2026)
 -- No fim forca as constraints adiadas (soma do rateio, centro).
 
 begin;
@@ -70,7 +70,7 @@ begin
       raise notice 'OK 4 folha recusa custo';
       continue;
     elsif v_r.caso = 5 then
-      perform public.fn_conciliacao_casar(v_t, 'parcela', v_parc, false, true);
+      perform public.fn_conciliacao_casar(v_t, 'parcela', v_parc, false, 'financeiro'::text);
     else
       perform public.fn_conciliacao_casar(v_t, 'parcela', v_parc, false, v_r.ajuste::text);
     end if;

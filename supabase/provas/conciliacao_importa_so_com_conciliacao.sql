@@ -4,7 +4,7 @@
 -- as permissoes que ela apaga voltam inteiras.
 --
 -- O DEFEITO que ela tranca (print do usuario em 09/09/2026, "Sem permissao
--- para ver contas bancarias"): fn_importar_extrato exigia, alem de
+-- para ver contas bancarias"): a importacao exigia, alem de
 -- financeiro.conciliacao/criar, a permissao financeiro.contas-bancarias/ver —
 -- outro recurso, que a tela nunca pede. E a policy de SELECT de
 -- contas_bancarias listava sete recursos do Financeiro sem incluir a
@@ -20,7 +20,7 @@
 --   M1  a conta aparece no seletor (policy de SELECT de contas_bancarias),
 --       medida com `set local role authenticated`: RLS nao se prova trocando
 --       so as claims, tem que trocar o ROLE.
---   M2  a importacao conclui (guarda de fn_importar_extrato).
+--   M2  a importacao conclui (guarda da importacao).
 --
 -- E duas LINHAS DE CONTROLE, sem as quais a prova nao distingue "trava
 -- consertada" de "trava desligada":
@@ -86,11 +86,12 @@ begin
   -- uma vez que insere e que deduplica.
   set local role authenticated;
   begin
-    v_resultado := public.fn_importar_extrato(
+    v_resultado := public.fn_conciliacao_importar(
       v_conta,
       '01.2026 Caixa Economica.ofx',
       '2026-01-01'::date,
       '2026-01-31'::date,
+      null, null,
       '[{"data":"2026-01-15","valor":1004.51,"memo":"CREDITO TESTE","fitid":"F1"},
         {"data":"2026-01-16","valor":-2074.39,"memo":"DEBITO TESTE","fitid":"F2"},
         {"data":"2026-01-16","valor":-2074.39,"memo":"DEBITO TESTE","fitid":"F2"}]'::jsonb
@@ -134,8 +135,9 @@ begin
   v_erro := null;
   set local role authenticated;
   begin
-    v_resultado := public.fn_importar_extrato(
+    v_resultado := public.fn_conciliacao_importar(
       v_conta, 'intruso.ofx', '2026-01-01'::date, '2026-01-31'::date,
+      null, null,
       '[{"data":"2026-01-15","valor":10.00,"memo":"X","fitid":"F9"}]'::jsonb
     );
   exception when others then
