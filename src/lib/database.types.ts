@@ -9485,30 +9485,20 @@ export type Database = {
         Args: { p_conta_id: string; p_data: string };
         Returns: number;
       };
-      fn_conciliacao_casar:
-        | {
-            Args: {
-              p_ajustar?: boolean;
-              p_alvo_id: string;
-              p_automatica?: boolean;
-              p_especie: string;
-              p_transacao_id: string;
-            };
-            Returns: undefined;
-          }
-        | {
-            Args: {
-              p_ajuste: string;
-              p_alvo_id: string;
-              p_automatica: boolean;
-              p_especie: string;
-              p_transacao_id: string;
-            };
-            Returns: undefined;
-          };
-      fn_conciliacao_casar_lote:
-        | { Args: { p_pares: Json }; Returns: Json }
-        | { Args: { p_automatica: boolean; p_pares: Json }; Returns: Json };
+      fn_conciliacao_casar: {
+        Args: {
+          p_ajuste: string;
+          p_alvo_id: string;
+          p_automatica: boolean;
+          p_especie: string;
+          p_transacao_id: string;
+        };
+        Returns: undefined;
+      };
+      fn_conciliacao_casar_lote: {
+        Args: { p_automatica: boolean; p_pares: Json };
+        Returns: Json;
+      };
       fn_conciliacao_excluir_lancamento: {
         Args: { p_motivo: string; p_parcela_id: string };
         Returns: undefined;
@@ -9924,16 +9914,6 @@ export type Database = {
           p_ajustar_saldo_conta?: boolean;
           p_criar_lancamento_orfao?: boolean;
           p_usuario_id?: string;
-        };
-        Returns: Json;
-      };
-      fn_importar_extrato: {
-        Args: {
-          p_conta_id: string;
-          p_nome: string;
-          p_periodo_fim: string;
-          p_periodo_inicio: string;
-          p_transacoes: Json;
         };
         Returns: Json;
       };

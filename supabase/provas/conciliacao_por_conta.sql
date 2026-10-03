@@ -72,7 +72,7 @@ begin
     'mesCompetencia', '2026-10-01', 'centroCustoId', v_centro));
   select id into v_parc2 from public.lancamento_parcelas where lancamento_id = v_lanc2;
   perform public.fn_desconciliar_transacao(t_auto);
-  v_lote := public.fn_conciliacao_casar_lote(jsonb_build_array(
+  v_lote := public.fn_conciliacao_casar_lote(p_automatica => true, p_pares => jsonb_build_array(
     jsonb_build_object('transacao', t_auto, 'especie', 'parcela', 'alvo', v_parc2),
     -- controle: o automatico nao pode casar com diferenca de centavo
     jsonb_build_object('transacao', t_centavo, 'especie', 'parcela', 'alvo', v_parc2)));
@@ -85,13 +85,13 @@ begin
   -- 3. Centavo: sem ajustar recusa, com ajustar vira juros e grava evento.
   perform public.fn_desconciliar_transacao(t_auto);
   begin
-    perform public.fn_conciliacao_casar(t_centavo, 'parcela', v_parc2, false, false);
+    perform public.fn_conciliacao_casar(t_centavo, 'parcela', v_parc2, false, null::text);
     raise exception 'FALHA 3: casou com centavo de diferenca sem ajustar';
   exception when others then
     if sqlerrm like 'FALHA%' then raise; end if;
     v_erro := sqlerrm;
   end;
-  perform public.fn_conciliacao_casar(t_centavo, 'parcela', v_parc2, false, true);
+  perform public.fn_conciliacao_casar(t_centavo, 'parcela', v_parc2, false, 'financeiro'::text);
   select juros into v_juros from public.lancamento_parcelas where id = v_parc2;
   if v_juros <> 0.01 then raise exception 'FALHA 3: juros % (esperado 0,01)', v_juros; end if;
   if not exists (select 1 from public.parcela_eventos where parcela_id = v_parc2 and motivo like 'Conciliacao do extrato: valor ajustado%') then
@@ -111,10 +111,10 @@ begin
   if (select conta_bancaria_id from public.lancamento_parcelas where id = v_parc) <> v_caixa then
     raise exception 'FALHA 4: trocar conta nao trocou';
   end if;
-  v_lote := public.fn_conciliacao_casar_lote(jsonb_build_array(
+  v_lote := public.fn_conciliacao_casar_lote(p_automatica => true, p_pares => jsonb_build_array(
     jsonb_build_object('transacao', t_outra, 'especie', 'parcela', 'alvo', v_parc)));
   if (v_lote->>'casadas')::int <> 0 then raise exception 'FALHA 4: automatico casou parcela de outra conta'; end if;
-  perform public.fn_conciliacao_casar(t_outra, 'parcela', v_parc, false, false);
+  perform public.fn_conciliacao_casar(t_outra, 'parcela', v_parc, false, null::text);
   if (select conta_bancaria_id from public.lancamento_parcelas where id = v_parc) <> v_bb then
     raise exception 'FALHA 4: casar nao trouxe a parcela para a conta do extrato';
   end if;
@@ -127,7 +127,7 @@ begin
   insert into public.lancamento_parcelas (lancamento_id, numero_parcela, valor, data_vencimento, status, conta_bancaria_id, data_programada)
   values (v_aberta_lanc, 1, 444.44, v_dia, 'aprovado', v_caixa, v_dia) returning id into v_aberta_parc;
   insert into public.lancamento_rateios (lancamento_id, centro_custo_id, valor) values (v_aberta_lanc, v_centro, 444.44);
-  perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, false);
+  perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, null::text);
   select status, conta_bancaria_id into v_status, v_conta from public.lancamento_parcelas where id = v_aberta_parc;
   if v_status <> 'pago' or v_conta <> v_bb
      or (select data_pagamento from public.lancamento_parcelas where id = v_aberta_parc) <> v_dia
@@ -142,13 +142,13 @@ begin
   perform public.fn_desconciliar_transacao(t_aberta);
   update public.lancamento_parcelas set status = 'pendente', data_pagamento = null, pago_por = null, pago_em = null where id = v_aberta_parc;
   begin
-    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, false);
+    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, null::text);
     raise exception 'FALHA 5b: deu baixa em parcela a pagar nao aprovada';
   exception when others then
     if sqlerrm like 'FALHA%' then raise; end if;
   end;
   begin
-    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_parc2, false, true);
+    perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_parc2, false, 'financeiro'::text);
     raise exception 'FALHA 5b: casou com diferenca acima de R$ 1,00';
   exception when others then
     if sqlerrm like 'FALHA%' then raise; end if;
@@ -163,7 +163,7 @@ begin
   end;
   delete from public.lancamento_parcelas where lancamento_id = v_lanc2 and numero_parcela = 2;
   update public.lancamento_parcelas set status = 'aprovado', data_programada = v_dia where id = v_aberta_parc;
-  perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, false);
+  perform public.fn_conciliacao_casar(t_aberta, 'parcela', v_aberta_parc, false, null::text);
   raise notice 'OK 5b travas: nao aprovada, diferenca grande e varias parcelas recusadas';
 
   -- 6. Transferencia: debito do BB para a Caixa.

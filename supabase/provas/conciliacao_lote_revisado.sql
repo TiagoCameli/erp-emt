@@ -38,10 +38,10 @@ begin
   values (v_lanc, 1, 654, v_dia, 'aprovado', v_caixa, v_dia) returning id into p_aberta;
   insert into public.lancamento_rateios (lancamento_id, centro_custo_id, valor) values (v_lanc, v_centro, 654);
 
-  -- automatico (um parametro): recusa os dois
+  -- automatico: recusa os dois
   v_r := public.fn_conciliacao_casar_lote(jsonb_build_array(
     jsonb_build_object('transacao', t_outra, 'especie', 'parcela', 'alvo', p_outra),
-    jsonb_build_object('transacao', t_aberta, 'especie', 'parcela', 'alvo', p_aberta)));
+    jsonb_build_object('transacao', t_aberta, 'especie', 'parcela', 'alvo', p_aberta)), true);
   if (v_r->>'casadas')::int <> 0 then raise exception 'FALHA 1: automatico casou %', v_r; end if;
   raise notice 'OK 1 automatico recusa outra conta e aberta';
 
