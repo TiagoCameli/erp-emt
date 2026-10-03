@@ -156,16 +156,20 @@ export function palavrasEmComum(
   if (doNome.size === 0) return 0;
   let pontos = 0;
   for (const palavra of doMemo) {
-    let casou = doNome.has(palavra);
-    if (!casou) {
+    // A palavra que casou do lado do cadastro decide se é nome comum: o banco
+    // corta o nome ("OLIVEIR" de OLIVEIRA) e o pedaço cortado não está na lista.
+    let casada: string | null = doNome.has(palavra) ? palavra : null;
+    if (!casada) {
       for (const candidata of doNome) {
         if (candidata.startsWith(palavra) || palavra.startsWith(candidata)) {
-          casou = true;
+          casada = candidata;
           break;
         }
       }
     }
-    if (casou) pontos += NOMES_COMUNS.has(palavra) ? 0.5 : 1;
+    if (casada) {
+      pontos += NOMES_COMUNS.has(palavra) || NOMES_COMUNS.has(casada) ? 0.5 : 1;
+    }
   }
   return pontos;
 }

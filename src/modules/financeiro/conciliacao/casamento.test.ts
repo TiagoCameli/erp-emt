@@ -314,3 +314,23 @@ describe("nome comum não identifica sozinho", () => {
     expect(nomeConfere("PIX JOSE DA SILVA", ["Jose Silva Construcoes"])).toBe(true);
   });
 });
+
+describe("nome comum cortado pelo banco", () => {
+  const memo = "PIX - ENVIADO - 30/05 11:50 CLELTON PEREIRA DE OLIVEIR";
+
+  it("OLIVEIR (cortado) casa com OLIVEIRA e vale meia palavra", () => {
+    expect(nomeConfere(memo, ["MARIA RAIMUNDA MIRANDA DE OLIVEIRA"])).toBe(false);
+    expect(palavrasEmComum(memo, ["CLELTON PEREIRA OLIVEIRA"])).toBe(2);
+  });
+
+  it("caso real de 30/05/2025: casa sozinho com o Clelton", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -1404.15, memo, "2025-05-30")],
+      [
+        parcela("clelton", 1404.15, "CLELTON PEREIRA OLIVEIRA", "2025-05-30"),
+        parcela("maria", 1404.15, "MARIA RAIMUNDA MIRANDA DE OLIVEIRA", "2025-05-30"),
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "clelton", nomeBate: true })]);
+  });
+});
