@@ -5094,3 +5094,7 @@ Autorizado pelo Tiago ("pode continuar"). Em duas etapas, pela lição de 27/08:
 ## 2026-10-03 - Conciliação: "Todos os meses"
 
 **Pedido do Tiago:** o "Todos" do seletor de mês não funcionava e ele quer ver todos os meses juntos. **Decisão:** `?mes=todos` abre do início do primeiro extrato importado da conta ao fim do último (`periodoDosExtratos`), com as três visões juntas; o casamento automático vale para o período inteiro. Fechar e reabrir ficam escondidos nesse modo (fechamento é de um mês); o banco continua recusando ação em mês fechado. Para aguentar o volume (BB 102.124-9: 6.919 movimentos, 1.847 candidatos), as sugestões filtram por sentido, valor e data antes de comparar nomes, e as palavras de cada nome ficam em cache: de cerca de 10 s para 0,8 s, com o mesmo resultado.
+
+## 2026-10-03 - Conciliação: nome comum não identifica sozinho
+
+**Caso do Tiago:** "PIX - ENVIADO - EDILSON FRANCA DA SILVA" (R$ 1.518,00 em 02/05/2025) tinha duas sugestões com "nome confere", a certa (EDILSON FRANÇA SILVA) e ANTONIO DA SILVA SOUZA, que só batia no SILVA; com dois nomes batendo, o automático não casava nenhum. **Decisão:** nomes e sobrenomes muito comuns (Silva, Souza, Santos, José, Maria, Antônio...) valem meia palavra em `palavrasEmComum`; "nome confere" (`nomeConfere`) exige 1 ponto (uma palavra que identifica, ou duas comuns); as sugestões ordenam pelos pontos de nome. Efeito: foto de setembro do BB, automático de 359 para 364; com todos os meses pendentes, de 28 para 186.

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   casarAutomaticamente,
+  nomeConfere,
   palavrasEmComum,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
@@ -37,7 +38,7 @@ describe("palavrasEmComum", () => {
       palavrasEmComum("PIX - ENVIADO - 01/09 19:22 JOSE AUGUSTO DA SILVA PRA", [
         "José Augusto da Silva Prado",
       ]),
-    ).toBe(4);
+    ).toBe(3); // JOSE e SILVA são nomes comuns: meia palavra cada
   });
 
   it("não conta palavra de histórico e de razão social que não identifica ninguém", () => {
@@ -286,5 +287,30 @@ describe("sugestoesSeguras (Bloco E)", () => {
   it("parcela a pagar em aberto sem aprovação fica de fora", () => {
     expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva", false)])).toEqual([]);
     expect(sugestoesSeguras([pix("m1", "PIX CICLANO DA SILVA")], [aberta("p1", "Ciclano da Silva")])).toHaveLength(1);
+  });
+});
+
+describe("nome comum não identifica sozinho", () => {
+  const memo = "PIX - ENVIADO - 02/05 16:05 EDILSON FRANCA DA SILVA";
+
+  it("só o SILVA não confere; nome e sobrenome do favorecido conferem", () => {
+    expect(nomeConfere(memo, ["ANTONIO DA SILVA SOUZA - SANTIM"])).toBe(false);
+    expect(nomeConfere(memo, ["EDILSON FRANÇA SILVA"])).toBe(true);
+    expect(palavrasEmComum(memo, ["EDILSON FRANÇA SILVA"])).toBe(2.5);
+  });
+
+  it("caso real de 02/05/2025: casa sozinho com o Edilson, não com o Antonio", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -1518, memo, "2025-05-02")],
+      [
+        parcela("antonio", 1518, "ANTONIO DA SILVA SOUZA - SANTIM", "2025-05-02"),
+        parcela("edilson", 1518, "EDILSON FRANÇA SILVA", "2025-05-02"),
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "edilson", nomeBate: true, confira: false })]);
+  });
+
+  it("dois nomes comuns juntos conferem (JOSE + SILVA)", () => {
+    expect(nomeConfere("PIX JOSE DA SILVA", ["Jose Silva Construcoes"])).toBe(true);
   });
 });
