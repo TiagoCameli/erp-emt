@@ -148,6 +148,22 @@ export type CandidatoDoPainel = CandidatoCasavel &
     | { registro?: undefined; transferencia: TransferenciaLivre }
   );
 
+/** Valor do seletor de mês que abre todos os meses importados juntos. */
+export const TODOS_OS_MESES = "todos";
+
+/**
+ * Período de "todos os meses": do início do primeiro extrato importado ao fim
+ * do último. Null quando a conta não tem extrato com período.
+ */
+export function periodoDosExtratos(
+  extratos: readonly { periodoInicio: string | null; periodoFim: string | null }[],
+): { inicio: string; fim: string } | null {
+  const inicios = extratos.map((e) => e.periodoInicio).filter((d): d is string => !!d).sort();
+  const fins = extratos.map((e) => e.periodoFim).filter((d): d is string => !!d).sort();
+  if (inicios.length === 0 || fins.length === 0) return null;
+  return { inicio: inicios[0], fim: fins[fins.length - 1] };
+}
+
 /** Período fechado de um mês "YYYY-MM": do dia 1 ao último dia. */
 export function periodoDoMes(
   mes: string,

@@ -66,6 +66,7 @@ import {
   movimentosLivres,
   somar,
   statusDoMes,
+  TODOS_OS_MESES,
   type CandidatoDoPainel,
   type ItemForaDoBanco,
   type PainelConciliacao,
@@ -108,6 +109,10 @@ export interface ConciliacaoClienteProps {
   permissoes: PermissoesConciliacao;
 }
 
+function rotuloDoMes(mes: string): string {
+  return mes === TODOS_OS_MESES ? "Todos os meses" : formatarMesAno(`${mes}-01`);
+}
+
 function hrefDe(contaId: string, mes: string, visao: VisaoConciliacao): string {
   const params = new URLSearchParams({ conta: contaId, mes, ver: visao });
   return `?${params.toString()}`;
@@ -147,9 +152,13 @@ function vinculoDe(transacao: TransacaoPainel): string {
  * A conciliação do mês está fechada quando as duas primeiras visões zeram.
  */
 export function ConciliacaoCliente(props: ConciliacaoClienteProps) {
+  // "Todos os meses" não tem fechamento: fechar e reabrir é de um mês só. O
+  // banco continua recusando ação em mês fechado, com a mensagem do mês.
+  const todos = props.mes === TODOS_OS_MESES;
+  const painel = todos ? { ...props.painel, fechamento: null } : props.painel;
   // Mês fechado (Bloco F): nada se casa, desfaz, lança ou exclui até reabrir.
   // O banco recusa de qualquer jeito; aqui os botões somem para não convidar.
-  const fechado = props.painel.fechamento !== null;
+  const fechado = painel.fechamento !== null;
   const permissoes: PermissoesConciliacao = fechado
     ? {
         importar: props.permissoes.importar,
@@ -163,8 +172,9 @@ export function ConciliacaoCliente(props: ConciliacaoClienteProps) {
   return (
     <ConciliacaoConta
       {...props}
+      painel={painel}
       permissoes={permissoes}
-      podeFechar={props.permissoes.conciliar}
+      podeFechar={props.permissoes.conciliar && !todos}
     />
   );
 }
@@ -272,7 +282,7 @@ function ConciliacaoConta({
       toast.error(resposta.erro);
       return;
     }
-    toast.success(`${formatarMesAno(`${mes}-01`)} conciliado e fechado`);
+    toast.success(`${rotuloDoMes(mes)} conciliado e fechado`);
     router.refresh();
   }
 
@@ -342,8 +352,9 @@ function ConciliacaoConta({
           className="max-w-72 max-md:max-w-full max-md:basis-full"
         />
         <FiltroSelect
-          valor={mes}
-          onValorChange={(valor) => valor && trocarMes(valor)}
+          valor={mes === TODOS_OS_MESES ? "" : mes}
+          onValorChange={(valor) => trocarMes(valor || TODOS_OS_MESES)}
+          todosRotulo="Todos os meses"
           opcoes={meses.map((m) => ({
             valor: m,
             rotulo: formatarMesAno(`${m}-01`),
@@ -603,7 +614,7 @@ function ConciliacaoConta({
       <ConfirmDialog
         aberto={reabrirAberto}
         onAbertoChange={setReabrirAberto}
-        titulo={`Reabrir ${formatarMesAno(`${mes}-01`)}`}
+        titulo={`Reabrir ${rotuloDoMes(mes)}`}
         descricao="O mês volta a aceitar casar, desfazer e lançar. O motivo fica registrado na auditoria."
         textoConfirmar="Reabrir mês"
         exigeMotivo
