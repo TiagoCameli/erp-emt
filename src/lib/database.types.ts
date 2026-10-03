@@ -9438,16 +9438,27 @@ export type Database = {
         Args: { p_conta_id: string; p_data: string };
         Returns: number;
       };
-      fn_conciliacao_casar: {
-        Args: {
-          p_ajustar?: boolean;
-          p_alvo_id: string;
-          p_automatica?: boolean;
-          p_especie: string;
-          p_transacao_id: string;
-        };
-        Returns: undefined;
-      };
+      fn_conciliacao_casar:
+        | {
+            Args: {
+              p_ajustar?: boolean;
+              p_alvo_id: string;
+              p_automatica?: boolean;
+              p_especie: string;
+              p_transacao_id: string;
+            };
+            Returns: undefined;
+          }
+        | {
+            Args: {
+              p_ajuste: string;
+              p_alvo_id: string;
+              p_automatica: boolean;
+              p_especie: string;
+              p_transacao_id: string;
+            };
+            Returns: undefined;
+          };
       fn_conciliacao_casar_lote: { Args: { p_pares: Json }; Returns: Json };
       fn_conciliacao_excluir_lancamento: {
         Args: { p_motivo: string; p_parcela_id: string };
