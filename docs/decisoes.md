@@ -5070,3 +5070,9 @@ Mês fechado bloqueia, naquela conta e mês: casar (e tirar pagamento de outra c
 Tela: "Fechar mês" aparece só com as três condições; fechado, faixa "Conciliado por Fulano em dd/mm hh:mm · saldo R$ X" e "Reabrir" com motivo, e as ações somem. A escolha de conta mostra os três últimos meses ("set/26 fechado · ago/26 fechado · jul/26 12 pendentes").
 
 **Efeito no BB 102.124-9 de 09/2026:** não fecha enquanto o Rende Fácil não for lançado como transferência (diferença de saldo de R$ 150.251,58, Bloco B).
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco G: histórico de importações
+
+**Decisão:** `extratos_ofx` guarda `qtd_inseridas`/`qtd_ignoradas`; importação em que nada entrou não deixa extrato (a tela diz "esse arquivo já estava importado (N movimentos), nada foi acrescentado"). Tela `/financeiro/conciliacao/importacoes`, sob a mesma permissão de ver da Conciliação (sem recurso novo no menu; acesso pela escolha de conta, "Ver todas as importações", e pelo botão "Importações" da conta): fileira de cobertura dos últimos 12 meses por conta (`coberturaMeses`: cheio, parcial, sem; dois arquivos somam; 30/12 a 31/01 deixa dezembro parcial) e tabela com conta, arquivo, período, saldo final, quem e quando importou (fuso de Rio Branco), inseridos/ignorados, conciliados e status do mês. Ações "Abrir mês" e "Excluir importação" (`fn_conciliacao_excluir_extrato`, ação nova `financeiro.conciliacao/excluir`; recusa com casamento ou mês fechado; cópia em `arquivo_morto.extratos_excluidos_conciliacao`). Leitura por `fn_conciliacao_importacoes` (o nome de quem importou vem de usuarios e `extratos_ofx.created_by` não tem FK).
+
+A ação `excluir` não foi concedida a ninguém: quem administra marca na matriz de permissões.

@@ -709,3 +709,35 @@ export async function reabrirMes(contaId: string, mes: string, motivo: string): 
   revalidatePath(ROTA);
   return { ok: true };
 }
+
+/**
+ * Exclui uma importação de extrato (Bloco G): pede a ação `excluir` da
+ * Conciliação. O banco recusa com movimento conciliado ou mês fechado e
+ * guarda cópia no arquivo morto com o motivo.
+ */
+export async function excluirImportacao(extratoId: string, motivo: string): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "excluir");
+  } catch {
+    return { erro: "Sem permissão para excluir importações" };
+  }
+  if (!idSchema.safeParse(extratoId).success) return { erro: "Importação inválida" };
+  const motivoOk = motivoSchema.safeParse(motivo);
+  if (!motivoOk.success) return { erro: "Informe o motivo da exclusão" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_excluir_extrato", {
+    p_extrato_id: extratoId,
+    p_motivo: motivoOk.data,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.excluirImportacao",
+      error,
+      mensagem(error, "Não foi possível excluir a importação"),
+    );
+  }
+  revalidatePath(ROTA);
+  revalidatePath(`${ROTA}/importacoes`);
+  return { ok: true };
+}

@@ -132,9 +132,11 @@ export function ImportarOfxDialog({
       aviso: resposta.aviso,
     });
     toast.success(
-      resposta.inseridas === 1
-        ? "1 transação importada"
-        : `${resposta.inseridas} transações importadas`,
+      resposta.inseridas === 0
+        ? "Esse arquivo já estava importado"
+        : resposta.inseridas === 1
+          ? "1 transação importada"
+          : `${resposta.inseridas} transações importadas`,
     );
     router.refresh();
   }
@@ -165,9 +167,11 @@ export function ImportarOfxDialog({
               <CircleCheck className="size-10 text-status-aprovado" />
               <div className="text-detalhe">
                 <p className="font-medium">
-                  {resultado.inseridas === 1
-                    ? "1 transação importada"
-                    : `${resultado.inseridas} transações importadas`}
+                  {resultado.inseridas === 0
+                    ? `Esse arquivo já estava importado (${resultado.ignoradas} ${resultado.ignoradas === 1 ? "movimento" : "movimentos"}), nada foi acrescentado`
+                    : resultado.inseridas === 1
+                      ? "1 transação importada"
+                      : `${resultado.inseridas} transações importadas`}
                 </p>
                 {resultado.casadas > 0 ? (
                   <p className="text-muted-foreground">
