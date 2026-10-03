@@ -54,7 +54,7 @@ import {
 } from "@/modules/financeiro/conciliacao/actions";
 import {
   casarAutomaticamente,
-  palavrasEmComum,
+  nomeConfere,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
   sugestoesSeguras,
@@ -1198,7 +1198,7 @@ function TabelaForaDoBanco({
 
 function precisaConferir(t: TransacaoPainel): boolean {
   if (!t.automatica || !t.parcela) return false;
-  return palavrasEmComum(t.memo, [t.parcela.nome, t.parcela.descricao]) === 0;
+  return !nomeConfere(t.memo, [t.parcela.nome, t.parcela.descricao]);
 }
 
 function TabelaCasados({

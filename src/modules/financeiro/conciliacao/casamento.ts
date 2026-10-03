@@ -75,6 +75,8 @@ export interface Sugestao<C extends CandidatoCasavel = CandidatoCasavel> {
   diferenca: number;
   dias: number;
   nomeBate: boolean;
+  /** Pontos de nome (palavras em comum, nome comum vale meia). */
+  pontosNome: number;
 }
 
 /** Janela do automático: o banco às vezes compensa no dia útil seguinte. */
@@ -122,9 +124,27 @@ export function palavrasDoNome(texto: string | null | undefined): string[] {
 }
 
 /**
- * Quantas palavras do histórico aparecem num dos nomes do candidato. A palavra
- * do histórico casa se for igual ou se for PREFIXO de uma palavra do nome (o
- * banco corta o nome: "SILVA PRA" de "SILVA PRADO").
+ * Nomes e sobrenomes tão comuns que, sozinhos, não identificam ninguém. Caso
+ * real (03/10/2026): "PIX - ENVIADO - EDILSON FRANCA DA SILVA" saía com "nome
+ * confere" para ANTONIO DA SILVA SOUZA só por causa do SILVA. Valem meia
+ * palavra: dois deles juntos contam como uma que identifica.
+ */
+const NOMES_COMUNS = new Set([
+  "SILVA", "SOUZA", "SOUSA", "SANTOS", "OLIVEIRA", "PEREIRA", "LIMA", "COSTA", "FERREIRA",
+  "RODRIGUES", "ALVES", "GOMES", "MARTINS", "CARVALHO", "ARAUJO", "RIBEIRO", "NASCIMENTO",
+  "BARBOSA", "MELO", "MELLO", "ROCHA", "DIAS", "CASTRO", "CARDOSO", "TEIXEIRA", "MOREIRA",
+  "FERNANDES", "LOPES", "SOARES", "VIEIRA", "MENDES", "FREITAS", "BATISTA", "MONTEIRO",
+  "JESUS", "NUNES", "MOURA", "CAVALCANTE", "MACHADO", "CORREIA", "PINTO", "REIS", "FILHO",
+  "JUNIOR", "NETO", "SOBRINHO",
+  "JOSE", "JOAO", "MARIA", "ANTONIO", "FRANCISCO", "CARLOS", "PAULO", "PEDRO", "LUCAS",
+  "LUIZ", "LUIS", "MARCOS", "ANA", "RAIMUNDO", "MANOEL", "MANUEL", "FRANCISCA", "ANTONIA",
+]);
+
+/**
+ * Pontos de nome entre o histórico e os nomes do candidato. Cada palavra do
+ * histórico que aparece num nome vale 1 (ou 0,5 se for nome muito comum). A
+ * palavra casa se for igual ou se for PREFIXO de uma palavra do nome (o banco
+ * corta o nome: "SILVA PRA" de "SILVA PRADO").
  */
 export function palavrasEmComum(
   memo: string | null,
@@ -134,20 +154,28 @@ export function palavrasEmComum(
   if (doMemo.length === 0) return 0;
   const doNome = new Set(nomes.flatMap((nome) => palavrasDoNome(nome)));
   if (doNome.size === 0) return 0;
-  let comum = 0;
+  let pontos = 0;
   for (const palavra of doMemo) {
-    if (doNome.has(palavra)) {
-      comum += 1;
-      continue;
-    }
-    for (const candidata of doNome) {
-      if (candidata.startsWith(palavra) || palavra.startsWith(candidata)) {
-        comum += 1;
-        break;
+    let casou = doNome.has(palavra);
+    if (!casou) {
+      for (const candidata of doNome) {
+        if (candidata.startsWith(palavra) || palavra.startsWith(candidata)) {
+          casou = true;
+          break;
+        }
       }
     }
+    if (casou) pontos += NOMES_COMUNS.has(palavra) ? 0.5 : 1;
   }
-  return comum;
+  return pontos;
+}
+
+/**
+ * "Nome confere": pelo menos uma palavra que identifica, ou dois nomes comuns.
+ * Só SILVA (ou só JOSE) não confere.
+ */
+export function nomeConfere(memo: string | null, nomes: readonly (string | null)[]): boolean {
+  return palavrasEmComum(memo, nomes) >= 1;
 }
 
 /** Diferença em dias entre duas datas yyyy-MM-dd, em módulo. */
@@ -227,7 +255,7 @@ export function casarAutomaticamente(
         candidato,
         chaveCandidato,
         dias,
-        nomeBate: palavrasEmComum(movimento.memo, candidato.nomes) > 0,
+        nomeBate: nomeConfere(movimento.memo, candidato.nomes),
       };
       const doMovimento = porMovimento.get(movimento.id);
       if (doMovimento) doMovimento.push(possivel);
@@ -311,6 +339,7 @@ export function sugerirParaMovimento<C extends CandidatoCasavel>(
       diferenca: (banco - centavos(candidato.valor)) / 100,
       dias: diasEntre(candidato.data, movimento.dataMovimento),
       nomeBate: false,
+      pontosNome: 0,
     }))
     .filter((sugestao) => {
       const janela =
@@ -322,12 +351,14 @@ export function sugerirParaMovimento<C extends CandidatoCasavel>(
     })
     .map((sugestao) => ({
       ...sugestao,
-      nomeBate: palavrasEmComum(movimento.memo, sugestao.candidato.nomes) > 0,
+      pontosNome: palavrasEmComum(movimento.memo, sugestao.candidato.nomes),
+      nomeBate: nomeConfere(movimento.memo, sugestao.candidato.nomes),
     }))
     .sort(
       (a, b) =>
         Number(a.diferenca !== 0) - Number(b.diferenca !== 0) ||
         Number(b.nomeBate) - Number(a.nomeBate) ||
+        b.pontosNome - a.pontosNome ||
         a.dias - b.dias ||
         peso[a.candidato.grupo] - peso[b.candidato.grupo],
     );
