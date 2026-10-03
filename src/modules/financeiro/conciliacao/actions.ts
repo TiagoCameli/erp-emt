@@ -293,13 +293,18 @@ const casarSchema = z.object({
   transacaoId: idSchema,
   especie: z.enum(["parcela", "transferencia"]),
   alvoId: idSchema,
-  ajustar: z.boolean(),
+  /**
+   * O que a diferença de até R$ 1,00 é: `financeiro` (juros se o banco saiu a
+   * mais, desconto se saiu a menos) ou `custo` (muda o valor do fornecimento,
+   * cai no centro de custo). Null quando o valor é exato.
+   */
+  ajuste: z.enum(["financeiro", "custo"]).nullable(),
 });
 
 /**
  * Casa um movimento com o que a pessoa escolheu. Conforme o candidato, o banco
  * também muda a conta (paga em outra conta), dá baixa (parcela em aberto) ou
- * ajusta a diferença como juros/desconto (`ajustar`), sempre com evento na
+ * ajusta a diferença como financeiro ou custo (`ajuste`), sempre com evento na
  * trilha da parcela.
  */
 export async function casar(
@@ -319,7 +324,7 @@ export async function casar(
     p_especie: dados.data.especie,
     p_alvo_id: dados.data.alvoId,
     p_automatica: false,
-    p_ajustar: dados.data.ajustar,
+    p_ajuste: dados.data.ajuste as string,
   });
   if (error) {
     return erroAcao(

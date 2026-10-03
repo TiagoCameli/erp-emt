@@ -7,7 +7,7 @@ import type {
   ParcelaLivre,
   TransacaoPainel,
 } from "@/modules/financeiro/conciliacao/painel";
-import { CasarDialog } from "./casar-dialog";
+import { CasarDialog, opcoesDeAjuste } from "./casar-dialog";
 
 vi.mock("@/modules/financeiro/conciliacao/actions", () => ({
   casar: vi.fn(async () => ({ ok: true })),
@@ -73,7 +73,7 @@ function candidato(id: string, valor: number, grupo: CandidatoDoPainel["grupo"])
 }
 
 describe("CasarDialog", () => {
-  it("só casa com diferença de centavo depois de marcar o ajuste", async () => {
+  it("só casa com diferença de centavo depois de escolher o que ela é", async () => {
     render(
       <CasarDialog
         aberto
@@ -83,12 +83,14 @@ describe("CasarDialog", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("radio"));
+    fireEvent.click(screen.getAllByRole("radio")[0]);
     const botao = screen.getByRole("button", { name: /^Casar$/ });
     expect(botao).toBeDisabled();
     expect(screen.getByText(/Valor difere em R\$\s?0,01/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("checkbox"));
+    // Banco pagou a menos: desconto ou custo, nenhum marcado.
+    expect(screen.getByLabelText("Desconto obtido (receita financeira)")).not.toBeChecked();
+    fireEvent.click(screen.getByLabelText("Custo do fornecedor (reduz o valor do lançamento)"));
     expect(botao).toBeEnabled();
     fireEvent.click(botao);
 
@@ -97,7 +99,7 @@ describe("CasarDialog", () => {
         transacaoId: transacao.id,
         especie: "parcela",
         alvoId: "38673fc5-c55a-c7be-8687-e9b1d3589ef2",
-        ajustar: true,
+        ajuste: "custo",
       }),
     );
   });
@@ -113,10 +115,27 @@ describe("CasarDialog", () => {
     );
 
     expect(screen.getByText("Em aberto: dá baixa na data do extrato")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio"));
+    fireEvent.click(screen.getAllByRole("radio")[0]);
     fireEvent.click(screen.getByRole("button", { name: /^Casar$/ }));
     await waitFor(() =>
-      expect(casar).toHaveBeenCalledWith(expect.objectContaining({ ajustar: false })),
+      expect(casar).toHaveBeenCalledWith(expect.objectContaining({ ajuste: null })),
     );
+  });
+});
+
+describe("opcoesDeAjuste", () => {
+  it("banco a mais: juros ou custo que aumenta; banco a menos: desconto ou custo que reduz", () => {
+    expect(opcoesDeAjuste(0.01, false).map((o) => o.rotulo)).toEqual([
+      "Juros ou multa (despesa financeira)",
+      "Custo do fornecedor (aumenta o valor do lançamento)",
+    ]);
+    expect(opcoesDeAjuste(-0.01, false).map((o) => o.rotulo)).toEqual([
+      "Desconto obtido (receita financeira)",
+      "Custo do fornecedor (reduz o valor do lançamento)",
+    ]);
+  });
+
+  it("origem de RH só oferece o financeiro", () => {
+    expect(opcoesDeAjuste(0.01, true).map((o) => o.valor)).toEqual(["financeiro"]);
   });
 });

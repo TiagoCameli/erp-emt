@@ -8,7 +8,6 @@ import { EmptyState, MoneyText } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +42,40 @@ const EFEITO: Record<GrupoCandidato, string> = {
   paga_outra_conta: "Paga em outra conta: passa para esta",
   aberta: "Em aberto: dá baixa na data do extrato",
 };
+
+/** Origens em que o centavo só pode ser financeiro (o banco recusa custo). */
+const ORIGENS_SO_FINANCEIRO = new Set([
+  "folha",
+  "folha_guia",
+  "decimo_terceiro",
+  "decimo_terceiro_guia",
+  "ferias",
+  "ferias_guia",
+  "rescisao",
+  "adiantamento",
+  "diaria",
+  "aplicacao",
+]);
+
+/**
+ * As duas leituras da diferença, pelo sinal. Nenhuma vem marcada: quem
+ * concilia escolhe, e o Casar fica desabilitado até escolher.
+ */
+export function opcoesDeAjuste(
+  diferenca: number,
+  soFinanceiro: boolean,
+): { valor: "financeiro" | "custo"; rotulo: string }[] {
+  const financeiro =
+    diferenca > 0
+      ? { valor: "financeiro" as const, rotulo: "Juros ou multa (despesa financeira)" }
+      : { valor: "financeiro" as const, rotulo: "Desconto obtido (receita financeira)" };
+  if (soFinanceiro) return [financeiro];
+  const custo =
+    diferenca > 0
+      ? { valor: "custo" as const, rotulo: "Custo do fornecedor (aumenta o valor do lançamento)" }
+      : { valor: "custo" as const, rotulo: "Custo do fornecedor (reduz o valor do lançamento)" };
+  return [financeiro, custo];
+}
 
 export interface CasarDialogProps {
   aberto: boolean;
@@ -89,7 +122,7 @@ export function CasarDialog({
 }: CasarDialogProps) {
   const router = useRouter();
   const [selecionado, setSelecionado] = React.useState<string | null>(null);
-  const [ajustar, setAjustar] = React.useState(false);
+  const [ajuste, setAjuste] = React.useState<"financeiro" | "custo" | null>(null);
   const [busca, setBusca] = React.useState("");
   const [enviando, setEnviando] = React.useState(false);
 
@@ -123,6 +156,10 @@ export function CasarDialog({
   const precisaAjuste = !!escolhida && escolhida.diferenca !== 0;
   const ajusteImpossivel =
     precisaAjuste && escolhida.candidato.especie === "transferencia";
+  // Salário e guia não mudam de valor por centavo de banco (Bloco D).
+  const soFinanceiro =
+    !!escolhida?.candidato.registro &&
+    ORIGENS_SO_FINANCEIRO.has(escolhida.candidato.registro.origem);
 
   function trocarAberto(novo: boolean) {
     if (enviando) return;
@@ -136,7 +173,7 @@ export function CasarDialog({
       transacaoId: transacao.id,
       especie: escolhida.candidato.especie,
       alvoId: escolhida.candidato.id,
-      ajustar: precisaAjuste && ajustar,
+      ajuste: precisaAjuste ? ajuste : null,
     });
     setEnviando(false);
     if ("erro" in resposta) {
@@ -212,7 +249,7 @@ export function CasarDialog({
                   aria-checked={ativo}
                   onClick={() => {
                     setSelecionado(chave);
-                    setAjustar(false);
+                    setAjuste(null);
                   }}
                   className={cn(
                     "foco-anel flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm",
@@ -267,18 +304,30 @@ export function CasarDialog({
               {ajusteImpossivel ? (
                 "Transferência só casa com o valor exato. Corrija a transferência ou lance o movimento."
               ) : (
-                <label className="flex items-start gap-2">
-                  <Checkbox
-                    checked={ajustar}
-                    onCheckedChange={(v) => setAjustar(v === true)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    O banco {escolhida.diferenca > 0 ? "movimentou mais" : "movimentou menos"}{" "}
-                    {formatarBRL(Math.abs(escolhida.diferenca))}. Ajustar a parcela para o valor
-                    do extrato, como {escolhida.diferenca > 0 ? "juros" : "desconto"}.
+                <fieldset className="flex flex-col gap-2">
+                  <legend className="mb-1">
+                    O banco {escolhida.diferenca > 0 ? "pagou a mais" : "pagou a menos"}{" "}
+                    {formatarBRL(Math.abs(escolhida.diferenca))}. O que é essa diferença?
+                  </legend>
+                  {opcoesDeAjuste(escolhida.diferenca, soFinanceiro).map((opcao) => (
+                    <label key={opcao.valor} className="flex items-start gap-2">
+                      <input
+                        type="radio"
+                        name="ajuste"
+                        value={opcao.valor}
+                        checked={ajuste === opcao.valor}
+                        onChange={() => setAjuste(opcao.valor)}
+                        className="foco-anel mt-1"
+                      />
+                      <span>{opcao.rotulo}</span>
+                    </label>
+                  ))}
+                  <span className="text-legenda text-muted-foreground">
+                    {soFinanceiro
+                      ? "Lançamento de folha, guia ou diária só aceita o ajuste financeiro: salário não muda de valor por centavo de banco."
+                      : "Juros e desconto entram no resultado financeiro; custo entra no centro de custo do lançamento."}
                   </span>
-                </label>
+                </fieldset>
               )}
             </AlertDescription>
           </Alert>
@@ -297,7 +346,7 @@ export function CasarDialog({
             type="button"
             onClick={() => void confirmar()}
             disabled={
-              !escolhida || enviando || ajusteImpossivel || (precisaAjuste && !ajustar)
+              !escolhida || enviando || ajusteImpossivel || (precisaAjuste && !ajuste)
             }
           >
             {enviando ? <LoaderCircle className="animate-spin" /> : <Link2 />}

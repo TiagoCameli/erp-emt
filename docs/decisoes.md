@@ -5042,3 +5042,15 @@ importa pela tela.
 **Decisão:** sem FITID, a chave de duplicidade passa a ser `sd:data:valor:memo:n`, com `n` = posição entre os iguais (mesma data, valor e histórico) dentro do arquivo (`numerarRepetidos`). Duas diárias iguais no mesmo dia entram as duas; reimportar o mesmo arquivo continua deduplicando. `fn_conciliacao_importar` devolve a lista dos ignorados, e o diálogo mostra quais foram. Arquivo com período declarado e nenhum movimento dentro é recusado (app e RPC). Chaves antigas sem `:n` não existem: as importações foram apagadas em 03/10/2026.
 
 **Efeito no BB 102.124-9 de 09/2026:** nenhum. O BB manda FITID em todos os 508 movimentos; a regra protege OFX sem FITID (alguns exportadores da Caixa e do Sicredi).
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco D: diferença de até R$ 1,00 é juros, desconto ou custo
+
+**Decisão do Tiago:** quem concilia escolhe o que a diferença é, porque às vezes o centavo é do preço do fornecedor (arredondamento de boleto) e cai como custo no centro de custo.
+1. `fn_conciliacao_casar(..., p_automatica boolean, p_ajuste text)`, sobrecarga nova sem valores padrão (com padrão nas duas, a chamada com três argumentos ficaria ambígua). `p_ajuste`: null, `financeiro` (juros ou desconto pelo sinal, como antes) ou `custo`. A versão com `p_ajustar boolean` virou repasse (`true` = financeiro) e sai em migration própria, depois do deploy e com ok do Tiago.
+2. `custo` soma a diferença em `lancamento_parcelas.valor`, `lancamentos.valor` (a coluna é `valor`, não `valor_total`), na forma da parcela quando existe, e nos rateios proporcionalmente (o último absorve o arredondamento). Juros e desconto não mudam. **A OC de origem não é tocada:** a OC é o pedido, o lançamento é o que foi pago.
+3. Origem de RH (folha, guias, 13º, férias, rescisão, adiantamento, diária) e aplicação só aceitam `financeiro`. `custo` exige a permissão de mexer no pago e competência aberta, mesmo com a parcela em aberto.
+4. Eventos: "... - juros", "... - desconto", "valor do fornecimento ajustado de R$ X para R$ Y (diferenca R$ Z) - custo", com valores em formato brasileiro (`fn_conciliacao_brl`).
+5. DRE e custo por centro somam `lancamento_rateios.valor` e não há visão materializada: leem o custo novo sem mudança. Juros e desconto seguem fora do custo de obra.
+6. Automático e lote nunca aplicam ajuste.
+
+**Efeito no BB 102.124-9 de 09/2026:** os dois boletos com R$ 0,01 (RB TRATOR e AMAZONIA PNEUS/PIMPAO) passam a pedir a escolha entre financeiro e custo.
