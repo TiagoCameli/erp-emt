@@ -5036,3 +5036,9 @@ importa pela tela.
 4. O painel devolve `bate` calculado no servidor também para quem não vê valores.
 
 **Efeito no BB 102.124-9 de 09/2026:** o OFX traz saldo final R$ 0,00 (o Rende Fácil aplica tudo todo dia) e o app tem R$ 150.251,58 na corrente em 30/09. A diferença é o dinheiro aplicado que ainda não foi lançado como transferência para a subconta; o mês só fecha depois disso.
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco C: nenhum movimento some na importação
+
+**Decisão:** sem FITID, a chave de duplicidade passa a ser `sd:data:valor:memo:n`, com `n` = posição entre os iguais (mesma data, valor e histórico) dentro do arquivo (`numerarRepetidos`). Duas diárias iguais no mesmo dia entram as duas; reimportar o mesmo arquivo continua deduplicando. `fn_conciliacao_importar` devolve a lista dos ignorados, e o diálogo mostra quais foram. Arquivo com período declarado e nenhum movimento dentro é recusado (app e RPC). Chaves antigas sem `:n` não existem: as importações foram apagadas em 03/10/2026.
+
+**Efeito no BB 102.124-9 de 09/2026:** nenhum. O BB manda FITID em todos os 508 movimentos; a regra protege OFX sem FITID (alguns exportadores da Caixa e do Sicredi).

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { conferirMesFechado, parseOfx } from "@/lib/ofx";
+import {
+  conferirMesFechado,
+  parseOfx,
+  conferirMovimentosNoPeriodo,
+  numerarRepetidos,
+} from "@/lib/ofx";
 
 /**
  * OFX 1.x (SGML) de exemplo, no formato que Caixa/BB/Sicredi exportam: cabeçalho
@@ -264,21 +269,97 @@ describe("saldo final (LEDGERBAL)", () => {
 
   it("lê o BB em SGML, com o saldo antes do fim do arquivo", () => {
     const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST>\n<LEDGERBAL>\n\t <BALAMT>0.00\n\t <DTASOF>20261001\n    </LEDGERBAL></OFX>`;
-    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: 0, saldoFinalData: "2026-10-01" });
+    expect(parseOfx(ofx)).toMatchObject({
+      saldoFinal: 0,
+      saldoFinalData: "2026-10-01",
+    });
   });
 
   it("lê a Caixa em SGML sem fechamento de tag, parando no AVAILBAL", () => {
     const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST><LEDGERBAL><BALAMT>69690.90<DTASOF>20260930000000[-3:BRT]<AVAILBAL><BALAMT>1.00<DTASOF>20260930</OFX>`;
-    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: 69690.9, saldoFinalData: "2026-09-30" });
+    expect(parseOfx(ofx)).toMatchObject({
+      saldoFinal: 69690.9,
+      saldoFinalData: "2026-09-30",
+    });
   });
 
   it("lê o Sicredi em XML, com saldo negativo e vírgula decimal", () => {
     const ofx = `<?xml version="1.0"?><OFX><BANKTRANLIST>${transacao}</BANKTRANLIST><LEDGERBAL><BALAMT>-1.234,56</BALAMT><DTASOF>20260930120000</DTASOF></LEDGERBAL></OFX>`;
-    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: -1234.56, saldoFinalData: "2026-09-30" });
+    expect(parseOfx(ofx)).toMatchObject({
+      saldoFinal: -1234.56,
+      saldoFinalData: "2026-09-30",
+    });
   });
 
   it("sem LEDGERBAL devolve null, nunca inventa zero", () => {
     const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST></OFX>`;
-    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: null, saldoFinalData: null });
+    expect(parseOfx(ofx)).toMatchObject({
+      saldoFinal: null,
+      saldoFinalData: null,
+    });
+  });
+});
+
+describe("numerarRepetidos (Bloco C)", () => {
+  it("numera os iguais sem FITID na ordem do arquivo e deixa o FITID de fora", () => {
+    const base = { data: "2026-09-02", valor: -150, memo: "PIX DIARIA FULANO" };
+    const numerados = numerarRepetidos([
+      { ...base, fitid: null },
+      { ...base, fitid: null },
+      { ...base, memo: "PIX DIARIA BELTRANO", fitid: null },
+      { ...base, fitid: "123" },
+      { ...base, fitid: null },
+    ]);
+    expect(numerados.map((t) => t.n)).toEqual([1, 2, 1, null, 3]);
+  });
+
+  it("reimportar o mesmo arquivo gera as mesmas posições", () => {
+    const arquivo = [
+      { data: "2026-09-02", valor: -150, memo: "X", fitid: null },
+      { data: "2026-09-02", valor: -150, memo: "X", fitid: null },
+    ];
+    expect(numerarRepetidos(arquivo).map((t) => t.n)).toEqual(
+      numerarRepetidos(arquivo).map((t) => t.n),
+    );
+  });
+});
+
+describe("conferirMovimentosNoPeriodo (Bloco C)", () => {
+  const extrato = (
+    inicio: string | null,
+    fim: string | null,
+    datas: string[],
+  ) => ({
+    periodoInicio: inicio,
+    periodoFim: fim,
+    contaOfx: null,
+    saldoFinal: null,
+    saldoFinalData: null,
+    transacoes: datas.map((data) => ({
+      data,
+      valor: -1,
+      memo: null,
+      fitid: null,
+      tipo: "debito" as const,
+    })),
+  });
+
+  it("recusa período declarado sem nenhum movimento dentro", () => {
+    expect(
+      conferirMovimentosNoPeriodo(
+        extrato("2026-10-01", "2026-10-31", ["2026-09-30"]),
+      ),
+    ).toContain("nenhum movimento cai nesse período");
+  });
+
+  it("aceita quando há movimento no período ou quando o arquivo não declara período", () => {
+    expect(
+      conferirMovimentosNoPeriodo(
+        extrato("2026-09-01", "2026-09-30", ["2026-09-30"]),
+      ),
+    ).toBeNull();
+    expect(
+      conferirMovimentosNoPeriodo(extrato(null, null, ["2026-09-30"])),
+    ).toBeNull();
   });
 });

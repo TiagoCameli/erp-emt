@@ -27,7 +27,11 @@ import {
   Combobox,
 } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
-import { importarOfx } from "@/modules/financeiro/conciliacao/actions";
+import {
+  importarOfx,
+  type MovimentoIgnorado,
+} from "@/modules/financeiro/conciliacao/actions";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 
 export interface ImportarOfxDialogProps {
@@ -41,6 +45,7 @@ export interface ImportarOfxDialogProps {
 interface ResultadoImportacao {
   inseridas: number;
   ignoradas: number;
+  ignorados: MovimentoIgnorado[];
   /** Quantos movimentos o casamento automático já vinculou. */
   casadas: number;
   /** Frase do aviso quando o arquivo não é um mês fechado. */
@@ -122,6 +127,7 @@ export function ImportarOfxDialog({
     setResultado({
       inseridas: resposta.inseridas,
       ignoradas: resposta.ignoradas,
+      ignorados: resposta.ignorados,
       casadas: resposta.casadas,
       aviso: resposta.aviso,
     });
@@ -179,6 +185,38 @@ export function ImportarOfxDialog({
                 ) : null}
               </div>
             </div>
+            {/* Os ignorados à vista, não só o número: é o que permite ver
+                que nenhum movimento novo foi tomado por repetido. */}
+            {resultado.ignorados.length > 0 ? (
+              <details className="rounded-md border border-border px-3 py-2 text-detalhe">
+                <summary className="cursor-pointer text-muted-foreground">
+                  {resultado.ignorados.length === 1
+                    ? "1 movimento já estava importado: ver"
+                    : `${resultado.ignorados.length} movimentos já estavam importados: ver`}
+                </summary>
+                <ul className="mt-2 flex max-h-56 flex-col gap-1 overflow-y-auto">
+                  {resultado.ignorados.map((m, i) => (
+                    <li
+                      key={`${m.fitid ?? ""}-${i}`}
+                      className="flex items-baseline gap-3"
+                    >
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatarData(m.data)}
+                      </span>
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        title={m.memo ?? ""}
+                      >
+                        {m.memo ?? "-"}
+                      </span>
+                      <span className="tabular-nums">
+                        {formatarBRL(m.valor)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             {/* O arquivo entrou, mas se ele não cobre o mês inteiro a
                 conferência nasce furada: o extrato do BB de janeiro/2026 vinha
                 de 30/12 a 31/01. Avisar aqui, com o resultado à vista, é o que
