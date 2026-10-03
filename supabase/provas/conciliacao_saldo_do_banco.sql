@@ -65,6 +65,14 @@ begin
   if v_saldo <> 1148 then raise exception 'FALHA 1: saldo em 30/09 = % (esperado 1148)', v_saldo; end if;
   raise notice 'OK 1 saldo do app: 900 em 12/09, 1148 em 30/09';
 
+  -- Antes do corte (31/08): para tras. Em 29/08 o pagamento de 999 de 30/08
+  -- ainda nao tinha saido: 1000 + 999 = 1999. No proprio corte, 1000.
+  v_saldo := public.fn_conciliacao_saldo_app(v_conta, date '2026-08-29');
+  if v_saldo <> 1999 then raise exception 'FALHA 1b: saldo em 29/08 = % (esperado 1999)', v_saldo; end if;
+  v_saldo := public.fn_conciliacao_saldo_app(v_conta, date '2026-08-31');
+  if v_saldo <> 1000 then raise exception 'FALHA 1b: saldo no corte = % (esperado 1000)', v_saldo; end if;
+  raise notice 'OK 1b antes do corte: 1999 em 29/08, 1000 no corte';
+
   -- importacao nova grava o saldo e o painel compara
   v_import := public.fn_conciliacao_importar(v_conta, 'PROVA.ofx', date '2026-09-01', date '2026-09-30',
     1148, date '2026-10-01',

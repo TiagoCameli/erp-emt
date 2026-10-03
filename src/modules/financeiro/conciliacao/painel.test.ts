@@ -176,6 +176,8 @@ describe("statusDoMes", () => {
     app: bate ? 100 : 90,
     diferenca: bate ? 0 : 10,
     bate,
+    corte: null,
+    antesDoCorte: false,
   });
 
   it("só declara conciliado com as listas zeradas e o saldo batendo", () => {

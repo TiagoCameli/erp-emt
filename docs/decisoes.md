@@ -5084,3 +5084,9 @@ Autorizado pelo Tiago ("pode continuar"). Em duas etapas, pela lição de 27/08:
 ## 2026-10-03 - Importar OFX escolhendo o intervalo do arquivo
 
 **Pedido do Tiago:** o BB exporta de 30/12 a 31/01 e o aviso pedia "mês fechado"; ele quer escolher de quando a quando usar do arquivo. **Decisão:** o diálogo lê o OFX no navegador ao escolher o arquivo, mostra o período e os movimentos, e oferece "Usar movimentos de / até", já com o mês mais completo do arquivo (`sugerirIntervalo`: 30/12 a 31/01 vira 01/01 a 31/01). Só os movimentos do intervalo entram e o período gravado é o intervalo (`recortarExtrato`). O saldo final do arquivo só é gravado se o intervalo termina no último dia do arquivo; num recorte que para antes, ele não confere e o mês fica "sem saldo".
+
+## 2026-10-03 - Conciliação: saldo do app em datas anteriores ao corte
+
+**Problema (Tiago):** o saldo do app em 31/12/2025 aparecia muito maior que o real. A conta tem saldo inicial em 21/08/2026 (corte da migração) e o cálculo só somava o que vinha depois: para qualquer data anterior devolvia o próprio saldo inicial (R$ 155.484,34 no BB 102.124-9). **Decisão:** antes do corte, o saldo é calculado para trás: saldo inicial menos os movimentos entre a data e o corte, com os mesmos filtros. Depois do corte nada muda (conferido igual a `fn_saldo_conta` nas 9 contas). O painel marca `antesDoCorte` e o cartão avisa que a diferença pode vir de qualquer mês até o corte.
+
+**O que isso mostrou no BB 102.124-9:** janeiro e fevereiro de 2025 ficam com a mesma diferença (R$ 900.437,41): o movimento desses meses confere, e a diferença vem de meses posteriores, provavelmente o Rende Fácil nunca lançado antes do corte e o saldo inicial da corrente incluindo o dinheiro aplicado.
