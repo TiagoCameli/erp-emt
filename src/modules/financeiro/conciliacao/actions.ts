@@ -9,10 +9,16 @@ import { idSchema } from "@/lib/id";
 import {
   contaDoArquivoConfere,
   conferirMesFechado,
+  conferirMovimentosNoPeriodo,
   decodificarOfx,
+  numerarRepetidos,
   parseOfx,
 } from "@/lib/ofx";
-import { exigirPermissao, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import {
+  exigirPermissao,
+  getUsuarioLogado,
+  temPermissao,
+} from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { casarAutomaticamente } from "@/modules/financeiro/conciliacao/casamento";
 import {
@@ -31,6 +37,8 @@ export type ResultadoImportacao =
       ok: true;
       inseridas: number;
       ignoradas: number;
+      /** Os que já estavam importados, para a pessoa ver quais foram. */
+      ignorados: MovimentoIgnorado[];
       /** Quantos movimentos o casamento automático já vinculou. */
       casadas: number;
       aviso: string | null;
@@ -46,11 +54,32 @@ interface TransacaoImportacao {
   valor: number;
   memo: string | null;
   fitid: string | null;
+  /** Posição entre os iguais sem FITID no arquivo (Bloco C). */
+  n: number | null;
+}
+
+/** Movimento que já estava importado e não entrou de novo. */
+export interface MovimentoIgnorado {
+  data: string;
+  valor: number;
+  memo: string | null;
+  fitid: string | null;
 }
 
 const resultadoImportacaoSchema = z.object({
   inseridas: z.number(),
   ignoradas: z.number(),
+  ignorados: z
+    .array(
+      z.object({
+        data: z.string(),
+        valor: z.coerce.number(),
+        memo: z.string().nullable(),
+        fitid: z.string().nullable(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 const resultadoLoteSchema = z.object({
@@ -157,13 +186,16 @@ export async function importarOfx(
     };
   }
 
-  const transacoes: TransacaoImportacao[] = extrato.transacoes.map(
-    (transacao) => ({
+  const foraDoPeriodo = conferirMovimentosNoPeriodo(extrato);
+  if (foraDoPeriodo) return { erro: foraDoPeriodo };
+
+  const transacoes: TransacaoImportacao[] = numerarRepetidos(
+    extrato.transacoes.map((transacao) => ({
       data: transacao.data,
       valor: transacao.valor,
       memo: transacao.memo,
       fitid: transacao.fitid,
-    }),
+    })),
   );
 
   // Quando o OFX não traz DTSTART/DTEND, derivamos o período pela menor e maior
@@ -218,6 +250,7 @@ export async function importarOfx(
     ok: true,
     inseridas: resumo.data.inseridas,
     ignoradas: resumo.data.ignoradas,
+    ignorados: resumo.data.ignorados,
     casadas,
     // A conferência é do MÊS FECHADO e vale sobre o período que o ARQUIVO
     // declara, não sobre o que foi deduzido das transações.
@@ -269,7 +302,9 @@ const casarSchema = z.object({
  * ajusta a diferença como juros/desconto (`ajustar`), sempre com evento na
  * trilha da parcela.
  */
-export async function casar(entrada: z.input<typeof casarSchema>): Promise<ResultadoAcao> {
+export async function casar(
+  entrada: z.input<typeof casarSchema>,
+): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "editar");
   } catch {
@@ -333,7 +368,10 @@ const mesCompetenciaSchema = z
   .regex(/^\d{4}-\d{2}-01$/, "Informe o mês de referência");
 
 const lancarSchema = z.object({
-  transacaoIds: z.array(idSchema).min(1, "Escolha ao menos um movimento").max(500),
+  transacaoIds: z
+    .array(idSchema)
+    .min(1, "Escolha ao menos um movimento")
+    .max(500),
   /** Só vale quando é um movimento: no lote cada um leva o próprio histórico. */
   descricao: z.string().trim().max(500).optional(),
   centroCustoId: idSchema,
@@ -388,7 +426,10 @@ export async function lancarMovimentos(
       } as unknown as Json,
     });
     if (error) {
-      falhas.push({ id: transacaoId, erro: mensagem(error, "Não foi possível lançar") });
+      falhas.push({
+        id: transacaoId,
+        erro: mensagem(error, "Não foi possível lançar"),
+      });
     } else {
       feitos += 1;
     }
@@ -430,14 +471,20 @@ export async function transferirMovimentos(
   const falhas: { id: string; erro: string }[] = [];
   let feitos = 0;
   for (const transacaoId of dados.data.transacaoIds) {
-    const { error } = await supabase.rpc("fn_conciliacao_lancar_transferencia", {
-      p_transacao_id: transacaoId,
-      p_conta_contraparte_id: dados.data.contaContraparteId,
-      p_centro_custo_id: dados.data.centroCustoId,
-      p_descricao: dados.data.descricao,
-    });
+    const { error } = await supabase.rpc(
+      "fn_conciliacao_lancar_transferencia",
+      {
+        p_transacao_id: transacaoId,
+        p_conta_contraparte_id: dados.data.contaContraparteId,
+        p_centro_custo_id: dados.data.centroCustoId,
+        p_descricao: dados.data.descricao,
+      },
+    );
     if (error) {
-      falhas.push({ id: transacaoId, erro: mensagem(error, "Não foi possível lançar") });
+      falhas.push({
+        id: transacaoId,
+        erro: mensagem(error, "Não foi possível lançar"),
+      });
     } else {
       feitos += 1;
     }
@@ -463,8 +510,10 @@ export async function trocarContaParcela(
   } catch {
     return { erro: "Sem permissão para conciliar" };
   }
-  if (!idSchema.safeParse(parcelaId).success) return { erro: "Parcela inválida" };
-  if (!idSchema.safeParse(contaId).success) return { erro: "Escolha a conta certa" };
+  if (!idSchema.safeParse(parcelaId).success)
+    return { erro: "Parcela inválida" };
+  if (!idSchema.safeParse(contaId).success)
+    return { erro: "Escolha a conta certa" };
   const motivoOk = motivoSchema.safeParse(motivo);
   if (!motivoOk.success) return { erro: "Informe o motivo da troca de conta" };
 
@@ -502,7 +551,8 @@ export async function excluirLancamentoDaConciliacao(
   if (!temPermissao(usuario, "financeiro.lancamentos", "excluir")) {
     return { erro: "Sem permissão para excluir lançamentos" };
   }
-  if (!idSchema.safeParse(parcelaId).success) return { erro: "Parcela inválida" };
+  if (!idSchema.safeParse(parcelaId).success)
+    return { erro: "Parcela inválida" };
   const motivoOk = motivoSchema.safeParse(motivo);
   if (!motivoOk.success) return { erro: "Informe o motivo da exclusão" };
 

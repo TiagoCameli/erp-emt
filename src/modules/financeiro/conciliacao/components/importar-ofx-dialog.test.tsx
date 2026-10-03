@@ -52,9 +52,8 @@ async function importar(resposta: Awaited<ReturnType<typeof importarOfx>>) {
 
   // O Dialog do Radix monta em portal, fora do container do render: o
   // seletor de arquivo vive no document.body.
-  const entrada = document.body.querySelector<HTMLInputElement>(
-    'input[type="file"]',
-  );
+  const entrada =
+    document.body.querySelector<HTMLInputElement>('input[type="file"]');
   if (!entrada) throw new Error("o seletor de arquivo sumiu do diálogo");
 
   const arquivo = new File(["<OFX></OFX>"], "01.2026 Banco do Brasil.ofx", {
@@ -76,6 +75,7 @@ describe("ImportarOfxDialog", () => {
       ok: true,
       inseridas: 280,
       ignoradas: 0,
+      ignorados: [],
       casadas: 0,
       aviso:
         "O arquivo vai de 30/12/2025 a 31/01/2026, que não é um mês fechado. Exporte do dia 1 ao último dia do mês.",
@@ -90,11 +90,50 @@ describe("ImportarOfxDialog", () => {
   });
 
   it("não inventa aviso quando o mês está fechado", async () => {
-    await importar({ ok: true, inseridas: 4, ignoradas: 0, casadas: 0, aviso: null });
+    await importar({
+      ok: true,
+      inseridas: 4,
+      ignoradas: 0,
+      ignorados: [],
+      casadas: 0,
+      aviso: null,
+    });
 
-    expect(await screen.findByText("4 transações importadas")).toBeInTheDocument();
+    expect(
+      await screen.findByText("4 transações importadas"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("O extrato não é de um mês fechado"),
     ).not.toBeInTheDocument();
+  });
+
+  it("mostra quais movimentos já estavam importados, não só quantos", async () => {
+    await importar({
+      ok: true,
+      inseridas: 1,
+      ignoradas: 2,
+      ignorados: [
+        {
+          data: "2026-09-02",
+          valor: -150,
+          memo: "PIX - ENVIADO - DIARIA FULANO",
+          fitid: null,
+        },
+        {
+          data: "2026-09-02",
+          valor: -150,
+          memo: "PIX - ENVIADO - DIARIA BELTRANO",
+          fitid: null,
+        },
+      ],
+      casadas: 0,
+      aviso: null,
+    });
+    expect(
+      await screen.findByText("2 movimentos já estavam importados: ver"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("PIX - ENVIADO - DIARIA BELTRANO"),
+    ).toBeInTheDocument();
   });
 });

@@ -231,3 +231,45 @@ export function parseOfx(conteudo: string): ExtratoOfx {
     transacoes,
   };
 }
+
+/**
+ * Posição de cada movimento SEM FITID entre os iguais (mesma data, valor e
+ * histórico) dentro do MESMO arquivo: 1, 2, 3... Vira parte da chave de
+ * duplicidade. Sem isso, duas diárias de R$ 150,00 no mesmo dia para a mesma
+ * pessoa viravam uma só e a segunda era descartada como "já importada".
+ * Reimportar o mesmo arquivo continua deduplicando, porque as posições se
+ * repetem. Movimento com FITID recebe null: o FITID já o identifica.
+ */
+export function numerarRepetidos<
+  T extends {
+    data: string;
+    valor: number;
+    memo: string | null;
+    fitid: string | null;
+  },
+>(transacoes: readonly T[]): (T & { n: number | null })[] {
+  const contagem = new Map<string, number>();
+  return transacoes.map((t) => {
+    if (t.fitid) return { ...t, n: null };
+    const chave = `${t.data}|${t.valor.toFixed(2)}|${t.memo ?? ""}`;
+    const n = (contagem.get(chave) ?? 0) + 1;
+    contagem.set(chave, n);
+    return { ...t, n };
+  });
+}
+
+/**
+ * Arquivo que declara o período (DTSTART/DTEND) e não tem nenhum movimento
+ * dentro dele: quase sempre é exportação errada (outro mês, filtro do banco).
+ * Devolve a mensagem de recusa, ou null.
+ */
+export function conferirMovimentosNoPeriodo(
+  extrato: ExtratoOfx,
+): string | null {
+  if (!extrato.periodoInicio || !extrato.periodoFim) return null;
+  const dentro = extrato.transacoes.some(
+    (t) => t.data >= extrato.periodoInicio! && t.data <= extrato.periodoFim!,
+  );
+  if (dentro) return null;
+  return `O arquivo declara o período de ${dataBr(extrato.periodoInicio)} a ${dataBr(extrato.periodoFim)}, mas nenhum movimento cai nesse período. Confira se exportou o mês certo.`;
+}
