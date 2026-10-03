@@ -1947,6 +1947,34 @@ export type Database = {
         };
         Relationships: [];
       };
+      conciliacao_fechamentos: {
+        Row: {
+          conta_bancaria_id: string;
+          created_at: string;
+          created_by: string | null;
+          fechado_em: string;
+          fechado_por: string | null;
+          id: string;
+          mes: string;
+          motivo_reabertura: string | null;
+          reaberto_em: string | null;
+          reaberto_por: string | null;
+          saldo_app: number;
+          saldo_banco: number;
+          updated_at: string;
+        };
+        Insert: {
+          conta_bancaria_id: string;
+          mes: string;
+          saldo_app: number;
+          saldo_banco: number;
+          [coluna: string]: unknown;
+        };
+        Update: {
+          [coluna: string]: unknown;
+        };
+        Relationships: [];
+      };
       contas_bancarias: {
         Row: {
           agencia: string | null;
@@ -9421,6 +9449,14 @@ export type Database = {
           observacao: string;
           reaberturas: number;
         }[];
+      };
+      fn_conciliacao_fechar_mes: {
+        Args: { p_conta_id: string; p_mes: string };
+        Returns: string;
+      };
+      fn_conciliacao_reabrir_mes: {
+        Args: { p_conta_id: string; p_mes: string; p_motivo: string };
+        Returns: undefined;
       };
       fn_conciliacao_importar: {
         Args: {
