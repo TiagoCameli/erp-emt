@@ -12,6 +12,8 @@ import { EscolherConta } from "@/modules/financeiro/conciliacao/components/escol
 import {
   montarVisoes,
   periodoDoMes,
+  periodoDosExtratos,
+  TODOS_OS_MESES,
 } from "@/modules/financeiro/conciliacao/painel";
 import {
   carregarPainel,
@@ -117,8 +119,19 @@ export default async function PaginaConciliacao({
   }
 
   const meses = mesesDosExtratos(extratos, conta.id);
-  const mes = mesParam && meses.includes(mesParam) ? mesParam : meses[0];
-  const periodo = mes ? periodoDoMes(mes) : null;
+  // "Todos os meses": do primeiro ao último extrato importado da conta, as
+  // três visões juntas.
+  const todos = mesParam === TODOS_OS_MESES && meses.length > 0;
+  const mes = todos
+    ? TODOS_OS_MESES
+    : mesParam && meses.includes(mesParam)
+      ? mesParam
+      : meses[0];
+  const periodo = todos
+    ? periodoDosExtratos(extratos.filter((e) => e.contaBancariaId === conta.id))
+    : mes
+      ? periodoDoMes(mes)
+      : null;
 
   if (!mes || !periodo) {
     return (

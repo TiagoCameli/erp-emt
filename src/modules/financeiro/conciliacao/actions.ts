@@ -26,6 +26,8 @@ import {
   candidatosDoPainel,
   movimentosLivres,
   periodoDoMes,
+  periodoDosExtratos,
+  TODOS_OS_MESES,
 } from "@/modules/financeiro/conciliacao/painel";
 import { carregarPainel } from "@/modules/financeiro/conciliacao/queries";
 
@@ -289,7 +291,17 @@ export async function casarAutomatico(
     return { erro: "Sem permissão para conciliar" };
   }
   if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
-  const periodo = periodoDoMes(mes);
+  let periodo = periodoDoMes(mes);
+  if (mes === TODOS_OS_MESES) {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("extratos_ofx")
+      .select("periodo_inicio, periodo_fim")
+      .eq("conta_bancaria_id", contaId);
+    periodo = periodoDosExtratos(
+      (data ?? []).map((e) => ({ periodoInicio: e.periodo_inicio, periodoFim: e.periodo_fim })),
+    );
+  }
   if (!periodo) return { erro: "Mês inválido" };
 
   try {

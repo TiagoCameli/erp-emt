@@ -98,11 +98,17 @@ const PALAVRAS_VAZIAS = new Set([
 ]);
 
 /** Tira acento, caixa e pontuação, e quebra em palavras que identificam. */
+const cachePalavras = new Map<string, string[]>();
+
 export function palavrasDoNome(texto: string | null | undefined): string[] {
   if (!texto) return [];
-  return texto
+  // Os mesmos nomes de fornecedor se repetem em milhares de comparações
+  // ("todos os meses"): normalizar uma vez só.
+  const guardado = cachePalavras.get(texto);
+  if (guardado) return guardado;
+  const palavras = texto
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toUpperCase()
     .replace(/[^A-Z0-9 ]+/g, " ")
     .split(/\s+/)
@@ -110,6 +116,9 @@ export function palavrasDoNome(texto: string | null | undefined): string[] {
       (palavra) =>
         palavra.length >= 3 && !/^\d+$/.test(palavra) && !PALAVRAS_VAZIAS.has(palavra),
     );
+  if (cachePalavras.size > 50000) cachePalavras.clear();
+  cachePalavras.set(texto, palavras);
+  return palavras;
 }
 
 /**
@@ -293,13 +302,15 @@ export function sugerirParaMovimento<C extends CandidatoCasavel>(
     aberta: 3,
   };
 
+  // Os filtros baratos (sentido, valor, data) vêm antes da comparação de
+  // nomes: com todos os meses abertos são milhares de candidatos por movimento.
   return candidatos
     .filter((candidato) => candidato.sentido === sentido)
     .map((candidato) => ({
       candidato,
       diferenca: (banco - centavos(candidato.valor)) / 100,
       dias: diasEntre(candidato.data, movimento.dataMovimento),
-      nomeBate: palavrasEmComum(movimento.memo, candidato.nomes) > 0,
+      nomeBate: false,
     }))
     .filter((sugestao) => {
       const janela =
@@ -309,6 +320,10 @@ export function sugerirParaMovimento<C extends CandidatoCasavel>(
       const limite = sugestao.candidato.especie === "transferencia" ? 0 : tolerancia;
       return Math.abs(sugestao.diferenca) <= limite + 1e-9;
     })
+    .map((sugestao) => ({
+      ...sugestao,
+      nomeBate: palavrasEmComum(movimento.memo, sugestao.candidato.nomes) > 0,
+    }))
     .sort(
       (a, b) =>
         Number(a.diferenca !== 0) - Number(b.diferenca !== 0) ||
