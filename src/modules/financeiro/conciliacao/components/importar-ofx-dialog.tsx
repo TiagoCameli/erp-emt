@@ -32,6 +32,8 @@ import {
   type MovimentoIgnorado,
 } from "@/modules/financeiro/conciliacao/actions";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { decodificarOfx, parseOfx, sugerirIntervalo, type ExtratoOfx } from "@/lib/ofx";
+import { Input } from "@/components/ui/input";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 
 export interface ImportarOfxDialogProps {
@@ -66,6 +68,10 @@ export function ImportarOfxDialog({
   const router = useRouter();
   const [contaId, setContaId] = React.useState(contaInicialId ?? "");
   const [arquivo, setArquivo] = React.useState<File | null>(null);
+  // O que o arquivo traz, lido aqui mesmo para a pessoa escolher o intervalo.
+  const [previa, setPrevia] = React.useState<ExtratoOfx | null>(null);
+  const [de, setDe] = React.useState("");
+  const [ate, setAte] = React.useState("");
   const [erro, setErro] = React.useState<string | null>(null);
   const [enviando, setEnviando] = React.useState(false);
   const [arrastando, setArrastando] = React.useState(false);
@@ -77,6 +83,9 @@ export function ImportarOfxDialog({
   function limpar() {
     setContaId(contaInicialId ?? "");
     setArquivo(null);
+    setPrevia(null);
+    setDe("");
+    setAte("");
     setErro(null);
     setEnviando(false);
     setArrastando(false);
@@ -97,7 +106,25 @@ export function ImportarOfxDialog({
     }
     setErro(null);
     setArquivo(escolhido);
+    setPrevia(null);
+    void escolhido.arrayBuffer().then((bytes) => {
+      const extrato = parseOfx(decodificarOfx(bytes));
+      setPrevia(extrato);
+      const sugerido = sugerirIntervalo(extrato);
+      setDe(sugerido?.de ?? "");
+      setAte(sugerido?.ate ?? "");
+    });
   }
+
+  const inicioArquivo =
+    previa?.periodoInicio ?? previa?.transacoes.map((t) => t.data).sort()[0] ?? "";
+  const fimArquivo =
+    previa?.periodoFim ?? previa?.transacoes.map((t) => t.data).sort().at(-1) ?? "";
+  const noIntervalo =
+    previa && de && ate ? previa.transacoes.filter((t) => t.data >= de && t.data <= ate).length : 0;
+  // Arquivo sem movimento nenhum o servidor recusa com a mensagem certa.
+  const intervaloInvalido =
+    !!previa && previa.transacoes.length > 0 && (!de || !ate || de > ate || noIntervalo === 0);
 
   async function importar() {
     if (!contaId) {
@@ -115,6 +142,10 @@ export function ImportarOfxDialog({
     const formData = new FormData();
     formData.append("contaId", contaId);
     formData.append("arquivo", arquivo);
+    if (de && ate) {
+      formData.append("de", de);
+      formData.append("ate", ate);
+    }
 
     const resposta = await importarOfx(formData);
     setEnviando(false);
@@ -302,6 +333,49 @@ export function ImportarOfxDialog({
               />
             </div>
 
+            {previa ? (
+              <div className="flex flex-col gap-3 rounded-md border border-border px-3 py-3">
+                <p className="text-detalhe">
+                  O arquivo vai de {formatarData(inicioArquivo)} a {formatarData(fimArquivo)}, com{" "}
+                  {previa.transacoes.length} movimentos. Escolha o que usar:
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <CampoFormulario id="ofx-de" rotulo="Usar movimentos de">
+                    <Input
+                      id="ofx-de"
+                      type="date"
+                      value={de}
+                      min={inicioArquivo}
+                      max={fimArquivo}
+                      onChange={(e) => setDe(e.target.value)}
+                      disabled={enviando}
+                      className="tabular-nums"
+                    />
+                  </CampoFormulario>
+                  <CampoFormulario id="ofx-ate" rotulo="até">
+                    <Input
+                      id="ofx-ate"
+                      type="date"
+                      value={ate}
+                      min={inicioArquivo}
+                      max={fimArquivo}
+                      onChange={(e) => setAte(e.target.value)}
+                      disabled={enviando}
+                      className="tabular-nums"
+                    />
+                  </CampoFormulario>
+                </div>
+                <p className={cn("text-legenda", intervaloInvalido ? "text-status-rejeitado" : "text-muted-foreground")}>
+                  {intervaloInvalido
+                    ? "Nenhum movimento nesse intervalo."
+                    : `${noIntervalo} de ${previa.transacoes.length} movimentos entram.`}{" "}
+                  {previa.saldoFinal !== null && ate && ate < fimArquivo
+                    ? "O saldo final do arquivo não será usado, porque o intervalo para antes do fim do arquivo."
+                    : null}
+                </p>
+              </div>
+            ) : null}
+
             <DialogFooter>
               <Button
                 variant="outline"
@@ -312,7 +386,7 @@ export function ImportarOfxDialog({
               </Button>
               <Button
                 onClick={() => void importar()}
-                disabled={enviando || !contaId || !arquivo}
+                disabled={enviando || !contaId || !arquivo || intervaloInvalido}
               >
                 {enviando ? (
                   <LoaderCircle className="animate-spin" />

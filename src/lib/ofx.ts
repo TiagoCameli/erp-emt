@@ -273,3 +273,56 @@ export function conferirMovimentosNoPeriodo(
   if (dentro) return null;
   return `O arquivo declara o período de ${dataBr(extrato.periodoInicio)} a ${dataBr(extrato.periodoFim)}, mas nenhum movimento cai nesse período. Confira se exportou o mês certo.`;
 }
+
+/** Último dia (ISO) do mês de uma data ISO. */
+function fimDoMes(iso: string): string {
+  const [ano, mes] = iso.split("-").map(Number);
+  return `${iso.slice(0, 7)}-${String(ultimoDiaDoMes(ano, mes)).padStart(2, "0")}`;
+}
+
+/**
+ * O intervalo que a importação sugere usar: o período do arquivo quando ele
+ * já é um mês só; quando atravessa meses (o BB manda de 30/12 a 31/01), o mês
+ * que o arquivo mais cobre, recortado ao arquivo. Empate fica com o mais
+ * recente. Sem período declarado, as datas dos próprios movimentos.
+ */
+export function sugerirIntervalo(extrato: ExtratoOfx): { de: string; ate: string } | null {
+  const datas = extrato.transacoes.map((t) => t.data).sort();
+  const inicio = extrato.periodoInicio ?? datas[0];
+  const fim = extrato.periodoFim ?? datas[datas.length - 1];
+  if (!inicio || !fim) return null;
+  if (inicio.slice(0, 7) === fim.slice(0, 7)) return { de: inicio, ate: fim };
+
+  let melhor = { de: inicio, ate: fim, dias: -1 };
+  let cursor = `${inicio.slice(0, 7)}-01`;
+  while (cursor <= fim) {
+    const de = cursor < inicio ? inicio : cursor;
+    const fimMes = fimDoMes(cursor);
+    const ate = fimMes > fim ? fim : fimMes;
+    const dias = Number(ate.slice(8, 10)) - Number(de.slice(8, 10)) + 1;
+    if (dias >= melhor.dias) melhor = { de, ate, dias };
+    const [ano, mes] = cursor.split("-").map(Number);
+    cursor = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+  }
+  return { de: melhor.de, ate: melhor.ate };
+}
+
+/**
+ * O extrato recortado ao intervalo escolhido na importação: só os movimentos
+ * de `de` a `ate`, e o período passa a ser o intervalo. O saldo final do
+ * arquivo só vale se o intervalo termina no último dia do arquivo: o saldo é
+ * o do fim do extrato, e num recorte que para antes ele não confere.
+ */
+export function recortarExtrato(extrato: ExtratoOfx, de: string, ate: string): ExtratoOfx {
+  const fimDoArquivo =
+    extrato.periodoFim ?? extrato.transacoes.map((t) => t.data).sort().at(-1) ?? null;
+  const saldoVale = fimDoArquivo !== null && ate >= fimDoArquivo;
+  return {
+    ...extrato,
+    periodoInicio: de,
+    periodoFim: ate,
+    saldoFinal: saldoVale ? extrato.saldoFinal : null,
+    saldoFinalData: saldoVale ? extrato.saldoFinalData : null,
+    transacoes: extrato.transacoes.filter((t) => t.data >= de && t.data <= ate),
+  };
+}
