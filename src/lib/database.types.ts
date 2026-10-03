@@ -2666,6 +2666,8 @@ export type Database = {
           nome_arquivo: string | null;
           periodo_fim: string | null;
           periodo_inicio: string | null;
+          saldo_final: number | null;
+          saldo_final_data: string | null;
         };
         Insert: {
           conta_bancaria_id: string;
@@ -2676,6 +2678,8 @@ export type Database = {
           nome_arquivo?: string | null;
           periodo_fim?: string | null;
           periodo_inicio?: string | null;
+          saldo_final?: number | null;
+          saldo_final_data?: string | null;
         };
         Update: {
           conta_bancaria_id?: string;
@@ -2686,6 +2690,8 @@ export type Database = {
           nome_arquivo?: string | null;
           periodo_fim?: string | null;
           periodo_inicio?: string | null;
+          saldo_final?: number | null;
+          saldo_final_data?: string | null;
         };
         Relationships: [
           {
@@ -9415,6 +9421,22 @@ export type Database = {
           observacao: string;
           reaberturas: number;
         }[];
+      };
+      fn_conciliacao_importar: {
+        Args: {
+          p_conta_id: string;
+          p_nome: string;
+          p_periodo_fim: string;
+          p_periodo_inicio: string;
+          p_saldo_final: number | null;
+          p_saldo_final_data: string | null;
+          p_transacoes: Json;
+        };
+        Returns: Json;
+      };
+      fn_conciliacao_saldo_app: {
+        Args: { p_conta_id: string; p_data: string };
+        Returns: number;
       };
       fn_conciliacao_casar: {
         Args: {

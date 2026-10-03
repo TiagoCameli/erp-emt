@@ -5018,3 +5018,13 @@ importa pela tela.
 7. Importar recusa OFX de outra conta (ACCTID contra o número cadastrado) e já roda o casamento automático.
 8. **Travas (revisão, mesmo dia, `20261002200000_conciliacao_por_conta_travas.sql`):** baixa pela conciliação em parcela a pagar só se ela estiver aprovada (a conciliação não é atalho da fila de aprovação); mudar conta ou valor de parcela já paga pede também pagamentos/criar ou recebimentos/editar e respeita competência fechada; diferença ajustável de no máximo R$ 1,00; excluir só lançamento de uma parcela (com várias, apagaria as outras); o painel oferece parcela aberta ou de outra conta com até R$ 1,00 de diferença e filtra as parcelas cedo (130 ms no mês do BB).
 9. **Encoding do OFX:** o BB manda `CHARSET:1252` e o import lia como UTF-8, por isso 100 históricos do BB estão gravados com "�". `decodificarOfx` respeita o charset daqui para frente; os já gravados só se corrigem com o arquivo original (pelo FITID).
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco B: o mês só fecha com o saldo do banco
+
+**Decisão:** o parser lê `LEDGERBAL` (`BALAMT`, `DTASOF`) e o extrato guarda `saldo_final`/`saldo_final_data`. "Mês conciliado" exige Faltam no app = 0, Fora do banco = 0 **e** saldo do banco = saldo do app no último dia do período (`statusDoMes`). Sem saldo no OFX o mês nunca se declara fechado.
+1. Importação nova `fn_conciliacao_importar` (grava o saldo). `fn_importar_extrato` ficou intacta: mudar a assinatura criaria sobrecarga ambígua no PostgREST e quebraria o import no ar até o deploy. Remover a antiga depende de ok do Tiago.
+2. `fn_conciliacao_saldo_app(conta, data)`: mesma base de `fn_saldo_conta` (conferido ao centavo nas 9 contas com data futura), com corte na data. Quem não tem `fn_pode_ver_saldo` recebe null. Não toca em `fn_rel_posicao_bancaria` nem no que `fn_pagar_parcela` usa.
+3. Data do saldo = menor entre `DTASOF` e o fim do extrato: o BB põe no `DTASOF` o dia da exportação (01/10), mas o saldo é o do fim do período.
+4. O painel devolve `bate` calculado no servidor também para quem não vê valores.
+
+**Efeito no BB 102.124-9 de 09/2026:** o OFX traz saldo final R$ 0,00 (o Rende Fácil aplica tudo todo dia) e o app tem R$ 150.251,58 na corrente em 30/09. A diferença é o dinheiro aplicado que ainda não foi lançado como transferência para a subconta; o mês só fecha depois disso.

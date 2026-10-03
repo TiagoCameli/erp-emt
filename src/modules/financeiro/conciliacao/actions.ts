@@ -173,11 +173,14 @@ export async function importarOfx(
     extrato.periodoInicio ?? datas.reduce((a, b) => (a < b ? a : b));
   const fim = extrato.periodoFim ?? datas.reduce((a, b) => (a > b ? a : b));
 
-  const { data, error } = await supabase.rpc("fn_importar_extrato", {
+  const { data, error } = await supabase.rpc("fn_conciliacao_importar", {
     p_conta_id: contaId,
     p_nome: arquivo.name,
     p_periodo_inicio: inicio,
     p_periodo_fim: fim,
+    // O saldo final do OFX é a prova do mês (Bloco B). Sem ele, null.
+    p_saldo_final: extrato.saldoFinal,
+    p_saldo_final_data: extrato.saldoFinalData,
     p_transacoes: transacoes as unknown as Json,
   });
 

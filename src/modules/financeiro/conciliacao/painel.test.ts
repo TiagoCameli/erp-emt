@@ -4,6 +4,7 @@ import { contaDoArquivoConfere } from "@/lib/ofx";
 import {
   candidatosDoPainel,
   montarVisoes,
+  statusDoMes,
   painelSchema,
   periodoDoMes,
   somar,
@@ -35,6 +36,7 @@ function parcela(parcial: Partial<ParcelaLivre>): ParcelaLivre {
 }
 
 const painel: PainelConciliacao = {
+  saldo: null,
   transacoes: [
     {
       id: "t1",
@@ -158,5 +160,36 @@ describe("decodificarOfx", () => {
     const { decodificarOfx } = await import("@/lib/ofx");
     const bytes = new TextEncoder().encode("<OFX><MEMO>TRANSFERÊNCIA</OFX>");
     expect(decodificarOfx(bytes)).toContain("TRANSFERÊNCIA");
+  });
+});
+
+describe("statusDoMes", () => {
+  const vazio = { faltamNoApp: [], foraDoBanco: [] };
+  const saldo = (bate: boolean | null) => ({
+    data: "2026-09-30",
+    temSaldoNoArquivo: bate !== null,
+    podeVer: true,
+    banco: 100,
+    app: bate ? 100 : 90,
+    diferenca: bate ? 0 : 10,
+    bate,
+  });
+
+  it("só declara conciliado com as listas zeradas e o saldo batendo", () => {
+    expect(statusDoMes(vazio, saldo(true))).toBe("conciliado");
+  });
+
+  it("listas zeradas com saldo diferente: falta bater o saldo", () => {
+    expect(statusDoMes(vazio, saldo(false))).toBe("falta_saldo");
+  });
+
+  it("sem saldo no arquivo ou sem extrato no fim do mês nunca fecha sozinho", () => {
+    expect(statusDoMes(vazio, saldo(null))).toBe("sem_saldo");
+    expect(statusDoMes(vazio, null)).toBe("sem_saldo");
+  });
+
+  it("com movimento pendente fica aberto mesmo com o saldo batendo", () => {
+    const visoes = montarVisoes(painel, { inicio: "2026-09-01", fim: "2026-09-30" });
+    expect(statusDoMes(visoes, saldo(true))).toBe("aberto");
   });
 });

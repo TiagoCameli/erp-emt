@@ -56,6 +56,7 @@ import {
   montarVisoes,
   movimentosLivres,
   somar,
+  statusDoMes,
   type CandidatoDoPainel,
   type ItemForaDoBanco,
   type PainelConciliacao,
@@ -188,8 +189,8 @@ export function ConciliacaoCliente({
   const somaFaltam = somar(visoes.faltamNoApp.map((t) => t.valor));
   const somaFora = somar(visoes.foraDoBanco.map((i) => i.valor));
   const total = painel.transacoes.length;
-  const fechado =
-    visoes.faltamNoApp.length === 0 && visoes.foraDoBanco.length === 0;
+  const status = statusDoMes(visoes, painel.saldo);
+  const saldo = painel.saldo;
 
   function trocarConta_(contaId: string) {
     router.push(`?${new URLSearchParams({ conta: contaId }).toString()}`);
@@ -352,14 +353,65 @@ export function ConciliacaoCliente({
           titulo="Casados"
           valor={`${visoes.casados.length} de ${total}`}
           detalhe={
-            fechado && total > 0
-              ? "Mês conciliado"
-              : total > 0
-                ? `${Math.round((visoes.casados.length / total) * 100)}% do extrato`
-                : undefined
+            status === "conciliado" ? (
+              "Mês conciliado"
+            ) : status === "falta_saldo" ? (
+              saldo?.diferenca != null ? (
+                <>
+                  Falta bater o saldo (<MoneyText valor={saldo.diferenca} />)
+                </>
+              ) : (
+                "Falta bater o saldo"
+              )
+            ) : status === "sem_saldo" ? (
+              "Sem saldo do banco para fechar"
+            ) : total > 0 ? (
+              `${Math.round((visoes.casados.length / total) * 100)}% do extrato`
+            ) : undefined
           }
           href={hrefDe(conta.id, mes, "casados")}
           className={cn(visao === "casados" && "border-foreground")}
+        />
+        <KPICard
+          titulo={
+            saldo ? `Saldo em ${formatarData(saldo.data).slice(0, 5)}` : "Saldo"
+          }
+          valor={
+            !saldo ? (
+              "Sem extrato no fim do mês"
+            ) : !saldo.temSaldoNoArquivo ? (
+              "O OFX não trouxe saldo"
+            ) : !saldo.podeVer ? (
+              <span
+                className={cn(
+                  saldo.bate ? "text-status-aprovado" : "text-status-rejeitado",
+                )}
+              >
+                {saldo.bate ? "Bate" : "Não bate"}
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "tabular-nums",
+                  saldo.bate ? "text-status-aprovado" : "text-status-rejeitado",
+                )}
+              >
+                <MoneyText valor={saldo.diferenca ?? 0} />
+              </span>
+            )
+          }
+          detalhe={
+            saldo?.temSaldoNoArquivo && saldo.podeVer ? (
+              <>
+                Banco <MoneyText valor={saldo.banco} /> · App{" "}
+                <MoneyText valor={saldo.app} />
+              </>
+            ) : saldo?.temSaldoNoArquivo ? (
+              "Saldo: sem permissão para ver os valores"
+            ) : (
+              "Sem saldo do banco o mês não fecha sozinho"
+            )
+          }
         />
       </GradeKpis>
 
