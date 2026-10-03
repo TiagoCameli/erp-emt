@@ -5060,3 +5060,13 @@ importa pela tela.
 **Decisão:** faixa 2 da regra ("um clique com revisão"). `sugestoesSeguras` (pura, `casamento.ts`): valor exato, mesmo sentido, nome do favorecido no histórico, um único candidato com nome para o movimento, candidato de "paga em outra conta" ou "em aberto" que o banco aceitaria baixar (a pagar só aprovada), e que não é a melhor sugestão de nenhum outro movimento. A tela oferece "Revisar N sugestões seguras": lista com uma caixa marcada por linha e o efeito no app escrito ("muda da Caixa para o BB", "dá baixa em LAN-... na data do extrato"). Confirmar manda para `fn_conciliacao_casar_lote(p_pares, p_automatica)`, sobrecarga nova sem default, com `false`: é decisão humana, não automático, e nunca ajusta valor. A coluna "O app tem" ganha o selo "Segura".
 
 **Efeito no BB 102.124-9 de 09/2026:** nenhuma sugestão segura. As 71 sugestões são de "paga nesta conta" com mais de um candidato, que ficam de fora por regra, e as pagas em outra conta e abertas do mês não têm o nome confirmado no histórico.
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco F: fechamento do mês gravado
+
+**Decisão:** tabela `conciliacao_fechamentos` (um fechamento ativo por conta e mês; os reabertos ficam como histórico; leitura com `financeiro.conciliacao/ver`, escrita só pelas RPCs; auditoria). `fn_conciliacao_fechar_mes` recalcula no servidor com o mesmo painel da tela e recusa se faltar movimento no app, sobrar no app, faltar saldo no arquivo ou o saldo não bater; grava os dois saldos. `fn_conciliacao_reabrir_mes` exige motivo.
+
+Mês fechado bloqueia, naquela conta e mês: casar (e tirar pagamento de outra conta fechada), desconciliar, lançar, lançar transferência (as duas contas), trocar conta (as duas contas), excluir lançamento e estornar pagamento ou recebimento conciliado. Mensagem: "Mes de setembro/2026 da conta X esta conciliado e fechado. Reabra primeiro." Só os corpos mudaram, assinaturas iguais. Importar num mês fechado é permitido; movimento novo reabre o mês sozinho, com motivo "novo movimento importado".
+
+Tela: "Fechar mês" aparece só com as três condições; fechado, faixa "Conciliado por Fulano em dd/mm hh:mm · saldo R$ X" e "Reabrir" com motivo, e as ações somem. A escolha de conta mostra os três últimos meses ("set/26 fechado · ago/26 fechado · jul/26 12 pendentes").
+
+**Efeito no BB 102.124-9 de 09/2026:** não fecha enquanto o Rende Fácil não for lançado como transferência (diferença de saldo de R$ 150.251,58, Bloco B).

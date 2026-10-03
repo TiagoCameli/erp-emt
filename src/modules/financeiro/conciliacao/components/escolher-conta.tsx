@@ -5,7 +5,7 @@ import { Landmark, Upload } from "lucide-react";
 
 import { EmptyState, GradeKpis, KPICard } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { formatarMesAno } from "@/lib/formatadores";
+import { resumoUltimosMeses } from "@/modules/financeiro/conciliacao/painel";
 import type {
   ContaBancariaOpcao,
   ResumoConta,
@@ -59,8 +59,8 @@ export function EscolherConta({ contas, todasContas, resumos, podeImportar }: Es
                 titulo={conta.nome}
                 valor={pendentes > 0 ? `${pendentes} pendentes` : resumo?.qtdExtratos ? "Em dia" : "Sem extrato"}
                 detalhe={
-                  resumo?.ultimoMes
-                    ? `Último extrato: ${formatarMesAno(`${resumo.ultimoMes}-01`)}`
+                  resumo && resumo.meses.length > 0
+                    ? resumoUltimosMeses(resumo.meses)
                     : "Nenhum extrato importado"
                 }
                 href={`?${new URLSearchParams({ conta: conta.id }).toString()}`}

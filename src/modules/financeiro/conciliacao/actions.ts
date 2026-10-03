@@ -657,3 +657,55 @@ export async function aceitarSugestoes(
     falhas: resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })),
   };
 }
+
+/**
+ * Fecha o mês da conta (Bloco F). O banco recalcula tudo e recusa se faltar
+ * movimento no app, sobrar no app ou o saldo não bater.
+ */
+export async function fecharMes(contaId: string, mes: string): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para fechar o mês" };
+  }
+  if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
+  const periodo = periodoDoMes(mes);
+  if (!periodo) return { erro: "Mês inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_fechar_mes", {
+    p_conta_id: contaId,
+    p_mes: periodo.inicio,
+  });
+  if (error) {
+    return erroAcao("financeiro.conciliacao.fecharMes", error, mensagem(error, "Não foi possível fechar o mês"));
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/** Reabre um mês fechado, com motivo (fica na auditoria). */
+export async function reabrirMes(contaId: string, mes: string, motivo: string): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para reabrir o mês" };
+  }
+  if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
+  const periodo = periodoDoMes(mes);
+  if (!periodo) return { erro: "Mês inválido" };
+  const motivoOk = motivoSchema.safeParse(motivo);
+  if (!motivoOk.success) return { erro: "Informe o motivo da reabertura" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_reabrir_mes", {
+    p_conta_id: contaId,
+    p_mes: periodo.inicio,
+    p_motivo: motivoOk.data,
+  });
+  if (error) {
+    return erroAcao("financeiro.conciliacao.reabrirMes", error, mensagem(error, "Não foi possível reabrir o mês"));
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
+}

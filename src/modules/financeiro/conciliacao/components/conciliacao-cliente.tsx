@@ -35,13 +35,20 @@ import {
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
+import {
+  formatarBRL,
+  formatarData,
+  formatarDataHora,
+  formatarMesAno,
+} from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
   casarAutomatico,
   desconciliar,
   desconciliarVarios,
+  fecharMes,
+  reabrirMes,
   excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
 import {
@@ -138,7 +145,30 @@ function vinculoDe(transacao: TransacaoPainel): string {
  *
  * A conciliação do mês está fechada quando as duas primeiras visões zeram.
  */
-export function ConciliacaoCliente({
+export function ConciliacaoCliente(props: ConciliacaoClienteProps) {
+  // Mês fechado (Bloco F): nada se casa, desfaz, lança ou exclui até reabrir.
+  // O banco recusa de qualquer jeito; aqui os botões somem para não convidar.
+  const fechado = props.painel.fechamento !== null;
+  const permissoes: PermissoesConciliacao = fechado
+    ? {
+        importar: props.permissoes.importar,
+        conciliar: false,
+        lancar: false,
+        transferir: false,
+        mexerNoPago: false,
+        excluir: false,
+      }
+    : props.permissoes;
+  return (
+    <ConciliacaoConta
+      {...props}
+      permissoes={permissoes}
+      podeFechar={props.permissoes.conciliar}
+    />
+  );
+}
+
+function ConciliacaoConta({
   conta,
   contasConciliaveis,
   contas,
@@ -149,7 +179,8 @@ export function ConciliacaoCliente({
   visao,
   opcoes,
   permissoes,
-}: ConciliacaoClienteProps) {
+  podeFechar,
+}: ConciliacaoClienteProps & { podeFechar: boolean }) {
   const router = useRouter();
   const visoes = React.useMemo(
     () => montarVisoes(painel, periodo),
@@ -177,6 +208,8 @@ export function ConciliacaoCliente({
   const [desfazerAlvo, setDesfazerAlvo] =
     React.useState<TransacaoPainel | null>(null);
   const [desfazerIds, setDesfazerIds] = React.useState<string[] | null>(null);
+  const [fechando, setFechando] = React.useState(false);
+  const [reabrirAberto, setReabrirAberto] = React.useState(false);
 
   const porId = React.useMemo(
     () => new Map(painel.transacoes.map((t) => [t.id, t])),
@@ -227,6 +260,29 @@ export function ConciliacaoCliente({
     }
     toast.success("Casamento desfeito: o movimento voltou para Faltam no app");
     setDesfazerAlvo(null);
+    router.refresh();
+  }
+
+  async function fechar() {
+    setFechando(true);
+    const resposta = await fecharMes(conta.id, mes);
+    setFechando(false);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return;
+    }
+    toast.success(`${formatarMesAno(`${mes}-01`)} conciliado e fechado`);
+    router.refresh();
+  }
+
+  async function confirmarReabrir(motivo?: string) {
+    const resposta = await reabrirMes(conta.id, mes, motivo ?? "");
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return false;
+    }
+    toast.success("Mês reaberto");
+    setReabrirAberto(false);
     router.refresh();
   }
 
@@ -319,6 +375,33 @@ export function ConciliacaoCliente({
           ) : null}
         </div>
       </div>
+
+      {painel.fechamento ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-aprovado/40 bg-status-aprovado/10 px-3 py-2 text-sm">
+          <span className="text-status-aprovado">
+            Conciliado por {painel.fechamento.fechadoPor ?? "-"} em{" "}
+            {formatarDataHora(painel.fechamento.fechadoEm)}
+            {painel.fechamento.saldoBanco !== null ? (
+              <>
+                {" "}· saldo <MoneyText valor={painel.fechamento.saldoBanco} />
+              </>
+            ) : null}
+          </span>
+          {podeFechar ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => setReabrirAberto(true)}>
+              Reabrir
+            </Button>
+          ) : null}
+        </div>
+      ) : status === "conciliado" && podeFechar ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+          <span>Tudo casado e o saldo do banco bate com o do app.</span>
+          <Button type="button" size="sm" onClick={() => void fechar()} disabled={fechando}>
+            {fechando ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
+            Fechar mês
+          </Button>
+        </div>
+      ) : null}
 
       <GradeKpis>
         <KPICard
@@ -500,6 +583,17 @@ export function ConciliacaoCliente({
         exigeMotivo
         minMotivo={3}
         onConfirmar={confirmarExcluir}
+      />
+
+      <ConfirmDialog
+        aberto={reabrirAberto}
+        onAbertoChange={setReabrirAberto}
+        titulo={`Reabrir ${formatarMesAno(`${mes}-01`)}`}
+        descricao="O mês volta a aceitar casar, desfazer e lançar. O motivo fica registrado na auditoria."
+        textoConfirmar="Reabrir mês"
+        exigeMotivo
+        minMotivo={3}
+        onConfirmar={confirmarReabrir}
       />
 
       <ConfirmDialog

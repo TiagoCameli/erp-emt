@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { contaDoArquivoConfere } from "@/lib/ofx";
 import {
   candidatosDoPainel,
+  mesCurto,
   montarVisoes,
+  resumoUltimosMeses,
   statusDoMes,
   painelSchema,
   periodoDoMes,
@@ -37,6 +39,7 @@ function parcela(parcial: Partial<ParcelaLivre>): ParcelaLivre {
 
 const painel: PainelConciliacao = {
   saldo: null,
+  fechamento: null,
   transacoes: [
     {
       id: "t1",
@@ -191,5 +194,27 @@ describe("statusDoMes", () => {
   it("com movimento pendente fica aberto mesmo com o saldo batendo", () => {
     const visoes = montarVisoes(painel, { inicio: "2026-09-01", fim: "2026-09-30" });
     expect(statusDoMes(visoes, saldo(true))).toBe("aberto");
+  });
+});
+
+describe("resumoUltimosMeses (Bloco F)", () => {
+  it("escreve fechado, pendentes ou aberto por mês, do mais recente ao mais antigo", () => {
+    expect(
+      resumoUltimosMeses([
+        { mes: "2026-09", fechado: true, pendentes: 0 },
+        { mes: "2026-08", fechado: true, pendentes: 0 },
+        { mes: "2026-07", fechado: false, pendentes: 12 },
+      ]),
+    ).toBe("set/26 fechado · ago/26 fechado · jul/26 12 pendentes");
+  });
+
+  it("mês sem pendência e sem fechamento é aberto; um pendente no singular", () => {
+    expect(
+      resumoUltimosMeses([
+        { mes: "2026-10", fechado: false, pendentes: 0 },
+        { mes: "2026-01", fechado: false, pendentes: 1 },
+      ]),
+    ).toBe("out/26 aberto · jan/26 1 pendente");
+    expect(mesCurto("2025-12")).toBe("dez/25");
   });
 });

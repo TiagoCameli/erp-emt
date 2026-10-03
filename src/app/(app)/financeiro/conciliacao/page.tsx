@@ -17,6 +17,7 @@ import {
   carregarPainel,
   contarPendentesPorConta,
   listarContasBancarias,
+  listarMesesFechados,
   listarExtratos,
   mesesDosExtratos,
 } from "@/modules/financeiro/conciliacao/queries";
@@ -59,11 +60,28 @@ export default async function PaginaConciliacao({
 
   const { conta: contaParam, mes: mesParam, ver } = await searchParams;
 
-  const [extratos, contas, pendentes] = await Promise.all([
+  const [extratos, contas, pendentes, fechados] = await Promise.all([
     listarExtratos(),
     listarContasBancarias(),
     contarPendentesPorConta(),
+    listarMesesFechados(),
   ]);
+
+  const resumoDe = (contaId: string) => {
+    const meses = mesesDosExtratos(extratos, contaId);
+    const pendentesDaConta = pendentes.get(contaId) ?? new Map<string, number>();
+    return {
+      contaId,
+      qtdExtratos: extratos.filter((e) => e.contaBancariaId === contaId).length,
+      ultimoMes: meses[0] ?? null,
+      qtdPendentes: [...pendentesDaConta.values()].reduce((a, b) => a + b, 0),
+      meses: meses.slice(0, 3).map((mes) => ({
+        mes,
+        fechado: fechados.get(contaId)?.has(mes) ?? false,
+        pendentes: pendentesDaConta.get(mes) ?? 0,
+      })),
+    };
+  };
 
   // Conciliável = tem extrato, ou é conta corrente (pode receber o primeiro).
   const comExtrato = new Set(extratos.map((e) => e.contaBancariaId));
@@ -92,12 +110,7 @@ export default async function PaginaConciliacao({
           contas={contasConciliaveis}
           todasContas={contas}
           podeImportar={permissoes.importar}
-          resumos={contasConciliaveis.map((c) => ({
-            contaId: c.id,
-            qtdExtratos: extratos.filter((e) => e.contaBancariaId === c.id).length,
-            ultimoMes: mesesDosExtratos(extratos, c.id)[0] ?? null,
-            qtdPendentes: pendentes.get(c.id) ?? 0,
-          }))}
+          resumos={contasConciliaveis.map((c) => resumoDe(c.id))}
         />
       </>
     );
@@ -115,7 +128,7 @@ export default async function PaginaConciliacao({
           contas={[conta]}
           todasContas={contas}
           podeImportar={permissoes.importar}
-          resumos={[{ contaId: conta.id, qtdExtratos: 0, ultimoMes: null, qtdPendentes: 0 }]}
+          resumos={[resumoDe(conta.id)]}
         />
       </>
     );

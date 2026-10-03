@@ -105,7 +105,18 @@ const saldoSchema = z.object({
 
 export type SaldoPainel = z.infer<typeof saldoSchema>;
 
+const fechamentoSchema = z.object({
+  fechadoEm: z.string(),
+  fechadoPor: z.string().nullable(),
+  /** Null para quem não vê saldo da conta. */
+  saldoBanco: numero.nullable(),
+});
+
+export type FechamentoPainel = z.infer<typeof fechamentoSchema>;
+
 export const painelSchema = z.object({
+  /** O fechamento ativo do mês, quando o mês está conciliado e fechado. */
+  fechamento: fechamentoSchema.nullable().optional().transform((f) => f ?? null),
   /** Null quando nenhum extrato importado cobre o último dia do período. */
   saldo: saldoSchema
     .nullable()
@@ -306,4 +317,34 @@ export function statusDoMes(
     return "aberto";
   if (!saldo || saldo.bate === null) return "sem_saldo";
   return saldo.bate ? "conciliado" : "falta_saldo";
+}
+
+/** Situação de um mês na escolha de conta. */
+export interface MesDaConta {
+  mes: string;
+  fechado: boolean;
+  pendentes: number;
+}
+
+const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** "2026-09" → "set/26". */
+export function mesCurto(mes: string): string {
+  const [ano, m] = mes.split("-");
+  return `${MESES_CURTOS[Number(m) - 1] ?? m}/${ano.slice(2)}`;
+}
+
+/**
+ * A linha de status da conta na escolha: "set/26 fechado · ago/26 fechado ·
+ * jul/26 12 pendentes". Mês sem pendência e sem fechamento é "aberto": falta
+ * bater o saldo e fechar.
+ */
+export function resumoUltimosMeses(meses: readonly MesDaConta[]): string {
+  return meses
+    .map((m) => {
+      if (m.fechado) return `${mesCurto(m.mes)} fechado`;
+      if (m.pendentes > 0) return `${mesCurto(m.mes)} ${m.pendentes} ${m.pendentes === 1 ? "pendente" : "pendentes"}`;
+      return `${mesCurto(m.mes)} aberto`;
+    })
+    .join(" · ");
 }

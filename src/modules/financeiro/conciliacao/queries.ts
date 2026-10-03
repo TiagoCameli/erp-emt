@@ -7,6 +7,7 @@ import {
 } from "@/modules/financeiro/_shared/formato";
 import {
   painelSchema,
+  type MesDaConta,
   type PainelConciliacao,
 } from "@/modules/financeiro/conciliacao/painel";
 
@@ -43,6 +44,8 @@ export interface ResumoConta {
   qtdExtratos: number;
   ultimoMes: string | null;
   qtdPendentes: number;
+  /** Os três últimos meses com extrato, do mais recente ao mais antigo. */
+  meses: MesDaConta[];
 }
 
 /** Tipo bruto de banco do Postgres normalizado para o union conhecido. */
@@ -145,14 +148,16 @@ export async function listarContasBancarias(): Promise<ContaBancariaOpcao[]> {
 }
 
 /**
- * Quantos movimentos pendentes cada conta tem, para a escolha da conta mostrar
- * onde está o trabalho.
+ * Movimentos pendentes por conta e por mês ("YYYY-MM"), para a escolha da
+ * conta mostrar onde está o trabalho.
  */
-export async function contarPendentesPorConta(): Promise<Map<string, number>> {
+export async function contarPendentesPorConta(): Promise<
+  Map<string, Map<string, number>>
+> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("extrato_transacoes")
-    .select("conta_bancaria_id")
+    .select("conta_bancaria_id, data_movimento")
     .eq("conciliada", false)
     .limit(20000);
 
@@ -160,14 +165,35 @@ export async function contarPendentesPorConta(): Promise<Map<string, number>> {
     throw new Error("Não foi possível contar os movimentos pendentes");
   }
 
-  const contagem = new Map<string, number>();
+  const contagem = new Map<string, Map<string, number>>();
   for (const linha of data ?? []) {
-    contagem.set(
-      linha.conta_bancaria_id,
-      (contagem.get(linha.conta_bancaria_id) ?? 0) + 1,
-    );
+    const mes = linha.data_movimento.slice(0, 7);
+    const daConta = contagem.get(linha.conta_bancaria_id) ?? new Map<string, number>();
+    daConta.set(mes, (daConta.get(mes) ?? 0) + 1);
+    contagem.set(linha.conta_bancaria_id, daConta);
   }
   return contagem;
+}
+
+/** Meses fechados (ativos) por conta: conjunto de "YYYY-MM". */
+export async function listarMesesFechados(): Promise<Map<string, Set<string>>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conciliacao_fechamentos")
+    .select("conta_bancaria_id, mes")
+    .is("reaberto_em", null);
+
+  if (error) {
+    throw new Error("Não foi possível carregar os meses fechados");
+  }
+
+  const fechados = new Map<string, Set<string>>();
+  for (const linha of data ?? []) {
+    const daConta = fechados.get(linha.conta_bancaria_id) ?? new Set<string>();
+    daConta.add(linha.mes.slice(0, 7));
+    fechados.set(linha.conta_bancaria_id, daConta);
+  }
+  return fechados;
 }
 
 /**
