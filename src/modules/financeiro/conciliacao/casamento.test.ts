@@ -334,3 +334,50 @@ describe("nome comum cortado pelo banco", () => {
     expect(pares).toEqual([expect.objectContaining({ alvoId: "clelton", nomeBate: true })]);
   });
 });
+
+describe("transferência entre contas no mesmo dia (regra c)", () => {
+  const trf = (id: string, data: string): CandidatoCasavel => ({
+    especie: "transferencia",
+    grupo: "transferencia",
+    id,
+    valor: 10000,
+    data,
+    sentido: "credito",
+    nomes: ["BANCO DO BRASIL 30.893-5 para BANCO DO BRASIL 102.124-9", "Transferência entre contas"],
+  });
+  const recebida = (id: string, data: string) =>
+    mov(id, 10000, `TRANSFERÊNCIA RECEBIDA - ${data.slice(8)}/${data.slice(5, 7)} E M T CONSTRUTORA`, data);
+
+  it("caso real de 21 e 22/07/2025: cada movimento casa com a transferência do seu dia", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m21", "2025-07-21"), recebida("m22", "2025-07-22")],
+      [trf("t21", "2025-07-21"), trf("t22", "2025-07-22")],
+    );
+    const porMovimento = Object.fromEntries(pares.map((p) => [p.transacaoId, p.alvoId]));
+    expect(porMovimento).toEqual({ m21: "t21", m22: "t22" });
+  });
+
+  it("duas transferências iguais no mesmo dia: nenhuma casa sozinha", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m1", "2025-07-21")],
+      [trf("t1", "2025-07-21"), trf("t2", "2025-07-21")],
+    );
+    expect(pares).toEqual([]);
+  });
+
+  it("dois movimentos iguais no mesmo dia para uma transferência: nenhum casa", () => {
+    const pares = casarAutomaticamente(
+      [recebida("m1", "2025-07-21"), recebida("m2", "2025-07-21")],
+      [trf("t1", "2025-07-21"), trf("t2", "2025-07-22")],
+    );
+    expect(pares.filter((p) => p.alvoId === "t1")).toEqual([]);
+  });
+
+  it("pagamento de mesmo valor no mesmo dia não usa esta regra", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -500, "PIX FULANO", "2025-07-21")],
+      [parcela("p1", 500, "Ciclano", "2025-07-21"), parcela("p2", 500, "Beltrano", "2025-07-22")],
+    );
+    expect(pares).toEqual([]);
+  });
+});
