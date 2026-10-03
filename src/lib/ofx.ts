@@ -23,6 +23,13 @@ export interface ExtratoOfx {
   periodoFim: string | null;
   /** Número da conta que o banco escreveu no arquivo (ACCTID), cru. */
   contaOfx: string | null;
+  /**
+   * Saldo final do extrato (LEDGERBAL/BALAMT), com sinal. Null quando o
+   * arquivo não traz: nunca inventar, porque é ele que prova o mês.
+   */
+  saldoFinal: number | null;
+  /** Data do saldo final (LEDGERBAL/DTASOF), ISO. */
+  saldoFinalData: string | null;
   transacoes: TransacaoOfx[];
 }
 
@@ -151,6 +158,28 @@ function dataOfxParaIso(valor: string | null): string | null {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
+/**
+ * Saldo final do extrato: o bloco LEDGERBAL com BALAMT e DTASOF. Caixa, BB e
+ * Sicredi mandam igual no SGML (tags sem fechamento) e no XML; o bloco termina
+ * no </LEDGERBAL> ou, no SGML sem fechamento, na próxima tag de bloco
+ * (AVAILBAL, </STMTRS>).
+ */
+function lerSaldoFinal(conteudo: string): {
+  valor: number | null;
+  data: string | null;
+} {
+  const bloco = conteudo.match(
+    /<LEDGERBAL>([\s\S]*?)(?:<\/LEDGERBAL>|<AVAILBAL>|<\/STMTRS>|$)/i,
+  );
+  if (!bloco) return { valor: null, data: null };
+  const bruto = campo(bloco[1], "BALAMT");
+  const valor = bruto === null ? null : valorOfxParaNumero(bruto);
+  return {
+    valor: valor === null || Number.isNaN(valor) ? null : valor,
+    data: dataOfxParaIso(campo(bloco[1], "DTASOF")),
+  };
+}
+
 /** Lê o conteúdo de um arquivo OFX e retorna período e transações. */
 export function parseOfx(conteudo: string): ExtratoOfx {
   const blocos = conteudo.match(/<STMTTRN>[\s\S]*?<\/STMTTRN>/gi) ?? [];
@@ -191,11 +220,14 @@ export function parseOfx(conteudo: string): ExtratoOfx {
   const fimBruto = dataOfxParaIso(campo(conteudo, "DTEND"));
   const trocado =
     inicioBruto !== null && fimBruto !== null && inicioBruto > fimBruto;
+  const saldo = lerSaldoFinal(conteudo);
 
   return {
     periodoInicio: trocado ? fimBruto : inicioBruto,
     periodoFim: trocado ? inicioBruto : fimBruto,
     contaOfx: campo(conteudo, "ACCTID"),
+    saldoFinal: saldo.valor,
+    saldoFinalData: saldo.data,
     transacoes,
   };
 }

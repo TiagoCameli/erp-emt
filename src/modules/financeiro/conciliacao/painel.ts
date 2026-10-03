@@ -88,7 +88,29 @@ const transferenciaLivreSchema = z.object({
   destinoNome: texto,
 });
 
+/**
+ * Saldo do banco contra o do app no último dia do período. Valores nulos para
+ * quem não vê saldo da conta; `bate` vem calculado no servidor mesmo assim.
+ */
+const saldoSchema = z.object({
+  data: z.string(),
+  temSaldoNoArquivo: z.boolean(),
+  podeVer: z.boolean(),
+  banco: numero.nullable(),
+  app: numero.nullable(),
+  diferenca: numero.nullable(),
+  /** Null quando o OFX não trouxe saldo. */
+  bate: z.boolean().nullable(),
+});
+
+export type SaldoPainel = z.infer<typeof saldoSchema>;
+
 export const painelSchema = z.object({
+  /** Null quando nenhum extrato importado cobre o último dia do período. */
+  saldo: saldoSchema
+    .nullable()
+    .optional()
+    .transform((s) => s ?? null),
   transacoes: z.array(transacaoSchema),
   pagasNaConta: z.array(parcelaLivreSchema),
   pagasEmOutraConta: z.array(parcelaLivreSchema),
@@ -109,7 +131,9 @@ export type CandidatoDoPainel = CandidatoCasavel &
   );
 
 /** Período fechado de um mês "YYYY-MM": do dia 1 ao último dia. */
-export function periodoDoMes(mes: string): { inicio: string; fim: string } | null {
+export function periodoDoMes(
+  mes: string,
+): { inicio: string; fim: string } | null {
   const m = /^(\d{4})-(\d{2})$/.exec(mes);
   if (!m) return null;
   const ano = Number(m[1]);
@@ -127,7 +151,9 @@ function sentidoDaParcela(parcela: ParcelaLivre): "credito" | "debito" {
 }
 
 /** Todo candidato do painel no formato do motor de casamento. */
-export function candidatosDoPainel(painel: PainelConciliacao): CandidatoDoPainel[] {
+export function candidatosDoPainel(
+  painel: PainelConciliacao,
+): CandidatoDoPainel[] {
   const daParcela = (
     parcela: ParcelaLivre,
     grupo: "paga_na_conta" | "paga_outra_conta" | "aberta",
@@ -135,7 +161,9 @@ export function candidatosDoPainel(painel: PainelConciliacao): CandidatoDoPainel
     especie: "parcela",
     grupo,
     id: parcela.id,
-    data: (grupo === "aberta" ? parcela.dataVencimento : parcela.dataPagamento) ?? "",
+    data:
+      (grupo === "aberta" ? parcela.dataVencimento : parcela.dataPagamento) ??
+      "",
     valor: parcela.valorLiquido,
     sentido: sentidoDaParcela(parcela),
     nomes: [parcela.nome, parcela.razaoSocial, parcela.descricao],
@@ -162,7 +190,9 @@ export function candidatosDoPainel(painel: PainelConciliacao): CandidatoDoPainel
 }
 
 /** Movimentos sem par, no formato do motor. */
-export function movimentosLivres(painel: PainelConciliacao): MovimentoCasavel[] {
+export function movimentosLivres(
+  painel: PainelConciliacao,
+): MovimentoCasavel[] {
   return painel.transacoes
     .filter((t) => !t.conciliada)
     .map((t) => ({
@@ -175,7 +205,13 @@ export function movimentosLivres(painel: PainelConciliacao): MovimentoCasavel[] 
 
 /** Linha do "no app, fora do banco": parcela paga ou lado de transferência. */
 export type ItemForaDoBanco =
-  | { especie: "parcela"; id: string; data: string; valor: number; parcela: ParcelaLivre }
+  | {
+      especie: "parcela";
+      id: string;
+      data: string;
+      valor: number;
+      parcela: ParcelaLivre;
+    }
   | {
       especie: "transferencia";
       id: string;
@@ -238,5 +274,34 @@ export function montarVisoes(
 
 /** Soma com sinal, em centavos, para não acumular erro de ponto flutuante. */
 export function somar(valores: readonly number[]): number {
-  return valores.reduce((total, valor) => total + Math.round(valor * 100), 0) / 100;
+  return (
+    valores.reduce((total, valor) => total + Math.round(valor * 100), 0) / 100
+  );
+}
+
+/** Situação do mês na conta. */
+export type StatusDoMes =
+  /** Faltam e fora zerados e o saldo do banco bate com o do app. */
+  | "conciliado"
+  /** Listas zeradas, mas o saldo não bate. */
+  | "falta_saldo"
+  /** Listas zeradas, mas o OFX não trouxe saldo: nunca se declara fechado sozinho. */
+  | "sem_saldo"
+  /** Ainda tem movimento sem par em algum dos lados. */
+  | "aberto";
+
+/**
+ * "Mês conciliado" só com as três condições: nada faltando no app, nada
+ * sobrando no app e o saldo do banco igual ao do app. Duas listas zeradas não
+ * provam nada sozinhas (dois lançamentos de mesmo valor trocados zeram as
+ * duas); o saldo prova.
+ */
+export function statusDoMes(
+  visoes: Pick<VisoesConciliacao, "faltamNoApp" | "foraDoBanco">,
+  saldo: SaldoPainel | null,
+): StatusDoMes {
+  if (visoes.faltamNoApp.length > 0 || visoes.foraDoBanco.length > 0)
+    return "aberto";
+  if (!saldo || saldo.bate === null) return "sem_saldo";
+  return saldo.bate ? "conciliado" : "falta_saldo";
 }

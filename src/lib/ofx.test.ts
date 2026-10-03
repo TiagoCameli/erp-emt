@@ -257,3 +257,28 @@ describe("conferirMesFechado", () => {
     expect(conferirMesFechado(null, null)).toContain("não informa o período");
   });
 });
+
+describe("saldo final (LEDGERBAL)", () => {
+  const transacao =
+    "<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260901<TRNAMT>-10.00<FITID>1<MEMO>X</STMTTRN>";
+
+  it("lê o BB em SGML, com o saldo antes do fim do arquivo", () => {
+    const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST>\n<LEDGERBAL>\n\t <BALAMT>0.00\n\t <DTASOF>20261001\n    </LEDGERBAL></OFX>`;
+    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: 0, saldoFinalData: "2026-10-01" });
+  });
+
+  it("lê a Caixa em SGML sem fechamento de tag, parando no AVAILBAL", () => {
+    const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST><LEDGERBAL><BALAMT>69690.90<DTASOF>20260930000000[-3:BRT]<AVAILBAL><BALAMT>1.00<DTASOF>20260930</OFX>`;
+    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: 69690.9, saldoFinalData: "2026-09-30" });
+  });
+
+  it("lê o Sicredi em XML, com saldo negativo e vírgula decimal", () => {
+    const ofx = `<?xml version="1.0"?><OFX><BANKTRANLIST>${transacao}</BANKTRANLIST><LEDGERBAL><BALAMT>-1.234,56</BALAMT><DTASOF>20260930120000</DTASOF></LEDGERBAL></OFX>`;
+    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: -1234.56, saldoFinalData: "2026-09-30" });
+  });
+
+  it("sem LEDGERBAL devolve null, nunca inventa zero", () => {
+    const ofx = `<OFX><BANKTRANLIST>${transacao}</BANKTRANLIST></OFX>`;
+    expect(parseOfx(ofx)).toMatchObject({ saldoFinal: null, saldoFinalData: null });
+  });
+});

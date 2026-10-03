@@ -5026,3 +5026,13 @@ importa pela tela.
 **Decisão** (`casarAutomaticamente`, `conciliacao/casamento.ts`): par automático exige valor exato, mesmo sentido, janela de 3 dias, candidato elegível (paga nesta conta ou transferência) e uma de duas: (a) nome do favorecido no histórico, único dos dois lados (um candidato com nome para o movimento e um movimento com nome para o candidato); (b) sem nome, mas valor único nos dois lados dentro da janela, marcado `confira` ("Confira" na tela). A disputa conta dos dois lados: candidato disputado por mais de um movimento sem nome nunca casa sozinho. O resto fica como sugestão.
 
 **Efeito no BB 102.124-9 de 09/2026** (foto do painel de 02/10): automático de 414 para 359 (281 por nome, 78 por valor único); sugestões de 16 para 71; sem par algum, 77 nos dois.
+
+## 2026-10-03 - Conciliação 100% precisa, Bloco B: o mês só fecha com o saldo do banco
+
+**Decisão:** o parser lê `LEDGERBAL` (`BALAMT`, `DTASOF`) e o extrato guarda `saldo_final`/`saldo_final_data`. "Mês conciliado" exige Faltam no app = 0, Fora do banco = 0 **e** saldo do banco = saldo do app no último dia do período (`statusDoMes`). Sem saldo no OFX o mês nunca se declara fechado.
+1. Importação nova `fn_conciliacao_importar` (grava o saldo). `fn_importar_extrato` ficou intacta: mudar a assinatura criaria sobrecarga ambígua no PostgREST e quebraria o import no ar até o deploy. Remover a antiga depende de ok do Tiago.
+2. `fn_conciliacao_saldo_app(conta, data)`: mesma base de `fn_saldo_conta` (conferido ao centavo nas 9 contas com data futura), com corte na data. Quem não tem `fn_pode_ver_saldo` recebe null. Não toca em `fn_rel_posicao_bancaria` nem no que `fn_pagar_parcela` usa.
+3. Data do saldo = menor entre `DTASOF` e o fim do extrato: o BB põe no `DTASOF` o dia da exportação (01/10), mas o saldo é o do fim do período.
+4. O painel devolve `bate` calculado no servidor também para quem não vê valores.
+
+**Efeito no BB 102.124-9 de 09/2026:** o OFX traz saldo final R$ 0,00 (o Rende Fácil aplica tudo todo dia) e o app tem R$ 150.251,58 na corrente em 30/09. A diferença é o dinheiro aplicado que ainda não foi lançado como transferência para a subconta; o mês só fecha depois disso.
