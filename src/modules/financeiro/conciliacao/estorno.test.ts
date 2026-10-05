@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   casarEstornos,
+  especieDoMovimento,
   paresPossiveis,
   pareceEstorno,
 } from "@/modules/financeiro/conciliacao/estorno";
@@ -135,5 +136,50 @@ describe("paresPossiveis", () => {
       mov("dev", 200, "PIX - REJEITADO - 03/06 19:09 ORDEM REJEITADA PELO PSP D", "2026-06-03"),
     ]);
     expect(pares).toEqual([{ transacaoId: "dev", parId: "s1" }]);
+  });
+});
+
+describe("Bloco L: os três casos de 05/10 casam sozinhos", () => {
+  it("especieDoMovimento", () => {
+    expect(especieDoMovimento("TED DEVOLVIDA - AG OU CNT DEST DO CRED INVAL")).toBe("ted");
+    expect(especieDoMovimento("TED TRANSF.ELETR.DISPONIV - 104 0803 FRANCISCO A")).toBe("ted");
+    expect(especieDoMovimento("PIX - REJEITADO - 07/02 12:58 ERRO")).toBe("pix");
+    expect(especieDoMovimento("PIX-ENVIO DEVOLVIDO - 30/04 14:28 JEFERSON")).toBe("pix");
+    expect(especieDoMovimento("BOLETO DEVOLVIDO")).toBe("boleto");
+    expect(especieDoMovimento("PAGAMENTO DE BOLETO - TRATORON")).toBe("boleto");
+    expect(especieDoMovimento("BB RENDE FÁCIL")).toBe("outro");
+  });
+
+  it("TED de R$ 2.000,00 devolvida em 29/08/2025 casa com a TED, não com os PIX", () => {
+    const pares = casarEstornos([
+      mov("pix1", -2000, "PIX - ENVIADO - 29/08 11:47 DONIZETE CLAUDINO DOS SANT", "2025-08-29"),
+      mov("pix2", -2000, "PIX - ENVIADO - 29/08 12:22 VERA LUCIA DA SILVA", "2025-08-29"),
+      mov("pix3", -2000, "PIX - ENVIADO - 23/08 20:23 AGE ENGENHARIA", "2025-08-25"),
+      mov("ted1", -2000, "TED TRANSF.ELETR.DISPONIV - 104 0803 72213442215 FRANCISCO A", "2025-08-29"),
+      mov("ted2", -2000, "TED TRANSF.ELETR.DISPONIV - 104 0803 72213442215 FRANCISCO A", "2025-08-29"),
+      mov("dev", 2000, "TED DEVOLVIDA - AG OU CNT DEST DO CRED INVAL", "2025-08-29"),
+    ]);
+    expect(pares).toHaveLength(1);
+    expect(["ted1", "ted2"]).toContain(pares[0].parId);
+  });
+
+  it("PIX de R$ 6.337,08 de 01/10/2025: envio e rejeição no mesmo minuto", () => {
+    const pares = casarEstornos([
+      mov("e1", -6337.08, "PIX - ENVIADO - 01/10 10:06 BRITAS DA AMAZONIA MINERA", "2025-10-01"),
+      mov("e2", -6337.08, "PIX - ENVIADO - 01/10 12:35 BRITAS DA AMAZONIA MINERA", "2025-10-01"),
+      mov("dev", 6337.08, "PIX - REJEITADO - 01/10 10:06 ORDEM REJEITADA PELO PSP D", "2025-10-01"),
+    ]);
+    expect(pares).toEqual([{ transacaoId: "dev", parId: "e1" }]);
+  });
+
+  it("PIX de R$ 360,00 de 07/02/2025 casa com o das 12:57", () => {
+    const pares = casarEstornos([
+      mov("jose", -360, "PIX - ENVIADO - 07/02 12:55 JOSÉ RODRIGO SILVA DOS SAN", "2025-02-07"),
+      mov("antonio", -360, "PIX - ENVIADO - 07/02 12:55 ANTONIO DA SILVA", "2025-02-07"),
+      mov("matheus", -360, "PIX - ENVIADO - 07/02 12:57 MATHEUS SANTOS DE SOUZA", "2025-02-07"),
+      mov("ana", -360, "PIX - ENVIADO - 07/02 16:27 ANA RAQUEL DA FONSECA PEDR", "2025-02-07"),
+      mov("dev", 360, "PIX - REJEITADO - 07/02 12:58 ERRO. TEMPO EXCEDIDO", "2025-02-07"),
+    ]);
+    expect(pares).toEqual([{ transacaoId: "dev", parId: "matheus" }]);
   });
 });

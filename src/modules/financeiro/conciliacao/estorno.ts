@@ -6,10 +6,11 @@
  * Módulo puro, testado em `estorno.test.ts`. Regras:
  * - devolução é o movimento cujo histórico diz REJEITADO, DEVOLVIDO(A),
  *   ESTORNO ou RECUSADO;
- * - o envio tem o sentido oposto, o mesmo valor e sai até 10 dias antes
- *   (ou no mesmo dia);
+ * - o envio tem o sentido oposto, o mesmo valor, a mesma espécie (TED com
+ *   TED, PIX com PIX, boleto com boleto) e sai até 10 dias antes (ou no
+ *   mesmo dia);
  * - quando o histórico traz a hora ("PIX - REJEITADO - 07/02 12:58"), o envio
- *   é o último antes dela, no máximo 30 minutos antes. Caso real: rejeição
+ *   é o último até ela (no mesmo minuto vale), no máximo 30 minutos antes. Caso real: rejeição
  *   às 12:58 e envios de R$ 360,00 às 12:55, 12:57 e 16:27; o das 16:27 é
  *   outro pagamento, o rejeitado é o das 12:57;
  * - quando o histórico traz o nome (PIX-ENVIO DEVOLVIDO - JEFERSON), só vale
@@ -48,6 +49,21 @@ function normalizar(memo: string | null): string {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toUpperCase();
+}
+
+export type EspecieMovimento = "pix" | "ted" | "boleto" | "outro";
+
+/**
+ * A espécie do movimento pelo histórico (Bloco L): devolução só casa com
+ * envio da mesma espécie. Caso real: TED de R$ 2.000,00 devolvida em
+ * 29/08/2025 disputando com dois PIX do mesmo valor.
+ */
+export function especieDoMovimento(memo: string | null): EspecieMovimento {
+  const texto = normalizar(memo).replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  if (/\bBOLETO\b/.test(texto)) return "boleto";
+  if (/^TED\b/.test(texto) || /\bTED DEVOLVIDA\b/.test(texto)) return "ted";
+  if (/\bPIX\b/.test(texto)) return "pix";
+  return "outro";
 }
 
 /** O histórico diz que o banco devolveu um movimento anterior. */
@@ -91,10 +107,12 @@ export function enviosPossiveis<M extends MovimentoCasavel>(
   devolucao: MovimentoCasavel,
   movimentos: readonly M[],
 ): M[] {
+  const especie = especieDoMovimento(devolucao.memo);
   return movimentos
     .filter(
       (m) =>
         m.id !== devolucao.id &&
+        (especie === "outro" || especieDoMovimento(m.memo) === especie) &&
         Math.sign(m.valor) === -Math.sign(devolucao.valor) &&
         centavos(m.valor) === centavos(devolucao.valor) &&
         !pareceEstorno(m.memo) &&
