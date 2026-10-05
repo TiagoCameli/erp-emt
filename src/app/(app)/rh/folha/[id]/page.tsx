@@ -72,7 +72,11 @@ export default async function PaginaFolhaDetalhe({
     await Promise.all([
       buscarParametros(),
       trilhaFolha(id),
-      listarLancamentosDaFolha(id, idsLancamentoSalario),
+      listarLancamentosDaFolha(
+        id,
+        idsLancamentoSalario,
+        folha.itens.map((item) => item.id),
+      ),
       listarCentrosCusto(),
     ]);
   const lancamentos = agruparLancamentosDaFolha(lancamentosDaFolha);
