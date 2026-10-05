@@ -36,6 +36,7 @@ function segura(n: number, grupo: "paga_outra_conta" | "aberta"): SugestaoSegura
     status: grupo === "aberta" ? "aprovado" : "pago",
     contaNome: "CAIXA ECONOMICA",
     contaId: "caixa",
+    apelidos: [],
   };
   return {
     movimento: { id: `38673fc5-c55a-c7be-8687-e9b1d3589f0${n}`, dataMovimento: "2026-09-10", valor: -100 * n, memo: `PIX FORNECEDOR ${n}` },

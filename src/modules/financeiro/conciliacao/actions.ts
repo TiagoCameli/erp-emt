@@ -25,6 +25,7 @@ import { casarTudo } from "@/modules/financeiro/conciliacao/estorno";
 import {
   candidatosDoPainel,
   movimentosLivres,
+  precisaConferir,
   vizinhosLivres,
   periodoDoMes,
   periodoDosExtratos,
@@ -404,6 +405,11 @@ const casarSchema = z.object({
    * cai no centro de custo). Null quando o valor é exato.
    */
   ajuste: z.enum(["financeiro", "custo"]).nullable(),
+  /**
+   * A pessoa escolheu um candidato cujo nome não aparece no histórico: o
+   * cedente vira apelido bancário do favorecido (Bloco I).
+   */
+  aprender: z.boolean().optional(),
 });
 
 /**
@@ -437,6 +443,13 @@ export async function casar(
       error,
       mensagem(error, "Não foi possível casar o movimento"),
     );
+  }
+  if (dados.data.aprender && dados.data.especie === "parcela") {
+    // Aprender é um extra: se falhar, o casamento continua feito.
+    const { error: erroApelido } = await supabase.rpc("fn_conciliacao_aprender_apelido", {
+      p_transacao_id: dados.data.transacaoId,
+    });
+    if (erroApelido) logErroServidor("financeiro.conciliacao.aprender_apelido", erroApelido);
   }
   revalidatePath(ROTA);
   return { ok: true };
@@ -814,10 +827,20 @@ export async function fecharMes(contaId: string, mes: string): Promise<Resultado
   const periodo = periodoDoMes(mes);
   if (!periodo) return { erro: "Mês inválido" };
 
+  // Fechar o mês é a confirmação (Bloco I): os "Confira" do mês, pela mesma
+  // regra da tela, são confirmados e ensinam o apelido, tudo ou nada.
+  let confira: string[];
+  try {
+    const painel = await carregarPainel(contaId, periodo.inicio, periodo.fim);
+    confira = painel.transacoes.filter(precisaConferir).map((t) => t.id);
+  } catch (e) {
+    return erroAcao("financeiro.conciliacao.fecharMes", e, "Não foi possível carregar o mês");
+  }
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_conciliacao_fechar_mes", {
+  const { error } = await supabase.rpc("fn_conciliacao_fechar_mes_confirmando", {
     p_conta_id: contaId,
     p_mes: periodo.inicio,
+    p_confira_ids: confira,
   });
   if (error) {
     return erroAcao("financeiro.conciliacao.fecharMes", error, mensagem(error, "Não foi possível fechar o mês"));
@@ -1001,4 +1024,35 @@ export async function aplicarRegra(
     feitos: resultado.aplicadas,
     falhas: resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })),
   };
+}
+
+/**
+ * "Confirmar" dos Casados (Bloco I): a pessoa conferiu o casamento com selo
+ * "Confira". Tira o selo e o cedente vira apelido bancário do favorecido.
+ */
+export async function confirmarConferencias(
+  transacaoIds: string[],
+): Promise<{ ok: true; confirmadas: number; aprendidos: number } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const ids = z.array(idSchema).min(1).max(1000).safeParse(transacaoIds);
+  if (!ids.success) return { erro: "Movimentos inválidos" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_confirmar_conferencia", {
+    p_transacao_ids: ids.data,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.confirmar",
+      error,
+      mensagem(error, "Não foi possível confirmar"),
+    );
+  }
+  const resultado = z.object({ confirmadas: z.number(), aprendidos: z.number() }).parse(data);
+  revalidatePath(ROTA);
+  return { ok: true, ...resultado };
 }

@@ -54,6 +54,12 @@ export interface CandidatoCasavel {
    * aprovada). Fica de fora das sugestões seguras.
    */
   podeBaixar?: boolean;
+  /**
+   * Apelidos bancários do favorecido (Bloco I): o cedente que o banco escreve
+   * no histórico (FORTBRAS para RONDOBRAS). Igual ao cedente do movimento,
+   * o nome bate com pontuação máxima.
+   */
+  apelidos?: readonly string[];
 }
 
 export interface ParCasado {
@@ -182,6 +188,90 @@ export function nomeConfere(memo: string | null, nomes: readonly (string | null)
   return palavrasEmComum(memo, nomes) >= 1;
 }
 
+const COM_ACENTO = "áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ";
+const SEM_ACENTO = "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC";
+
+/**
+ * Sem acento, maiúsculas, pontuação vira espaço, espaços simples. Igual a
+ * `fn_conciliacao_normalizar_cedente`: o apelido gravado no banco e o cedente
+ * calculado aqui precisam sair idênticos.
+ */
+export function normalizarCedente(texto: string | null | undefined): string {
+  let saida = "";
+  for (const c of texto ?? "") {
+    const i = COM_ACENTO.indexOf(c);
+    saida += i >= 0 ? SEM_ACENTO[i] : c;
+  }
+  return saida
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Prefixos do BB antes do nome de quem recebeu ou pagou. */
+const PREFIXOS_DO_CEDENTE = [
+  "PIX ENVIADO",
+  "PIX RECEBIDO",
+  "PAGAMENTO DE BOLETO",
+  "PAGTO VIA AUTO ATEND BB",
+  "TED TRANSF ELETR DISPONIV",
+  "TRANSFERENCIA ENVIADA",
+  "TRANSFERIDO PARA POUPANCA",
+  "PAGTO CONTA TELEFONE",
+  "PAGAMENTO CONTA LUZ",
+  "IMPOSTOS",
+];
+
+/**
+ * O cedente que o banco escreveu no histórico (Bloco I): tira o prefixo do
+ * BB, as datas, horas e números soltos (CNPJ, agência) e devolve o resto, com
+ * pelo menos 3 letras. Sem prefixo conhecido devolve null: tarifa, DARF e
+ * Rende Fácil não têm cedente, e é assim mesmo. Igual a
+ * `fn_conciliacao_cedente`.
+ *
+ * "PAGAMENTO DE BOLETO - FORTBRAS AUTOPECAS S.A." vira "FORTBRAS AUTOPECAS S A".
+ */
+export function cedenteDoHistorico(memo: string | null): string | null {
+  const texto = normalizarCedente(memo);
+  const prefixo = PREFIXOS_DO_CEDENTE.find((p) => texto === p || texto.startsWith(`${p} `));
+  if (!prefixo) return null;
+  const resto = texto
+    .slice(prefixo.length)
+    .split(" ")
+    .filter((w) => w !== "" && !/^\d+$/.test(w))
+    .join(" ");
+  return resto.replace(/[^A-Z]/g, "").length >= 3 ? resto : null;
+}
+
+/** Pontuação máxima: o cedente é um apelido confirmado do favorecido. */
+const PONTOS_DO_APELIDO = 99;
+
+/**
+ * Pontos de nome entre o movimento e um candidato: o apelido bancário vale o
+ * máximo; senão, as palavras em comum com os nomes.
+ */
+export function pontosDoCandidato(
+  memo: string | null,
+  candidato: { nomes: readonly (string | null)[]; apelidos?: readonly string[] },
+  nomes: readonly (string | null)[] = candidato.nomes,
+): number {
+  if (candidato.apelidos && candidato.apelidos.length > 0) {
+    const cedente = cedenteDoHistorico(memo);
+    if (cedente && candidato.apelidos.includes(cedente)) return PONTOS_DO_APELIDO;
+  }
+  return palavrasEmComum(memo, nomes);
+}
+
+/** "Nome confere" com o candidato, contando o apelido bancário. */
+export function nomeConfereComCandidato(
+  memo: string | null,
+  candidato: { nomes: readonly (string | null)[]; apelidos?: readonly string[] },
+  nomes: readonly (string | null)[] = candidato.nomes,
+): boolean {
+  return pontosDoCandidato(memo, candidato, nomes) >= 1;
+}
+
 /** Diferença em dias entre duas datas yyyy-MM-dd, em módulo. */
 export function diasEntre(a: string, b: string): number {
   const ms = Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`);
@@ -306,7 +396,7 @@ function casarIguaisDoMesmoDia(
 
     const transferencia = cands.every((c) => c.especie === "transferencia");
     if (!transferencia && cands.some((c) => c.especie === "transferencia")) continue;
-    if (!transferencia && !cands.every((c) => nomeConfere(movs[0].memo, c.nomes))) continue;
+    if (!transferencia && !cands.every((c) => nomeConfereComCandidato(movs[0].memo, c))) continue;
     // Uma transferência sozinha no dia é coisa das regras (b) e (c).
     if (transferencia && movs.length === 1 && cands.length === 1) continue;
 
@@ -323,7 +413,8 @@ function casarIguaisDoMesmoDia(
       const c = ordenadosCand[i];
       // Favorecido (nome, razão social) conferindo; só a descrição não basta
       // para dispensar a conferência.
-      const favorecidoConfere = transferencia || nomeConfere(m.memo, c.nomes.slice(0, 2));
+      const favorecidoConfere =
+        transferencia || nomeConfereComCandidato(m.memo, c, c.nomes.slice(0, 2));
       pares.push({
         transacaoId: m.id,
         especie: c.especie,
@@ -374,7 +465,7 @@ function casarPorRegras(
         candidato,
         chaveCandidato,
         dias,
-        nomeBate: nomeConfere(movimento.memo, candidato.nomes),
+        nomeBate: nomeConfereComCandidato(movimento.memo, candidato),
       };
       const doMovimento = porMovimento.get(movimento.id);
       if (doMovimento) doMovimento.push(possivel);
@@ -483,8 +574,8 @@ export function sugerirParaMovimento<C extends CandidatoCasavel>(
     })
     .map((sugestao) => ({
       ...sugestao,
-      pontosNome: palavrasEmComum(movimento.memo, sugestao.candidato.nomes),
-      nomeBate: nomeConfere(movimento.memo, sugestao.candidato.nomes),
+      pontosNome: pontosDoCandidato(movimento.memo, sugestao.candidato),
+      nomeBate: nomeConfereComCandidato(movimento.memo, sugestao.candidato),
     }))
     .sort(
       (a, b) =>

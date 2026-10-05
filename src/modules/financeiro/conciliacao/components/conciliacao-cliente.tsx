@@ -49,6 +49,7 @@ import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
   aplicarRegra,
   casarAutomatico,
+  confirmarConferencias,
   desconciliar,
   desconciliarVarios,
   fecharMes,
@@ -56,7 +57,7 @@ import {
   excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
 import {
-  nomeConfere,
+  cedenteDoHistorico,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
   sugestoesSeguras,
@@ -77,6 +78,7 @@ import {
   candidatosDoPainel,
   montarVisoes,
   movimentosLivres,
+  precisaConferir,
   somar,
   statusDoMes,
   TODOS_OS_MESES,
@@ -265,6 +267,21 @@ function ConciliacaoConta({
       ativa: true,
       historicoDeOrigem: t.memo,
     });
+  }
+
+  async function confirmar(ids: string[]) {
+    const resposta = await confirmarConferencias(ids);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return;
+    }
+    toast.success(
+      `${quantos(resposta.confirmadas, "casamento confirmado", "casamentos confirmados")}` +
+        (resposta.aprendidos > 0
+          ? `, ${quantos(resposta.aprendidos, "apelido bancário aprendido", "apelidos bancários aprendidos")}`
+          : ""),
+    );
+    router.refresh();
   }
 
   async function aplicarRegras(pares: { regraId: string; ids: string[] }[]) {
@@ -641,6 +658,7 @@ function ConciliacaoConta({
           permissoes={permissoes}
           onDesfazer={setDesfazerAlvo}
           onDesfazerVarios={setDesfazerIds}
+          onConfirmar={confirmar}
         />
       )}
 
@@ -1432,22 +1450,22 @@ function TabelaForaDoBanco({
 // Casados
 // ---------------------------------------------------------------------------
 
-function precisaConferir(t: TransacaoPainel): boolean {
-  if (!t.automatica || !t.parcela) return false;
-  return !nomeConfere(t.memo, [t.parcela.nome, t.parcela.descricao]);
-}
 
 function TabelaCasados({
   transacoes,
   permissoes,
   onDesfazer,
   onDesfazerVarios,
+  onConfirmar,
 }: {
   transacoes: TransacaoPainel[];
   permissoes: PermissoesConciliacao;
   onDesfazer: (t: TransacaoPainel) => void;
   onDesfazerVarios: (ids: string[]) => void;
+  /** Confirma casamentos com selo "Confira" e aprende o apelido (Bloco I). */
+  onConfirmar: (ids: string[]) => Promise<void>;
 }) {
+  const [confirmando, setConfirmando] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [situacao, setSituacao] = React.useState("");
   const [selecionados, setSelecionados] = React.useState<string[]>([]);
@@ -1512,7 +1530,21 @@ function TabelaCasados({
         id: "vinculo",
         header: "No app",
         size: 320,
-        cell: ({ row }) => vinculoDe(row.original),
+        cell: ({ row }) => {
+          // No "Confira", o cedente que vai virar apelido ao confirmar.
+          const cedente = precisaConferir(row.original)
+            ? cedenteDoHistorico(row.original.memo)
+            : null;
+          return cedente ? (
+            <span title={`Ao confirmar, ${cedente} vira apelido bancário deste favorecido`}>
+              <span className="text-status-pendente">{cedente}</span>
+              {" → "}
+              {vinculoDe(row.original)}
+            </span>
+          ) : (
+            vinculoDe(row.original)
+          );
+        },
       },
       {
         id: "como",
@@ -1531,24 +1563,38 @@ function TabelaCasados({
       {
         id: "acoes",
         header: "",
-        size: 130,
+        size: 230,
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) =>
           permissoes.conciliar ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => onDesfazer(row.original)}
-              title="Desfazer"
-            >
-              <X />
-              <span className="max-md:sr-only">Desfazer</span>
-            </Button>
+            <div className="flex justify-end gap-1">
+              {precisaConferir(row.original) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void onConfirmar([row.original.id])}
+                  title="Confirmar: está certo, e o banco passa a reconhecer este nome"
+                >
+                  <CheckCheck />
+                  <span className="max-md:sr-only">Confirmar</span>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => onDesfazer(row.original)}
+                title="Desfazer"
+              >
+                <X />
+                <span className="max-md:sr-only">Desfazer</span>
+              </Button>
+            </div>
           ) : null,
       },
     ],
-    [permissoes, onDesfazer],
+    [permissoes, onDesfazer, onConfirmar],
   );
 
   const qtdConferir = transacoes.filter(precisaConferir).length;
@@ -1596,6 +1642,10 @@ function TabelaCasados({
     },
   ];
 
+  const paraConfirmar = transacoes
+    .filter((t) => validos.includes(t.id) && precisaConferir(t))
+    .map((t) => t.id);
+
   return (
     <div className="flex flex-col gap-2">
       {validos.length > 0 ? (
@@ -1612,6 +1662,22 @@ function TabelaCasados({
             ),
           )}`}
         >
+          {permissoes.conciliar && paraConfirmar.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={confirmando}
+              onClick={async () => {
+                setConfirmando(true);
+                await onConfirmar(paraConfirmar);
+                setConfirmando(false);
+                setSelecionados([]);
+              }}
+            >
+              {confirmando ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
+              Confirmar {paraConfirmar.length}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
