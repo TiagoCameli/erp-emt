@@ -5130,3 +5130,13 @@ Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem 
 ## 2026-10-05 - Conciliação: ver o resumo do lançamento antes de casar
 
 **Pedido do Tiago:** no "Casar movimento do extrato", um botão para ver o resumo do lançamento candidato (caso: TRANSFERIDO PARA POUPANÇA de R$ 100.000,00 contra o LAN-2026-3101, Simone Maria Gomes Magalhães, "PAGAMENTO PARCELA TERRENO"). **Decisão:** botão "Ver" ao lado de cada candidato que é lançamento, sem escolher o candidato. Abre por cima o resumo: favorecido, descrição, valor, categoria, mês de referência, data da compra, documento, observações, parcelas (data, conta, valor, situação) e rateio por centro de custo, com "Abrir lançamento" em outra aba. Lê por `resumoDoLancamento`, com a permissão de ver lançamentos (quem só tem a Conciliação recebe o aviso de sem permissão).
+
+## 2026-10-05 - Conciliação v2, Bloco H: regras por histórico
+
+**Pedido do Tiago (roteiro "Conciliação bancária v2"):** o histórico do banco já diz o que muitos movimentos são; "BB RENDE FÁCIL" ficava em "Faltam no app" todo mês. **Decisão:** tabela `conciliacao_regras` (texto do histórico normalizado, comparado por "contém", nunca regex; sentido; ação `transferencia` ou `lancar`; `apelido` fica reservada ao Bloco I). A importação e o "Casar automaticamente" aplicam as regras automáticas antes do casamento (`fn_conciliacao_aplicar_regras`); as não automáticas aparecem em "Faltam no app" como "Regra: nome" com "Aplicar" e "Aplicar N regras". Qualquer movimento sem par tem "Criar regra a partir deste", com o maior trecho do histórico sem data, hora e número. Nova aba "Regras" ao lado de Importações.
+- A transferência usa a mesma `fn_conciliacao_lancar_transferencia` de sempre; o sinal do movimento decide (débito = aplicação, crédito = resgate). A aplicação vem da regra ou da única aplicação ativa cadastrada para a subconta; sem nenhuma, o movimento fica em Faltam com "Cadastre a aplicação da subconta".
+- O lançamento usa `fn_conciliacao_lancar`, com fornecedor, categoria e centro da regra, descrição = histórico e mês de referência = mês do movimento.
+- Mês fechado recusa. Regra aplicada sozinha marca o movimento como automático; a aplicada pelo botão, como manual.
+- Semeadura: "BB Rende Fácil" na BB 102.124-9, automática, com a aplicação "Banco do Brasil - Rende Fácil" (o cadastro de `aplicacoes` não tem a subconta do BB, por isso a regra carrega a aplicação).
+
+Efeito medido no BB 102.124-9 (6.919 pendentes, conciliação zerada): automático de 6.002 para 6.250 (248 Rende Fácil), "Confira" 1.234, sugestões 380, sem par de 522 para 274.

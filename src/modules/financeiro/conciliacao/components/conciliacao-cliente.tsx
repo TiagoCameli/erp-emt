@@ -11,6 +11,7 @@ import {
   CheckCheck,
   FilePlus2,
   Link2,
+  ListPlus,
   LoaderCircle,
   Pencil,
   Trash2,
@@ -46,6 +47,7 @@ import {
 import { cn } from "@/lib/utils";
 import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
+  aplicarRegra,
   casarAutomatico,
   desconciliar,
   desconciliarVarios,
@@ -67,6 +69,11 @@ import {
   pareceEstorno,
 } from "@/modules/financeiro/conciliacao/estorno";
 import {
+  padraoDoHistorico,
+  regraDoMovimento,
+  type RegraConciliacao,
+} from "@/modules/financeiro/conciliacao/regras";
+import {
   candidatosDoPainel,
   montarVisoes,
   movimentosLivres,
@@ -83,6 +90,7 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
 import { EstornoDialog } from "./estorno-dialog";
+import { RegraDialog, type RegraEmEdicao } from "./regra-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
 import { RevisarSegurasDialog } from "./revisar-seguras-dialog";
 import { LancarDrawer, type OpcoesLancamento } from "./lancar-drawer";
@@ -114,6 +122,8 @@ export interface ConciliacaoClienteProps {
   painel: PainelConciliacao;
   visao: VisaoConciliacao;
   opcoes: OpcoesLancamento;
+  /** Regras por histórico (Bloco H): a tela mostra qual vale para cada movimento. */
+  regras: RegraConciliacao[];
   permissoes: PermissoesConciliacao;
 }
 
@@ -201,6 +211,7 @@ function ConciliacaoConta({
   painel,
   visao,
   opcoes,
+  regras,
   permissoes,
   podeFechar,
 }: ConciliacaoClienteProps & { podeFechar: boolean }) {
@@ -216,11 +227,65 @@ function ConciliacaoConta({
     () => [...movimentosLivres(painel), ...vizinhosLivres(painel)],
     [painel],
   );
+  // A regra por histórico de cada movimento sem par (Bloco H). O banco aplica
+  // as automáticas antes do casamento, então elas saem da prévia do casamento.
+  const regraPorMovimento = React.useMemo(() => {
+    const mapa = new Map<string, RegraConciliacao>();
+    for (const m of movimentosLivres(painel)) {
+      const regra = regraDoMovimento(regras, { ...m, contaBancariaId: conta.id });
+      if (regra) mapa.set(m.id, regra);
+    }
+    return mapa;
+  }, [painel, regras, conta.id]);
   const automatico = React.useMemo(
-    () => casarTudo(movimentosLivres(painel), vizinhosLivres(painel), candidatos),
-    [painel, candidatos],
+    () =>
+      casarTudo(
+        movimentosLivres(painel).filter((m) => !regraPorMovimento.get(m.id)?.automatica),
+        vizinhosLivres(painel),
+        candidatos,
+      ),
+    [painel, candidatos, regraPorMovimento],
   );
-  const qtdAutomaticos = automatico.pares.length + automatico.estornos.length;
+  const qtdRegrasAutomaticas = [...regraPorMovimento.values()].filter((r) => r.automatica).length;
+  const qtdAutomaticos =
+    automatico.pares.length + automatico.estornos.length + qtdRegrasAutomaticas;
+  const [regraEmEdicao, setRegraEmEdicao] = React.useState<RegraEmEdicao | null>(null);
+  const [chaveRegra, setChaveRegra] = React.useState(0);
+
+  function criarRegraDe(t: TransacaoPainel) {
+    const padrao = padraoDoHistorico(t.memo);
+    setChaveRegra((k) => k + 1);
+    setRegraEmEdicao({
+      nome: padrao.slice(0, 60),
+      padrao,
+      contaBancariaId: conta.id,
+      sentido: t.valor >= 0 ? "credito" : "debito",
+      acao: "lancar",
+      automatica: false,
+      ativa: true,
+      historicoDeOrigem: t.memo,
+    });
+  }
+
+  async function aplicarRegras(pares: { regraId: string; ids: string[] }[]) {
+    let feitos = 0;
+    const erros: string[] = [];
+    for (const par of pares) {
+      const resposta = await aplicarRegra({ regraId: par.regraId, transacaoIds: par.ids });
+      if ("erro" in resposta) {
+        erros.push(resposta.erro);
+        continue;
+      }
+      feitos += resposta.feitos;
+      erros.push(...resposta.falhas.map((f) => f.erro));
+    }
+    if (erros.length > 0) {
+      toast.error(`${quantos(feitos, "aplicada", "aplicadas")}, ${erros.length} com erro: ${erros[0]}`);
+    } else {
+      toast.success(`${quantos(feitos, "movimento lançado", "movimentos lançados")} pela regra`);
+    }
+    router.refresh();
+  }
 
   const [importarAberto, setImportarAberto] = React.useState(false);
   const [casando, setCasando] = React.useState(false);
@@ -276,6 +341,7 @@ function ConciliacaoConta({
     }
     toast.success(
       `${quantos(resposta.feitos, "movimento casado", "movimentos casados")}` +
+        (resposta.regras ? `, ${quantos(resposta.regras, "lançado por regra", "lançados por regra")}` : "") +
         (resposta.falhas.length > 0
           ? `, ${resposta.falhas.length} não casaram`
           : ""),
@@ -553,9 +619,12 @@ function ConciliacaoConta({
           transacoes={visoes.faltamNoApp}
           candidatos={candidatos}
           movimentosParaEstorno={movimentosParaEstorno}
+          regraPorMovimento={regraPorMovimento}
           permissoes={permissoes}
           onCasar={setCasarAlvoId}
           onEstorno={setEstornoAlvoId}
+          onAplicarRegras={aplicarRegras}
+          onCriarRegra={permissoes.lancar ? criarRegraDe : undefined}
           onLancar={setLancarIds}
           onTransferir={setTransferirIds}
         />
@@ -589,6 +658,18 @@ function ConciliacaoConta({
         onAbertoChange={(aberto) => !aberto && setCasarAlvoId(null)}
         transacao={casarAlvo}
         candidatos={candidatos}
+      />
+
+      <RegraDialog
+        key={`regra-${chaveRegra}`}
+        regra={regraEmEdicao}
+        onFechar={() => setRegraEmEdicao(null)}
+        opcoes={{
+          contas,
+          centros: opcoes.centros,
+          categorias: opcoes.categorias,
+          fornecedores: opcoes.fornecedores,
+        }}
       />
 
       <EstornoDialog
@@ -706,9 +787,12 @@ function TabelaFaltam({
   transacoes,
   candidatos,
   movimentosParaEstorno,
+  regraPorMovimento,
   permissoes,
   onCasar,
   onEstorno,
+  onAplicarRegras,
+  onCriarRegra,
   onLancar,
   onTransferir,
 }: {
@@ -716,9 +800,12 @@ function TabelaFaltam({
   transacoes: TransacaoPainel[];
   candidatos: CandidatoDoPainel[];
   movimentosParaEstorno: MovimentoCasavel[];
+  regraPorMovimento: Map<string, RegraConciliacao>;
   permissoes: PermissoesConciliacao;
   onCasar: (id: string) => void;
   onEstorno: (id: string) => void;
+  onAplicarRegras: (pares: { regraId: string; ids: string[] }[]) => Promise<void>;
+  onCriarRegra?: (t: TransacaoPainel) => void;
   onLancar: (ids: string[]) => void;
   onTransferir: (ids: string[]) => void;
 }) {
@@ -832,6 +919,15 @@ function TabelaFaltam({
         header: "O app tem",
         size: 300,
         cell: ({ row }) => {
+          const regra = regraPorMovimento.get(row.original.id);
+          if (regra) {
+            return (
+              <span className="text-status-pendente" title={regra.padrao}>
+                Regra: {regra.nome}
+                {regra.automatica ? " (automática)" : ""}
+              </span>
+            );
+          }
           if (pareceEstorno(row.original.memo)) {
             const envio = enviosPossiveis(row.original, movimentosParaEstorno)[0];
             return envio ? (
@@ -873,8 +969,21 @@ function TabelaFaltam({
           const t = row.original;
           const aplicacao = pareceAplicacaoAutomatica(t.memo);
           const devolucao = pareceEstorno(t.memo);
+          const regra = regraPorMovimento.get(t.id);
           return (
             <div className="flex flex-wrap justify-end gap-1">
+              {permissoes.conciliar && regra ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void onAplicarRegras([{ regraId: regra.id, ids: [t.id] }])}
+                  title={`Aplicar a regra ${regra.nome}`}
+                >
+                  <Wand2 />
+                  <span className="max-md:sr-only">Aplicar</span>
+                </Button>
+              ) : null}
               {permissoes.conciliar && devolucao ? (
                 <Button
                   type="button"
@@ -926,6 +1035,18 @@ function TabelaFaltam({
                   ) : null}
                 </Button>
               ) : null}
+              {permissoes.conciliar && onCriarRegra && !regra ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onCriarRegra(t)}
+                  aria-label="Criar regra a partir deste"
+                  title="Criar regra a partir deste histórico"
+                >
+                  <ListPlus />
+                </Button>
+              ) : null}
               {permissoes.conciliar && !devolucao ? (
                 <Button
                   type="button"
@@ -947,9 +1068,12 @@ function TabelaFaltam({
       sugestoes,
       idsSeguros,
       movimentosParaEstorno,
+      regraPorMovimento,
       permissoes,
       onCasar,
       onEstorno,
+      onAplicarRegras,
+      onCriarRegra,
       onLancar,
       onTransferir,
     ],
@@ -1018,8 +1142,39 @@ function TabelaFaltam({
     },
   ];
 
+  // Movimentos com regra, agrupados por regra, para o "Aplicar N regras".
+  const comRegra = transacoes.filter((t) => regraPorMovimento.has(t.id));
+  const porRegra = new Map<string, string[]>();
+  for (const t of comRegra) {
+    const id = regraPorMovimento.get(t.id)!.id;
+    porRegra.set(id, [...(porRegra.get(id) ?? []), t.id]);
+  }
+  const [aplicando, setAplicando] = React.useState(false);
+
   return (
     <div className="flex flex-col gap-2">
+      {permissoes.conciliar && comRegra.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+          <span>
+            {comRegra.length === 1
+              ? "1 movimento tem regra por histórico (Rende Fácil, tarifa)."
+              : `${comRegra.length} movimentos têm regra por histórico (Rende Fácil, tarifa).`}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            disabled={aplicando}
+            onClick={async () => {
+              setAplicando(true);
+              await onAplicarRegras([...porRegra].map(([regraId, ids]) => ({ regraId, ids })));
+              setAplicando(false);
+            }}
+          >
+            {aplicando ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
+            Aplicar {comRegra.length} {comRegra.length === 1 ? "regra" : "regras"}
+          </Button>
+        </div>
+      ) : null}
       {permissoes.conciliar && seguras.length > 0 ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
           <span>

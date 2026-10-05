@@ -49,11 +49,19 @@ export type ResultadoImportacao =
       ignorados: MovimentoIgnorado[];
       /** Quantos movimentos o casamento automático já vinculou. */
       casadas: number;
+      /** Quantos as regras automáticas por histórico lançaram (Bloco H). */
+      regras: number;
       aviso: string | null;
     }
   | { erro: string };
 export type ResultadoLote =
-  | { ok: true; feitos: number; falhas: { id: string; erro: string }[] }
+  | {
+      ok: true;
+      feitos: number;
+      falhas: { id: string; erro: string }[];
+      /** Quantos as regras automáticas lançaram antes do casamento. */
+      regras?: number;
+    }
   | { erro: string };
 
 /** Transação no formato que a RPC fn_conciliacao_importar espera no jsonb. */
@@ -94,6 +102,36 @@ const resultadoLoteSchema = z.object({
   casadas: z.number(),
   falhas: z.array(z.object({ transacao: z.string(), erro: z.string() })),
 });
+
+const resultadoRegrasSchema = z.object({
+  aplicadas: z.number(),
+  sugeridas: z.number(),
+  porRegra: z.array(z.object({ regraId: z.string(), nome: z.string(), qtd: z.number() })),
+  ignoradas: z.array(
+    z.object({ transacaoId: z.string(), regra: z.string(), erro: z.string() }),
+  ),
+});
+
+export type ResultadoRegras = z.infer<typeof resultadoRegrasSchema>;
+
+/**
+ * Regras automáticas por histórico (Bloco H): Rende Fácil vira transferência
+ * com a subconta, tarifa vira lançamento. Rodam antes do casamento, para o
+ * casamento não oferecer parcela a um movimento que a regra já explica.
+ * `mes` null = todos os movimentos livres da conta.
+ */
+async function aplicarRegrasNoServidor(
+  contaId: string,
+  mes: string | null,
+): Promise<ResultadoRegras> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_aplicar_regras", {
+    p_conta_id: contaId,
+    ...(mes ? { p_mes: mes } : {}),
+  });
+  if (error) throw error;
+  return resultadoRegrasSchema.parse(data);
+}
 
 /** Mensagem do Postgres sem o prefixo técnico, para o toast. */
 function mensagem(e: unknown, padrao: string): string {
@@ -273,8 +311,14 @@ export async function importarOfx(
   // O casamento automático é parte da importação para quem pode conciliar.
   // Se falhar, o extrato continua importado: a pessoa casa pelo botão.
   let casadas = 0;
+  let regras = 0;
   const usuario = await getUsuarioLogado();
   if (usuario && temPermissao(usuario, RECURSO, "editar")) {
+    try {
+      regras = (await aplicarRegrasNoServidor(contaId, null)).aplicadas;
+    } catch (e) {
+      logErroServidor("financeiro.conciliacao.importarOfx.regras", e);
+    }
     try {
       casadas = (await casarNoServidor(contaId, inicio, fim)).casadas;
     } catch (e) {
@@ -289,6 +333,7 @@ export async function importarOfx(
     ignoradas: resumo.data.ignoradas,
     ignorados: resumo.data.ignorados,
     casadas,
+    regras,
     // A conferência é do MÊS FECHADO e vale sobre o período que o ARQUIVO
     // declara, não sobre o que foi deduzido das transações.
     aviso: conferirMesFechado(extrato.periodoInicio, extrato.periodoFim),
@@ -320,13 +365,26 @@ export async function casarAutomatico(
   if (!periodo) return { erro: "Mês inválido" };
 
   try {
+    // As regras primeiro: pegam movimento importado antes da regra existir.
+    const regras = await aplicarRegrasNoServidor(
+      contaId,
+      mes === TODOS_OS_MESES ? null : `${mes}-01`,
+    );
     const { casadas, falhas } = await casarNoServidor(
       contaId,
       periodo.inicio,
       periodo.fim,
     );
     revalidatePath(ROTA);
-    return { ok: true, feitos: casadas, falhas };
+    return {
+      ok: true,
+      feitos: casadas,
+      falhas: [
+        ...regras.ignoradas.map((i) => ({ id: i.transacaoId, erro: `${i.regra}: ${i.erro}` })),
+        ...falhas,
+      ],
+      regras: regras.aplicadas,
+    };
   } catch (e) {
     return erroAcao(
       "financeiro.conciliacao.casarAutomatico",
@@ -850,4 +908,97 @@ export async function resumoDoLancamento(
     logErroServidor("financeiro.conciliacao.resumo_lancamento", e);
     return { erro: "Não foi possível carregar o lançamento" };
   }
+}
+
+const salvarRegraSchema = z.object({
+  id: idSchema.nullable(),
+  contaBancariaId: idSchema.nullable(),
+  nome: z.string().trim().min(1, "Informe o nome da regra").max(120),
+  padrao: z.string().trim().min(3, "O texto do histórico precisa ter pelo menos 3 letras").max(200),
+  sentido: z.enum(["credito", "debito"]).nullable(),
+  acao: z.enum(["transferencia", "lancar"]),
+  contaContraparteId: idSchema.nullable(),
+  fornecedorId: idSchema.nullable(),
+  categoriaId: idSchema.nullable(),
+  centroCustoId: idSchema.nullable(),
+  automatica: z.boolean(),
+  ativa: z.boolean(),
+});
+
+export type DadosRegra = z.input<typeof salvarRegraSchema>;
+
+/** Cria ou edita uma regra de conciliação por histórico (Bloco H). */
+export async function salvarRegra(
+  entrada: DadosRegra,
+): Promise<{ ok: true; id: string } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para editar regras de conciliação" };
+  }
+  const dados = salvarRegraSchema.safeParse(entrada);
+  if (!dados.success) {
+    return { erro: dados.error.issues[0]?.message ?? "Dados da regra inválidos" };
+  }
+  const { id, ...resto } = dados.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_salvar_regra", {
+    p_id: id as string,
+    p_dados: resto as unknown as Json,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.salvar_regra",
+      error,
+      mensagem(error, "Não foi possível salvar a regra"),
+    );
+  }
+  revalidatePath(ROTA, "layout");
+  return { ok: true, id: String(data) };
+}
+
+const aplicarRegraSchema = z.object({
+  regraId: idSchema,
+  transacaoIds: z.array(idSchema).min(1).max(500),
+});
+
+/**
+ * O "Aplicar" da tela: uma regra (automática ou não) nos movimentos
+ * escolhidos. O banco confere de novo se a regra vale para cada um.
+ */
+export async function aplicarRegra(
+  entrada: z.input<typeof aplicarRegraSchema>,
+): Promise<ResultadoLote> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = aplicarRegraSchema.safeParse(entrada);
+  if (!dados.success) return { erro: "Movimentos inválidos" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_aplicar_regra", {
+    p_regra_id: dados.data.regraId,
+    p_transacao_ids: dados.data.transacaoIds,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.aplicar_regra",
+      error,
+      mensagem(error, "Não foi possível aplicar a regra"),
+    );
+  }
+  const resultado = z
+    .object({
+      aplicadas: z.number(),
+      falhas: z.array(z.object({ transacao: z.string(), erro: z.string() })),
+    })
+    .parse(data);
+  revalidatePath(ROTA);
+  return {
+    ok: true,
+    feitos: resultado.aplicadas,
+    falhas: resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })),
+  };
 }
