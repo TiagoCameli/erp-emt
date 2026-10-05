@@ -25,6 +25,7 @@ describe("lerFiltrosCustoGrupo", () => {
       centroId: "",
       etapaId: "",
       categoriaId: "",
+      incluirInvestimento: false,
     });
   });
 

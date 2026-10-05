@@ -45,10 +45,10 @@ const OPCOES_SITUACAO = [
   { valor: "fechada", rotulo: "Fechadas" },
 ];
 
-/** Lançamento incompleto: custo do mês que ainda vai mudar. */
-const OPCOES_INCOMPLETOS = [
-  { valor: "com", rotulo: "Com incompletos" },
-  { valor: "sem", rotulo: "Sem incompletos" },
+/** Lançamento sem categoria: o DRE e o custo não sabem classificar. */
+const OPCOES_SEM_CATEGORIA = [
+  { valor: "com", rotulo: "Com lançamento sem categoria" },
+  { valor: "sem", rotulo: "Todos categorizados" },
 ];
 
 /** Mês fechado que recebeu lançamento depois, ou que foi reaberto. */
@@ -59,8 +59,8 @@ const OPCOES_EXCECOES = [
 
 /**
  * Fechamento de competência: um mês por linha, com o custo que está sendo
- * congelado e quantos lançamentos ainda estão incompletos (custo que vai mudar
- * depois). Fechar pede confirmação mostrando o valor; reabrir exige motivo,
+ * congelado e quantos lançamentos estão sem categoria (o DRE e o custo não
+ * sabem classificar). Fechar pede confirmação mostrando o valor; reabrir exige motivo,
  * porque muda número que alguém já olhou.
  */
 export function CompetenciasTabela({
@@ -76,7 +76,7 @@ export function CompetenciasTabela({
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [mes, setMes] = useFiltroSessao("mes", "");
   const [situacao, setSituacao] = useFiltroSessao("situacao", "");
-  const [incompletos, setIncompletos] = useFiltroSessao("incompletos", "");
+  const [semCategoria, setSemCategoria] = useFiltroSessao("sem_categoria", "");
   const [excecoes, setExcecoes] = useFiltroSessao("excecoes", "");
   const [custoDe, setCustoDe] = useFiltroSessao("custoDe", "");
   const [custoAte, setCustoAte] = useFiltroSessao("custoAte", "");
@@ -91,8 +91,8 @@ export function CompetenciasTabela({
     setSituacao(valor);
     zerarPagina();
   }
-  function mudarIncompletos(valor: string) {
-    setIncompletos(valor);
+  function mudarSemCategoria(valor: string) {
+    setSemCategoria(valor);
     zerarPagina();
   }
   function mudarExcecoes(valor: string) {
@@ -105,7 +105,7 @@ export function CompetenciasTabela({
     zerarPagina();
   }
 
-  // Facetado: situação, incompletos e exceções só oferecem o que existe nos
+  // Facetado: situação, sem categoria e exceções só oferecem o que existe nos
   // meses filtrados pelos outros (ver `_shared/filtros-facetados`). Mês e custo
   // entram livres.
   const { linhas: dados, opcoes } = React.useMemo(
@@ -117,9 +117,9 @@ export function CompetenciasTabela({
             selecionados: selecao(situacao),
             chave: (competencia) => (competencia.fechada ? "fechada" : "aberta"),
           },
-          incompletos: {
-            selecionados: selecao(incompletos),
-            chave: (competencia) => (competencia.incompletos > 0 ? "com" : "sem"),
+          sem_categoria: {
+            selecionados: selecao(semCategoria),
+            chave: (competencia) => (competencia.semCategoria > 0 ? "com" : "sem"),
           },
           excecoes: {
             selecionados: selecao(excecoes),
@@ -133,13 +133,13 @@ export function CompetenciasTabela({
             dentroDaFaixaValor(competencia.custo, custoDe, custoAte),
         ],
       ),
-    [competencias, mes, situacao, incompletos, excecoes, custoDe, custoAte],
+    [competencias, mes, situacao, semCategoria, excecoes, custoDe, custoAte],
   );
 
   const filtrando =
     mes !== "" ||
     situacao !== "" ||
-    incompletos !== "" ||
+    semCategoria !== "" ||
     excecoes !== "" ||
     custoDe !== "" ||
     custoAte !== "";
@@ -171,18 +171,18 @@ export function CompetenciasTabela({
       ),
     },
     {
-      id: "incompletos",
-      rotulo: "Lançamentos incompletos",
+      id: "sem_categoria",
+      rotulo: "Lançamentos sem categoria",
       ocultoPorPadrao: true,
-      temValor: incompletos !== "",
-      onLimpar: () => mudarIncompletos(""),
+      temValor: semCategoria !== "",
+      onLimpar: () => mudarSemCategoria(""),
       elemento: (
         <FiltroSelect
-          valor={incompletos}
-          onValorChange={mudarIncompletos}
-          opcoes={opcoes("incompletos", OPCOES_INCOMPLETOS)}
-          placeholder="Incompletos"
-          todosRotulo="Com e sem incompletos"
+          valor={semCategoria}
+          onValorChange={mudarSemCategoria}
+          opcoes={opcoes("sem_categoria", OPCOES_SEM_CATEGORIA)}
+          placeholder="Sem categoria"
+          todosRotulo="Com e sem categoria"
         />
       ),
     },
@@ -271,17 +271,15 @@ export function CompetenciasTabela({
       // truncava, porque o rótulo é mais largo que a contagem que ele nomeia.
       colunaNumero<CompetenciaMes>("lancamentos", "Lançamentos", { size: 140 }),
       {
-        accessorKey: "incompletos",
-        header: "Incompletos",
-        size: 140,
+        accessorKey: "semCategoria",
+        header: "Sem categoria",
+        size: 150,
         meta: { alinharDireita: true, naoTruncar: true },
         cell: ({ row }) =>
-          row.original.incompletos > 0 ? (
+          row.original.semCategoria > 0 ? (
             <StatusBadge
               status="rejeitado"
-              rotulo={`${row.original.incompletos} incompleto${
-                row.original.incompletos > 1 ? "s" : ""
-              }`}
+              rotulo={`${row.original.semCategoria} sem categoria`}
             />
           ) : (
             <span className="tabular-nums text-muted-foreground">0</span>
@@ -410,8 +408,8 @@ export function CompetenciasTabela({
             ? `Vai congelar ${formatarBRL(fechando.custo)} de custo em ${
                 fechando.lancamentos
               } lançamento(s).${
-                fechando.incompletos > 0
-                  ? ` Atenção: ${fechando.incompletos} lançamento(s) deste mês ainda estão incompletos, e o custo deles vai entrar depois pela exceção.`
+                fechando.semCategoria > 0
+                  ? ` Atenção: ${fechando.semCategoria} lançamento(s) deste mês estão sem categoria, e o DRE não sabe classificá-los.`
                   : ""
               } Depois de fechar, lançar neste mês exige reabrir a competência.`
             : ""

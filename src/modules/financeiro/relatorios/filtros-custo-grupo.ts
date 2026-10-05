@@ -1,4 +1,5 @@
 import { lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+import { lerIncluirInvestimento } from "@/modules/financeiro/relatorios/filtro-investimento";
 import {
   lerPeriodoDaUrl,
   type ParametrosUrl,
@@ -45,6 +46,8 @@ export interface FiltrosCustoGrupo extends PeriodoNaUrl {
   etapaId: string;
   /** Categoria financeira escolhida. Vazio = todas. */
   categoriaId: string;
+  /** CAPEX de volta no custo. Ver `filtro-investimento.ts`. */
+  incluirInvestimento: boolean;
 }
 
 /** O primeiro uuid válido do parâmetro, ou vazio. */
@@ -62,5 +65,6 @@ export function lerFiltrosCustoGrupo(
     centroId: lerUuidDaUrl(params.centro),
     etapaId: lerUuidDaUrl(params.etapa),
     categoriaId: lerUuidDaUrl(params.categoria),
+    incluirInvestimento: lerIncluirInvestimento(params.com_investimento),
   };
 }

@@ -122,7 +122,10 @@ describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
       <CustoGrupoTabela
         custo={CUSTO}
         periodo={{ de: "2026-01", ate: "2026-03" }}
-        recorte={{ centroCustoId: CENTRO, categoriaId: "cat-financeira" }}
+        recorte={{
+          centroCustoId: CENTRO,
+          categoriaId: "cat-financeira",
+        }}
         podeVerLancamentos
       />,
     );
@@ -136,7 +139,31 @@ describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
       "cat-combustivel",
       { de: "2026-01", ate: "2026-03" },
       CENTRO,
+      // "Incluir investimentos" desmarcado: o padrão do relatório.
+      undefined,
     ]);
+  });
+
+  it("o nível de insumo herda o Incluir investimentos da tela", async () => {
+    // Ligado no grupo e desligado no insumo, a máquina comprada sumiria do
+    // nível 3 e o filho deixaria de fechar com o pai.
+    acaoDoInsumo.mockClear();
+    render(
+      <CustoGrupoTabela
+        custo={CUSTO}
+        periodo={{ mes: "2026-03" }}
+        recorte={{ incluirInvestimento: true }}
+        podeVerLancamentos
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Abrir Material"));
+    fireEvent.click(screen.getByLabelText("Abrir Combustível"));
+    await waitFor(() => {
+      expect(acaoDoInsumo).toHaveBeenCalled();
+    });
+
+    const chamada = acaoDoInsumo.mock.calls[0] as unknown[] | undefined;
+    expect(chamada?.[3]).toBe(true);
   });
 
   it("o link do grupo sem insumo abre a lista com o mesmo recorte", () => {

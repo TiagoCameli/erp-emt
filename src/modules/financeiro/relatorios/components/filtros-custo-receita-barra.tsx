@@ -22,6 +22,7 @@ import {
 } from "@/modules/_shared/centro-custo/filtro";
 import type { FiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
+import { filtroIncluirInvestimento } from "@/modules/financeiro/relatorios/components/filtro-marcar";
 
 export interface FiltrosCustoReceitaBarraProps {
   filtros: FiltrosCustoReceita;
@@ -214,6 +215,15 @@ export function FiltrosCustoReceitaBarra({
       />
     ),
   });
+
+  // Só o lado do CUSTO muda com ele: a receita é natureza operacional com ou
+  // sem o checkbox (ver `fn_rel_custo_receita`).
+  filtrosDaBarra.push(
+    filtroIncluirInvestimento({
+      marcado: filtros.incluirInvestimento,
+      setMuitos,
+    }),
+  );
 
   return (
     <BarraFiltrosConfiguravel

@@ -9,7 +9,7 @@ import type { CompetenciaMes } from "@/modules/financeiro/competencias/queries";
 
 /**
  * Filtros facetados na tela de competências (ver `_shared/filtros-facetados`):
- * com "Com incompletos" ligado, a situação só oferece o que sobra na tabela.
+ * com "Com lançamento sem categoria" ligado, a situação só oferece o que sobra na tabela.
  *
  * O FiltroSelect vira um `<select>` nativo aqui só para dar para ler as opções
  * sem abrir o popover do Radix; a tela continua a mesma.
@@ -69,17 +69,17 @@ function mes(sobrescrever: Partial<CompetenciaMes>): CompetenciaMes {
     observacao: null,
     custo: 1000,
     lancamentos: 3,
-    incompletos: 0,
+    semCategoria: 0,
     excecoes: 0,
     reaberturas: 0,
     ...sobrescrever,
   };
 }
 
-// Aberta com incompletos; fechada sem incompletos.
+// Aberta com lançamento sem categoria; fechada toda categorizada.
 const COMPETENCIAS = [
-  mes({ mes: "2026-09-01", fechada: false, incompletos: 2 }),
-  mes({ mes: "2026-08-01", fechada: true, incompletos: 0 }),
+  mes({ mes: "2026-09-01", fechada: false, semCategoria: 2 }),
+  mes({ mes: "2026-08-01", fechada: true, semCategoria: 0 }),
 ];
 
 function opcoesDe(rotulo: string): string[] {
@@ -106,19 +106,19 @@ describe("competências: filtros facetados", () => {
     expect(opcoesDe("Situação")).toEqual(["aberta", "fechada"]);
   });
 
-  it("com 'Com incompletos', a situação só oferece o que sobra (abertas)", () => {
-    window.sessionStorage.setItem(chaveFiltroSessao(ROTA, "incompletos"), "com");
+  it("com 'Com lançamento sem categoria', a situação só oferece o que sobra (abertas)", () => {
+    window.sessionStorage.setItem(chaveFiltroSessao(ROTA, "sem_categoria"), "com");
     render(<CompetenciasTabela competencias={COMPETENCIAS} podeFechar podeReabrir />);
     expect(opcoesDe("Situação")).toEqual(["aberta"]);
   });
 
-  it("escolher a situação restringe o filtro de incompletos, e o escolhido fica", () => {
-    window.sessionStorage.setItem(chaveFiltroSessao(ROTA, "incompletos"), "com");
+  it("escolher a situação restringe o filtro de sem categoria, e o escolhido fica", () => {
+    window.sessionStorage.setItem(chaveFiltroSessao(ROTA, "sem_categoria"), "com");
     render(<CompetenciasTabela competencias={COMPETENCIAS} podeFechar podeReabrir />);
     fireEvent.change(screen.getByRole("combobox", { name: "Situação" }), {
       target: { value: "fechada" },
     });
-    // Nenhum mês fechado tem incompleto: "com" fica (escolhido), "sem" aparece.
-    expect(opcoesDe("Incompletos")).toEqual(["com", "sem"]);
+    // Nenhum mês fechado tem lançamento sem categoria: "com" fica (escolhido), "sem" aparece.
+    expect(opcoesDe("Sem categoria")).toEqual(["com", "sem"]);
   });
 });

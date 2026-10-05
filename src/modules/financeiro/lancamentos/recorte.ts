@@ -31,13 +31,48 @@ export type FaixaAgingRecorte =
 
 export type TipoLancamentoRecorte = "a_pagar" | "a_receber";
 
+/**
+ * As quatro séries do fluxo de caixa, as mesmas que `fn_rel_fluxo_caixa` devolve
+ * em `tipo` (coluna `serie_fluxo` de `vw_parcelas_caixa`). Desde a D1
+ * (03/10/2026) a movimentação que passa pela conta entra no caixa, mas em série
+ * própria: `emprestimo_tomado` é a entrada de movimentação rateada no centro de
+ * Empréstimos, e `amortizacao` é a saída de movimentação. Os resgates antigos de
+ * aplicação ficam em `a_receber`.
+ */
+export type SerieFluxo =
+  | "a_pagar"
+  | "a_receber"
+  | "emprestimo_tomado"
+  | "amortizacao";
+
+export const SERIES_FLUXO: readonly SerieFluxo[] = [
+  "a_pagar",
+  "a_receber",
+  "emprestimo_tomado",
+  "amortizacao",
+];
+
+/** O tipo do lançamento de cada série: a saída é a pagar, a entrada a receber. */
+export function tipoDaSerie(serie: SerieFluxo): TipoLancamentoRecorte {
+  return serie === "a_pagar" || serie === "amortizacao" ? "a_pagar" : "a_receber";
+}
+
 export type Recorte =
   | {
       tipo: "aging";
       faixa: FaixaAgingRecorte;
       tipoLancamento: TipoLancamentoRecorte;
     }
-  | { tipo: "fluxo"; mes: string; realizado: boolean }
+  | {
+      tipo: "fluxo";
+      mes: string;
+      realizado: boolean;
+      /**
+       * A série clicada. Ausente = as quatro, que é o que a URL antiga (sem o
+       * quarto pedaço) sempre quis dizer: o mês inteiro do caixa.
+       */
+      serie?: SerieFluxo;
+    }
   | { tipo: "conta_paga" };
 
 /** Como cada fatia é somada: a MESMA medida do relatório que a gerou. */
@@ -66,6 +101,14 @@ const ROTULO_FAIXA: Record<FaixaAgingRecorte, string> = {
   v_60_mais: "vencidas mais de 60 dias",
 };
 
+/** Como cada série aparece no chip do recorte, depois do mês. */
+const ROTULO_SERIE: Record<SerieFluxo, string> = {
+  a_pagar: "saídas operacionais",
+  a_receber: "entradas operacionais",
+  emprestimo_tomado: "empréstimos tomados",
+  amortizacao: "amortizações",
+};
+
 /**
  * Lê e valida o `recorte` da URL. Qualquer coisa fora do contrato volta
  * `undefined`, incluindo chave repetida (que o App Router entrega como array).
@@ -88,11 +131,15 @@ export function lerRecorte(
     return { tipo: "aging", faixa, tipoLancamento };
   }
 
-  if (partes[0] === "fluxo" && partes.length === 3) {
+  if (partes[0] === "fluxo" && (partes.length === 3 || partes.length === 4)) {
     const mes = partes[1];
     if (!MES.test(mes)) return undefined;
     if (partes[2] !== "realizado" && partes[2] !== "previsto") return undefined;
-    return { tipo: "fluxo", mes, realizado: partes[2] === "realizado" };
+    const realizado = partes[2] === "realizado";
+    if (partes.length === 3) return { tipo: "fluxo", mes, realizado };
+    const serie = partes[3] as SerieFluxo;
+    if (!SERIES_FLUXO.includes(serie)) return undefined;
+    return { tipo: "fluxo", mes, realizado, serie };
   }
 
   return undefined;
@@ -107,8 +154,10 @@ export function escreverRecorte(recorte: Recorte): string {
   switch (recorte.tipo) {
     case "aging":
       return `aging:${recorte.faixa}:${recorte.tipoLancamento}`;
-    case "fluxo":
-      return `fluxo:${recorte.mes}:${recorte.realizado ? "realizado" : "previsto"}`;
+    case "fluxo": {
+      const base = `fluxo:${recorte.mes}:${recorte.realizado ? "realizado" : "previsto"}`;
+      return recorte.serie ? `${base}:${recorte.serie}` : base;
+    }
     case "conta_paga":
       return "conta_paga";
   }
@@ -126,10 +175,12 @@ export function rotuloRecorte(recorte: Recorte): string {
         recorte.tipoLancamento === "a_pagar" ? "a pagar" : "a receber";
       return `Parcelas ${tipo} ${ROTULO_FAIXA[recorte.faixa]}`;
     }
-    case "fluxo":
-      return recorte.realizado
+    case "fluxo": {
+      const base = recorte.realizado
         ? `Parcelas pagas em ${rotuloMes(recorte.mes)}`
         : `Parcelas previstas para ${rotuloMes(recorte.mes)}`;
+      return recorte.serie ? `${base}, ${ROTULO_SERIE[recorte.serie]}` : base;
+    }
     case "conta_paga":
       return "Parcelas pagas";
   }

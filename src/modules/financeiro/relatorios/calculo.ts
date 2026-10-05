@@ -153,6 +153,11 @@ export interface DreLinha {
   categoriaId: string | null;
   categoria: string;
   valor: number;
+  /**
+   * Retenção na fonte da linha, só nas receitas do DRE (as outras somas por
+   * categoria não a têm). `valor` é o líquido; a bruta é `valor + retencao`.
+   */
+  retencao?: number;
 }
 
 /** Lançamento mínimo para somar por categoria. */
@@ -199,18 +204,25 @@ export function totalCategorias(linhas: DreLinha[]): number {
 }
 
 // =====================================================================
-// Os três blocos do DRE (por natureza da categoria)
+// Os quatro blocos do DRE (por natureza da categoria)
 // =====================================================================
 
 /**
- * Um bloco do DRE: entradas, saídas e o que sobra. Os três blocos têm a mesma
+ * Um bloco do DRE: entradas, saídas e o que sobra. Os quatro blocos têm a mesma
  * forma porque a diferença entre eles não é estrutura, é significado.
  */
 export interface BlocoDre {
   receitas: DreLinha[];
   despesas: DreLinha[];
+  /** Receita LÍQUIDA: o que o cliente pagou, já sem a retenção na fonte. */
   totalReceitas: number;
   totalDespesas: number;
+  /**
+   * Retenção na fonte das receitas do bloco (ISS, INSS, IR, PIS, COFINS, CSLL e
+   * outras), proporcional ao rateio como em `fn_rel_dre`. Receita bruta é
+   * `totalReceitas + retencaoReceitas`.
+   */
+  retencaoReceitas: number;
   resultado: number;
 }
 
@@ -221,13 +233,26 @@ export interface LinhaDreAgregada {
   categoria: string | null;
   natureza: string;
   total: number | string | null;
+  /**
+   * Retenção na fonte da linha (só faz sentido em a_receber). Opcional porque a
+   * coluna nasceu em 04/10/2026: linha sem ela conta como retenção zero.
+   */
+  retencao?: number | string | null;
 }
 
 export interface DrePorNatureza {
   operacional: BlocoDre;
   financeiro: BlocoDre;
   movimentacao: BlocoDre;
-  /** Operacional mais financeiro. A movimentação NÃO entra, de propósito. */
+  /**
+   * CAPEX (Aquisição de Equipamento, Investimentos, Compra de Terreno). Saiu do
+   * caixa, mas é patrimônio, não custo do período: fica FORA do resultado.
+   */
+  investimento: BlocoDre;
+  /**
+   * Operacional mais financeiro. Movimentação e investimento NÃO entram, de
+   * propósito.
+   */
   resultado: number;
 }
 
@@ -236,6 +261,7 @@ const BLOCO_VAZIO: BlocoDre = {
   despesas: [],
   totalReceitas: 0,
   totalDespesas: 0,
+  retencaoReceitas: 0,
   resultado: 0,
 };
 
@@ -243,11 +269,21 @@ const BLOCO_VAZIO: BlocoDre = {
 function montarBloco(
   receitasBrutas: LancamentoCategoria[],
   despesasBrutas: LancamentoCategoria[],
+  retencaoPorCategoria: ReadonlyMap<string, number>,
 ): BlocoDre {
   if (receitasBrutas.length === 0 && despesasBrutas.length === 0) {
     return { ...BLOCO_VAZIO };
   }
-  const receitas = somarPorCategoria(receitasBrutas);
+  // A retenção fica na linha (para a planilha mostrar a de cada categoria) e no
+  // bloco (para a tela fechar bruta, retenções e líquida). As duas somam os
+  // mesmos centavos, então não há como discordarem.
+  let retencaoCentavos = 0;
+  const receitas = somarPorCategoria(receitasBrutas).map((linha) => {
+    const centavos =
+      retencaoPorCategoria.get(linha.categoriaId ?? CHAVE_SEM_CATEGORIA) ?? 0;
+    retencaoCentavos += centavos;
+    return { ...linha, retencao: paraReais(centavos) };
+  });
   const despesas = somarPorCategoria(despesasBrutas);
   const totalReceitas = totalCategorias(receitas);
   const totalDespesas = totalCategorias(despesas);
@@ -256,14 +292,20 @@ function montarBloco(
     despesas,
     totalReceitas,
     totalDespesas,
+    retencaoReceitas: paraReais(retencaoCentavos),
     resultado: totalReceitas - totalDespesas,
   };
 }
 
-/** As três naturezas, na ordem em que aparecem no relatório. */
-const NATUREZAS = ["operacional", "financeira", "movimentacao"] as const;
+/** As quatro naturezas, na ordem em que aparecem no relatório. */
+export const NATUREZAS = [
+  "operacional",
+  "financeira",
+  "movimentacao",
+  "investimento",
+] as const;
 
-type Natureza = (typeof NATUREZAS)[number];
+export type Natureza = (typeof NATUREZAS)[number];
 
 /**
  * Natureza desconhecida cai em operacional. É natureza nova no banco com código
@@ -278,24 +320,36 @@ function naturezaDe(valor: string): Natureza {
 }
 
 /**
- * Separa as linhas agregadas do DRE nos três blocos, pela natureza da categoria.
+ * Separa as linhas agregadas do DRE nos quatro blocos, pela natureza da
+ * categoria (a do RATEIO, caindo na do lançamento; ver `fn_rel_dre`).
  *
  * O RESULTADO soma só operacional e financeiro. A movimentação (principal de
  * aplicação, resgate, empréstimo) fica de fora: aplicar R$ 1 milhão do saldo à
  * noite e resgatar na manhã seguinte movimenta R$ 2 milhões na conta e não gera
  * um centavo de resultado. Enquanto entrava na soma, a varredura automática do
  * banco respondia por 31,7% da "receita" de 2026 e 14,3% da "despesa".
+ *
+ * O investimento (CAPEX) também fica de fora, pela decisão D3 de 03/10/2026:
+ * comprar uma escavadeira troca dinheiro por máquina, e somar os R$ 5,2 mi de
+ * jan-set/2026 como despesa do período dava às obras um prejuízo que é, na
+ * verdade, patrimônio.
  */
 export function agruparDrePorNatureza(
   linhas: readonly LinhaDreAgregada[],
 ): DrePorNatureza {
   const gavetas: Record<
     Natureza,
-    { receitas: LancamentoCategoria[]; despesas: LancamentoCategoria[] }
+    {
+      receitas: LancamentoCategoria[];
+      despesas: LancamentoCategoria[];
+      /** Centavos de retenção por categoria (a chave de `somarPorCategoria`). */
+      retencao: Map<string, number>;
+    }
   > = {
-    operacional: { receitas: [], despesas: [] },
-    financeira: { receitas: [], despesas: [] },
-    movimentacao: { receitas: [], despesas: [] },
+    operacional: { receitas: [], despesas: [], retencao: new Map() },
+    financeira: { receitas: [], despesas: [], retencao: new Map() },
+    movimentacao: { receitas: [], despesas: [], retencao: new Map() },
+    investimento: { receitas: [], despesas: [], retencao: new Map() },
   };
 
   for (const linha of linhas) {
@@ -309,28 +363,71 @@ export function agruparDrePorNatureza(
     // é de propósito, para tipo novo de lançamento não sumir da tela.
     if (linha.tipo === "a_receber") {
       gaveta.receitas.push(item);
+      const chave = linha.categoria_id ?? CHAVE_SEM_CATEGORIA;
+      gaveta.retencao.set(
+        chave,
+        (gaveta.retencao.get(chave) ?? 0) + paraCentavos(linha.retencao),
+      );
     } else {
       gaveta.despesas.push(item);
     }
   }
 
-  const operacional = montarBloco(
-    gavetas.operacional.receitas,
-    gavetas.operacional.despesas,
-  );
-  const financeiro = montarBloco(
-    gavetas.financeira.receitas,
-    gavetas.financeira.despesas,
-  );
-  const movimentacao = montarBloco(
-    gavetas.movimentacao.receitas,
-    gavetas.movimentacao.despesas,
-  );
+  const bloco = (natureza: Natureza) =>
+    montarBloco(
+      gavetas[natureza].receitas,
+      gavetas[natureza].despesas,
+      gavetas[natureza].retencao,
+    );
+  const operacional = bloco("operacional");
+  const financeiro = bloco("financeira");
+  const movimentacao = bloco("movimentacao");
+  const investimento = bloco("investimento");
 
   return {
     operacional,
     financeiro,
     movimentacao,
+    investimento,
     resultado: operacional.resultado + financeiro.resultado,
+  };
+}
+
+/** Os quatro cartões do topo do DRE, e o indicador de investimento ao lado. */
+export interface CartoesDre {
+  /** Receita LÍQUIDA operacional (a obra). */
+  receitaOperacional: number;
+  despesaOperacional: number;
+  /** Receitas menos despesas financeiras (juros, tarifa, IOF). */
+  resultadoFinanceiro: number;
+  /** Resultado operacional mais resultado financeiro. */
+  resultadoDoPeriodo: number;
+  /** Saídas de CAPEX no período, fora do resultado. */
+  investimentosNoPeriodo: number;
+}
+
+/**
+ * Os números dos cartões, tirados do MESMO agrupamento da tabela.
+ *
+ * Em centavos, para a identidade que o cartão promete fechar ao centavo:
+ * receita operacional - despesa operacional + resultado financeiro = resultado
+ * do período. Somar reais em ponto flutuante deixaria um resto de 0,01 que se lê
+ * como erro de conta.
+ */
+export function cartoesDoDre(dre: DrePorNatureza): CartoesDre {
+  const receita = paraCentavos(dre.operacional.totalReceitas);
+  const despesa = paraCentavos(dre.operacional.totalDespesas);
+  const financeiro =
+    paraCentavos(dre.financeiro.totalReceitas) -
+    paraCentavos(dre.financeiro.totalDespesas);
+  return {
+    receitaOperacional: paraReais(receita),
+    despesaOperacional: paraReais(despesa),
+    resultadoFinanceiro: paraReais(financeiro),
+    resultadoDoPeriodo: paraReais(receita - despesa + financeiro),
+    // As SAÍDAS de CAPEX, que é a pergunta do indicador ("quanto foi para
+    // máquina e terreno"). Uma eventual venda de bem aparece na tabela, no bloco
+    // de investimentos, e não abate este número calada.
+    investimentosNoPeriodo: dre.investimento.totalDespesas,
   };
 }

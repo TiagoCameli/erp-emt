@@ -126,6 +126,9 @@ export function CustoGrupoTabela({
       categoriaId,
       periodo,
       recorte.centroCustoId,
+      // O CAPEX desce para o insumo junto: ligado no grupo e desligado aqui, a
+      // máquina comprada sumiria do nível 3 e o filho não fecharia com o pai.
+      recorte.incluirInvestimento,
     );
     setCarregando(null);
 

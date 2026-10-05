@@ -19,6 +19,13 @@ import { escreverListaNaUrl } from "@/modules/financeiro/_shared/listas-na-url";
  * | Pagamentos a aprovar | parcela pendente                             |
  * | Pago no mês          | paga, com pagamento dentro do mês corrente   |
  *
+ * NENHUM dos três cartões de pagar filtra natureza, e os links também não
+ * (D1, 03/10/2026): a prestação de empréstimo paga pela conta é caixa, e a fila
+ * de Pagamentos nunca filtrou natureza. Por isso estes links não levam
+ * `categoria`, `sem_movimentacao` nem `sem_investimento`: com qualquer um deles
+ * o destino somaria menos que o cartão. O teste `cartoes-de-pagar.test.ts`
+ * trava isso com uma parcela de movimentação e uma operacional.
+ *
  * Módulo puro: recebe as datas prontas em vez de ler o relógio, para o teste
  * poder fixar o dia e para a tela usar a MESMA data do resto do painel (fuso de
  * Rio Branco).
@@ -65,6 +72,12 @@ export interface ContextoDosCards {
   centroIds?: readonly string[];
   etapaIds?: readonly string[];
   categoriaIds?: readonly string[];
+  /**
+   * "Incluir investimentos" marcado no painel. Viaja no mesmo parâmetro do
+   * relatório (`com_investimento`): sem ele o Custo por centro abriria SEM o
+   * CAPEX embaixo de um cartão que o somou.
+   */
+  incluirInvestimento?: boolean;
 }
 
 export interface LinksDosCards {
@@ -98,7 +111,8 @@ function comParametros(rota: string, params: Record<string, string | undefined>)
 }
 
 export function linksDosCards(contexto: ContextoDosCards): LinksDosCards {
-  const { hoje, mesDoCusto, centroIds, etapaIds, categoriaIds } = contexto;
+  const { hoje, mesDoCusto, centroIds, etapaIds, categoriaIds, incluirInvestimento } =
+    contexto;
 
   return {
     // Obedece ao filtro do painel (é o único que obedece), então carrega centro,
@@ -111,6 +125,7 @@ export function linksDosCards(contexto: ContextoDosCards): LinksDosCards {
       centro: lista(centroIds),
       etapa: lista(etapaIds),
       categoria: lista(categoriaIds),
+      com_investimento: incluirInvestimento ? "1" : undefined,
     }),
 
     // A fila a pagar JÁ é o conjunto em aberto (pendente, em revisão e

@@ -21,9 +21,12 @@ import { describe, expect, it } from "vitest";
  *    Bancária, que é despesa paga e rateada. Decisão do Tiago: "as tarifas
  *    bancarias devem ser do escritorio central mesmo".
  *
- * A regra que ficou, e que este teste tranca:
- *   custo   (as sete)  : natureza <> 'movimentacao'
+ * A regra que ficou, e que este teste tranca (quatro naturezas desde
+ * 03/10/2026: operacional, financeira, movimentacao e investimento):
+ *   custo   (todas)    : natureza <> 'movimentacao'
+ *                        e natureza <> 'investimento', salvo p_incluir_investimento
  *   receita (só a 7ª)  : natureza  = 'operacional'
+ *   natureza medida em : coalesce(r.categoria_id, l.categoria_id) (D4)
  *
  * `movimentacao` é principal de empréstimo e de aplicação: entra e sai do caixa
  * sem virar resultado, então não é custo de ninguém. `financeira` é resultado —
@@ -43,10 +46,34 @@ const FAMILIA_DE_CUSTO = [
   "fn_rel_custo_receita",
 ] as const;
 
+/**
+ * As outras que respondem "quanto custou" e cortam pelo mesmo WHERE: o Painel de
+ * Gestão (maiores custos e fornecedores) e o "Custo do mês" das Competências,
+ * que divergia do Custo por centro antes de 03/10/2026 (R$ 9.020.764,29 contra
+ * R$ 5.477.200,29 em jul/2026).
+ */
+const PRIMAS_DE_CUSTO = [
+  "fn_rel_gestao_maiores_custos",
+  "fn_rel_gestao_maiores_fornecedores",
+  "fn_competencias_painel",
+] as const;
+
+/** Leem `fn_rel_custo_itens_oc` e têm de repassar o parâmetro a ela. */
+const LEEM_ITENS_OC = [
+  "fn_rel_custo_por_subcategoria",
+  "fn_rel_custo_por_insumo",
+] as const;
+
 /** A única que também conta receita, e por isso corta diferente nos dois lados. */
 const A_QUE_TEM_RECEITA = "fn_rel_custo_receita";
 
 const CORTE_DO_CUSTO = /coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*<>\s*'movimentacao'/;
+/** CAPEX fora, salvo pedido explícito da tela ("Incluir investimentos"). */
+const CORTE_DO_INVESTIMENTO =
+  /\(\s*coalesce\(\s*p_incluir_investimento,\s*false\s*\)\s*or\s+coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*<>\s*'investimento'\s*\)/;
+/** A natureza lida da categoria do RATEIO, caindo na do lançamento (D4). */
+const NATUREZA_DO_RATEIO =
+  /on\s+c\w*\.id\s*=\s*coalesce\(\s*r\.categoria_id,\s*l\.categoria_id\s*\)/;
 const CORTE_SO_OPERACIONAL = /coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*=\s*'operacional'/;
 
 /**
@@ -140,3 +167,43 @@ describe("corte de natureza da família de custo", () => {
     ).toEqual([]);
   });
 });
+
+describe("investimento (CAPEX) fora do custo, com volta pelo parâmetro", () => {
+  const TODAS = [...FAMILIA_DE_CUSTO, ...PRIMAS_DE_CUSTO];
+
+  it.each(TODAS)("%s corta `investimento` salvo p_incluir_investimento", (nomeDaFuncao) => {
+    const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
+    expect(
+      CORTE_DO_INVESTIMENTO.test(corpo),
+      "sem o corte, a escavadeira comprada volta a ser custo da obra (decisão D3)",
+    ).toBe(true);
+  });
+
+  it.each(TODAS)("%s também corta `movimentacao`", (nomeDaFuncao) => {
+    const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
+    expect(CORTE_DO_CUSTO.test(corpo)).toBe(true);
+  });
+
+  it.each(TODAS)("%s mede a natureza pela categoria do RATEIO", (nomeDaFuncao) => {
+    const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
+    expect(
+      NATUREZA_DO_RATEIO.test(corpo),
+      "pela categoria do lançamento, os R$ 1,32 mi de Investimentos que só existem no rateio voltam ao custo",
+    ).toBe(true);
+  });
+
+  it.each(LEEM_ITENS_OC)("%s repassa p_incluir_investimento ao nível de item", (nomeDaFuncao) => {
+    const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
+    expect(
+      /fn_rel_custo_itens_oc\(\s*p_inicio,\s*p_fim,\s*p_incluir_investimento\s*\)/.test(corpo),
+      "sem repassar, o insumo deixa de fechar com o grupo quando a tela marca Incluir investimentos",
+    ).toBe(true);
+  });
+
+  it("fn_rel_dre lê a natureza do rateio e devolve a retenção", () => {
+    const corpo = corpoDaUltimaDefinicao("fn_rel_dre") ?? "";
+    expect(NATUREZA_DO_RATEIO.test(corpo)).toBe(true);
+    expect(/as\s+retencao/.test(corpo)).toBe(true);
+  });
+});
+

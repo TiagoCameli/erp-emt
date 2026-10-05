@@ -50,10 +50,11 @@ export interface CategoriaCustoOpcao {
  * Categorias de custo que uma subcategoria de insumo pode apontar.
  *
  * Só `despesa`: compra é sempre custo. E fora a natureza `movimentacao`, que é
- * principal de aplicação e de empréstimo -- `fn_rel_posicao_bancaria` EXCLUI essa
- * natureza do saldo, então classificar insumo nela tiraria uma compra de material
- * do saldo bancário. O banco recusa (fn_reclassificar_insumo), e a lista não pode
- * oferecer o que o banco recusa.
+ * principal de aplicação e de empréstimo -- o resultado e o custo das obras
+ * EXCLUEM essa natureza, então classificar insumo nela tiraria uma compra de
+ * material do custo. (O saldo bancário não a exclui mais desde a D1, 03/10/2026.)
+ * O banco recusa (fn_reclassificar_insumo), e a lista não pode oferecer o que o
+ * banco recusa.
  */
 export async function listarCategoriasCusto(): Promise<CategoriaCustoOpcao[]> {
   const supabase = await createClient();

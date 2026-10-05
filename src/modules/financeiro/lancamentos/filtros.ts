@@ -7,6 +7,7 @@ import {
 } from "@/modules/financeiro/_shared/listas-na-url";
 import type { ListarLancamentosParams } from "@/modules/financeiro/lancamentos/queries";
 import { lerRecorte } from "@/modules/financeiro/lancamentos/recorte";
+import { NATUREZAS_CATEGORIA } from "@/modules/financeiro/lancamentos/natureza-no-embed";
 import {
   lerOrdenacao,
   type DirecaoOrdem,
@@ -98,6 +99,12 @@ export interface ValoresFiltrosLancamentos {
   semCancelado: string;
   /** "1" quando previstos estão fora da lista, "" quando entram. */
   semPrevisto: string;
+  /** Naturezas de categoria aceitas (`natureza=`), quando vêm de um drill. */
+  naturezas: string[];
+  /** "1" quando a movimentação está fora (pela categoria do rateio). */
+  semMovimentacao: string;
+  /** "1" quando o investimento (CAPEX) está fora (pela categoria do rateio). */
+  semInvestimento: string;
   /** A fatia de parcela recortada por um relatório, como veio na URL. */
   recorte: string;
   /** Faixa de MÊS DE REFERÊNCIA, como data yyyy-MM-dd. */
@@ -336,6 +343,14 @@ export function lerFiltrosLancamentos(
   // excludes explícitos em vez de um `status` multivalorado, porque o App Router
   // entrega chave repetida como array e o contrato inteiro recusa array.
   const semPrevisto = params.sem_previsto === "1" ? true : undefined;
+  // O "entra no resultado?" dos relatórios (D4, 03/10/2026), medido pela
+  // categoria do RATEIO caindo na do lançamento: os drills de custo mandam os
+  // dois `sem_*`, e o DRE manda a natureza do bloco clicado. Natureza fora do
+  // catálogo é descartada, como em todo filtro de catálogo desta tela; se só
+  // vier valor inválido, a lista abre sem corte de natureza.
+  const naturezas = lerCatalogoDaUrl(params.natureza, NATUREZAS_CATEGORIA);
+  const semMovimentacao = params.sem_movimentacao === "1" ? true : undefined;
+  const semInvestimento = params.sem_investimento === "1" ? true : undefined;
   const recorte = lerRecorte(params.recorte);
 
   /**
@@ -420,6 +435,9 @@ export function lerFiltrosLancamentos(
       comSaldoAberto,
       semCancelado,
       semPrevisto,
+      naturezas,
+      semMovimentacao,
+      semInvestimento,
       recorte,
       ordem,
       direcao,
@@ -459,6 +477,9 @@ export function lerFiltrosLancamentos(
       compAte: texto(competencia.ate),
       semCancelado: semCancelado ? "1" : "",
       semPrevisto: semPrevisto ? "1" : "",
+      naturezas,
+      semMovimentacao: semMovimentacao ? "1" : "",
+      semInvestimento: semInvestimento ? "1" : "",
       // Só o recorte que PASSOU na validação volta para a tela: recorte inválido
       // aparecendo na barra diria que a lista está recortada quando ela não está.
       recorte: recorte ? (params.recorte as string) : "",

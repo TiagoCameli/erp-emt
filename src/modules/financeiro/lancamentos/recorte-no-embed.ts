@@ -1,4 +1,8 @@
-import type { Recorte } from "@/modules/financeiro/lancamentos/recorte";
+import {
+  tipoDaSerie,
+  type Recorte,
+  type SerieFluxo,
+} from "@/modules/financeiro/lancamentos/recorte";
 
 /**
  * O recorte de relatório traduzido em FILTRO DE EMBED, em vez de lista de ids.
@@ -114,8 +118,9 @@ const FAIXA_EM_DIAS: Record<string, { de: number; ate: number }> = {
 /**
  * Traduz o recorte nas condições do embed.
  *
- * A natureza (`movimentacao` fora) NÃO entra aqui: ela mora no LANÇAMENTO, não na
- * parcela, então é filtro do pai. Quem monta a consulta a aplica.
+ * A série do fluxo NÃO entra aqui: ela depende da natureza da categoria e da
+ * origem, que moram no LANÇAMENTO, não na parcela, então é filtro do pai. Quem
+ * monta a consulta a aplica, com `aplicarSerieDoFluxo`.
  */
 export function recorteNoEmbed(
   recorte: Recorte,
@@ -270,23 +275,85 @@ export function aplicarRecorteNoEmbed<T extends ConsultaComEmbed<T>>(
   return consulta.not(alias, "is", null);
 }
 
+/** O que a série do fluxo precisa saber e só o banco sabe. */
+export interface ContextoDaSerie {
+  /** As categorias de natureza `movimentacao` (4 hoje). */
+  categoriasDeMovimentacao: readonly string[];
+  /**
+   * Os lançamentos da série `emprestimo_tomado` no mesmo mês e situação, como
+   * `fn_lancamentos_do_recorte` os devolve. Só a entrada precisa: o que separa
+   * empréstimo tomado de resgate é o rateio no centro de Empréstimos, e isso o
+   * filtro do pai não alcança. São poucos (um por contrato liberado no mês), então
+   * viajam como lista sem pesar na URL.
+   */
+  idsEmprestimoTomado: readonly string[];
+}
+
 /**
- * A natureza `movimentacao` fora, no nível do LANÇAMENTO.
+ * A série do fluxo de caixa no nível do LANÇAMENTO, repetindo `serie_fluxo` de
+ * `vw_parcelas_caixa`:
  *
- * Os três recortes descartam aplicação e resgate do principal, e essa regra mora
- * na categoria do lançamento, não na parcela. Vai como `or` porque `not.in`
- * sozinho descartaria também o lançamento SEM categoria (em SQL, `null not in
- * (...)` é nulo, e nulo não passa no where) — e existem três deles na base.
+ * - natureza diferente de movimentação: a série é o tipo do lançamento;
+ * - movimentação de saída: `amortizacao`;
+ * - movimentação de entrada rateada no centro de Empréstimos: `emprestimo_tomado`;
+ * - outra movimentação de entrada (resgate antigo): `a_receber`;
+ * - movimentação com `origem = 'aplicacao'`: fora do fluxo, em qualquer série.
  *
- * Lista vazia devolve a consulta intacta: sem categoria de movimentação
- * cadastrada não há o que excluir.
+ * Até 03/10/2026 este lugar descartava a movimentação inteira dos três recortes
+ * de caixa. Desde a D1 ela entra no caixa, e o aging e a conta paga não filtram
+ * natureza nenhuma; só o fluxo ainda precisa da categoria, para separar as séries
+ * e tirar o ajuste de aplicação.
+ *
+ * A categoria vai sempre como `or` com `categoria_id.is.null`: `not.in` sozinho
+ * descartaria o lançamento SEM categoria (em SQL, `null not in (...)` é nulo), e
+ * a view trata a categoria nula como operacional.
+ *
+ * Devolve `null` quando a série com certeza não tem lançamento nenhum (sem
+ * categoria de movimentação, ou sem empréstimo tomado no mês): quem chama
+ * responde lista vazia em vez de abrir a lista inteira.
  */
-export function aplicarNaturezaOperacional<T extends ConsultaComEmbed<T>>(
-  consulta: T,
-  categoriasDeMovimentacao: readonly string[],
-): T {
-  if (categoriasDeMovimentacao.length === 0) return consulta;
-  return consulta.or(
-    `categoria_id.is.null,categoria_id.not.in.(${categoriasDeMovimentacao.join(",")})`,
-  );
+export function aplicarSerieDoFluxo<T extends ConsultaComEmbed<T>>(
+  consultaInicial: T,
+  serie: SerieFluxo | undefined,
+  contexto: ContextoDaSerie,
+): T | null {
+  const movimentacao = contexto.categoriasDeMovimentacao;
+  const lista = `(${movimentacao.join(",")})`;
+  const naoMovimentacao = `categoria_id.is.null,categoria_id.not.in.${lista}`;
+
+  if (serie === undefined) {
+    // As quatro séries: tudo, menos a movimentação de origem aplicação.
+    if (movimentacao.length === 0) return consultaInicial;
+    return consultaInicial.or(`${naoMovimentacao},origem.neq.aplicacao`);
+  }
+
+  const consulta = consultaInicial.eq("tipo", tipoDaSerie(serie));
+
+  switch (serie) {
+    case "a_pagar":
+      if (movimentacao.length === 0) return consulta;
+      return consulta.or(naoMovimentacao);
+
+    case "amortizacao":
+      if (movimentacao.length === 0) return null;
+      return consulta
+        .in("categoria_id", movimentacao)
+        .neq("origem", "aplicacao");
+
+    case "emprestimo_tomado":
+      if (contexto.idsEmprestimoTomado.length === 0) return null;
+      return consulta.in("id", contexto.idsEmprestimoTomado);
+
+    case "a_receber": {
+      if (movimentacao.length === 0) return consulta;
+      // Movimentação de entrada só é a_receber quando não é ajuste de aplicação
+      // nem empréstimo tomado.
+      const tomado = contexto.idsEmprestimoTomado;
+      const movimentacaoQueFica =
+        tomado.length === 0
+          ? "origem.neq.aplicacao"
+          : `and(origem.neq.aplicacao,id.not.in.(${tomado.join(",")}))`;
+      return consulta.or(`${naoMovimentacao},${movimentacaoQueFica}`);
+    }
+  }
 }

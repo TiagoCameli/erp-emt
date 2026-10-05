@@ -2,6 +2,7 @@ import {
   lerListaDaUrl,
   lerUuidsDaUrl,
 } from "@/modules/financeiro/_shared/listas-na-url";
+import { lerIncluirInvestimento } from "@/modules/financeiro/relatorios/filtro-investimento";
 
 /**
  * Contrato da URL do relatório de Custo x receita por centro de custo.
@@ -77,6 +78,11 @@ export interface FiltrosCustoReceita {
   etapasCusto: string[];
   /** Etapas escolhidas dentro dos centros da receita. Vazio = o centro inteiro. */
   etapasReceita: string[];
+  /**
+   * CAPEX de volta no lado do CUSTO. A receita não muda: ela é só natureza
+   * operacional, com ou sem o checkbox. Ver `filtro-investimento.ts`.
+   */
+  incluirInvestimento: boolean;
 }
 
 /** Recua ou avança meses em `yyyy-MM`. Aritmética inteira, sem `Date` e sem fuso. */
@@ -150,6 +156,7 @@ export function lerFiltrosCustoReceita(
     centrosReceita: lerUuidsDaUrl(params.centro_receita),
     etapasCusto: lerUuidsDaUrl(params.etapa_custo),
     etapasReceita: lerUuidsDaUrl(params.etapa_receita),
+    incluirInvestimento: lerIncluirInvestimento(params.com_investimento),
   };
 
   return { filtros, mesesEfetivos: resolverMeses(filtros, mesesDisponiveis) };

@@ -26,17 +26,18 @@ import {
   montarCreditos,
   type Creditos,
 } from "@/modules/financeiro/relatorios/creditos";
+import type { JanelaFluxo } from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
 import {
-  dentroDaJanela,
-  type JanelaFluxo,
-} from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
+  montarFluxoCaixa,
+  saldoDePartida,
+  type FluxoCaixa as FluxoCaixaMontado,
+} from "@/modules/financeiro/relatorios/fluxo-caixa";
 import type { RecorteCustoGrupo } from "@/modules/financeiro/relatorios/drill";
 import {
   agregarAging,
   agruparDrePorNatureza,
   paraCentavos,
   paraReais,
-  rotuloMes,
   somarPorCategoria,
   totalAging,
   totalCategorias,
@@ -81,57 +82,47 @@ export {
 // 1. Fluxo de caixa
 // =====================================================================
 
-export interface FluxoCaixaMes {
-  /** "YYYY-MM" para ordenação. */
-  mes: string;
-  /** "mm/aaaa" para exibição. */
-  rotulo: string;
-  entradasRealizado: number;
-  entradasProjetado: number;
-  saidasRealizado: number;
-  saidasProjetado: number;
-  /** entradas - saidas, considerando realizado + projetado. */
-  saldo: number;
-}
+export type { FluxoCaixaMes } from "@/modules/financeiro/relatorios/fluxo-caixa";
 
-export interface FluxoCaixa {
-  meses: FluxoCaixaMes[];
-  totalEntradas: number;
-  totalSaidas: number;
-  totalRealizadoEntradas: number;
-  totalRealizadoSaidas: number;
-  saldoProjetado: number;
-}
-
-interface AcumuladorFluxo {
-  entradasRealizado: number;
-  entradasProjetado: number;
-  saidasRealizado: number;
-  saidasProjetado: number;
+/** O fluxo montado, mais de quantas contas o saldo de partida saiu. */
+export interface FluxoCaixa extends FluxoCaixaMontado {
+  /**
+   * Contas correntes e caixa ativas que entraram no saldo de partida, e as que
+   * ficaram fora por a pessoa não poder ver o saldo delas. Zero e zero quando o
+   * relatório está recortado por centro (o saldo nem é lido).
+   */
+  contasNoSaldo: { contas: number; ocultas: number };
 }
 
 /**
- * Fluxo de caixa mensal: entradas (lançamentos a_receber) x saídas (a_pagar),
- * separando realizado de projetado. O realizado (parcelas pagas) entra no mês
- * em que o dinheiro de fato se moveu (data_pagamento), refletindo a posição de
- * caixa; o projetado (pendentes/aprovadas) entra no mês de vencimento, pois é
- * quando deve ocorrer. Parcelas canceladas ficam de fora.
+ * Fluxo de caixa mensal em quatro séries (ver `fluxo-caixa.ts`): entradas e
+ * saídas operacionais, empréstimos tomados e amortizações, separando realizado
+ * de projetado. O realizado (parcelas pagas) entra no mês em que o dinheiro de
+ * fato se moveu (data_pagamento), refletindo a posição de caixa; o projetado
+ * (pendentes/aprovadas) entra no mês de vencimento, pois é quando deve ocorrer.
+ * Parcelas canceladas ficam de fora. Desde a D1 (03/10/2026) a movimentação que
+ * passa pela conta entra, em série própria; só o ajuste de aplicação fica fora.
  *
  * A JANELA É APLICADA AQUI, e não no componente do gráfico, de propósito.
- * `fn_rel_fluxo_caixa()` não recebe parâmetro e devolve todo mês em que existe
- * parcela — pelo vencimento, então as prestações dos financiamentos empurram o
- * eixo até 05/2031 (78 meses, medido em 29/08/2026). Como ela já devolve agregado
- * (98 linhas), cortar antes de somar custa um `filter` e faz os quatro cartões, a
- * contagem de meses e o gráfico falarem da MESMA janela; cortar só no desenho
- * deixaria os cartões somando 2031 embaixo de um gráfico que para em 2027.
+ * `fn_rel_fluxo_caixa()` devolve todo mês em que existe parcela, pelo
+ * vencimento, então as prestações dos financiamentos empurram o eixo até 05/2031
+ * (78 meses, medido em 29/08/2026). Como ela já devolve agregado, cortar antes de
+ * somar custa um `filter` e faz os cartões, a contagem de meses e o gráfico
+ * falarem da MESMA janela; cortar só no desenho deixaria os cartões somando 2031
+ * embaixo de um gráfico que para em 2027.
  *
  * O CENTRO, AO CONTRÁRIO DA JANELA, VAI AO BANCO. Ele não é um `filter` de linha
  * agregada: o rateio é do LANÇAMENTO e o dinheiro é da PARCELA, então a fatia de
  * um centro só se calcula antes de agregar. Filtrar aqui exigiria trazer parcela
  * e rateio crus (uns 15 mil registros por abertura de tela) e reescrever em TS as
- * regras que a RPC já tem — o mês do pagamento x o do vencimento, a natureza
- * `movimentacao` fora, o cancelado fora. Duas cópias dessas regras divergem na
+ * regras que a RPC já tem: o mês do pagamento x o do vencimento, a série de
+ * cada natureza, o cancelado fora. Duas cópias dessas regras divergem na
  * primeira que alguém mexer de um lado só.
+ *
+ * O SALDO DE PARTIDA vem de `fn_saldos_das_contas`, a mesma função de Contas
+ * bancárias e de Posição bancária, somando as correntes e caixa ativas. Com
+ * centro escolhido ele nem é lido: as barras viram fatia de uma obra, e somar a
+ * fatia ao saldo da empresa inteira não daria saldo de ninguém.
  */
 export async function fluxoCaixa(
   janela?: JanelaFluxo,
@@ -139,94 +130,67 @@ export async function fluxoCaixa(
    * Centros JÁ EFETIVOS de cada lado (a etapa substitui a raiz, ver
    * `_shared/centro-custo/filtro.ts`). Vazio = o lado inteiro.
    *
-   * `p_centros_custo` recorta as saídas (a_pagar) e `p_centros_receita` as
-   * entradas (a_receber), e o que a RPC soma passa a ser a FATIA do rateio
-   * daquele centro. Os dois lados são independentes de propósito, como em
-   * `custoReceita`.
+   * `p_centros_custo` recorta as saídas (a pagar e amortização) e
+   * `p_centros_receita` as entradas (a receber e empréstimo tomado), e o que a
+   * RPC soma passa a ser a FATIA do rateio daquele centro. Os dois lados são
+   * independentes de propósito, como em `custoReceita`.
    */
   centros?: { custo?: readonly string[]; receita?: readonly string[] },
 ): Promise<FluxoCaixa> {
   const supabase = await createClient();
+  const comCorteDeCentro =
+    (centros?.custo?.length ?? 0) > 0 || (centros?.receita?.length ?? 0) > 0;
 
-  // Agregado no banco: uma linha por mês/tipo/realizado (a regra do mês do
-  // pagamento x mês do vencimento vive na fn_rel_fluxo_caixa).
-  const { data, error } = await supabase.rpc("fn_rel_fluxo_caixa", {
-    // `undefined` e não `null` quando o lado não filtra: os parâmetros da RPC
-    // são opcionais com default null no banco, e é assim que os tipos gerados os
-    // descrevem. Lista vazia também vira `undefined`, senão um `{}` chegaria ao
-    // banco e o `cardinality` daria zero — que dá no mesmo, mas manda array
-    // vazio na query string sem motivo.
-    p_centros_custo: centros?.custo?.length ? [...centros.custo] : undefined,
-    p_centros_receita: centros?.receita?.length
-      ? [...centros.receita]
-      : undefined,
-  });
+  // Agregado no banco: uma linha por mês/série/realizado (a regra do mês do
+  // pagamento x mês do vencimento, e a da série, vivem na fn_rel_fluxo_caixa).
+  const [fluxoResultado, contasResultado, saldosResultado] = await Promise.all([
+    supabase.rpc("fn_rel_fluxo_caixa", {
+      // `undefined` e não `null` quando o lado não filtra: os parâmetros da RPC
+      // são opcionais com default null no banco, e é assim que os tipos gerados
+      // os descrevem. Lista vazia também vira `undefined`, senão um `{}`
+      // chegaria ao banco e o `cardinality` daria zero, que dá no mesmo, mas
+      // manda array vazio na query string sem motivo.
+      p_centros_custo: centros?.custo?.length ? [...centros.custo] : undefined,
+      p_centros_receita: centros?.receita?.length
+        ? [...centros.receita]
+        : undefined,
+    }),
+    comCorteDeCentro
+      ? null
+      : supabase.from("contas_bancarias").select("id, tipo, ativo"),
+    comCorteDeCentro ? null : supabase.rpc("fn_saldos_das_contas"),
+  ]);
 
-  if (error) {
+  if (fluxoResultado.error) {
     throw new Error("Não foi possível carregar o fluxo de caixa");
   }
-
-  const porMes = new Map<string, AcumuladorFluxo>();
-
-  for (const linha of data ?? []) {
-    if (janela && !dentroDaJanela(linha.mes, janela)) continue;
-    const centavos = paraCentavos(linha.total);
-    const ehEntrada = linha.tipo === "a_receber";
-
-    const atual =
-      porMes.get(linha.mes) ??
-      ({
-        entradasRealizado: 0,
-        entradasProjetado: 0,
-        saidasRealizado: 0,
-        saidasProjetado: 0,
-      } satisfies AcumuladorFluxo);
-
-    if (ehEntrada) {
-      if (linha.realizado) atual.entradasRealizado += centavos;
-      else atual.entradasProjetado += centavos;
-    } else {
-      if (linha.realizado) atual.saidasRealizado += centavos;
-      else atual.saidasProjetado += centavos;
-    }
-
-    porMes.set(linha.mes, atual);
+  if (contasResultado?.error) {
+    throw new Error("Não foi possível carregar as contas bancárias");
+  }
+  if (saldosResultado?.error) {
+    throw new Error("Não foi possível carregar o saldo das contas");
   }
 
-  const meses: FluxoCaixaMes[] = [...porMes.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([mes, acc]) => {
-      const entradas = acc.entradasRealizado + acc.entradasProjetado;
-      const saidas = acc.saidasRealizado + acc.saidasProjetado;
-      return {
-        mes,
-        rotulo: rotuloMes(mes),
-        entradasRealizado: paraReais(acc.entradasRealizado),
-        entradasProjetado: paraReais(acc.entradasProjetado),
-        saidasRealizado: paraReais(acc.saidasRealizado),
-        saidasProjetado: paraReais(acc.saidasProjetado),
-        saldo: paraReais(entradas - saidas),
-      };
-    });
-
-  let totalEntradas = 0;
-  let totalSaidas = 0;
-  let totalRealizadoEntradas = 0;
-  let totalRealizadoSaidas = 0;
-  for (const acc of porMes.values()) {
-    totalEntradas += acc.entradasRealizado + acc.entradasProjetado;
-    totalSaidas += acc.saidasRealizado + acc.saidasProjetado;
-    totalRealizadoEntradas += acc.entradasRealizado;
-    totalRealizadoSaidas += acc.saidasRealizado;
-  }
+  const partida =
+    contasResultado && saldosResultado
+      ? saldoDePartida(
+          contasResultado.data ?? [],
+          (saldosResultado.data ?? []).map((linha) => ({
+            conta_bancaria_id: linha.conta_bancaria_id,
+            saldo: Number(linha.saldo),
+          })),
+        )
+      : { saldo: null, contas: 0, ocultas: 0 };
 
   return {
-    meses,
-    totalEntradas: paraReais(totalEntradas),
-    totalSaidas: paraReais(totalSaidas),
-    totalRealizadoEntradas: paraReais(totalRealizadoEntradas),
-    totalRealizadoSaidas: paraReais(totalRealizadoSaidas),
-    saldoProjetado: paraReais(totalEntradas - totalSaidas),
+    ...montarFluxoCaixa({
+      linhas: fluxoResultado.data ?? [],
+      janela,
+      mesCorrente: mesCorrente(),
+      saldoInicial: partida.saldo,
+      comCorteDeCentro,
+    }),
+    contasNoSaldo: { contas: partida.contas, ocultas: partida.ocultas },
   };
 }
 
@@ -245,7 +209,16 @@ export interface DreGerencial {
    * não desaparecer da vista, mas fora da soma do resultado.
    */
   movimentacao: BlocoDre;
-  /** Operacional mais financeiro. A movimentação não entra, de propósito. */
+  /**
+   * CAPEX: Aquisição de Equipamento, Investimentos, Compra de Terreno (D3,
+   * 03/10/2026). Saiu do caixa e virou patrimônio: fica abaixo do resultado e
+   * fora da soma dele, como a movimentação.
+   */
+  investimento: BlocoDre;
+  /**
+   * Operacional mais financeiro. Movimentação e investimento não entram, de
+   * propósito.
+   */
   resultado: number;
 }
 
@@ -303,12 +276,12 @@ export async function dreGerencial({
     throw new Error("Não foi possível carregar o DRE gerencial");
   }
 
-  // A separação em três blocos é lógica pura e mora em calculo.ts, com teste.
+  // A separação em quatro blocos é lógica pura e mora em calculo.ts, com teste.
   // Aqui só a chamada: esta função é a que fala com o banco.
-  const { operacional, financeiro, movimentacao, resultado } =
+  const { operacional, financeiro, movimentacao, investimento, resultado } =
     agruparDrePorNatureza(data ?? []);
 
-  return { operacional, financeiro, movimentacao, resultado };
+  return { operacional, financeiro, movimentacao, investimento, resultado };
 }
 
 
@@ -555,6 +528,12 @@ export interface FiltrosCustoCentroCusto {
   status?: string[];
   excluirPrevisto?: boolean;
   tiposCentro?: string[];
+  /**
+   * Trazer o CAPEX (natureza `investimento`) de volta para o custo? Falso por
+   * padrão: desde a decisão D3 (03/10/2026) comprar máquina não é custo da obra
+   * no mês. O checkbox "Incluir investimentos" da tela é quem liga.
+   */
+  incluirInvestimento?: boolean;
 }
 
 export async function custoPorCentroCusto(
@@ -574,6 +553,7 @@ export async function custoPorCentroCusto(
     p_status: periodo?.status,
     p_excluir_previsto: periodo?.excluirPrevisto,
     p_tipos_centro: periodo?.tiposCentro,
+    p_incluir_investimento: periodo?.incluirInvestimento,
   });
 
   if (error) {
@@ -604,11 +584,16 @@ export async function custoPorCentroCusto(
  */
 export async function primeirosMesesDosCentros(
   centroIds: string[],
+  incluirInvestimento?: boolean,
 ): Promise<Map<string, string>> {
   if (centroIds.length === 0) return new Map();
   const supabase = await createClient();
+  // O investimento entra aqui também quando a tela o pede: um centro cujo
+  // primeiro custo foi a compra de uma máquina começaria a vida meses depois, e
+  // o gráfico cortaria o CAPEX que os cartões ao lado estão somando.
   const { data, error } = await supabase.rpc("fn_rel_custo_centro_vida", {
     p_centros: centroIds,
+    p_incluir_investimento: incluirInvestimento,
   });
   if (error) {
     throw new Error(
@@ -684,6 +669,7 @@ export async function serieDosCentros(
     p_status: filtros?.status,
     p_excluir_previsto: filtros?.excluirPrevisto,
     p_tipos_centro: filtros?.tiposCentro,
+    p_incluir_investimento: filtros?.incluirInvestimento,
   });
   if (error) {
     throw new Error(
@@ -824,11 +810,14 @@ export async function custoReceita({
   meses,
   centrosCusto,
   centrosReceita,
+  incluirInvestimento,
 }: {
   /** yyyy-MM. Lista vazia devolve nada, sem ir ao banco. */
   meses: readonly string[];
   centrosCusto?: readonly string[];
   centrosReceita?: readonly string[];
+  /** CAPEX de volta no lado do custo. Ver `FiltrosCustoCentroCusto`. */
+  incluirInvestimento?: boolean;
 }): Promise<LinhaCustoReceita[]> {
   if (meses.length === 0) return [];
 
@@ -838,6 +827,7 @@ export async function custoReceita({
     p_meses: meses.map((mes) => `${mes}-01`),
     p_centros_custo: centrosCusto ? [...centrosCusto] : undefined,
     p_centros_receita: centrosReceita ? [...centrosReceita] : undefined,
+    p_incluir_investimento: incluirInvestimento,
   });
 
   if (error) {
@@ -1136,6 +1126,7 @@ export async function custoPorGrupo(
     p_fim: filtros?.fim,
     p_centro_custo: filtros?.centroCustoId,
     p_categoria: filtros?.categoriaId,
+    p_incluir_investimento: filtros?.incluirInvestimento,
   });
 
   if (error) {
@@ -1161,6 +1152,7 @@ export async function custoPorGrupo(
           p_inicio: filtros?.inicio,
           p_fim: filtros?.fim,
           p_centro_custo: filtros?.centroCustoId,
+          p_incluir_investimento: filtros?.incluirInvestimento,
         },
       );
       return (subs ?? [])
@@ -1207,6 +1199,7 @@ export async function custoPorInsumo(
     p_inicio: filtros?.inicio,
     p_fim: filtros?.fim,
     p_centro_custo: filtros?.centroCustoId,
+    p_incluir_investimento: filtros?.incluirInvestimento,
   });
 
   if (error) {
@@ -1237,10 +1230,14 @@ const MESES_DOS_CREDITOS = 12;
  * continua lá para o DRE e para o custo por centro. A marca é uma dimensão à
  * parte, que responde a pergunta que nenhuma das duas respondia.
  *
- * O saldo devedor é a soma das PARCELAS EM ABERTO, não um campo: um
- * financiamento de 57 parcelas com 3 pagas deve o que falta, não o contratado.
- * Por isso contratado menos pago não dá exatamente o saldo quando alguém pagou
- * uma parcela com juros ou desconto (o pago é o líquido, o que saiu da conta).
+ * "Prestações a vencer" (o antigo "saldo devedor") é a soma das PARCELAS EM
+ * ABERTO, não um campo: um financiamento de 57 parcelas com 3 pagas deve o que
+ * falta. E é soma de PRESTAÇÃO, com os juros futuros dentro, e não o principal
+ * que o banco cobraria para quitar hoje: por isso os nomes mudaram em 03/10/2026
+ * (D2), de "Contratado" para "Total das prestações" e de "Saldo devedor" para
+ * "Prestações a vencer". Total menos pago não dá exatamente o que falta quando
+ * alguém pagou uma parcela com juros ou desconto (o pago é o líquido, o que saiu
+ * da conta).
  *
  * As duas RPCs são SECURITY INVOKER: quem não pode ver lançamento não vê crédito
  * nenhum, e a tela vem vazia em vez de furar a permissão.
@@ -1263,6 +1260,16 @@ export interface EmprestimoContrato {
   pago: number;
   /** O que falta pagar: soma das parcelas ainda não pagas. */
   aPagar: number;
+  /**
+   * O que as prestações somam acima do que foi tomado: pago mais a pagar, menos
+   * tomado (D2, 03/10/2026). A prestação é um rateio só, sem separar principal e
+   * juros, então os juros não estão no DRE; é aqui que eles aparecem.
+   *
+   * `null` quando falta uma das pernas (entrada sem prestação lançada, ou
+   * prestação sem entrada): a conta daria o tomado inteiro como juro negativo,
+   * ou a prestação inteira como juro, e nenhum dos dois é juro.
+   */
+  jurosEmbutidos: number | null;
   parcelas: number;
   parcelasPagas: number;
   proximoVencimento: string | null;
@@ -1273,6 +1280,8 @@ export interface EmprestimosPorContrato {
   totalTomado: number;
   totalPago: number;
   totalAPagar: number;
+  /** Só dos contratos com as duas pernas (ver `jurosEmbutidos`). */
+  totalJurosEmbutidos: number;
 }
 
 /**
@@ -1296,20 +1305,28 @@ export async function emprestimosPorContrato(): Promise<EmprestimosPorContrato> 
     throw new Error("Não foi possível carregar os contratos de empréstimo");
   }
 
-  const contratos = (data ?? []).map((linha) => ({
-    centroCustoId: linha.centro_custo_id,
-    contrato: linha.contrato,
-    tomado: paraReais(paraCentavos(linha.tomado)),
-    pago: paraReais(paraCentavos(linha.pago)),
-    aPagar: paraReais(paraCentavos(linha.a_pagar)),
-    parcelas: linha.parcelas,
-    parcelasPagas: linha.parcelas_pagas,
-    proximoVencimento: linha.proximo_vencimento ?? null,
-  }));
+  const contratos: EmprestimoContrato[] = (data ?? []).map((linha) => {
+    const tomado = paraCentavos(linha.tomado);
+    // As duas pernas: o dinheiro que entrou e ao menos uma prestação lançada.
+    const temAsDuasPernas = tomado !== 0 && linha.parcelas > 0;
+    return {
+      centroCustoId: linha.centro_custo_id,
+      contrato: linha.contrato,
+      tomado: paraReais(tomado),
+      pago: paraReais(paraCentavos(linha.pago)),
+      aPagar: paraReais(paraCentavos(linha.a_pagar)),
+      jurosEmbutidos: temAsDuasPernas
+        ? paraReais(paraCentavos(linha.juros_embutidos))
+        : null,
+      parcelas: linha.parcelas,
+      parcelasPagas: linha.parcelas_pagas,
+      proximoVencimento: linha.proximo_vencimento ?? null,
+    };
+  });
 
-  const somar = (campo: "tomado" | "pago" | "aPagar") =>
+  const somar = (campo: "tomado" | "pago" | "aPagar" | "jurosEmbutidos") =>
     paraReais(
-      contratos.reduce((soma, c) => soma + paraCentavos(c[campo]), 0),
+      contratos.reduce((soma, c) => soma + paraCentavos(c[campo] ?? 0), 0),
     );
 
   return {
@@ -1317,6 +1334,7 @@ export async function emprestimosPorContrato(): Promise<EmprestimosPorContrato> 
     totalTomado: somar("tomado"),
     totalPago: somar("pago"),
     totalAPagar: somar("aPagar"),
+    totalJurosEmbutidos: somar("jurosEmbutidos"),
   };
 }
 

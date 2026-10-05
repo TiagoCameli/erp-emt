@@ -102,10 +102,12 @@ export interface ContaLista {
  * aritmética daqui — ele já veio aplicado. O que esta função busca a mais é o
  * movimento que ficou de fora, para a tela mostrar a escolha em vez de esconder.
  *
- * OPÇÃO A (22/08/2026): a RPC também ignora categoria de natureza
- * `movimentacao`, então aplicação e resgate do principal não mexem no saldo. O
- * saldo aqui é o DINHEIRO QUE A EMPRESA TEM naquele banco (corrente mais
- * aplicado), que é o número que o próprio extrato chama de "Saldo". O aplicado
+ * D1 (03/10/2026): a RPC NÃO filtra mais natureza. A "opção A" de 22/08/2026
+ * ignorava a categoria `movimentacao`, e com isso a prestação de empréstimo paga
+ * pela conta sumia do saldo (R$ 622.301,19 em setembro). Agora o predicado é um
+ * só, `vw_parcelas_caixa`: o que passou pela conta está no saldo. O saldo aqui é
+ * o DINHEIRO QUE A EMPRESA TEM naquele banco (corrente mais aplicado), que é o
+ * número que o próprio extrato chama de "Saldo". O aplicado
  * mora na subconta de investimentos, e a posição por aplicação é da aba
  * Financeiro > Aplicações (25/09/2026).
  */
@@ -227,8 +229,9 @@ function tipoDoMovimento(valor: string): TipoMovimento {
  *
  * As linhas saem de `fn_extrato_conta`, gêmea DETALHADA de
  * `fn_rel_posicao_bancaria` (a que dá o saldo da listagem), repetindo o WHERE
- * dela: parcela paga pelo valor líquido, sem lançamento cancelado, sem categoria
- * de natureza 'movimentacao', mais as transferências das duas pontas e a tarifa.
+ * dela (as duas leem `vw_parcelas_caixa`): parcela paga pelo valor líquido, sem
+ * lançamento cancelado, de qualquer natureza desde a D1 (03/10/2026), mais as
+ * transferências das duas pontas e a tarifa.
  * É a FUNÇÃO DO BANCO o contrato compartilhado entre extrato e saldo; em
  * PostgREST dois desses filtros não se escrevem sem mentir (o porquê está no
  * comentário da migration 20260826170000).

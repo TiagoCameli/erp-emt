@@ -53,41 +53,77 @@ function fracao(parte: number, todo: number): number | null {
 const COLUNAS_FLUXO: ColunaRelatorio<FluxoCaixa["meses"][number]>[] = [
   { cabecalho: "Mês", largura: 12, tipo: "texto", celula: (l) => l.rotulo },
   {
-    cabecalho: "Entradas realizadas",
+    cabecalho: "Entradas operacionais realizadas",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.aReceberRealizado,
+    somar: true,
+  },
+  {
+    cabecalho: "Entradas operacionais projetadas",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.aReceberProjetado,
+    somar: true,
+  },
+  {
+    cabecalho: "Empréstimos tomados realizados",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.emprestimoTomadoRealizado,
+    somar: true,
+  },
+  {
+    cabecalho: "Empréstimos tomados projetados",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.emprestimoTomadoProjetado,
+    somar: true,
+  },
+  {
+    cabecalho: "Saídas operacionais realizadas",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.aPagarRealizado,
+    somar: true,
+  },
+  {
+    cabecalho: "Saídas operacionais projetadas",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.aPagarProjetado,
+    somar: true,
+  },
+  {
+    cabecalho: "Amortizações realizadas",
     largura: 20,
     tipo: "dinheiro",
-    celula: (l) => l.entradasRealizado,
+    celula: (l) => l.amortizacaoRealizado,
     somar: true,
   },
   {
-    cabecalho: "Entradas projetadas",
+    cabecalho: "Amortizações projetadas",
     largura: 20,
     tipo: "dinheiro",
-    celula: (l) => l.entradasProjetado,
+    celula: (l) => l.amortizacaoProjetado,
     somar: true,
   },
   {
-    cabecalho: "Saídas realizadas",
-    largura: 19,
-    tipo: "dinheiro",
-    celula: (l) => l.saidasRealizado,
-    somar: true,
-  },
-  {
-    cabecalho: "Saídas projetadas",
-    largura: 19,
-    tipo: "dinheiro",
-    celula: (l) => l.saidasProjetado,
-    somar: true,
-  },
-  {
-    cabecalho: "Saldo do mês",
+    cabecalho: "Líquido do mês",
     largura: 16,
     tipo: "dinheiro",
     // SOMA, e aqui isso é correto: é o líquido de cada mês, não um saldo
     // acumulado. A soma dos líquidos é o líquido do período.
-    celula: (l) => l.saldo,
+    celula: (l) => l.liquido,
     somar: true,
+  },
+  {
+    cabecalho: "Saldo projetado",
+    largura: 18,
+    tipo: "dinheiro",
+    // NÃO soma: é saldo acumulado, e o total de uma coluna de saldos não
+    // significa nada. Vazio em mês passado, como na tela.
+    celula: (l) => l.saldoAcumulado,
   },
 ];
 
@@ -108,8 +144,9 @@ export function abaFluxoCaixa(dados: FluxoCaixa, recorte: string): EscritaDeAba 
 /**
  * Uma linha do DRE já achatada: o bloco e o sinal viram COLUNA.
  *
- * A tela mostra três blocos empilhados (operacional, financeiro, movimentação),
- * cada um com receitas e despesas. Numa planilha isso vira coluna, não seção:
+ * A tela mostra quatro blocos empilhados (operacional, financeiro,
+ * investimentos, movimentação), cada um com receitas e despesas. Numa planilha
+ * isso vira coluna, não seção:
  * seção obriga a inventar linha de título no meio dos dados e destrói o filtro
  * do Excel, que é o motivo de exportar.
  */
@@ -117,7 +154,10 @@ interface LinhaDrePlanilha {
   bloco: string;
   natureza: string;
   categoria: string;
+  /** Receita LÍQUIDA, a mesma das linhas de categoria da tela. */
   receita: number | null;
+  /** Retenção na fonte da receita. Bruta = receita + retenção. */
+  retencao: number | null;
   despesa: number | null;
 }
 
@@ -136,10 +176,17 @@ const COLUNAS_DRE: ColunaRelatorio<LinhaDrePlanilha>[] = [
     celula: (l) => l.categoria,
   },
   {
-    cabecalho: "Receita",
-    largura: 16,
+    cabecalho: "Receita líquida",
+    largura: 18,
     tipo: "dinheiro",
     celula: (l) => l.receita,
+    somar: true,
+  },
+  {
+    cabecalho: "Retenção na fonte",
+    largura: 18,
+    tipo: "dinheiro",
+    celula: (l) => l.retencao,
     somar: true,
   },
   {
@@ -158,6 +205,11 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
     { rotulo: "Operacional", natureza: "operacional", bloco: dados.operacional },
     { rotulo: "Financeiro", natureza: "financeira", bloco: dados.financeiro },
     {
+      rotulo: "Investimentos",
+      natureza: "investimento",
+      bloco: dados.investimento,
+    },
+    {
       rotulo: "Movimentação",
       natureza: "movimentacao",
       bloco: dados.movimentacao,
@@ -171,6 +223,7 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
         natureza,
         categoria: linha.categoria,
         receita: linha.valor,
+        retencao: linha.retencao ?? 0,
         despesa: null,
       });
     }
@@ -180,6 +233,7 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
         natureza,
         categoria: linha.categoria,
         receita: null,
+        retencao: null,
         despesa: linha.valor,
       });
     }
@@ -190,11 +244,12 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
     titulo: `DRE gerencial · regime de competência · ${recorte}`,
     colunas: COLUNAS_DRE,
     linhas,
-    // O total da planilha soma OS TRÊS BLOCOS, então ele não é o "resultado" da
-    // tela, que deixa a movimentação de fora de propósito. O rótulo diz isso,
-    // porque a alternativa é alguém subtrair as duas colunas e achar um
-    // resultado que a tela nunca mostrou.
-    rotuloTotal: "Total dos três blocos (a movimentação NÃO é resultado)",
+    // O total da planilha soma OS QUATRO BLOCOS, então ele não é o "resultado"
+    // da tela, que deixa investimentos e movimentação de fora de propósito. O
+    // rótulo diz isso, porque a alternativa é alguém subtrair as duas colunas e
+    // achar um resultado que a tela nunca mostrou.
+    rotuloTotal:
+      "Total dos quatro blocos (investimentos e movimentação NÃO são resultado)",
   });
 }
 
@@ -334,7 +389,8 @@ const COLUNAS_CREDITOS: ColunaRelatorio<CreditoContrato>[] = [
     celula: (c) => c.categoria,
   },
   {
-    cabecalho: "Contratado",
+    // Soma de prestação, com juros futuros: não é o principal (D2, 03/10/2026).
+    cabecalho: "Total das prestações",
     largura: 18,
     tipo: "dinheiro",
     celula: (c) => c.valorContratado,
@@ -348,7 +404,7 @@ const COLUNAS_CREDITOS: ColunaRelatorio<CreditoContrato>[] = [
     somar: true,
   },
   {
-    cabecalho: "Saldo devedor",
+    cabecalho: "Prestações a vencer",
     largura: 18,
     tipo: "dinheiro",
     celula: (c) => c.saldoDevedor,

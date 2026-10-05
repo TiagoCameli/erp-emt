@@ -130,11 +130,20 @@ describe("recortarCreditosPorSituacao", () => {
     expect(emAberto.totalPago).toBe(300.83);
   });
 
-  it("a curva de vencimentos NÃO é recortada", () => {
+  it("em aberto não mexe na curva de vencimentos", () => {
     // Todo vencimento futuro vem de contrato em aberto, então recortar seria
     // trabalho para chegar onde já se está.
     const emAberto = recortarCreditosPorSituacao(carteira, "em_aberto");
     expect(emAberto.proximosMeses).toBe(carteira.proximosMeses);
     expect(emAberto.totalProximosMeses).toBe(100);
+  });
+
+  it("quitado zera a curva e o 'Vence em 12 meses'", () => {
+    // A curva vem de outra RPC, sem o contrato de cada parcela, então ela não
+    // se esvazia sozinha: sem isto, o cartão mostrava milhões vencendo embaixo
+    // de uma tabela só de contratos quitados.
+    const quitados = recortarCreditosPorSituacao(carteira, "quitado");
+    expect(quitados.proximosMeses).toEqual([]);
+    expect(quitados.totalProximosMeses).toBe(0);
   });
 });

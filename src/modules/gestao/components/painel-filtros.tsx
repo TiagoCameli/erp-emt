@@ -23,6 +23,7 @@ import {
   MAX_ITENS_FILTRO,
 } from "@/modules/financeiro/_shared/listas-na-url";
 import type { ValoresFiltrosPainel } from "@/modules/gestao/filtros";
+import { filtroIncluirInvestimento } from "@/modules/financeiro/relatorios/components/filtro-marcar";
 import type { OpcaoPainel } from "@/modules/gestao/queries";
 
 export interface PainelFiltrosProps {
@@ -200,6 +201,13 @@ export function PainelFiltros({
         />
       ),
     },
+    // Vale para os cortes de CUSTO do painel (custo do mês, por centro, por
+    // grupo, maiores custos e fornecedores). Os blocos de caixa e pendência
+    // não mudam com ele: são dinheiro, não resultado.
+    filtroIncluirInvestimento({
+      marcado: valores.incluirInvestimento,
+      setMuitos,
+    }),
   );
 
   return (

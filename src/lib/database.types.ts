@@ -9598,14 +9598,14 @@ export type Database = {
       fn_comb_tanque_externo: { Args: { p_tanque: string }; Returns: boolean };
       fn_competencia_fechada: { Args: { p_mes: string }; Returns: boolean };
       fn_competencias_painel: {
-        Args: { p_meses?: number };
+        Args: { p_meses?: number; p_incluir_investimento?: boolean };
         Returns: {
           custo: number;
           excecoes: number;
           fechada: boolean;
           fechado_em: string;
           fechado_por: string;
-          incompletos: number;
+          sem_categoria: number;
           lancamentos: number;
           mes: string;
           observacao: string;
@@ -10630,6 +10630,7 @@ export type Database = {
           p_sem_forma?: boolean;
           p_status?: string[];
           p_tipos_centro?: string[];
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           centro_custo_id: string;
@@ -10650,6 +10651,7 @@ export type Database = {
           p_sem_forma?: boolean;
           p_status?: string[];
           p_tipos_centro?: string[];
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           centro_custo_id: string;
@@ -10660,14 +10662,14 @@ export type Database = {
         }[];
       };
       fn_rel_custo_centro_vida: {
-        Args: { p_centros: string[] };
+        Args: { p_centros: string[]; p_incluir_investimento?: boolean };
         Returns: {
           centro_custo_id: string;
           primeiro_mes: string;
         }[];
       };
       fn_rel_custo_itens_oc: {
-        Args: { p_fim?: string; p_inicio?: string };
+        Args: { p_fim?: string; p_inicio?: string; p_incluir_investimento?: boolean };
         Returns: {
           categoria_financeira_id: string;
           categoria_insumo_id: string;
@@ -10688,6 +10690,7 @@ export type Database = {
           p_centros?: string[];
           p_fim?: string;
           p_inicio?: string;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           grupo_cor: string;
@@ -10703,6 +10706,7 @@ export type Database = {
           p_centro_custo?: string;
           p_fim?: string;
           p_inicio?: string;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           insumo_id: string;
@@ -10720,6 +10724,7 @@ export type Database = {
           p_fim?: string;
           p_inicio?: string;
           p_meses?: number;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           lancamentos: number;
@@ -10733,6 +10738,7 @@ export type Database = {
           p_fim?: string;
           p_grupo_id: string;
           p_inicio?: string;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           categoria_id: string;
@@ -10745,6 +10751,7 @@ export type Database = {
           p_centros_custo?: string[];
           p_centros_receita?: string[];
           p_meses: string[];
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           centro_custo_id: string;
@@ -10762,6 +10769,7 @@ export type Database = {
           categoria: string;
           categoria_id: string;
           natureza: string;
+          retencao: number;
           tipo: string;
           total: number;
         }[];
@@ -10772,6 +10780,7 @@ export type Database = {
           a_pagar: number;
           centro_custo_id: string;
           contrato: string;
+          juros_embutidos: number;
           pago: number;
           parcelas: number;
           parcelas_pagas: number;
@@ -10824,6 +10833,7 @@ export type Database = {
           p_fim?: string;
           p_inicio?: string;
           p_limite?: number;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           centros: number;
@@ -10847,6 +10857,7 @@ export type Database = {
           p_fim?: string;
           p_inicio?: string;
           p_limite?: number;
+          p_incluir_investimento?: boolean;
         };
         Returns: {
           aberto: number;

@@ -20,6 +20,7 @@ import {
 import type { FiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 import { camposDePeriodo } from "@/modules/financeiro/relatorios/components/filtros-periodo-barra";
 import { PARAMS_DE_NAVEGACAO } from "@/modules/financeiro/relatorios/relatorios";
+import { filtroIncluirInvestimento } from "@/modules/financeiro/relatorios/components/filtro-marcar";
 
 /**
  * Barra de filtros do relatório de Custo por grupo de insumo.
@@ -124,6 +125,13 @@ export function FiltrosCustoGrupoBarra({
       />
     ),
   });
+
+  filtrosDaBarra.push(
+    filtroIncluirInvestimento({
+      marcado: filtros.incluirInvestimento,
+      setMuitos,
+    }),
+  );
 
   return (
     <BarraFiltrosConfiguravel

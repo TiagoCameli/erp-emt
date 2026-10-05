@@ -104,6 +104,7 @@ const VAZIO: FiltrosCustoReceita = {
   centrosReceita: [],
   etapasCusto: [],
   etapasReceita: [],
+  incluirInvestimento: false,
 };
 
 function montar(filtros: Partial<FiltrosCustoReceita>) {
