@@ -659,3 +659,103 @@ export function sugestoesSeguras<C extends CandidatoCasavel>(
   }
   return seguras;
 }
+
+/** Um par dentro de um grupo equivalente. */
+export interface ParDoGrupo {
+  transacaoId: string;
+  alvoId: string;
+  /** O nome do candidato aparece no histórico; senão é só equivalente. */
+  nomeBate: boolean;
+}
+
+/** N movimentos e N parcelas de mesmo valor, sentido e dia (Bloco J). */
+export interface GrupoEquivalente {
+  /** sentido|centavos|dia */
+  chave: string;
+  pares: ParDoGrupo[];
+}
+
+/** "dd/mm hh:mm" do histórico em minutos, para ordenar os PIX do dia. */
+function minutosDoHistorico(memo: string | null): number {
+  const m = /(\d{2}):(\d{2})/.exec(memo ?? "");
+  return m ? Number(m[1]) * 60 + Number(m[2]) : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Grupos equivalentes N:N (Bloco J, 05/10/2026): roda sobre o que sobrou
+ * livre depois do automático. N movimentos e N parcelas pagas nesta conta de
+ * mesmo valor, sentido e DIA, N ≥ 2, e ninguém do grupo com nome batendo em
+ * alguém de fora (folha de valores iguais, diárias, PIX redondo). Os valores e
+ * o dia são iguais, então a ordem não muda saldo nem resultado.
+ *
+ * Dentro do grupo, os pares com nome batendo (um para um) ficam fixos; o
+ * resto pareia pela hora do histórico contra a ordem dos candidatos.
+ *
+ * NÃO é automático: é faixa 2, um clique com revisão. Mais movimentos que
+ * parcelas (ou o contrário) não é grupo: é lançamento faltando ou sobrando.
+ */
+export function gruposEquivalentes(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly CandidatoCasavel[],
+): GrupoEquivalente[] {
+  const chaveDe = (sentido: Sentido, valor: number, dia: string) =>
+    `${sentido}|${centavos(valor)}|${dia}`;
+  const movPorChave = new Map<string, MovimentoCasavel[]>();
+  for (const m of movimentos) {
+    const k = chaveDe(sentidoDo(m), m.valor, m.dataMovimento);
+    movPorChave.set(k, [...(movPorChave.get(k) ?? []), m]);
+  }
+  const candPorChave = new Map<string, CandidatoCasavel[]>();
+  for (const c of candidatos) {
+    const k = chaveDe(c.sentido, c.valor, c.data);
+    candPorChave.set(k, [...(candPorChave.get(k) ?? []), c]);
+  }
+
+  const grupos: GrupoEquivalente[] = [];
+  for (const [chave, movs] of movPorChave) {
+    const cands = candPorChave.get(chave) ?? [];
+    if (movs.length < 2 || movs.length !== cands.length) continue;
+    if (!cands.every((c) => c.grupo === "paga_na_conta")) continue;
+
+    // Ninguém do grupo pode ter nome batendo com alguém de fora: aí a
+    // equivalência é falsa, o par certo está fora.
+    const idsMov = new Set(movs.map((m) => m.id));
+    const idsCand = new Set(cands.map((c) => c.id));
+    const candsFora = candidatos.filter((c) => !idsCand.has(c.id));
+    const movimentoTemNomeFora = movs.some((m) =>
+      sugerirParaMovimento(m, candsFora).some((s) => s.nomeBate),
+    );
+    if (movimentoTemNomeFora) continue;
+    const candidatoTemNomeFora = movimentos
+      .filter((m) => !idsMov.has(m.id))
+      .some((m) => sugerirParaMovimento(m, cands).some((s) => s.nomeBate));
+    if (candidatoTemNomeFora) continue;
+
+    // Fixa os pares de nome único nos dois sentidos.
+    const pares: ParDoGrupo[] = [];
+    const usadosMov = new Set<string>();
+    const usadosCand = new Set<string>();
+    const batem = new Map(
+      movs.map((m) => [m.id, cands.filter((c) => nomeConfereComCandidato(m.memo, c))]),
+    );
+    for (const m of movs) {
+      const lista = batem.get(m.id) ?? [];
+      if (lista.length !== 1) continue;
+      const c = lista[0];
+      const disputado = movs.filter((outro) => (batem.get(outro.id) ?? []).some((x) => x.id === c.id));
+      if (disputado.length !== 1) continue;
+      pares.push({ transacaoId: m.id, alvoId: c.id, nomeBate: true });
+      usadosMov.add(m.id);
+      usadosCand.add(c.id);
+    }
+    const restoMov = movs
+      .filter((m) => !usadosMov.has(m.id))
+      .sort((a, b) => minutosDoHistorico(a.memo) - minutosDoHistorico(b.memo) || a.id.localeCompare(b.id));
+    const restoCand = cands.filter((c) => !usadosCand.has(c.id)).sort((a, b) => a.id.localeCompare(b.id));
+    restoMov.forEach((m, i) => {
+      pares.push({ transacaoId: m.id, alvoId: restoCand[i].id, nomeBate: false });
+    });
+    grupos.push({ chave, pares });
+  }
+  return grupos;
+}
