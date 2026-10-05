@@ -5188,3 +5188,9 @@ Efeito no BB 102.124-9 (6.671 pendentes): 51 grupos com 115 movimentos; sugestõ
 - valor igual: desfaz o casamento do débito, estorna o pagamento da parcela (volta a aprovada, com evento "estornou" e o motivo; `parcela_eventos` passou a aceitar esse tipo) e casa débito e crédito como estorno;
 - valor menor (parcial): a parcela continua paga; cria um a receber do mesmo fornecedor na categoria nova "Devolução de fornecedor" (receita operacional), no centro de custo do lançamento original, já recebido e casado com o crédito. **Devolução parcial reduz o custo no centro de custo, não é receita financeira.**
 - mês fechado recusa; pagamento do RH ou de aplicação recusa.
+
+## 2026-10-05 - Conciliação v2, Bloco M: importar várias contas de uma vez pelo ACCTID
+
+**Pedido do Tiago:** com três contas e um OFX por conta por mês, soltar os arquivos todos e o app decidir. **Decisão:** `contaDoArquivo` (ofx.ts) lê BANKID e ACCTID; `resolverContaDoArquivo` (importacoes.ts, puro) acha a conta pelos dígitos com a mesma regra de `contaDoArquivoConfere` (um termina com o outro, porque o banco às vezes põe a agência na frente), só entre contas ativas, corrente ou caixa, que não são subconta. Nenhuma ou mais de uma recusa e diz quais. `importarOfx` aceita a conta vazia e resolve pelo arquivo; com conta escolhida, continua conferindo o ACCTID como antes.
+- O diálogo lê cada arquivo no navegador e mostra "arquivo → conta detectada → período → saldo": quando o número do arquivo não acha a conta, aparece o seletor só naquele arquivo. A conta da tela (quando o diálogo abre de uma conta) vale até o arquivo ser lido. O saldo diz se vira âncora (saldo do fim do arquivo) ou não (saldo do dia do download, caso do BB).
+- Cada arquivo continua numa chamada, em ordem de data, e cada uma já roda as regras (Bloco H) e o automático na conta do arquivo.

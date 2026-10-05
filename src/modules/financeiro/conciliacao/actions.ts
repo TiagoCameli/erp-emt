@@ -7,6 +7,7 @@ import type { Json } from "@/lib/database.types";
 import { erroAcao, logErroServidor } from "@/lib/erros";
 import { idSchema } from "@/lib/id";
 import {
+  contaDoArquivo,
   contaDoArquivoConfere,
   conferirMesFechado,
   conferirMovimentosNoPeriodo,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { casarTudo } from "@/modules/financeiro/conciliacao/estorno";
+import { resolverContaDoArquivo } from "@/modules/financeiro/conciliacao/importacoes";
 import {
   candidatosDoPainel,
   movimentosLivres,
@@ -207,8 +209,13 @@ export async function importarOfx(
     return { erro: "Sem permissão para importar extratos" };
   }
 
-  const contaId = formData.get("contaId");
-  if (typeof contaId !== "string" || !idSchema.safeParse(contaId).success) {
+  // Sem conta no formulário (Bloco M), a conta sai do ACCTID do arquivo.
+  const contaInformada = formData.get("contaId");
+  if (
+    contaInformada !== null &&
+    contaInformada !== "" &&
+    (typeof contaInformada !== "string" || !idSchema.safeParse(contaInformada).success)
+  ) {
     return { erro: "Selecione a conta bancária do extrato" };
   }
 
@@ -251,6 +258,27 @@ export async function importarOfx(
   }
 
   const supabase = await createClient();
+  let contaId: string;
+  if (typeof contaInformada === "string" && contaInformada) {
+    contaId = contaInformada;
+  } else {
+    const { data: todas } = await supabase
+      .from("contas_bancarias")
+      .select("id, nome, conta, ativo, tipo, conta_pai_id");
+    const achada = resolverContaDoArquivo(
+      contaDoArquivo(texto).digitos,
+      (todas ?? []).map((c) => ({
+        id: c.id,
+        nome: c.nome,
+        numero: c.conta,
+        ativo: c.ativo,
+        tipo: c.tipo,
+        contaPaiId: c.conta_pai_id,
+      })),
+    );
+    if ("erro" in achada) return { erro: achada.erro };
+    contaId = achada.conta.id;
+  }
   const { data: conta } = await supabase
     .from("contas_bancarias")
     .select("nome, conta")

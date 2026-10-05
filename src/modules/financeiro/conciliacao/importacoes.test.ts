@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { coberturaMeses, deslocarMes } from "./importacoes";
+import {
+  coberturaMeses,
+  deslocarMes,
+  resolverContaDoArquivo,
+  type ContaParaArquivo,
+} from "./importacoes";
 
 const extrato = (periodoInicio: string, periodoFim: string) => ({ periodoInicio, periodoFim });
 const situacoes = (r: ReturnType<typeof coberturaMeses>) =>
@@ -37,5 +42,44 @@ describe("coberturaMeses (Bloco G)", () => {
     expect(r[0].mes).toBe("2025-04");
     expect(r[11].mes).toBe("2026-03");
     expect(deslocarMes("2026-01", -1)).toBe("2025-12");
+  });
+});
+
+describe("resolverContaDoArquivo (Bloco M)", () => {
+  const conta = (id: string, numero: string, extra: Partial<ContaParaArquivo> = {}): ContaParaArquivo => ({
+    id,
+    nome: id,
+    numero,
+    ativo: true,
+    tipo: "corrente",
+    contaPaiId: null,
+    ...extra,
+  });
+  const contas = [
+    conta("bb102", "102.124-9"),
+    conta("caixa", "578367973-5"),
+    conta("bb30", "30.893-5"),
+    conta("bb102-inv", "102.124-9", { tipo: "investimento", contaPaiId: "bb102" }),
+  ];
+
+  it("acha as três contas reais pelo ACCTID", () => {
+    expect(resolverContaDoArquivo("1021249", contas)).toEqual({ conta: contas[0] });
+    expect(resolverContaDoArquivo("5783679735", contas)).toEqual({ conta: contas[1] });
+    expect(resolverContaDoArquivo("308935", contas)).toEqual({ conta: contas[2] });
+  });
+
+  it("com a agência na frente do número também acha", () => {
+    expect(resolverContaDoArquivo("23581021249", contas)).toEqual({ conta: contas[0] });
+  });
+
+  it("colisão de sufixo recusa e diz quais", () => {
+    const r = resolverContaDoArquivo("5", [conta("a", "30.893-5"), conta("b", "578367973-5")]);
+    expect("erro" in r && r.candidatas.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("conta inexistente, sem número no arquivo, inativa ou subconta: recusa", () => {
+    expect("erro" in resolverContaDoArquivo("999999", contas)).toBe(true);
+    expect("erro" in resolverContaDoArquivo("", contas)).toBe(true);
+    expect("erro" in resolverContaDoArquivo("1021249", [conta("x", "102.124-9", { ativo: false })])).toBe(true);
   });
 });

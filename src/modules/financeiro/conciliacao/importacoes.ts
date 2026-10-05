@@ -97,3 +97,48 @@ export function coberturaMeses(
   }
   return meses;
 }
+
+/** O mínimo de uma conta para descobrir de qual conta é um OFX. */
+export interface ContaParaArquivo {
+  id: string;
+  nome: string;
+  /** Número como cadastrado ("102.124-9"). */
+  numero: string | null;
+  ativo: boolean;
+  tipo: string;
+  contaPaiId: string | null;
+}
+
+export type ContaDoArquivo =
+  | { conta: ContaParaArquivo }
+  | { erro: string; candidatas: ContaParaArquivo[] };
+
+/**
+ * A conta de um OFX pelos dígitos do ACCTID (Bloco M), com a mesma regra de
+ * `contaDoArquivoConfere`: um termina com o outro, porque o banco às vezes
+ * põe a agência na frente. Só contas ativas, corrente ou caixa, que não são
+ * subconta. Nenhuma ou mais de uma: recusa e diz quais.
+ */
+export function resolverContaDoArquivo(
+  digitos: string,
+  contas: readonly ContaParaArquivo[],
+): ContaDoArquivo {
+  if (!digitos) {
+    return { erro: "O arquivo não diz de qual conta é: escolha a conta", candidatas: [] };
+  }
+  const elegiveis = contas.filter(
+    (c) => c.ativo && (c.tipo === "corrente" || c.tipo === "caixa") && !c.contaPaiId,
+  );
+  const candidatas = elegiveis.filter((c) => {
+    const doCadastro = (c.numero ?? "").replace(/\D/g, "");
+    return doCadastro !== "" && (digitos.endsWith(doCadastro) || doCadastro.endsWith(digitos));
+  });
+  if (candidatas.length === 1) return { conta: candidatas[0] };
+  if (candidatas.length === 0) {
+    return { erro: `Nenhuma conta cadastrada termina com ${digitos}: escolha a conta`, candidatas };
+  }
+  return {
+    erro: `Mais de uma conta combina com ${digitos} (${candidatas.map((c) => c.nome).join(", ")}): escolha a conta`,
+    candidatas,
+  };
+}

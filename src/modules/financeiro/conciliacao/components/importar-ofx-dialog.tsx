@@ -33,7 +33,14 @@ import {
   type MovimentoIgnorado,
 } from "@/modules/financeiro/conciliacao/actions";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
-import { decodificarOfx, parseOfx, sugerirIntervalo, type ExtratoOfx } from "@/lib/ofx";
+import {
+  contaDoArquivo,
+  decodificarOfx,
+  parseOfx,
+  sugerirIntervalo,
+  type ExtratoOfx,
+} from "@/lib/ofx";
+import { resolverContaDoArquivo } from "@/modules/financeiro/conciliacao/importacoes";
 import { Input } from "@/components/ui/input";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 
@@ -65,6 +72,12 @@ interface ArquivoEscolhido {
   previa: ExtratoOfx | null;
   de: string;
   ate: string;
+  /** A conta do arquivo: a do ACCTID (Bloco M) ou a escolhida à mão. */
+  contaId: string;
+  /** True quando a conta saiu do número que o banco escreveu no arquivo. */
+  contaDetectada: boolean;
+  /** Por que não deu para saber a conta pelo arquivo. */
+  avisoConta: string | null;
 }
 
 /** O que aconteceu com cada arquivo de um envio com vários. */
@@ -115,7 +128,6 @@ export function ImportarOfxDialog({
   contaInicialId,
 }: ImportarOfxDialogProps) {
   const router = useRouter();
-  const [contaId, setContaId] = React.useState(contaInicialId ?? "");
   const [arquivos, setArquivos] = React.useState<ArquivoEscolhido[]>([]);
   const [erro, setErro] = React.useState<string | null>(null);
   const [enviando, setEnviando] = React.useState(false);
@@ -128,7 +140,6 @@ export function ImportarOfxDialog({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   function limpar() {
-    setContaId(contaInicialId ?? "");
     setArquivos([]);
     setErro(null);
     setEnviando(false);
@@ -166,19 +177,46 @@ export function ImportarOfxDialog({
       const chave = chaveDoArquivo(arquivo);
       if (jaEscolhidas.has(chave)) continue;
       jaEscolhidas.add(chave);
-      novos.push({ chave, arquivo, previa: null, de: "", ate: "" });
+      novos.push({
+        chave,
+        arquivo,
+        previa: null,
+        de: "",
+        ate: "",
+        // A conta da tela vale até o arquivo ser lido; o ACCTID manda depois.
+        contaId: contaInicialId ?? "",
+        contaDetectada: false,
+        avisoConta: null,
+      });
     }
     if (novos.length === 0) return;
     setArquivos((atuais) => [...atuais, ...novos]);
 
     for (const novo of novos) {
       void novo.arquivo.arrayBuffer().then((bytes) => {
-        const extrato = parseOfx(decodificarOfx(bytes));
+        const texto = decodificarOfx(bytes);
+        const extrato = parseOfx(texto);
         const sugerido = sugerirIntervalo(extrato);
+        // A conta sai do ACCTID do arquivo; sem dar, fica a da tela (se houver)
+        // e a pessoa confere.
+        const achada = resolverContaDoArquivo(
+          contaDoArquivo(texto).digitos,
+          contas.map((c) => ({
+            id: c.id,
+            nome: c.nome,
+            numero: c.numero,
+            ativo: c.ativo,
+            tipo: c.tipo,
+            contaPaiId: c.contaPaiId,
+          })),
+        );
         atualizar(novo.chave, {
           previa: extrato,
           de: sugerido?.de ?? "",
           ate: sugerido?.ate ?? "",
+          ...("conta" in achada
+            ? { contaId: achada.conta.id, contaDetectada: true, avisoConta: null }
+            : { contaId: contaInicialId ?? "", contaDetectada: false, avisoConta: achada.erro }),
         });
       });
     }
@@ -191,8 +229,8 @@ export function ImportarOfxDialog({
   const algumInvalido = arquivos.some(intervaloInvalido);
 
   async function importar() {
-    if (!contaId) {
-      setErro("Selecione a conta bancária do extrato");
+    if (arquivos.some((item) => !item.contaId)) {
+      setErro("Escolha a conta de cada arquivo");
       return;
     }
     if (arquivos.length === 0) {
@@ -215,7 +253,7 @@ export function ImportarOfxDialog({
     for (const [indice, item] of fila.entries()) {
       setEnviandoNumero(indice + 1);
       const formData = new FormData();
-      formData.append("contaId", contaId);
+      formData.append("contaId", item.contaId);
       formData.append("arquivo", item.arquivo);
       if (item.de && item.ate) {
         formData.append("de", item.de);
@@ -351,19 +389,6 @@ export function ImportarOfxDialog({
           </div>
         ) : (
           <div className={classesFormulario}>
-            <CampoFormulario id="conta-ofx" rotulo="Conta bancária">
-              <Combobox
-                valor={contaId}
-                onValorChange={setContaId}
-                opcoes={contas.map((conta) => ({
-                  valor: conta.id,
-                  rotulo: `${conta.nome} (${conta.bancoRotulo})`,
-                }))}
-                placeholder="Selecione a conta"
-                id="conta-ofx"
-              />
-            </CampoFormulario>
-
             <div
               role="button"
               tabIndex={0}
@@ -422,6 +447,7 @@ export function ImportarOfxDialog({
                   <ArquivoNaFila
                     key={item.chave}
                     item={item}
+                    contas={contas}
                     enviando={enviando}
                     onMudar={(mudanca) => atualizar(item.chave, mudanca)}
                     onRemover={() => remover(item.chave)}
@@ -440,7 +466,12 @@ export function ImportarOfxDialog({
               </Button>
               <Button
                 onClick={() => void importar()}
-                disabled={enviando || !contaId || arquivos.length === 0 || algumInvalido}
+                disabled={
+                  enviando ||
+                  arquivos.length === 0 ||
+                  algumInvalido ||
+                  arquivos.some((item) => !item.contaId)
+                }
               >
                 {enviando ? (
                   <LoaderCircle className="animate-spin" />
@@ -464,11 +495,13 @@ export function ImportarOfxDialog({
 /** Um arquivo da fila: nome, o que ele traz e o intervalo que vai entrar. */
 function ArquivoNaFila({
   item,
+  contas,
   enviando,
   onMudar,
   onRemover,
 }: {
   item: ArquivoEscolhido;
+  contas: ContaBancariaOpcao[];
   enviando: boolean;
   onMudar: (mudanca: Partial<ArquivoEscolhido>) => void;
   onRemover: () => void;
@@ -498,6 +531,30 @@ function ArquivoNaFila({
       </div>
       {previa ? (
         <>
+          {item.contaDetectada ? (
+            <p className="text-detalhe">
+              Conta: <span className="font-medium">{contas.find((c) => c.id === item.contaId)?.nome ?? "-"}</span>
+              <span className="text-muted-foreground"> (pelo número no arquivo)</span>
+            </p>
+          ) : (
+            <CampoFormulario
+              id={`${idBase}-conta`}
+              rotulo="Conta"
+              obrigatorio
+              ajuda={item.avisoConta ?? undefined}
+            >
+              <Combobox
+                id={`${idBase}-conta`}
+                valor={item.contaId}
+                onValorChange={(contaId) => onMudar({ contaId })}
+                opcoes={contas
+                  .filter((c) => !c.contaPaiId)
+                  .map((c) => ({ valor: c.id, rotulo: `${c.nome} (${c.bancoRotulo})` }))}
+                placeholder="Escolha a conta"
+                disabled={enviando}
+              />
+            </CampoFormulario>
+          )}
           <p className="text-detalhe">
             O arquivo vai de {formatarData(inicioArquivo)} a {formatarData(fimArquivo)}, com{" "}
             {previa.transacoes.length} movimentos. Escolha o que usar:
@@ -534,7 +591,11 @@ function ArquivoNaFila({
               : `${movimentosNoIntervalo(item)} de ${previa.transacoes.length} movimentos entram.`}{" "}
             {previa.saldoFinal !== null && item.ate && item.ate < fimArquivo
               ? "O saldo final do arquivo não será usado, porque o intervalo para antes do fim do arquivo."
-              : null}
+              : previa.saldoFinal === null
+                ? "O arquivo não traz saldo."
+                : previa.saldoFinalData === fimArquivo
+                  ? `Saldo do fim do arquivo (${formatarBRL(previa.saldoFinal)}): vira âncora de saldo.`
+                  : "O saldo do arquivo é do dia do download, não do fim: não vira âncora."}
           </p>
         </>
       ) : (

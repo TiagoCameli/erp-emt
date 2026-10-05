@@ -50,6 +50,23 @@ export function contaDoArquivoConfere(
   return doArquivo.endsWith(doCadastro) || doCadastro.endsWith(doArquivo);
 }
 
+/**
+ * De qual conta é o arquivo (Bloco M): o banco (BANKID), a conta como o
+ * banco escreveu (ACCTID) e só os dígitos dela, para comparar com o cadastro.
+ */
+export function contaDoArquivo(conteudo: string): {
+  bankId: string | null;
+  acctId: string | null;
+  digitos: string;
+} {
+  const acctId = campo(conteudo, "ACCTID");
+  return {
+    bankId: campo(conteudo, "BANKID"),
+    acctId,
+    digitos: (acctId ?? "").replace(/\D/g, ""),
+  };
+}
+
 /** Data ISO yyyy-MM-dd no formato que o Tiago lê: dd/MM/yyyy. */
 function dataBr(iso: string): string {
   const [ano, mes, dia] = iso.split("-");
