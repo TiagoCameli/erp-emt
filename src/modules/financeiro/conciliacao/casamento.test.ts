@@ -357,12 +357,14 @@ describe("transferência entre contas no mesmo dia (regra c)", () => {
     expect(porMovimento).toEqual({ m21: "t21", m22: "t22" });
   });
 
-  it("duas transferências iguais no mesmo dia: nenhuma casa sozinha", () => {
+  it("duas transferências idênticas no mesmo dia: casa uma, a outra fica fora do banco", () => {
+    // Intercambiáveis (regra d): tanto faz qual. A que sobra aparece em
+    // "No app, fora do banco", que é onde a duplicidade tem que aparecer.
     const pares = casarAutomaticamente(
       [recebida("m1", "2025-07-21")],
       [trf("t1", "2025-07-21"), trf("t2", "2025-07-21")],
     );
-    expect(pares).toEqual([]);
+    expect(pares).toHaveLength(1);
   });
 
   it("dois movimentos iguais no mesmo dia para uma transferência: nenhum casa", () => {
@@ -377,6 +379,56 @@ describe("transferência entre contas no mesmo dia (regra c)", () => {
     const pares = casarAutomaticamente(
       [mov("m1", -500, "PIX FULANO", "2025-07-21")],
       [parcela("p1", 500, "Ciclano", "2025-07-21"), parcela("p2", 500, "Beltrano", "2025-07-22")],
+    );
+    expect(pares).toEqual([]);
+  });
+});
+
+describe("iguais do mesmo dia (regra d)", () => {
+  const tarifa = (id: string, data: string) => ({
+    ...parcela(id, 13.4, "TARIFAS BANCARIAS", data),
+    nomes: ["TARIFAS BANCARIAS", null, "TARIFA"],
+  });
+  const memoTarifa = (data: string) => `TAR DOC/TED ELETRÔNICO - COBRANÇA REFERENTE ${data}`;
+
+  it("tarifas idênticas do mesmo dia casam uma a uma, sem pegar as do dia seguinte", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -13.4, memoTarifa("30/03/2026"), "2026-03-30"), mov("m2", -13.4, memoTarifa("30/03/2026"), "2026-03-30")],
+      [
+        tarifa("a", "2026-03-30"), tarifa("b", "2026-03-30"),
+        tarifa("c", "2026-03-31"), tarifa("d", "2026-03-31"),
+      ],
+    );
+    expect(pares.map((p) => p.alvoId).sort()).toEqual(["a", "b"]);
+    expect(pares.every((p) => !p.confira)).toBe(true);
+  });
+
+  it("caso BRITAM: o do mesmo dia casa mesmo com outro igual 3 dias antes", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -100000, "PIX - ENVIADO - 31/07 12:39 BRITAS DA AMAZONIA MINERA", "2026-07-31")],
+      [
+        { ...parcela("p31", 100000, "BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", "2026-07-31"), nomes: ["BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", null, "PEDRAS LOTE 09"] },
+        { ...parcela("p28", 100000, "BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", "2026-07-28"), nomes: ["BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", null, "PEDRAS OBRA"] },
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "p31", confira: false })]);
+  });
+
+  it("mais movimentos que candidatos no dia continua para quem concilia", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -13.4, memoTarifa("30/03/2026"), "2026-03-30"), mov("m2", -13.4, memoTarifa("30/03/2026"), "2026-03-30")],
+      [tarifa("a", "2026-03-30")],
+    );
+    expect(pares).toEqual([]);
+  });
+
+  it("candidatos do mesmo dia mas diferentes entre si não são intercambiáveis", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -500, "PIX CICLANO DA SILVA", "2026-03-30"), mov("m2", -500, "PIX CICLANO DA SILVA", "2026-03-30")],
+      [
+        { ...parcela("a", 500, "Ciclano da Silva", "2026-03-30"), nomes: ["Ciclano da Silva", null, "Frete"] },
+        { ...parcela("b", 500, "Ciclano da Silva", "2026-03-30"), nomes: ["Ciclano da Silva", null, "Diaria"] },
+      ],
     );
     expect(pares).toEqual([]);
   });
