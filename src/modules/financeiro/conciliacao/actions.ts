@@ -817,7 +817,12 @@ export async function aceitarSugestoes(
  * Fecha o mês da conta (Bloco F). O banco recalcula tudo e recusa se faltar
  * movimento no app, sobrar no app ou o saldo não bater.
  */
-export async function fecharMes(contaId: string, mes: string): Promise<ResultadoAcao> {
+export async function fecharMes(
+  contaId: string,
+  mes: string,
+  /** Saldo da subconta no extrato de investimentos no último dia (Bloco K). */
+  saldoSubconta: number | null = null,
+): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "editar");
   } catch {
@@ -826,6 +831,32 @@ export async function fecharMes(contaId: string, mes: string): Promise<Resultado
   if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
   const periodo = periodoDoMes(mes);
   if (!periodo) return { erro: "Mês inválido" };
+
+  if (saldoSubconta !== null) {
+    if (!Number.isFinite(saldoSubconta)) return { erro: "Saldo da subconta inválido" };
+    const supabaseSub = await createClient();
+    const { data: sub } = await supabaseSub
+      .from("contas_bancarias")
+      .select("id")
+      .eq("conta_pai_id", contaId)
+      .maybeSingle();
+    if (sub) {
+      const { error: erroAncora } = await supabaseSub.rpc("fn_conciliacao_registrar_ancora", {
+        p_conta_id: sub.id,
+        p_data: periodo.fim,
+        p_saldo: saldoSubconta,
+        p_fonte: "extrato_pdf",
+        p_observacao: "Informado no fechamento do mês",
+      });
+      if (erroAncora) {
+        return erroAcao(
+          "financeiro.conciliacao.fecharMes.subconta",
+          erroAncora,
+          mensagem(erroAncora, "Não foi possível gravar o saldo da subconta"),
+        );
+      }
+    }
+  }
 
   // Fechar o mês é a confirmação (Bloco I): os "Confira" do mês, pela mesma
   // regra da tela, são confirmados e ensinam o apelido, tudo ou nada.
@@ -1103,4 +1134,46 @@ export async function casarGrupo(
   }
   revalidatePath(ROTA);
   return { ok: true, feitos, falhas };
+}
+
+const ancoraSchema = z.object({
+  contaId: idSchema,
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+  saldo: z.number().finite(),
+  observacao: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Âncora de saldo (Bloco K): o saldo do extrato em PDF no fim de um dia. O
+ * saldo do banco nos outros dias sai dela mais ou menos os movimentos do OFX.
+ * A mesma data de novo substitui o valor.
+ */
+export async function adicionarAncora(
+  entrada: z.input<typeof ancoraSchema>,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = ancoraSchema.safeParse(entrada);
+  if (!dados.success) return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_registrar_ancora", {
+    p_conta_id: dados.data.contaId,
+    p_data: dados.data.data,
+    p_saldo: dados.data.saldo,
+    p_fonte: "extrato_pdf",
+    p_observacao: dados.data.observacao ?? "",
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.ancora",
+      error,
+      mensagem(error, "Não foi possível gravar a âncora"),
+    );
+  }
+  revalidatePath(ROTA, "layout");
+  return { ok: true };
 }

@@ -185,6 +185,17 @@ describe("statusDoMes", () => {
     bate,
     corte: null,
     antesDoCorte: false,
+    bancoFonte: bate === null ? null : ("encadeado" as const),
+    bancoAncora: bate === null ? null : "2026-08-21",
+    motivo: bate === null ? "sem_ancora" : null,
+    subconta: null,
+  });
+
+  it("subconta com saldo do extrato diferente do app: falta bater (Bloco K)", () => {
+    const comSubconta = { ...saldo(true), subconta: { banco: 90, app: 100, temAncora: true, bate: false } };
+    expect(statusDoMes(vazio, comSubconta)).toBe("falta_saldo");
+    const batendo = { ...saldo(true), subconta: { banco: 100, app: 100, temAncora: true, bate: true } };
+    expect(statusDoMes(vazio, batendo)).toBe("conciliado");
   });
 
   it("só declara conciliado com as listas zeradas e o saldo batendo", () => {

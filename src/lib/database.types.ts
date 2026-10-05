@@ -1975,6 +1975,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      conciliacao_saldos_ancora: {
+        Row: {
+          conta_bancaria_id: string;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          fonte: string;
+          id: string;
+          observacao: string | null;
+          saldo: number;
+        };
+        Insert: {
+          conta_bancaria_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          fonte: string;
+          id?: string;
+          observacao?: string | null;
+          saldo: number;
+        };
+        Update: {
+          conta_bancaria_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          fonte?: string;
+          id?: string;
+          observacao?: string | null;
+          saldo?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conciliacao_saldos_ancora_conta_bancaria_id_fkey";
+            columns: ["conta_bancaria_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       conciliacao_regras: {
         Row: {
           acao: string;
@@ -9642,6 +9683,20 @@ export type Database = {
       };
       fn_conciliacao_aplicar_regras: {
         Args: { p_conta_id: string; p_mes?: string };
+        Returns: Json;
+      };
+      fn_conciliacao_registrar_ancora: {
+        Args: {
+          p_conta_id: string;
+          p_data: string;
+          p_fonte: string;
+          p_observacao: string;
+          p_saldo: number;
+        };
+        Returns: string;
+      };
+      fn_conciliacao_saldo_banco: {
+        Args: { p_conta_id: string; p_data: string };
         Returns: Json;
       };
       fn_conciliacao_salvar_regra: {

@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { Ancoras } from "@/modules/financeiro/conciliacao/components/ancoras";
 import { ImportacoesCliente } from "@/modules/financeiro/conciliacao/components/importacoes-cliente";
 import {
+  listarAncoras,
   listarContasBancarias,
   listarImportacoes,
 } from "@/modules/financeiro/conciliacao/queries";
@@ -25,9 +27,10 @@ export default async function PaginaImportacoes({
   }
 
   const { conta } = await searchParams;
-  const [importacoes, contas] = await Promise.all([
+  const [importacoes, contas, ancoras] = await Promise.all([
     listarImportacoes(),
     listarContasBancarias(),
+    listarAncoras(),
   ]);
 
   const comExtrato = new Set(importacoes.map((i) => i.contaId));
@@ -53,6 +56,11 @@ export default async function PaginaImportacoes({
         })
           .format(new Date())
           .slice(0, 7)}
+      />
+      <Ancoras
+        ancoras={ancoras}
+        contas={contas}
+        podeEditar={temPermissao(usuario, "financeiro.conciliacao", "editar")}
       />
     </>
   );

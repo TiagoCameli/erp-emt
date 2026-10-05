@@ -23,6 +23,7 @@ import {
 
 import {
   BarraSelecao,
+  CampoFormulario,
   CelulaVazia,
   ConfirmDialog,
   DataTable,
@@ -37,7 +38,16 @@ import {
 } from "@/components/canonicos";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { toast } from "@/components/canonicos/toast";
+import { InputMoeda } from "@/components/canonicos/input-numerico";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   formatarBRL,
   formatarData,
@@ -411,15 +421,28 @@ function ConciliacaoConta({
     router.refresh();
   }
 
-  async function fechar() {
+  const [saldoSubconta, setSaldoSubconta] = React.useState("");
+  const [pedirSubconta, setPedirSubconta] = React.useState(false);
+
+  async function fechar(comSubconta = false) {
+    // Com subconta, o fechamento pede o saldo dela no extrato de
+    // investimentos do último dia do mês (Bloco K).
+    if (saldo?.subconta && !comSubconta) {
+      setPedirSubconta(true);
+      return;
+    }
     setFechando(true);
-    const resposta = await fecharMes(conta.id, mes);
+    const valorSubconta = saldoSubconta.trim()
+      ? Number(saldoSubconta.replace(/\./g, "").replace(",", "."))
+      : null;
+    const resposta = await fecharMes(conta.id, mes, valorSubconta);
     setFechando(false);
     if ("erro" in resposta) {
       toast.error(resposta.erro);
       return;
     }
     toast.success(`${rotuloDoMes(mes)} conciliado e fechado`);
+    setPedirSubconta(false);
     router.refresh();
   }
 
@@ -622,7 +645,7 @@ function ConciliacaoConta({
             !saldo ? (
               "Sem extrato no fim do mês"
             ) : !saldo.temSaldoNoArquivo ? (
-              "O OFX não trouxe saldo"
+              saldo.motivo === "sem_cobertura" ? "Falta extrato até a âncora" : "Sem âncora de saldo"
             ) : !saldo.podeVer ? (
               <span
                 className={cn(
@@ -645,8 +668,20 @@ function ConciliacaoConta({
           detalhe={
             saldo?.temSaldoNoArquivo && saldo.podeVer ? (
               <>
-                Banco <MoneyText valor={saldo.banco} /> · App{" "}
-                <MoneyText valor={saldo.app} />
+                Banco <MoneyText valor={saldo.banco} />
+                {saldo.bancoFonte === "encadeado" && saldo.bancoAncora
+                  ? ` (encadeado desde ${formatarData(saldo.bancoAncora).slice(0, 5)}/${saldo.bancoAncora.slice(2, 4)})`
+                  : saldo.bancoFonte === "ledgerbal"
+                    ? " (saldo do OFX)"
+                    : ""}{" "}
+                · App <MoneyText valor={saldo.app} />
+                {saldo.subconta ? (
+                  <span className="block">
+                    Subconta: banco{" "}
+                    {saldo.subconta.temAncora ? <MoneyText valor={saldo.subconta.banco} /> : "sem saldo do extrato"} · app{" "}
+                    <MoneyText valor={saldo.subconta.app} />
+                  </span>
+                ) : null}
                 {saldo.antesDoCorte && saldo.corte ? (
                   <span className="block">
                     Antes do saldo inicial de {formatarData(saldo.corte)}: o app calcula
@@ -656,6 +691,8 @@ function ConciliacaoConta({
               </>
             ) : saldo?.temSaldoNoArquivo ? (
               "Saldo: sem permissão para ver os valores"
+            ) : saldo ? (
+              "Cadastre o saldo do extrato em Importações > Âncoras"
             ) : (
               "Sem saldo do banco o mês não fecha sozinho"
             )
@@ -713,6 +750,36 @@ function ConciliacaoConta({
         transacao={casarAlvo}
         candidatos={candidatos}
       />
+
+      <Dialog open={pedirSubconta} onOpenChange={(aberto) => !fechando && setPedirSubconta(aberto)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Saldo da subconta</DialogTitle>
+            <DialogDescription>
+              Saldo da subconta de investimentos em{" "}
+              {saldo ? formatarData(saldo.data) : "-"}, do extrato de investimentos do banco.
+              Se ela não teve movimento, deixe em branco.
+            </DialogDescription>
+          </DialogHeader>
+          <CampoFormulario id="saldo-subconta" rotulo="Saldo no extrato">
+            <InputMoeda
+              id="saldo-subconta"
+              valor={saldoSubconta}
+              onValorChange={setSaldoSubconta}
+              disabled={fechando}
+            />
+          </CampoFormulario>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPedirSubconta(false)} disabled={fechando}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={() => void fechar(true)} disabled={fechando}>
+              {fechando ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
+              Fechar mês
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <GrupoDialog
         key={`grupos-${chaveGrupos}`}

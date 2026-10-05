@@ -75,37 +75,39 @@ begin
 
   -- importacao nova grava o saldo e o painel compara
   v_import := public.fn_conciliacao_importar(v_conta, 'PROVA.ofx', date '2026-09-01', date '2026-09-30',
-    1148, date '2026-10-01',
+    1148, date '2026-09-30',
     jsonb_build_array(jsonb_build_object('data', '2026-09-10', 'valor', -100, 'memo', 'PAGAMENTO', 'fitid', 'prova-1')));
   if (select saldo_final from public.extratos_ofx where id = (v_import->>'extrato_id')::uuid) <> 1148 then
     raise exception 'FALHA 2: saldo_final nao gravado';
   end if;
   v_painel := public.fn_conciliacao_painel(v_conta, date '2026-09-01', date '2026-09-30');
   if (v_painel->'saldo'->>'data') <> '2026-09-30'
-     or (v_painel->'saldo'->>'banco')::numeric <> 1148
-     or (v_painel->'saldo'->>'app')::numeric <> 1148
-     or (v_painel->'saldo'->>'diferenca')::numeric <> 0
-     or not (v_painel->'saldo'->>'bate')::boolean then
+     or (v_painel->'saldo'->>'banco')::numeric is distinct from 1148
+     or (v_painel->'saldo'->>'app')::numeric is distinct from 1148
+     or (v_painel->'saldo'->>'diferenca')::numeric is distinct from 0
+     or not coalesce((v_painel->'saldo'->>'bate')::boolean, false) then
     raise exception 'FALHA 2: painel.saldo = %', v_painel->'saldo';
   end if;
-  raise notice 'OK 2 painel: banco 1148 = app 1148 em 30/09 (DTASOF 01/10 limitado ao fim do periodo)';
+  raise notice 'OK 2 painel: banco 1148 = app 1148 em 30/09 (Bloco K: DTASOF = fim do periodo vira ancora)';
 
   -- diferenca
-  update public.extratos_ofx set saldo_final = 1100 where id = (v_import->>'extrato_id')::uuid;
+  update public.conciliacao_saldos_ancora set saldo = 1100 where conta_bancaria_id = v_conta;
   v_painel := public.fn_conciliacao_painel(v_conta, date '2026-09-01', date '2026-09-30');
-  if (v_painel->'saldo'->>'diferenca')::numeric <> -48 or (v_painel->'saldo'->>'bate')::boolean then
+  if (v_painel->'saldo'->>'diferenca')::numeric is distinct from -48 or coalesce((v_painel->'saldo'->>'bate')::boolean, true) then
     raise exception 'FALHA 3: diferenca = %', v_painel->'saldo';
   end if;
   raise notice 'OK 3 diferenca de -48 e nao bate';
 
   -- sem saldo no arquivo: bate = null, nunca declara fechado
   update public.extratos_ofx set saldo_final = null where id = (v_import->>'extrato_id')::uuid;
+  delete from public.conciliacao_saldos_ancora where conta_bancaria_id = v_conta;
   v_painel := public.fn_conciliacao_painel(v_conta, date '2026-09-01', date '2026-09-30');
   if (v_painel->'saldo'->>'temSaldoNoArquivo')::boolean or (v_painel->'saldo'->'bate') <> 'null'::jsonb then
     raise exception 'FALHA 4: sem saldo = %', v_painel->'saldo';
   end if;
   raise notice 'OK 4 sem saldo no arquivo: bate null';
   update public.extratos_ofx set saldo_final = 1148 where id = (v_import->>'extrato_id')::uuid;
+  insert into public.conciliacao_saldos_ancora (conta_bancaria_id, data, saldo, fonte) values (v_conta, date '2026-09-30', 1148, 'informado');
 
   -- quem nao ve saldo
   delete from public.usuario_permissoes where usuario_id = v_brenda and recurso <> 'financeiro.conciliacao';

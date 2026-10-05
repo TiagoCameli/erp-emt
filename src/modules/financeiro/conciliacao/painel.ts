@@ -148,6 +148,27 @@ const saldoSchema = z.object({
    * partir do saldo inicial, e a diferença pode vir de qualquer mês até o corte.
    */
   antesDoCorte: z.boolean().optional().transform((a) => a ?? false),
+  /**
+   * De onde veio o saldo do banco (Bloco K): "encadeado" a partir de uma
+   * âncora com extrato cobrindo, ou "ledgerbal" quando o OFX traz o saldo do
+   * próprio fim do período. Null sem saldo.
+   */
+  bancoFonte: z.enum(["encadeado", "ledgerbal"]).nullable().optional().transform((f) => f ?? null),
+  /** Data da âncora de onde o saldo foi encadeado. */
+  bancoAncora: z.string().nullable().optional().transform((d) => d ?? null),
+  /** Sem saldo do banco: "sem_ancora" ou "sem_cobertura". */
+  motivo: z.string().nullable().optional().transform((m) => m ?? null),
+  /** Subconta de investimentos: o saldo do banco vem do extrato (âncora). */
+  subconta: z
+    .object({
+      banco: numero.nullable(),
+      app: numero.nullable(),
+      temAncora: z.boolean(),
+      bate: z.boolean().nullable(),
+    })
+    .nullable()
+    .optional()
+    .transform((s) => s ?? null),
 });
 
 export type SaldoPainel = z.infer<typeof saldoSchema>;
@@ -408,6 +429,8 @@ export function statusDoMes(
   if (visoes.faltamNoApp.length > 0 || visoes.foraDoBanco.length > 0)
     return "aberto";
   if (!saldo || saldo.bate === null) return "sem_saldo";
+  // Subconta com saldo do extrato e diferente do app também falta bater.
+  if (saldo.subconta?.bate === false) return "falta_saldo";
   return saldo.bate ? "conciliado" : "falta_saldo";
 }
 

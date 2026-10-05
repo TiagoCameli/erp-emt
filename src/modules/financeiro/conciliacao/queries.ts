@@ -180,6 +180,36 @@ export async function contarPendentesPorConta(): Promise<
   return contagem;
 }
 
+/** Saldo conhecido de uma conta no fim de um dia (Bloco K). */
+export interface AncoraSaldo {
+  id: string;
+  contaId: string;
+  data: string;
+  saldo: number;
+  fonte: "extrato_pdf" | "ledgerbal_fim_periodo" | "informado";
+  observacao: string | null;
+}
+
+/** Âncoras de saldo das contas que a pessoa pode ver (o RLS filtra). */
+export async function listarAncoras(): Promise<AncoraSaldo[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conciliacao_saldos_ancora")
+    .select("id, conta_bancaria_id, data, saldo, fonte, observacao")
+    .order("data", { ascending: false });
+  if (error) {
+    throw new Error("Não foi possível carregar as âncoras de saldo");
+  }
+  return (data ?? []).map((a) => ({
+    id: a.id,
+    contaId: a.conta_bancaria_id,
+    data: a.data,
+    saldo: Number(a.saldo),
+    fonte: a.fonte as AncoraSaldo["fonte"],
+    observacao: a.observacao,
+  }));
+}
+
 /** Regras de conciliação por histórico (Bloco H), todas as contas. */
 export async function listarRegras(): Promise<RegraConciliacao[]> {
   const supabase = await createClient();
