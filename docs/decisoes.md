@@ -5150,3 +5150,11 @@ Efeito medido no BB 102.124-9 (6.919 pendentes, conciliação zerada): automáti
 - `vezes_usado` conta pelo trigger quando um movimento casa com parcela cujo favorecido tem o apelido do cedente.
 
 Sem aprendizado retroativo: os 30 pares mais repetidos vão para o Tiago aprovar antes de semear com origem manual. No BB 102.124-9 (pendentes), os "Confira" seguem 1.234 até a semeadura; os 30 pares cobrem 591 deles.
+
+## 2026-10-05 - Conciliação v2, Bloco J: grupo equivalente N:N com um clique
+
+**Caso:** N movimentos de mesmo valor e dia contra N parcelas de mesmo valor, sem nome batendo em nenhum lado (folha de valores iguais, diárias, PIX redondo). A regra (d) exige o mesmo histórico em todos os movimentos; com nomes diferentes cai fora e era diálogo linha a linha. **Decisão:** `gruposEquivalentes` roda depois do automático sobre o que sobrou: mesmo sentido, valor e dia exato, N movimentos e N parcelas pagas nesta conta (N ≥ 2), e ninguém do grupo com nome batendo em alguém de fora (aí o par certo está fora e não é grupo). Dentro do grupo, os pares de nome único ficam fixos; o resto pareia pela hora do histórico. Não é automático: em "Faltam no app" a linha mostra "Grupo de N" e "Casar grupo"; "Revisar N grupos" passa por todos. O diálogo mostra os pares lado a lado com "Nome bate" ou "Equivalente" e o aviso de que a ordem não muda saldo nem resultado.
+- Os pares de nome batendo vão como manuais; os equivalentes vão como automáticos, para continuarem no filtro "Para conferir" dos Casados (o nome não confere). É o jeito de deixar rastreável sem coluna nova.
+- Mais movimentos que parcelas (ou o contrário) não é grupo: é lançamento faltando ou sobrando, e continua sugestão.
+
+Efeito no BB 102.124-9 (6.671 pendentes): 51 grupos com 115 movimentos; sugestões de 380 para 265; automático (6.002) e "Confira" (1.234) iguais. Os grupos levam 94 ms em todos os meses.

@@ -1056,3 +1056,51 @@ export async function confirmarConferencias(
   revalidatePath(ROTA);
   return { ok: true, ...resultado };
 }
+
+const parDoGrupoSchema = z.object({
+  transacaoId: idSchema,
+  alvoId: idSchema,
+  nomeBate: z.boolean(),
+});
+
+/**
+ * "Casar grupo" (Bloco J): N movimentos e N parcelas de mesmo valor e dia,
+ * revisados pela pessoa. Os pares de nome batendo vão como manuais; os
+ * equivalentes vão como automáticos, para continuarem no filtro "Para
+ * conferir" dos Casados (o nome não confere, e alguém pode querer olhar).
+ */
+export async function casarGrupo(
+  pares: z.input<typeof parDoGrupoSchema>[],
+): Promise<ResultadoLote> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = z.array(parDoGrupoSchema).min(2).max(500).safeParse(pares);
+  if (!dados.success) return { erro: "Grupo inválido" };
+
+  const supabase = await createClient();
+  let feitos = 0;
+  const falhas: { id: string; erro: string }[] = [];
+  for (const automatica of [false, true]) {
+    const lote = dados.data.filter((p) => p.nomeBate !== automatica);
+    if (lote.length === 0) continue;
+    const { data, error } = await supabase.rpc("fn_conciliacao_casar_lote", {
+      p_pares: lote.map((p) => ({ transacao: p.transacaoId, especie: "parcela", alvo: p.alvoId })) as unknown as Json,
+      p_automatica: automatica,
+    });
+    if (error) {
+      return erroAcao(
+        "financeiro.conciliacao.casarGrupo",
+        error,
+        mensagem(error, "Não foi possível casar o grupo"),
+      );
+    }
+    const resultado = resultadoLoteSchema.parse(data);
+    feitos += resultado.casadas;
+    falhas.push(...resultado.falhas.map((f) => ({ id: f.transacao, erro: f.erro })));
+  }
+  revalidatePath(ROTA);
+  return { ok: true, feitos, falhas };
+}
