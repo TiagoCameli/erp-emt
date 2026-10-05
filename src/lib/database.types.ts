@@ -9665,6 +9665,14 @@ export type Database = {
         Args: { p_transacao_ids: string[] };
         Returns: Json;
       };
+      fn_conciliacao_debitos_para_devolucao: {
+        Args: { p_credito_id: string };
+        Returns: Json;
+      };
+      fn_conciliacao_devolucao_fornecedor: {
+        Args: { p_credito_id: string; p_debito_id: string; p_motivo: string };
+        Returns: Json;
+      };
       fn_conciliacao_fechar_mes_confirmando: {
         Args: { p_confira_ids: string[]; p_conta_id: string; p_mes: string };
         Returns: string;

@@ -14,6 +14,7 @@ import {
   ListPlus,
   LoaderCircle,
   Pencil,
+  RotateCcw,
   Trash2,
   Undo2,
   Upload,
@@ -103,6 +104,7 @@ import {
 } from "@/modules/financeiro/conciliacao/painel";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
+import { DevolucaoDialog } from "./devolucao-dialog";
 import { EstornoDialog } from "./estorno-dialog";
 import { GrupoDialog } from "./grupo-dialog";
 import { RegraDialog, type RegraEmEdicao } from "./regra-dialog";
@@ -351,6 +353,7 @@ function ConciliacaoConta({
   const [casando, setCasando] = React.useState(false);
   const [casarAlvoId, setCasarAlvoId] = React.useState<string | null>(null);
   const [estornoAlvoId, setEstornoAlvoId] = React.useState<string | null>(null);
+  const [devolucaoAlvoId, setDevolucaoAlvoId] = React.useState<string | null>(null);
   const [lancarIds, setLancarIds] = React.useState<string[] | null>(null);
   const [transferirIds, setTransferirIds] = React.useState<string[] | null>(
     null,
@@ -373,6 +376,7 @@ function ConciliacaoConta({
   );
   const casarAlvo = casarAlvoId ? (porId.get(casarAlvoId) ?? null) : null;
   const estornoAlvo = estornoAlvoId ? (porId.get(estornoAlvoId) ?? null) : null;
+  const devolucaoAlvo = devolucaoAlvoId ? (porId.get(devolucaoAlvoId) ?? null) : null;
   const transacoesDe = (ids: string[] | null) =>
     (ids ?? [])
       .map((id) => porId.get(id))
@@ -710,6 +714,7 @@ function ConciliacaoConta({
           permissoes={permissoes}
           onCasar={setCasarAlvoId}
           onEstorno={setEstornoAlvoId}
+          onDevolucao={permissoes.lancar ? setDevolucaoAlvoId : undefined}
           onAplicarRegras={aplicarRegras}
           grupoPorMovimento={grupoPorMovimento}
           grupos={grupos}
@@ -799,6 +804,12 @@ function ConciliacaoConta({
           categorias: opcoes.categorias,
           fornecedores: opcoes.fornecedores,
         }}
+      />
+
+      <DevolucaoDialog
+        key={`devolucao-${devolucaoAlvoId ?? ""}`}
+        credito={devolucaoAlvo}
+        onFechar={() => setDevolucaoAlvoId(null)}
       />
 
       <EstornoDialog
@@ -920,6 +931,7 @@ function TabelaFaltam({
   permissoes,
   onCasar,
   onEstorno,
+  onDevolucao,
   onAplicarRegras,
   onCriarRegra,
   grupoPorMovimento,
@@ -936,6 +948,8 @@ function TabelaFaltam({
   permissoes: PermissoesConciliacao;
   onCasar: (id: string) => void;
   onEstorno: (id: string) => void;
+  /** Crédito que é o fornecedor devolvendo um pagamento (Bloco L). */
+  onDevolucao?: (id: string) => void;
   onAplicarRegras: (pares: { regraId: string; ids: string[] }[]) => Promise<void>;
   onCriarRegra?: (t: TransacaoPainel) => void;
   grupoPorMovimento: Map<string, GrupoEquivalente>;
@@ -1192,6 +1206,18 @@ function TabelaFaltam({
                   ) : null}
                 </Button>
               ) : null}
+              {permissoes.conciliar && onDevolucao && t.valor > 0 && !devolucao ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onDevolucao(t.id)}
+                  aria-label="É devolução de um pagamento"
+                  title="É devolução de um pagamento (o fornecedor devolveu)"
+                >
+                  <RotateCcw />
+                </Button>
+              ) : null}
               {permissoes.conciliar && onCriarRegra && !regra ? (
                 <Button
                   type="button"
@@ -1230,6 +1256,7 @@ function TabelaFaltam({
       permissoes,
       onCasar,
       onEstorno,
+      onDevolucao,
       onAplicarRegras,
       onCriarRegra,
       onCasarGrupos,

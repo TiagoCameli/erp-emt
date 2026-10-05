@@ -1177,3 +1177,83 @@ export async function adicionarAncora(
   revalidatePath(ROTA, "layout");
   return { ok: true };
 }
+
+const debitoParaDevolucaoSchema = z.object({
+  id: z.string(),
+  dataMovimento: z.string(),
+  valor: z.coerce.number(),
+  memo: z.string().nullable(),
+  lancamentoNumero: z.string().nullable(),
+  descricao: z.string().nullable(),
+  origem: z.string(),
+  fornecedor: z.string().nullable(),
+});
+
+export type DebitoParaDevolucao = z.infer<typeof debitoParaDevolucaoSchema>;
+
+/**
+ * Pagamentos que podem ter voltado neste crédito (Bloco L): débitos casados
+ * com parcela a pagar da conta, de mesmo valor ou maior, nos 90 dias antes.
+ */
+export async function debitosParaDevolucao(
+  creditoId: string,
+): Promise<{ debitos: DebitoParaDevolucao[] } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver a conciliação" };
+  }
+  if (!idSchema.safeParse(creditoId).success) return { erro: "Movimento inválido" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_debitos_para_devolucao", {
+    p_credito_id: creditoId,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.debitosParaDevolucao",
+      error,
+      mensagem(error, "Não foi possível carregar os pagamentos"),
+    );
+  }
+  return { debitos: z.array(debitoParaDevolucaoSchema).parse(data ?? []) };
+}
+
+const devolucaoSchema = z.object({
+  creditoId: idSchema,
+  debitoId: idSchema,
+  motivo: z.string().trim().min(3, "Informe o motivo da devolução").max(500),
+});
+
+/**
+ * "É devolução de um pagamento" (Bloco L). Valor igual: o pagamento volta a
+ * aberto e envio e devolução viram estorno. Valor menor: a parcela fica e a
+ * parte devolvida vira "Devolução de fornecedor" no centro de custo do
+ * lançamento original (reduz custo, não é receita financeira).
+ */
+export async function devolucaoDeFornecedor(
+  entrada: z.input<typeof devolucaoSchema>,
+): Promise<{ ok: true; modo: "total" | "parcial" } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = devolucaoSchema.safeParse(entrada);
+  if (!dados.success) return { erro: dados.error.issues[0]?.message ?? "Dados inválidos" };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_devolucao_fornecedor", {
+    p_credito_id: dados.data.creditoId,
+    p_debito_id: dados.data.debitoId,
+    p_motivo: dados.data.motivo,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.devolucao",
+      error,
+      mensagem(error, "Não foi possível registrar a devolução"),
+    );
+  }
+  const { modo } = z.object({ modo: z.enum(["total", "parcial"]) }).parse(data);
+  revalidatePath(ROTA);
+  return { ok: true, modo };
+}
