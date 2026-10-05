@@ -251,18 +251,27 @@ function chaveDeEquivalencia(c: CandidatoCasavel): string {
   return `${c.especie}|${c.nomes.map((n) => palavrasDoNome(n).join(" ")).join("|")}`;
 }
 
+/** O histórico sem hora, número e pontuação: o que identifica o movimento. */
+function chaveDoHistorico(memo: string | null): string {
+  return palavrasDoNome(memo).join(" ");
+}
+
 /**
- * (d) Iguais do mesmo dia (Tiago, 05/10/2026): movimentos e candidatos de
- * mesmo valor, sentido e DIA, com todos os candidatos idênticos entre si
- * (mesmo favorecido e descrição) e o nome conferindo, são intercambiáveis:
- * casar qualquer um com qualquer um dá o mesmo resultado. Casos reais: as
- * tarifas de R$ 13,40 do BB (várias por dia, todas "TARIFAS BANCARIAS /
- * TARIFA") e o PIX de R$ 100.000,00 para a BRITAM no dia em que também havia
- * outro igual 3 dias antes.
+ * (d) Iguais do mesmo dia (Tiago, 05/10/2026). Movimentos do banco de mesmo
+ * valor, sentido e DIA, com o MESMO histórico (só a hora muda, como os 14 PIX
+ * de R$ 198,15 para o DETRAN em 31/03/2026), são indistinguíveis: qualquer
+ * pareamento com os lançamentos do app daquele dia dá o mesmo resultado,
+ * mesmo que os lançamentos sejam diferentes entre si (uma placa cada).
  *
- * Só age quando há no máximo tantos movimentos quanto candidatos no dia: dois
- * movimentos disputando uma parcela só continuam para quem concilia (regra do
- * Bloco A). Transferência entre as mesmas contas não precisa de nome.
+ * - todo lançamento do dia precisa conferir com o histórico (transferência
+ *   entre as mesmas contas dispensa nome);
+ * - com tantos ou mais movimentos que lançamentos, casa todos os lançamentos
+ *   e os movimentos que sobram ficam em "Faltam no app";
+ * - com menos movimentos que lançamentos, só casa se os lançamentos também
+ *   forem idênticos (aí tanto faz qual sobra em "fora do banco"); senão
+ *   importa qual ficou de fora, e fica para quem concilia.
+ * - lançamento cujo favorecido não é o nome do extrato (o nome só aparece na
+ *   descrição) sai com `confira`.
  */
 function casarIguaisDoMesmoDia(
   movimentos: readonly MovimentoCasavel[],
@@ -279,6 +288,7 @@ function casarIguaisDoMesmoDia(
     if (lista) lista.push(c);
     else candPorDia.set(k, [c]);
   }
+  // Agrupa os movimentos também pelo histórico: só os indistinguíveis.
   const movPorDia = new Map<string, MovimentoCasavel[]>();
   for (const m of movimentos) {
     const k = chave(sentidoDo(m), m.valor, m.dataMovimento);
@@ -290,25 +300,39 @@ function casarIguaisDoMesmoDia(
   const pares: ParCasado[] = [];
   for (const [k, movs] of movPorDia) {
     const cands = candPorDia.get(k);
-    if (!cands || cands.length === 0 || movs.length > cands.length) continue;
-    const referencia = chaveDeEquivalencia(cands[0]);
-    if (!cands.every((c) => chaveDeEquivalencia(c) === referencia)) continue;
-    const transferencia = cands[0].especie === "transferencia";
-    if (!transferencia && !movs.every((m) => nomeConfere(m.memo, cands[0].nomes))) continue;
-    // Um só candidato e um só movimento sem nome é a regra (b)/(c), não esta.
-    if (transferencia && cands.length === 1) continue;
-    const ordenados = [...cands].sort((a, b) => a.id.localeCompare(b.id));
-    movs.forEach((m, i) => {
-      const c = ordenados[i];
+    if (!cands || cands.length === 0) continue;
+    const historico = chaveDoHistorico(movs[0].memo);
+    if (!movs.every((m) => chaveDoHistorico(m.memo) === historico)) continue;
+
+    const transferencia = cands.every((c) => c.especie === "transferencia");
+    if (!transferencia && cands.some((c) => c.especie === "transferencia")) continue;
+    if (!transferencia && !cands.every((c) => nomeConfere(movs[0].memo, c.nomes))) continue;
+    // Uma transferência sozinha no dia é coisa das regras (b) e (c).
+    if (transferencia && movs.length === 1 && cands.length === 1) continue;
+
+    if (movs.length < cands.length) {
+      const referencia = chaveDeEquivalencia(cands[0]);
+      if (!cands.every((c) => chaveDeEquivalencia(c) === referencia)) continue;
+    }
+
+    const ordenadosMov = [...movs].sort((a, b) => (a.memo ?? "").localeCompare(b.memo ?? "") || a.id.localeCompare(b.id));
+    const ordenadosCand = [...cands].sort((a, b) => a.id.localeCompare(b.id));
+    const n = Math.min(ordenadosMov.length, ordenadosCand.length);
+    for (let i = 0; i < n; i += 1) {
+      const m = ordenadosMov[i];
+      const c = ordenadosCand[i];
+      // Favorecido (nome, razão social) conferindo; só a descrição não basta
+      // para dispensar a conferência.
+      const favorecidoConfere = transferencia || nomeConfere(m.memo, c.nomes.slice(0, 2));
       pares.push({
         transacaoId: m.id,
         especie: c.especie,
         alvoId: c.id,
         dias: 0,
         nomeBate: !transferencia,
-        confira: false,
+        confira: !favorecidoConfere,
       });
-    });
+    }
   }
   return pares;
 }
