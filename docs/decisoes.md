@@ -5126,3 +5126,7 @@ Efeito nos pendentes do BB 102.124-9, todos os meses (802): automático de 111 p
 - Tela: botão "Estorno" na devolução (e ícone em qualquer movimento), escolhendo o outro lado; em Casados aparece "Estorno: data · histórico".
 
 Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem concilia a TED de R$ 2.000,00 de 29/08/2025 (5 envios possíveis), o PIX de R$ 6.337,08 de 01/10/2025 e o de R$ 360,00 de 07/02/2025 (o envio rejeitado das 12:57 já está casado com uma parcela).
+
+## 2026-10-05 - Conciliação: ver o resumo do lançamento antes de casar
+
+**Pedido do Tiago:** no "Casar movimento do extrato", um botão para ver o resumo do lançamento candidato (caso: TRANSFERIDO PARA POUPANÇA de R$ 100.000,00 contra o LAN-2026-3101, Simone Maria Gomes Magalhães, "PAGAMENTO PARCELA TERRENO"). **Decisão:** botão "Ver" ao lado de cada candidato que é lançamento, sem escolher o candidato. Abre por cima o resumo: favorecido, descrição, valor, categoria, mês de referência, data da compra, documento, observações, parcelas (data, conta, valor, situação) e rateio por centro de custo, com "Abrir lançamento" em outra aba. Lê por `resumoDoLancamento`, com a permissão de ver lançamentos (quem só tem a Conciliação recebe o aviso de sem permissão).

@@ -31,6 +31,10 @@ import {
   TODOS_OS_MESES,
 } from "@/modules/financeiro/conciliacao/painel";
 import { carregarPainel } from "@/modules/financeiro/conciliacao/queries";
+import {
+  buscarLancamento,
+  type LancamentoDetalhe,
+} from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.conciliacao" as const;
 const ROTA = "/financeiro/conciliacao";
@@ -820,4 +824,30 @@ export async function excluirImportacao(extratoId: string, motivo: string): Prom
   revalidatePath(ROTA);
   revalidatePath(`${ROTA}/importacoes`);
   return { ok: true };
+}
+
+/**
+ * Resumo do lançamento para conferir antes de casar (Tiago, 05/10/2026):
+ * favorecido, descrição, parcelas, rateio. Lê com a permissão de ver
+ * lançamentos, pelo RLS de quem pede.
+ */
+export async function resumoDoLancamento(
+  lancamentoId: string,
+): Promise<{ lancamento: LancamentoDetalhe } | { erro: string }> {
+  try {
+    await exigirPermissao("financeiro.lancamentos", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver lançamentos" };
+  }
+  if (!idSchema.safeParse(lancamentoId).success) {
+    return { erro: "Lançamento inválido" };
+  }
+  try {
+    const lancamento = await buscarLancamento(lancamentoId);
+    if (!lancamento) return { erro: "Lançamento não encontrado" };
+    return { lancamento };
+  } catch (e) {
+    logErroServidor("financeiro.conciliacao.resumo_lancamento", e);
+    return { erro: "Não foi possível carregar o lançamento" };
+  }
 }
