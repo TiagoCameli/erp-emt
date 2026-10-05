@@ -77,7 +77,7 @@ export default async function PaginaFornecedoresCombustivel({
     <>
       <TituloAba titulo="Fornecedores" descricao="Compras de combustível por fornecedor no período" />
 
-      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={OCULTAR_EM_ENTRADAS} />
+      <BarraFiltrosCombustivel filtro={filtro} opcoes={opcoes} ocultar={OCULTAR_EM_ENTRADAS} mostrarVisao={false} />
 
       {noPeriodo.length === 0 ? (
         <EmptyState titulo="Nenhuma entrada de combustível no período" descricao="Ajuste o período ou os filtros" />

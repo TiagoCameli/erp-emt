@@ -21,6 +21,14 @@ import {
   type OpcoesFiltroGlobal,
 } from "@/modules/combustivel/_shared/filtro-global";
 import { CHAVES_RECORTE } from "@/modules/combustivel/_shared/navegacao";
+import {
+  ORIGENS_EXTERNAS,
+  ROTULO_ORIGEM_EXTERNA,
+  ROTULO_VISAO,
+  VISOES_SAIDA,
+  type OrigemExterna,
+  type VisaoSaida,
+} from "@/modules/combustivel/abastecimentos/filtros";
 
 /**
  * A barra de filtros global do Combustível: a FilterBar + FilterChips da origem
@@ -49,6 +57,8 @@ export interface BarraFiltrosCombustivelProps {
   opcoes: OpcoesFiltroGlobal;
   /** Listas que a aba não usa (ex.: fornecedor numa aba só de saídas). */
   ocultar?: readonly DimensaoFiltro[];
+  /** Interna/externa só filtra saída: a aba só de entradas a esconde. */
+  mostrarVisao?: boolean;
   className?: string;
 }
 
@@ -73,6 +83,13 @@ export function useRecorteCombustivel(filtro: FiltroGlobal) {
       definirPeriodo(de: string, ate: string) {
         setMuitos({ de: de === "" ? null : de, ate: ate === "" ? null : ate, pagina: null });
       },
+      /** Trocar a visão zera a forma de pagamento: ela só existe em Externas. */
+      definirVisao(visao: VisaoSaida) {
+        setMuitos({ visao: visao === "todas" ? null : visao, externa: null, pagina: null });
+      },
+      definirExternas(externas: OrigemExterna[]) {
+        setMuitos({ externa: escreverListaNaUrl(externas), pagina: null });
+      },
       limpar() {
         setMuitos({ ...mudancasParaLimpar(), pagina: null });
       },
@@ -81,7 +98,13 @@ export function useRecorteCombustivel(filtro: FiltroGlobal) {
   );
 }
 
-export function BarraFiltrosCombustivel({ filtro, opcoes, ocultar = [], className }: BarraFiltrosCombustivelProps) {
+export function BarraFiltrosCombustivel({
+  filtro,
+  opcoes,
+  ocultar = [],
+  mostrarVisao = true,
+  className,
+}: BarraFiltrosCombustivelProps) {
   const recorte = useRecorteCombustivel(filtro);
   const proprios = filtro.modo === "proprios";
   const mostra = (dimensao: DimensaoFiltro) => !ocultar.includes(dimensao) && opcoes[dimensao].length > 0;
@@ -106,6 +129,14 @@ export function BarraFiltrosCombustivel({ filtro, opcoes, ocultar = [], classNam
           ate={pontasDoPeriodo(filtro.periodo).ate}
           onPeriodoChange={(de, ate) => recorte.definirPeriodo(de, ate)}
         />
+        {mostrarVisao ? (
+          <SeletorVisao
+            visao={filtro.visao}
+            externas={filtro.externas}
+            onVisaoChange={(visao) => recorte.definirVisao(visao)}
+            onExternasChange={(externas) => recorte.definirExternas(externas)}
+          />
+        ) : null}
         {multi("obras", "Obra")}
         {proprios ? multi("equipamentos", "Equipamento") : null}
         {!proprios ? multi("transportadoras", "Transportadora") : null}
@@ -123,8 +154,82 @@ export function BarraFiltrosCombustivel({ filtro, opcoes, ocultar = [], classNam
         <div className="flex-1" />
         <VisoesSalvas />
       </div>
-      <ChipsAtivos filtro={filtro} opcoes={opcoes} ocultar={ocultar} />
+      <ChipsAtivos filtro={filtro} opcoes={opcoes} ocultar={ocultar} mostrarVisao={mostrarVisao} />
     </div>
+  );
+}
+
+/**
+ * Interna (tanque da EMT) x externa (posto ou tanque de terceiro), a sub-aba de Saídas no
+ * recorte global; em Externas, a forma de pagamento. Estado local à frente da URL, pelo
+ * mesmo motivo dos chips de combustível.
+ */
+function SeletorVisao({
+  visao,
+  externas,
+  onVisaoChange,
+  onExternasChange,
+}: {
+  visao: VisaoSaida;
+  externas: OrigemExterna[];
+  onVisaoChange: (visao: VisaoSaida) => void;
+  onExternasChange: (externas: OrigemExterna[]) => void;
+}) {
+  const chave = `${visao}|${externas.join(",")}`;
+  const [local, setLocal] = React.useState({ visao, externas });
+  const [chaveAnterior, setChaveAnterior] = React.useState(chave);
+  if (chave !== chaveAnterior) {
+    setChaveAnterior(chave);
+    setLocal({ visao, externas });
+  }
+
+  const botao = (ativo: boolean) =>
+    cn(
+      "h-8 px-2.5 text-legenda transition-colors",
+      ativo ? "bg-primary/10 font-medium text-primary" : "bg-background text-muted-foreground hover:text-foreground",
+    );
+
+  return (
+    <>
+      <div className="flex overflow-hidden rounded-md border border-border" role="group" aria-label="Abastecimento">
+        {VISOES_SAIDA.map((v) => (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={local.visao === v}
+            onClick={() => {
+              setLocal({ visao: v, externas: [] });
+              onVisaoChange(v);
+            }}
+            className={cn(botao(local.visao === v), "border-l border-border first:border-l-0")}
+          >
+            {ROTULO_VISAO[v]}
+          </button>
+        ))}
+      </div>
+      {local.visao === "externas" ? (
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Forma de pagamento">
+          {ORIGENS_EXTERNAS.map((origem) => {
+            const ativa = local.externas.includes(origem);
+            return (
+              <button
+                key={origem}
+                type="button"
+                aria-pressed={ativa}
+                onClick={() => {
+                  const marcadas = ORIGENS_EXTERNAS.filter((o) => (o === origem ? !ativa : local.externas.includes(o)));
+                  setLocal({ visao: local.visao, externas: marcadas });
+                  onExternasChange(marcadas);
+                }}
+                className={cn(botao(ativa), "rounded-md border", ativa ? "border-primary" : "border-border")}
+              >
+                {ROTULO_ORIGEM_EXTERNA[origem]}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -179,9 +284,9 @@ function ChipsCombustivel({
 }
 
 interface Chip {
-  dimensao: DimensaoFiltro;
-  valor: string;
+  chave: string;
   rotulo: string;
+  remover: () => void;
 }
 
 const PREFIXO: Record<DimensaoFiltro, string> = {
@@ -200,10 +305,12 @@ function ChipsAtivos({
   filtro,
   opcoes,
   ocultar,
+  mostrarVisao,
 }: {
   filtro: FiltroGlobal;
   opcoes: OpcoesFiltroGlobal;
   ocultar: readonly DimensaoFiltro[];
+  mostrarVisao: boolean;
 }) {
   const recorte = useRecorteCombustivel(filtro);
   if (!temFiltroAtivo(filtro)) return null;
@@ -217,12 +324,26 @@ function ChipsAtivos({
   // O período não vira chip: o FiltroPeriodo já mostra o resumo e tem o X dele, como em
   // toda barra do ERP. Dois lugares para limpar a mesma coisa só confundem.
   const chips: Chip[] = [];
+  if (mostrarVisao && filtro.visao !== "todas") {
+    chips.push({ chave: "visao", rotulo: `Abastecimento: ${ROTULO_VISAO[filtro.visao]}`, remover: () => recorte.definirVisao("todas") });
+    for (const forma of filtro.externas) {
+      chips.push({
+        chave: `externa-${forma}`,
+        rotulo: `Pagamento: ${ROTULO_ORIGEM_EXTERNA[forma]}`,
+        remover: () => recorte.definirExternas(filtro.externas.filter((f) => f !== forma)),
+      });
+    }
+  }
   for (const dimensao of Object.keys(PREFIXO) as DimensaoFiltro[]) {
     if (!vale(dimensao)) continue;
     const prefixo = dimensao === "operadores" && !proprios ? "Motorista" : PREFIXO[dimensao];
     for (const valor of filtro[dimensao]) {
       const nome = opcoes[dimensao].find((o) => o.valor === valor)?.rotulo ?? valor;
-      chips.push({ dimensao, valor, rotulo: `${prefixo}: ${nome}` });
+      chips.push({
+        chave: `${dimensao}-${valor}`,
+        rotulo: `${prefixo}: ${nome}`,
+        remover: () => recorte.definirLista(dimensao, filtro[dimensao].filter((v) => v !== valor)),
+      });
     }
   }
   if (chips.length === 0) return null;
@@ -231,15 +352,10 @@ function ChipsAtivos({
     <div className="flex flex-wrap items-center gap-1.5 border-t border-border px-3 py-2">
       {chips.map((chip) => (
         <button
-          key={`${chip.dimensao}-${chip.valor}`}
+          key={chip.chave}
           type="button"
           aria-label={`Remover ${chip.rotulo}`}
-          onClick={() =>
-            recorte.definirLista(
-              chip.dimensao,
-              filtro[chip.dimensao].filter((v) => v !== chip.valor),
-            )
-          }
+          onClick={chip.remover}
           className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-legenda font-medium text-primary transition-colors hover:bg-primary/15"
         >
           <span className="max-w-[260px] truncate">{chip.rotulo}</span>

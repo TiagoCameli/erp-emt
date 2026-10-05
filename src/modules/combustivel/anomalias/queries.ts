@@ -86,7 +86,8 @@ export const carregarBaseCombustivel = cache(async (): Promise<BaseCombustivel> 
   const sentinelas = new Set(listaEquipamentos.filter((e) => e.sentinela).map((e) => e.id));
   const arvore = new Map(centros.linhas.map((c) => [c.id, { nome: c.nome, paiId: c.pai_id }]));
 
-  const listaSaidas = saidas.linhas.map((linha) => montarSaidaBase(linha, sentinelas, arvore));
+  const tanquesExternos = new Set(tanques.linhas.filter((t) => t.eh_externo).map((t) => t.id));
+  const listaSaidas = saidas.linhas.map((linha) => montarSaidaBase(linha, sentinelas, arvore, tanquesExternos));
 
   const obraNome = new Map<string, string>();
   for (const c of centros.linhas) {
