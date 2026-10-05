@@ -5107,3 +5107,13 @@ Ajuste no mesmo dia: o banco corta o nome ("CLELTON PEREIRA DE OLIVEIR"), e o pe
 ## 2026-10-05 - Conciliação: iguais do mesmo dia casam sozinhos (regra d)
 
 **Casos do Tiago:** PIX de R$ 100.000,00 para a BRITAM em 31/07/2026 com outros dois iguais (24/07 e 28/07) no app, e tarifas de R$ 13,40 do BB (várias por dia, todas "TARIFAS BANCARIAS / TARIFA"). **Decisão:** antes das regras (a), (b) e (c), movimentos e candidatos de mesmo valor, sentido e dia, com todos os candidatos idênticos entre si (espécie e nomes normalizados, incluindo a descrição) e o nome conferindo (transferência dispensa nome), casam um a um: são intercambiáveis. Só age quando não há mais movimentos que candidatos no dia (dois movimentos para uma parcela continuam para quem concilia, regra do Bloco A); candidato que sobra fica em "No app, fora do banco". Efeito nos pendentes do BB 102.124-9 (810): automático de 1 para 114.
+
+## 2026-10-05 - Conciliação: regra (d) olha os movimentos do banco, não os lançamentos
+
+**Caso do Tiago:** em 31/03/2026, 14 PIX de R$ 198,15 "PIX - ENVIADO - DETRAN" (só a hora muda) e 11 taxas no app, uma por placa ("REFERENTE PAGAMENTO TAXAS DO DETRAN ... PLACA X", favorecido Construtora Colorado); em 24/03/2026, 2 "IMPOSTOS - DETRAN-ACRE" para 2 licenciamentos de placas diferentes. A regra (d) não agia: exigia lançamentos idênticos entre si (a placa muda a descrição) e não mais movimentos que lançamentos. **Decisão:** o que torna o pareamento indiferente é o lado do banco. Movimentos do mesmo dia, valor, sentido e MESMO histórico (sem hora e número) são indistinguíveis: qualquer pareamento com os lançamentos daquele dia dá o mesmo resultado, mesmo que os lançamentos sejam diferentes entre si. Então:
+- todo lançamento do dia precisa conferir com o histórico pelo nome ou pela descrição (transferência dispensa nome);
+- com tantos ou mais movimentos que lançamentos, casa todos os lançamentos e os movimentos que sobram ficam em "Faltam no app" (os 3 PIX a mais de 31/03 aparecem lá para lançar). Isso afrouxa a regra do Bloco A de "dois movimentos para uma parcela ficam para quem concilia", e só para movimentos indistinguíveis, em que qualquer escolha é a mesma;
+- com menos movimentos que lançamentos, só casa se os lançamentos também forem idênticos; senão importa qual fica fora do banco, e fica para quem concilia;
+- quando o favorecido não é o nome do extrato (só a descrição bate, caso da Colorado) o par sai com "confira".
+
+Efeito nos pendentes do BB 102.124-9, todos os meses (802): automático de 111 para 227, nenhum casamento anterior perdido, 43 com "confira".
