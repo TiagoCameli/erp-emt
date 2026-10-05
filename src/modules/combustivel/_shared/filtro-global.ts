@@ -1,4 +1,10 @@
-import { lerListaDaUrl, lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+import { lerCatalogoDaUrl, lerListaDaUrl, lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
+import {
+  ORIGENS_EXTERNAS,
+  VISOES_SAIDA,
+  type OrigemExterna,
+  type VisaoSaida,
+} from "@/modules/combustivel/abastecimentos/filtros";
 import {
   EQUIPAMENTO_DESCONHECIDO,
   modoDaUrl,
@@ -32,6 +38,8 @@ import {
  * - saídas: modo (tipo de consumidor) + período + obra + tanque + combustível + operador;
  *   no modo próprios, equipamento (o sentinela nunca casa com um equipamento escolhido);
  *   no modo carretas, transportadora e placa. Fornecedor NÃO filtra saída.
+ *   Do ERP: interna/externa e, na externa, a forma de pagamento (`?visao=`/`?externa=`, as
+ *   chaves e a regra da sub-aba de Saídas, `casaVisao`).
  * - entradas: período + combustível + fornecedor + tanque. Modo, obra, equipamento e
  *   operador NÃO filtram entrada (a entrada é do tanque, não do consumidor).
  *
@@ -87,6 +95,10 @@ export interface FiltroGlobal {
   fornecedores: string[];
   /** Motorista/operador da saída. Texto livre. */
   operadores: string[];
+  /** Interna (tanque da EMT), externa (posto ou tanque de terceiro) ou todas. Só filtra SAÍDAS. */
+  visao: VisaoSaida;
+  /** A forma de pagamento da externa; vazio = todas. Só vale com `visao` externas. */
+  externas: OrigemExterna[];
 }
 
 /** O que a página recebe em `searchParams`, ou um `URLSearchParams` do cliente. */
@@ -174,16 +186,47 @@ export function filtroGlobalDaUrl(params: ParamsDaUrl): FiltroGlobal {
   const listas = Object.fromEntries(
     DIMENSOES_FILTRO.map((dimensao) => [dimensao, lerDimensao(valorDaUrl(params, CHAVE_DA_DIMENSAO[dimensao]), dimensao)]),
   ) as Record<DimensaoFiltro, string[]>;
+  const visaoBruta = primeiro(valorDaUrl(params, "visao"));
+  const visao = (VISOES_SAIDA as readonly string[]).includes(visaoBruta ?? "") ? (visaoBruta as VisaoSaida) : "todas";
   return {
     modo: modoDaUrl(valorDaUrl(params, "modo")),
     periodo: periodoOpcionalDaUrl(de, ate),
     ...listas,
+    visao,
+    externas: visao === "externas" ? lerCatalogoDaUrl(valorDaUrl(params, "externa"), ORIGENS_EXTERNAS) : [],
   };
 }
 
 /** Há filtro (o modo não conta)? O `hasActiveFilters` da origem. */
 export function temFiltroAtivo(filtro: FiltroGlobal): boolean {
-  return filtro.periodo !== null || DIMENSOES_FILTRO.some((dimensao) => filtro[dimensao].length > 0);
+  return (
+    filtro.periodo !== null ||
+    filtro.visao !== "todas" ||
+    DIMENSOES_FILTRO.some((dimensao) => filtro[dimensao].length > 0)
+  );
+}
+
+/** A forma de pagamento de uma saída externa; `null` = interna (ou sem tanque). */
+export function origemExternaDaSaida(s: Pick<SaidaBase, "origem" | "tanqueId" | "tanqueExterno">): OrigemExterna | null {
+  if (s.origem === "dinheiro" || s.origem === "requisicao") return s.origem;
+  if (s.origem === "tanque" && s.tanqueId !== null && s.tanqueExterno) return "tanque_externo";
+  return null;
+}
+
+/**
+ * A regra da sub-aba de Saídas (`aplicarFiltrosAbastecimentos`), em memória: interna =
+ * do tanque, e o tanque é da EMT; externa = posto (dinheiro, requisição) ou tanque de
+ * terceiro, restrita às formas marcadas. Saída de tanque sem tanque não é nenhuma das duas.
+ */
+export function casaVisao(
+  s: Pick<SaidaBase, "origem" | "tanqueId" | "tanqueExterno">,
+  visao: VisaoSaida,
+  externas: readonly OrigemExterna[],
+): boolean {
+  if (visao === "todas") return true;
+  if (visao === "internas") return s.origem === "tanque" && s.tanqueId !== null && !s.tanqueExterno;
+  const forma = origemExternaDaSaida(s);
+  return forma !== null && (externas.length === 0 || externas.includes(forma));
 }
 
 function normalizarPlaca(placa: string | null | undefined): string {
@@ -223,6 +266,7 @@ export function aplicarFiltroGlobal<T extends SaidaBase>(
     }
     if (combustiveis.size > 0 && (!s.tipoCombustivel || !combustiveis.has(s.tipoCombustivel))) return false;
     if (operadores.size > 0 && !operadores.has((s.motorista ?? "").trim())) return false;
+    if (!casaVisao(s, filtro.visao, filtro.externas)) return false;
     return true;
   });
 }
@@ -335,7 +379,7 @@ export function alternarValor(lista: readonly string[], valor: string): string[]
  * fica: ele é o seletor do topo, não um chip, e limpar filtro não pediu para trocar de modo.
  */
 export function mudancasParaLimpar(): Record<string, null> {
-  const mudancas: Record<string, null> = { de: null, ate: null };
+  const mudancas: Record<string, null> = { de: null, ate: null, visao: null, externa: null };
   for (const dimensao of DIMENSOES_FILTRO) mudancas[CHAVE_DA_DIMENSAO[dimensao]] = null;
   return mudancas;
 }

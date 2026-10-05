@@ -56,6 +56,7 @@ function saida(parcial: Partial<SaidaBase> = {}): SaidaBase {
     valorTotal: 60,
     origem: "tanque",
     tanqueId: null,
+    tanqueExterno: false,
     transportadoraId: null,
     motorista: null,
     precoUnitario: 6,

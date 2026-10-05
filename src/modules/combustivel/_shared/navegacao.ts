@@ -63,6 +63,9 @@ export const CHAVES_RECORTE = [
   "operador",
   "transportadora",
   "placa",
+  // Interna/externa e a forma de pagamento da externa: as mesmas chaves da sub-aba de Saídas.
+  "visao",
+  "externa",
 ] as const;
 
 /** A aba ativa: a de rota mais longa que é prefixo do caminho (o detalhe acende a lista). */

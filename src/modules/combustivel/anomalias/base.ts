@@ -101,6 +101,8 @@ export interface SaidaBase extends SaidaDeteccao {
   equipamentoIdReal: string | null;
   origem: string;
   tanqueId: string | null;
+  /** O tanque é de terceiro (`eh_externo`)? Saída dele é externa, como a do posto. */
+  tanqueExterno: boolean;
   transportadoraId: string | null;
   motorista: string | null;
   precoUnitario: number;
@@ -247,6 +249,7 @@ export function montarSaidaBase(
   linha: LinhaSaidaBanco,
   sentinelas: ReadonlySet<string>,
   centros: ReadonlyMap<string, { nome: string; paiId: string | null }>,
+  tanquesExternos: ReadonlySet<string> = new Set(),
 ): SaidaBase {
   const alocacoes = (linha.abastecimento_alocacoes ?? []).map((a) => ({
     centroRaizId: raizDoCentro(a.centro_custo_id, centros)?.id ?? null,
@@ -268,6 +271,7 @@ export function montarSaidaBase(
     valorTotal: numero(linha.valor_total),
     origem: linha.origem,
     tanqueId: linha.tanque_id,
+    tanqueExterno: linha.tanque_id !== null && tanquesExternos.has(linha.tanque_id),
     transportadoraId: linha.transportadora_id,
     motorista: linha.motorista,
     precoUnitario: numero(linha.preco_unitario),

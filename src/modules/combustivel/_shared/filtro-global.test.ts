@@ -5,10 +5,12 @@ import {
   alternarValor,
   aplicarFiltroGlobal,
   aplicarFiltroGlobalEntradas,
+  casaVisao,
   diasNoPeriodo,
   filtroGlobalDaUrl,
   mudancasParaLimpar,
   opcoesDoFiltroGlobal,
+  origemExternaDaSaida,
   periodoDoPreset,
   presetDoPeriodo,
   rotuloPeriodo,
@@ -48,6 +50,7 @@ function saida(parcial: Partial<SaidaBase> = {}): SaidaBase {
     valorTotal: 639.47,
     origem: "tanque",
     tanqueId: TANQUE_1,
+    tanqueExterno: false,
     transportadoraId: null,
     motorista: "João",
     precoUnitario: 6.3947,
@@ -308,5 +311,51 @@ describe("opcoesDoFiltroGlobal", () => {
     expect(opcoes.tanques).toEqual([]);
     // Fornecedor sem o próprio filtro, mas com o Arla escolhido: só o Posto A tem Arla; o B fica por estar marcado.
     expect(opcoes.fornecedores.map((o) => o.rotulo)).toEqual(["Posto A", "Posto B"]);
+  });
+});
+
+describe("interna/externa e forma de pagamento", () => {
+  const interna = saida({ id: "int" });
+  const tanqueTerceiro = saida({ id: "ter", tanqueExterno: true });
+  const dinheiro = saida({ id: "din", origem: "dinheiro", tanqueId: null });
+  const requisicao = saida({ id: "req", origem: "requisicao", tanqueId: null });
+  const semTanque = saida({ id: "sem", tanqueId: null });
+  const todas = [interna, tanqueTerceiro, dinheiro, requisicao, semTanque];
+  const ids = (f: FiltroGlobal) => aplicarFiltroGlobal(todas, f).map((s) => s.id);
+
+  it("lê ?visao= e ?externa= (as chaves da sub-aba de Saídas); forma só vale em externas", () => {
+    expect(filtroGlobalDaUrl({}).visao).toBe("todas");
+    expect(filtroGlobalDaUrl({ visao: "bobagem" }).visao).toBe("todas");
+    const ext = filtroGlobalDaUrl({ visao: "externas", externa: "requisicao,xpto,dinheiro" });
+    expect(ext.visao).toBe("externas");
+    expect([...ext.externas].sort()).toEqual(["dinheiro", "requisicao"]);
+    expect(filtroGlobalDaUrl({ visao: "internas", externa: "dinheiro" }).externas).toEqual([]);
+    expect(temFiltroAtivo(filtroGlobalDaUrl({ visao: "internas" }))).toBe(true);
+  });
+
+  it("todas não corta nada", () => {
+    expect(ids(filtro())).toEqual(["int", "ter", "din", "req", "sem"]);
+  });
+
+  it("internas = tanque da EMT (nem tanque de terceiro, nem saída de tanque sem tanque)", () => {
+    expect(ids(filtro({ visao: "internas" }))).toEqual(["int"]);
+  });
+
+  it("externas = posto e tanque de terceiro, e a forma de pagamento restringe", () => {
+    expect(ids(filtro({ visao: "externas" }))).toEqual(["ter", "din", "req"]);
+    expect(ids(filtro({ visao: "externas", externas: ["dinheiro"] }))).toEqual(["din"]);
+    expect(ids(filtro({ visao: "externas", externas: ["requisicao", "tanque_externo"] }))).toEqual(["ter", "req"]);
+  });
+
+  it("a forma de pagamento de cada saída", () => {
+    expect(todas.map(origemExternaDaSaida)).toEqual([null, "tanque_externo", "dinheiro", "requisicao", null]);
+    expect(casaVisao(semTanque, "externas", [])).toBe(false);
+  });
+
+  it("limpar apaga visão e forma, e as duas atravessam as abas", () => {
+    const limpar = mudancasParaLimpar();
+    expect(limpar).toMatchObject({ visao: null, externa: null });
+    expect(CHAVES_RECORTE).toContain("visao");
+    expect(CHAVES_RECORTE).toContain("externa");
   });
 });
