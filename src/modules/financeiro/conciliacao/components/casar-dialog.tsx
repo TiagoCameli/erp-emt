@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CircleAlert, Link2, LoaderCircle, Search } from "lucide-react";
+import { CircleAlert, Eye, Link2, LoaderCircle, Search } from "lucide-react";
 
 import { EmptyState, MoneyText } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
@@ -29,6 +29,7 @@ import type {
   CandidatoDoPainel,
   TransacaoPainel,
 } from "@/modules/financeiro/conciliacao/painel";
+import { ResumoLancamentoDialog } from "./resumo-lancamento-dialog";
 import { ValorMovimento } from "./valor-movimento";
 
 /**
@@ -161,6 +162,8 @@ export function CasarDialog({
     !!escolhida?.candidato.registro &&
     ORIGENS_SO_FINANCEIRO.has(escolhida.candidato.registro.origem);
 
+  const [resumoId, setResumoId] = React.useState<string | null>(null);
+
   function trocarAberto(novo: boolean) {
     if (enviando) return;
     onAbertoChange(novo);
@@ -241,57 +244,72 @@ export function CasarDialog({
             sugestoes.map((sugestao) => {
               const chave = `${sugestao.candidato.especie}:${sugestao.candidato.id}`;
               const ativo = chave === selecionado;
+              const lancamentoId = sugestao.candidato.registro?.lancamentoId;
               return (
-                <button
-                  key={chave}
-                  type="button"
-                  role="radio"
-                  aria-checked={ativo}
-                  onClick={() => {
-                    setSelecionado(chave);
-                    setAjuste(null);
-                  }}
-                  className={cn(
-                    "foco-anel flex flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm",
-                    ativo ? "border-primary bg-primary/5" : "border-border hover:bg-surface",
-                  )}
-                >
-                  <span className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="font-medium">{tituloCandidato(sugestao.candidato)}</span>
-                    <MoneyText valor={sugestao.candidato.valor} />
-                  </span>
-                  <span className="truncate text-legenda text-muted-foreground">
-                    {detalheCandidato(sugestao.candidato) || "-"}
-                  </span>
-                  <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-legenda">
-                    <span
-                      className={cn(
-                        sugestao.candidato.grupo === "paga_na_conta" ||
-                          sugestao.candidato.grupo === "transferencia"
-                          ? "text-muted-foreground"
-                          : "text-status-pendente",
-                      )}
-                    >
-                      {EFEITO[sugestao.candidato.grupo]}
-                    </span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatarData(sugestao.candidato.data)}
-                      {sugestao.dias > 0
-                        ? ` (${sugestao.dias} ${sugestao.dias === 1 ? "dia" : "dias"} de diferença)`
-                        : ""}
-                    </span>
-                    {sugestao.nomeBate ? (
-                      <span className="text-status-aprovado">Nome confere com o extrato</span>
-                    ) : (
-                      <span className="text-muted-foreground">Nome não aparece no extrato</span>
+                <div key={chave} className="flex items-stretch gap-1.5">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    onClick={() => {
+                      setSelecionado(chave);
+                      setAjuste(null);
+                    }}
+                    className={cn(
+                      "foco-anel flex min-w-0 flex-1 flex-col gap-0.5 rounded-md border px-3 py-2 text-left text-sm",
+                      ativo ? "border-primary bg-primary/5" : "border-border hover:bg-surface",
                     )}
-                    {sugestao.diferenca !== 0 ? (
-                      <span className="text-status-rejeitado">
-                        Valor difere em {formatarBRL(Math.abs(sugestao.diferenca))}
+                  >
+                    <span className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium">{tituloCandidato(sugestao.candidato)}</span>
+                      <MoneyText valor={sugestao.candidato.valor} />
+                    </span>
+                    <span className="truncate text-legenda text-muted-foreground">
+                      {detalheCandidato(sugestao.candidato) || "-"}
+                    </span>
+                    <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-legenda">
+                      <span
+                        className={cn(
+                          sugestao.candidato.grupo === "paga_na_conta" ||
+                            sugestao.candidato.grupo === "transferencia"
+                            ? "text-muted-foreground"
+                            : "text-status-pendente",
+                        )}
+                      >
+                        {EFEITO[sugestao.candidato.grupo]}
                       </span>
-                    ) : null}
-                  </span>
-                </button>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatarData(sugestao.candidato.data)}
+                        {sugestao.dias > 0
+                          ? ` (${sugestao.dias} ${sugestao.dias === 1 ? "dia" : "dias"} de diferença)`
+                          : ""}
+                      </span>
+                      {sugestao.nomeBate ? (
+                        <span className="text-status-aprovado">Nome confere com o extrato</span>
+                      ) : (
+                        <span className="text-muted-foreground">Nome não aparece no extrato</span>
+                      )}
+                      {sugestao.diferenca !== 0 ? (
+                        <span className="text-status-rejeitado">
+                          Valor difere em {formatarBRL(Math.abs(sugestao.diferenca))}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                  {lancamentoId ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-auto"
+                      onClick={() => setResumoId(lancamentoId)}
+                      aria-label="Ver resumo do lançamento"
+                      title="Ver resumo do lançamento"
+                    >
+                      <Eye />
+                      <span className="max-md:sr-only">Ver</span>
+                    </Button>
+                  ) : null}
+                </div>
               );
             })
           )}
@@ -353,6 +371,12 @@ export function CasarDialog({
             Casar
           </Button>
         </DialogFooter>
+
+        <ResumoLancamentoDialog
+          key={`resumo-${resumoId ?? ""}`}
+          lancamentoId={resumoId}
+          onFechar={() => setResumoId(null)}
+        />
       </DialogContent>
     </Dialog>
   );
