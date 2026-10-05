@@ -76,7 +76,7 @@ describe("ImportarOfxDialog", () => {
       inseridas: 280,
       ignoradas: 0,
       ignorados: [],
-      casadas: 0,
+      casadas: 0, regras: 0,
       aviso:
         "O arquivo vai de 30/12/2025 a 31/01/2026, que não é um mês fechado. Exporte do dia 1 ao último dia do mês.",
     });
@@ -95,7 +95,7 @@ describe("ImportarOfxDialog", () => {
       inseridas: 4,
       ignoradas: 0,
       ignorados: [],
-      casadas: 0,
+      casadas: 0, regras: 0,
       aviso: null,
     });
 
@@ -126,7 +126,7 @@ describe("ImportarOfxDialog", () => {
           fitid: null,
         },
       ],
-      casadas: 0,
+      casadas: 0, regras: 0,
       aviso: null,
     });
     expect(
@@ -139,7 +139,7 @@ describe("ImportarOfxDialog", () => {
 
   it("sugere o mês mais completo do arquivo e envia o intervalo escolhido", async () => {
     vi.mocked(importarOfx).mockResolvedValue({
-      ok: true, inseridas: 2, ignoradas: 0, ignorados: [], casadas: 0, aviso: null,
+      ok: true, inseridas: 2, ignoradas: 0, ignorados: [], casadas: 0, regras: 0, aviso: null,
     });
     render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={contas} contaInicialId={CONTA_ID} />);
     const entrada = document.body.querySelector<HTMLInputElement>('input[type="file"]');
@@ -168,7 +168,7 @@ describe("ImportarOfxDialog", () => {
     const ofx = (mes: string) =>
       `<OFX><DTSTART>2025${mes}01<DTEND>2025${mes}28<STMTTRN><DTPOSTED>2025${mes}10<TRNAMT>-1.00<FITID>${mes}<MEMO>X</STMTTRN></OFX>`;
     vi.mocked(importarOfx)
-      .mockResolvedValueOnce({ ok: true, inseridas: 3, ignoradas: 0, ignorados: [], casadas: 1, aviso: null })
+      .mockResolvedValueOnce({ ok: true, inseridas: 3, ignoradas: 0, ignorados: [], casadas: 1, regras: 0, aviso: null })
       .mockResolvedValueOnce({ erro: "Este arquivo é da conta 30893-5, e não da BANCO DO BRASIL 102.124-9." });
 
     render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={contas} contaInicialId={CONTA_ID} />);

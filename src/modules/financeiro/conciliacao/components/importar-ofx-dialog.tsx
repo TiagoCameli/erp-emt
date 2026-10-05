@@ -51,6 +51,8 @@ interface ResultadoImportacao {
   ignorados: MovimentoIgnorado[];
   /** Quantos movimentos o casamento automático já vinculou. */
   casadas: number;
+  /** Quantos as regras automáticas por histórico lançaram. */
+  regras: number;
   /** Frase do aviso quando o arquivo não é um mês fechado. */
   aviso: string | null;
 }
@@ -238,6 +240,7 @@ export function ImportarOfxDialog({
                 ignoradas: resposta.ignoradas,
                 ignorados: resposta.ignorados,
                 casadas: resposta.casadas,
+                regras: resposta.regras,
                 aviso: resposta.aviso,
               },
             },
@@ -569,6 +572,13 @@ function ResumoArquivo({
               {resultado.casadas === 1
                 ? "1 já casada com o app automaticamente"
                 : `${resultado.casadas} já casadas com o app automaticamente`}
+            </p>
+          ) : null}
+          {resultado.regras > 0 ? (
+            <p className="text-muted-foreground">
+              {resultado.regras === 1
+                ? "1 lançada por regra (Rende Fácil, tarifa)"
+                : `${resultado.regras} lançadas por regra (Rende Fácil, tarifa)`}
             </p>
           ) : null}
           {resultado.ignoradas > 0 ? (

@@ -1975,6 +1975,102 @@ export type Database = {
         };
         Relationships: [];
       };
+      conciliacao_regras: {
+        Row: {
+          acao: string;
+          automatica: boolean;
+          ativa: boolean;
+          categoria_id: string | null;
+          centro_custo_id: string | null;
+          conta_bancaria_id: string | null;
+          conta_contraparte_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          fornecedor_id: string | null;
+          id: string;
+          nome: string;
+          padrao: string;
+          sentido: string | null;
+          ultima_aplicacao: string | null;
+          updated_at: string;
+          vezes_aplicada: number;
+        };
+        Insert: {
+          acao: string;
+          automatica?: boolean;
+          ativa?: boolean;
+          categoria_id?: string | null;
+          centro_custo_id?: string | null;
+          conta_bancaria_id?: string | null;
+          conta_contraparte_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          nome: string;
+          padrao: string;
+          sentido?: string | null;
+          ultima_aplicacao?: string | null;
+          updated_at?: string;
+          vezes_aplicada?: number;
+        };
+        Update: {
+          acao?: string;
+          automatica?: boolean;
+          ativa?: boolean;
+          categoria_id?: string | null;
+          centro_custo_id?: string | null;
+          conta_bancaria_id?: string | null;
+          conta_contraparte_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          nome?: string;
+          padrao?: string;
+          sentido?: string | null;
+          ultima_aplicacao?: string | null;
+          updated_at?: string;
+          vezes_aplicada?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conciliacao_regras_conta_bancaria_id_fkey";
+            columns: ["conta_bancaria_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conciliacao_regras_conta_contraparte_id_fkey";
+            columns: ["conta_contraparte_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conciliacao_regras_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conciliacao_regras_categoria_id_fkey";
+            columns: ["categoria_id"];
+            isOneToOne: false;
+            referencedRelation: "categorias_financeiras";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conciliacao_regras_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contas_bancarias: {
         Row: {
           agencia: string | null;
@@ -9461,6 +9557,18 @@ export type Database = {
       };
       fn_conciliacao_fechar_mes: {
         Args: { p_conta_id: string; p_mes: string };
+        Returns: string;
+      };
+      fn_conciliacao_aplicar_regra: {
+        Args: { p_regra_id: string; p_transacao_ids: string[] };
+        Returns: Json;
+      };
+      fn_conciliacao_aplicar_regras: {
+        Args: { p_conta_id: string; p_mes?: string };
+        Returns: Json;
+      };
+      fn_conciliacao_salvar_regra: {
+        Args: { p_dados: Json; p_id: string };
         Returns: string;
       };
       fn_conciliacao_reabrir_mes: {
