@@ -8,6 +8,13 @@ import { z } from "zod";
 
 const numero = z.coerce.number();
 
+/**
+ * Primeiro mês em que a conciliação bancária é exigida (Tiago, 05/10/2026):
+ * de setembro de 2026 em diante. Antes disso o app não cobra extrato,
+ * pendência nem fechamento.
+ */
+export const INICIO_DA_CONCILIACAO = "2026-09";
+
 export const importacaoSchema = z.object({
   id: z.string(),
   contaId: z.string(),
@@ -64,10 +71,13 @@ export function coberturaMeses(
   }[],
   ateMes: string,
   quantidade = 12,
+  /** Primeiro mês exigido ("YYYY-MM"): antes dele não entra na cobertura. */
+  desde?: string,
 ): MesCobertura[] {
   const meses: MesCobertura[] = [];
   for (let i = quantidade - 1; i >= 0; i -= 1) {
     const mes = deslocarMes(ateMes, -i);
+    if (desde && mes < desde) continue;
     const ultimo = diasNoMes(mes);
     const cobertos = new Set<number>();
     for (const e of extratos) {

@@ -27,6 +27,7 @@ import {
 } from "@/modules/_shared/filtros-cliente";
 import { excluirImportacao } from "@/modules/financeiro/conciliacao/actions";
 import {
+  INICIO_DA_CONCILIACAO,
   coberturaMeses,
   type Importacao,
   type SituacaoCobertura,
@@ -331,6 +332,8 @@ export function ImportacoesCliente({
             const meses = coberturaMeses(
               importacoes.filter((i) => i.contaId === c.id),
               hoje,
+              12,
+              INICIO_DA_CONCILIACAO,
             );
             return (
               <div key={c.id} className="flex items-center gap-3">
