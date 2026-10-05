@@ -208,3 +208,34 @@ describe("ImportarOfxDialog", () => {
     expect(screen.getByRole("button", { name: "Importar extrato" })).toBeInTheDocument();
   });
 });
+
+describe("ImportarOfxDialog sem conta escolhida (Bloco M)", () => {
+  it("acha a conta pelo ACCTID do arquivo e manda a conta de cada arquivo", async () => {
+    vi.mocked(importarOfx).mockResolvedValue({
+      ok: true,
+      inseridas: 1,
+      ignoradas: 0,
+      ignorados: [],
+      casadas: 0,
+      regras: 0,
+      aviso: null,
+    });
+    const caixa = { ...contas[0], id: "8f1b7c2e-6d3a-4f58-9b0e-1c2d3e4f5a6b", nome: "CAIXA 578367973-5", numero: "578367973-5" };
+    const bb = { ...contas[0], numero: "102.124-9" };
+    render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={[bb, caixa]} />);
+
+    const entrada = document.body.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!entrada) throw new Error("o seletor de arquivo sumiu do diálogo");
+    const ofx =
+      "<OFX><BANKACCTFROM><BANKID>104<ACCTID>5783679735</BANKACCTFROM>" +
+      "<DTSTART>20260901<DTEND>20260930" +
+      "<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260910<TRNAMT>-10.00<FITID>1<MEMO>X</STMTTRN></OFX>";
+    fireEvent.change(entrada, { target: { files: [new File([ofx], "caixa.ofx")] } });
+
+    expect(await screen.findByText("CAIXA 578367973-5")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Importar extrato/ }));
+    await waitFor(() => expect(importarOfx).toHaveBeenCalledTimes(1));
+    const enviado = vi.mocked(importarOfx).mock.calls[0][0] as FormData;
+    expect(enviado.get("contaId")).toBe(caixa.id);
+  });
+});

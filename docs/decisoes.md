@@ -5188,3 +5188,15 @@ Efeito no BB 102.124-9 (6.671 pendentes): 51 grupos com 115 movimentos; sugestõ
 - valor igual: desfaz o casamento do débito, estorna o pagamento da parcela (volta a aprovada, com evento "estornou" e o motivo; `parcela_eventos` passou a aceitar esse tipo) e casa débito e crédito como estorno;
 - valor menor (parcial): a parcela continua paga; cria um a receber do mesmo fornecedor na categoria nova "Devolução de fornecedor" (receita operacional), no centro de custo do lançamento original, já recebido e casado com o crédito. **Devolução parcial reduz o custo no centro de custo, não é receita financeira.**
 - mês fechado recusa; pagamento do RH ou de aplicação recusa.
+
+## 2026-10-05 - Conciliação v2, Bloco M: importar várias contas de uma vez pelo ACCTID
+
+**Pedido do Tiago:** com três contas e um OFX por conta por mês, soltar os arquivos todos e o app decidir. **Decisão:** `contaDoArquivo` (ofx.ts) lê BANKID e ACCTID; `resolverContaDoArquivo` (importacoes.ts, puro) acha a conta pelos dígitos com a mesma regra de `contaDoArquivoConfere` (um termina com o outro, porque o banco às vezes põe a agência na frente), só entre contas ativas, corrente ou caixa, que não são subconta. Nenhuma ou mais de uma recusa e diz quais. `importarOfx` aceita a conta vazia e resolve pelo arquivo; com conta escolhida, continua conferindo o ACCTID como antes.
+- O diálogo lê cada arquivo no navegador e mostra "arquivo → conta detectada → período → saldo": quando o número do arquivo não acha a conta, aparece o seletor só naquele arquivo. A conta da tela (quando o diálogo abre de uma conta) vale até o arquivo ser lido. O saldo diz se vira âncora (saldo do fim do arquivo) ou não (saldo do dia do download, caso do BB).
+- Cada arquivo continua numa chamada, em ordem de data, e cada uma já roda as regras (Bloco H) e o automático na conta do arquivo.
+
+## 2026-10-05 - Conciliação v2, Bloco N: histórico do BB 102.124-9 só com o automático
+
+**Decisão do Tiago:** de jan/2025 a ago/2026 a conciliação fica só com o automático, sem fechamento; fechamento começa em set/2026. Rodado no BB 102.124-9 depois dos Blocos H a L: regras (as 248 do Rende Fácil já estavam aplicadas) e o automático de todos os meses com os estornos, pelo mesmo motor da tela (6.004 casamentos: 16 estornos e 5.988 pares, sem falha). Não foram aceitas sugestões, casados grupos, feitos lançamentos nem aprendidos apelidos.
+
+Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 248 por regra, 32 movimentos em 16 estornos; ficam 115 movimentos em 51 grupos equivalentes propostos, 262 com sugestão e 274 sem par (R$ 2.858.116,29); 533 lançamentos do app fora do banco. O saldo encadeado do banco fica em R$ 155.484,34 de set/25 a set/26 (a varredura do Rende Fácil zera a corrente todo dia) e o app em R$ 127.409,26 em 30/09/2026: falta a âncora real da corrente e da subconta em 21/08/2026.
