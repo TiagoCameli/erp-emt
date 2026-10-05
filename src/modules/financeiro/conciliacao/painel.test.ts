@@ -41,6 +41,7 @@ function parcela(parcial: Partial<ParcelaLivre>): ParcelaLivre {
 const painel: PainelConciliacao = {
   saldo: null,
   fechamento: null,
+  vizinhos: [],
   transacoes: [
     {
       id: "t1",
@@ -53,6 +54,7 @@ const painel: PainelConciliacao = {
       automatica: true,
       parcela: null,
       transferencia: null,
+      estorno: null,
     },
     {
       id: "t2",
@@ -65,6 +67,7 @@ const painel: PainelConciliacao = {
       automatica: false,
       parcela: null,
       transferencia: null,
+      estorno: null,
     },
   ],
   pagasNaConta: [
