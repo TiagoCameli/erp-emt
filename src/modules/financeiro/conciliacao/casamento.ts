@@ -216,6 +216,7 @@ function sentidoDo(movimento: MovimentoCasavel): Sentido {
  *
  * (c) transferência entre contas sem nome no histórico: uma única de mesmo
  *     valor no mesmo dia do movimento, e ela com um único movimento no dia.
+ * (d) iguais do mesmo dia (roda antes das outras): ver casarIguaisDoMesmoDia.
  *
  * A disputa é contada pelos dois lados: um candidato disputado por mais de um
  * movimento sem nome nunca casa sozinho, mesmo que sobre só ele. O defeito
@@ -229,6 +230,93 @@ export function casarAutomaticamente(
   movimentos: readonly MovimentoCasavel[],
   candidatos: readonly CandidatoCasavel[],
   janelaDias: number = JANELA_AUTOMATICA_DIAS,
+): ParCasado[] {
+  // (d) primeiro: os iguais do mesmo dia. O que sobra segue pelas regras
+  // (a), (b) e (c), já sem os que casaram aqui.
+  const iguais = casarIguaisDoMesmoDia(movimentos, candidatos);
+  const movUsados = new Set(iguais.map((p) => p.transacaoId));
+  const candUsados = new Set(iguais.map((p) => `${p.especie}:${p.alvoId}`));
+  return [
+    ...iguais,
+    ...casarPorRegras(
+      movimentos.filter((m) => !movUsados.has(m.id)),
+      candidatos.filter((c) => !candUsados.has(`${c.especie}:${c.id}`)),
+      janelaDias,
+    ),
+  ];
+}
+
+/** O que identifica um candidato: espécie e nomes normalizados (favorecido, descrição). */
+function chaveDeEquivalencia(c: CandidatoCasavel): string {
+  return `${c.especie}|${c.nomes.map((n) => palavrasDoNome(n).join(" ")).join("|")}`;
+}
+
+/**
+ * (d) Iguais do mesmo dia (Tiago, 05/10/2026): movimentos e candidatos de
+ * mesmo valor, sentido e DIA, com todos os candidatos idênticos entre si
+ * (mesmo favorecido e descrição) e o nome conferindo, são intercambiáveis:
+ * casar qualquer um com qualquer um dá o mesmo resultado. Casos reais: as
+ * tarifas de R$ 13,40 do BB (várias por dia, todas "TARIFAS BANCARIAS /
+ * TARIFA") e o PIX de R$ 100.000,00 para a BRITAM no dia em que também havia
+ * outro igual 3 dias antes.
+ *
+ * Só age quando há no máximo tantos movimentos quanto candidatos no dia: dois
+ * movimentos disputando uma parcela só continuam para quem concilia (regra do
+ * Bloco A). Transferência entre as mesmas contas não precisa de nome.
+ */
+function casarIguaisDoMesmoDia(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly CandidatoCasavel[],
+): ParCasado[] {
+  const elegiveis = candidatos.filter(
+    (c) => c.grupo === "paga_na_conta" || c.grupo === "transferencia",
+  );
+  const chave = (sentido: Sentido, valor: number, dia: string) => `${sentido}|${centavos(valor)}|${dia}`;
+  const candPorDia = new Map<string, CandidatoCasavel[]>();
+  for (const c of elegiveis) {
+    const k = chave(c.sentido, c.valor, c.data);
+    const lista = candPorDia.get(k);
+    if (lista) lista.push(c);
+    else candPorDia.set(k, [c]);
+  }
+  const movPorDia = new Map<string, MovimentoCasavel[]>();
+  for (const m of movimentos) {
+    const k = chave(sentidoDo(m), m.valor, m.dataMovimento);
+    const lista = movPorDia.get(k);
+    if (lista) lista.push(m);
+    else movPorDia.set(k, [m]);
+  }
+
+  const pares: ParCasado[] = [];
+  for (const [k, movs] of movPorDia) {
+    const cands = candPorDia.get(k);
+    if (!cands || cands.length === 0 || movs.length > cands.length) continue;
+    const referencia = chaveDeEquivalencia(cands[0]);
+    if (!cands.every((c) => chaveDeEquivalencia(c) === referencia)) continue;
+    const transferencia = cands[0].especie === "transferencia";
+    if (!transferencia && !movs.every((m) => nomeConfere(m.memo, cands[0].nomes))) continue;
+    // Um só candidato e um só movimento sem nome é a regra (b)/(c), não esta.
+    if (transferencia && cands.length === 1) continue;
+    const ordenados = [...cands].sort((a, b) => a.id.localeCompare(b.id));
+    movs.forEach((m, i) => {
+      const c = ordenados[i];
+      pares.push({
+        transacaoId: m.id,
+        especie: c.especie,
+        alvoId: c.id,
+        dias: 0,
+        nomeBate: !transferencia,
+        confira: false,
+      });
+    });
+  }
+  return pares;
+}
+
+function casarPorRegras(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly CandidatoCasavel[],
+  janelaDias: number,
 ): ParCasado[] {
   const elegiveis = candidatos.filter(
     (c) => c.grupo === "paga_na_conta" || c.grupo === "transferencia",
