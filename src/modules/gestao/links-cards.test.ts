@@ -96,6 +96,16 @@ describe("linksDosCards", () => {
     );
   });
 
+  it("com Incluir investimentos, o relatório abre com o CAPEX também", () => {
+    // Sem o parâmetro, o Custo por centro abriria SEM a máquina comprada
+    // embaixo de um cartão que a somou.
+    const ligado = linksDosCards({ ...CONTEXTO, incluirInvestimento: true });
+    expect(ligado.custoDoMes).toContain("com_investimento=1");
+
+    const desligado = linksDosCards({ ...CONTEXTO, incluirInvestimento: false });
+    expect(desligado.custoDoMes).not.toContain("com_investimento");
+  });
+
   it("A pagar em aberto abre a fila inteira, sem filtro", () => {
     // A fila JÁ é o conjunto em aberto: qualquer filtro aqui mostraria menos do
     // que o cartão soma.

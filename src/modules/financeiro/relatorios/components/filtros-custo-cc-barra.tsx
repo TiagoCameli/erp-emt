@@ -11,7 +11,10 @@ import {
   escritaDaJanela,
   janelaDoPeriodo,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  FiltroMarcar,
+  filtroIncluirInvestimento,
+} from "@/modules/financeiro/relatorios/components/filtro-marcar";
 import type {
   CategoriaOpcao,
   CentroCustoOpcao,
@@ -70,43 +73,6 @@ const ROTULO_STATUS: Record<(typeof STATUS_CUSTO)[number], string> = {
  * ele viaja na URL no parâmetro próprio (`sem_forma=1`).
  */
 const SEM_FORMA = "__sem_forma__";
-
-/** Caixa de marcar com rótulo, no tamanho da barra de filtros. */
-function FiltroMarcar({
-  id,
-  rotulo,
-  marcado,
-  onMarcarChange,
-  desabilitado,
-  motivo,
-}: {
-  id: string;
-  rotulo: string;
-  marcado: boolean;
-  onMarcarChange: (marcado: boolean) => void;
-  desabilitado?: boolean;
-  /** Por que está desabilitado, no title. Some quando habilitado. */
-  motivo?: string;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      title={desabilitado ? motivo : undefined}
-      className={
-        "flex h-8 items-center gap-1.5 text-detalhe " +
-        (desabilitado ? "text-muted-foreground/60" : "text-muted-foreground")
-      }
-    >
-      <Checkbox
-        id={id}
-        checked={marcado}
-        disabled={desabilitado}
-        onCheckedChange={(estado) => onMarcarChange(estado === true)}
-      />
-      {rotulo}
-    </label>
-  );
-}
 
 export interface FiltrosCustoCcBarraProps {
   filtros: FiltrosCustoCc;
@@ -253,6 +219,10 @@ export function FiltrosCustoCcBarra({
         />
       ),
     },
+    filtroIncluirInvestimento({
+      marcado: filtros.incluirInvestimento,
+      setMuitos,
+    }),
   ];
 
   filtrosDaBarra.push({

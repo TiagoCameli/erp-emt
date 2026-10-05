@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  aplicarNaturezaOperacional,
   aplicarRecorteNoEmbed,
+  aplicarSerieDoFluxo,
   recorteNoEmbed,
   somarDias,
   type ConsultaComEmbed,
@@ -221,22 +221,90 @@ describe("aplicarRecorteNoEmbed", () => {
   });
 });
 
-describe("aplicarNaturezaOperacional", () => {
-  it("deixa passar o lançamento SEM categoria", () => {
-    // `not.in` sozinho descartaria o lançamento de categoria nula (em SQL,
-    // `null not in (...)` é nulo e não passa no where) — e existem três deles.
-    const consulta = aplicarNaturezaOperacional(new ConsultaFalsa(), [
-      CATEGORIA,
-      OUTRA_CATEGORIA,
-    ]);
-    expect(consulta.chamadas).toEqual([
-      `or - categoria_id.is.null,categoria_id.not.in.(${CATEGORIA},${OUTRA_CATEGORIA})`,
+describe("aplicarSerieDoFluxo", () => {
+  const TOMADO = "33333333-3333-4333-8333-333333333333";
+  const contexto = {
+    categoriasDeMovimentacao: [CATEGORIA, OUTRA_CATEGORIA],
+    idsEmprestimoTomado: [TOMADO],
+  };
+  const naoMovimentacao = `categoria_id.is.null,categoria_id.not.in.(${CATEGORIA},${OUTRA_CATEGORIA})`;
+
+  it("sem série, traz as quatro e tira só a movimentação de origem aplicação", () => {
+    // Desde a D1 a movimentação entra no caixa; o ajuste de aplicação continua
+    // fora do fluxo, como em `serie_fluxo`.
+    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), undefined, contexto);
+    expect(consulta?.chamadas).toEqual([
+      `or - ${naoMovimentacao},origem.neq.aplicacao`,
     ]);
   });
 
-  it("sem categoria de movimentação, não mexe na consulta", () => {
-    expect(aplicarNaturezaOperacional(new ConsultaFalsa(), []).chamadas).toEqual(
-      [],
+  it("saída operacional deixa passar o lançamento SEM categoria", () => {
+    // `not.in` sozinho descartaria o lançamento de categoria nula (em SQL,
+    // `null not in (...)` é nulo e não passa no where).
+    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), "a_pagar", contexto);
+    expect(consulta?.chamadas).toEqual([
+      "eq tipo a_pagar",
+      `or - ${naoMovimentacao}`,
+    ]);
+  });
+
+  it("amortização é a saída de movimentação que não veio de aplicação", () => {
+    const consulta = aplicarSerieDoFluxo(
+      new ConsultaFalsa(),
+      "amortizacao",
+      contexto,
     );
+    expect(consulta?.chamadas).toEqual([
+      "eq tipo a_pagar",
+      `in categoria_id (${CATEGORIA},${OUTRA_CATEGORIA})`,
+      "neq origem aplicacao",
+    ]);
+  });
+
+  it("empréstimo tomado vai pelos ids que a RPC classificou", () => {
+    const consulta = aplicarSerieDoFluxo(
+      new ConsultaFalsa(),
+      "emprestimo_tomado",
+      contexto,
+    );
+    expect(consulta?.chamadas).toEqual([
+      "eq tipo a_receber",
+      `in id (${TOMADO})`,
+    ]);
+  });
+
+  it("entrada operacional inclui o resgate antigo e tira tomado e aplicação", () => {
+    const consulta = aplicarSerieDoFluxo(
+      new ConsultaFalsa(),
+      "a_receber",
+      contexto,
+    );
+    expect(consulta?.chamadas).toEqual([
+      "eq tipo a_receber",
+      `or - ${naoMovimentacao},and(origem.neq.aplicacao,id.not.in.(${TOMADO}))`,
+    ]);
+  });
+
+  it("sem empréstimo tomado no mês, a entrada só tira a aplicação", () => {
+    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), "a_receber", {
+      ...contexto,
+      idsEmprestimoTomado: [],
+    });
+    expect(consulta?.chamadas).toEqual([
+      "eq tipo a_receber",
+      `or - ${naoMovimentacao},origem.neq.aplicacao`,
+    ]);
+  });
+
+  it("série que com certeza está vazia devolve null, não a lista inteira", () => {
+    const vazio = { categoriasDeMovimentacao: [], idsEmprestimoTomado: [] };
+    expect(aplicarSerieDoFluxo(new ConsultaFalsa(), "amortizacao", vazio)).toBeNull();
+    expect(
+      aplicarSerieDoFluxo(new ConsultaFalsa(), "emprestimo_tomado", vazio),
+    ).toBeNull();
+    // Sem categoria de movimentação, a saída operacional é o tipo inteiro.
+    expect(
+      aplicarSerieDoFluxo(new ConsultaFalsa(), "a_pagar", vazio)?.chamadas,
+    ).toEqual(["eq tipo a_pagar"]);
   });
 });

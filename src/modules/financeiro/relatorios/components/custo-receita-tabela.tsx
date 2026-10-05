@@ -20,6 +20,8 @@ interface CustoReceitaTabelaProps {
   meses: readonly string[];
   /** Sem permissão de ver lançamentos, o nome não vira link (daria 404). */
   podeVerLancamentos: boolean;
+  /** "Incluir investimentos" marcado: o clique no custo leva o CAPEX junto. */
+  incluirInvestimento?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export function CustoReceitaTabela({
   lado,
   meses,
   podeVerLancamentos,
+  incluirInvestimento,
 }: CustoReceitaTabelaProps) {
   const total = linhas.reduce((soma, linha) => soma + linha.total, 0);
   const temRetencao =
@@ -116,6 +119,7 @@ export function CustoReceitaTabela({
                         centroCustoId: linha.centroCustoId,
                         meses,
                         tipo,
+                        incluirInvestimento,
                       })}
                       titulo={`Ver os lançamentos de ${linha.nome} nestes meses`}
                     >

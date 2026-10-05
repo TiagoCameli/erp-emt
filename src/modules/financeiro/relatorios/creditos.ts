@@ -37,8 +37,13 @@ export interface CreditoContrato {
   credor: string;
   descricao: string;
   categoria: string;
+  /**
+   * "Total das prestações" na tela: o valor do lançamento, que é a soma das
+   * prestações com os juros dentro, e não o principal (D2, 03/10/2026).
+   */
   valorContratado: number;
   totalPago: number;
+  /** "Prestações a vencer" na tela: a soma das parcelas em aberto. */
   saldoDevedor: number;
   parcelas: number;
   parcelasPagas: number;

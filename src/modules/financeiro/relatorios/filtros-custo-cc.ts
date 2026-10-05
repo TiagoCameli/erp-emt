@@ -1,4 +1,5 @@
 import type { PeriodoCompetencia } from "@/modules/financeiro/relatorios/drill";
+import { lerIncluirInvestimento } from "@/modules/financeiro/relatorios/filtro-investimento";
 import {
   lerCatalogoDaUrl,
   lerUuidsDaUrl,
@@ -114,6 +115,11 @@ export interface FiltrosCustoCc {
   excluirPrevisto: boolean;
   /** Mostrar a variação contra o período imediatamente anterior. */
   comparar: boolean;
+  /**
+   * Trazer o CAPEX de volta para o custo ("Incluir investimentos"). Falso por
+   * padrão, pela decisão D3: ver `filtro-investimento.ts`.
+   */
+  incluirInvestimento: boolean;
 }
 
 const MODOS: ModoPeriodo[] = ["mes", "periodo", "total", "vida"];
@@ -196,6 +202,7 @@ export function lerFiltrosCustoCc(
     tiposCentro: lerCatalogoDaUrl(params.tipo_centro, TIPOS_CENTRO),
     excluirPrevisto: parametroLigado(params.sem_previsto),
     comparar: parametroLigado(params.comparar),
+    incluirInvestimento: lerIncluirInvestimento(params.com_investimento),
   };
 
   // O modo `vida` sem centro não é erro de digitação a ser corrigido em silêncio:

@@ -82,56 +82,70 @@ describe("aba do DRE", () => {
     despesas: [{ categoriaId: null, categoria, valor }],
     totalReceitas: 0,
     totalDespesas: valor,
+    retencaoReceitas: 0,
     resultado: -valor,
   });
 
   const dados = {
     mes: "2026-08",
     operacional: {
-      receitas: [{ categoriaId: null, categoria: "Outras receitas", valor: 7059 }],
+      receitas: [
+        {
+          categoriaId: null,
+          categoria: "Outras receitas",
+          valor: 7059,
+          retencao: 941,
+        },
+      ],
       despesas: [{ categoriaId: null, categoria: "Combustível", valor: 691566.94 }],
       totalReceitas: 7059,
       totalDespesas: 691566.94,
+      retencaoReceitas: 941,
       resultado: -684507.94,
     },
     financeiro: bloco("Tarifa Bancária", 1521.75),
+    investimento: bloco("Aquisição de Equipamento", 250000),
     movimentacao: bloco("Pagamento de Empréstimo", 37300),
     resultado: -686029.69,
   };
 
-  it("achata os três blocos em COLUNA, não em seção", async () => {
+  it("achata os quatro blocos em COLUNA, não em seção", async () => {
     // Seção obrigaria a inventar linha de título no meio dos dados e destruiria
     // o filtro do Excel, que é o motivo de exportar.
     const { celula, planilha } = await ler(abaDre(dados, "agosto de 2026"));
 
     expect(celula(1, "Bloco")).toBe("Operacional");
     expect(celula(1, "Categoria")).toBe("Outras receitas");
-    expect(celula(1, "Receita")).toBe(7059);
+    expect(celula(1, "Receita líquida")).toBe(7059);
+    // A retenção ao lado: bruta = líquida + retenção, como as três linhas da tela.
+    expect(celula(1, "Retenção na fonte")).toBe(941);
     // Receita e despesa em colunas separadas: a mesma linha nunca tem as duas.
     expect(celula(1, "Despesa")).toBeNull();
 
     expect(celula(2, "Categoria")).toBe("Combustível");
     expect(celula(2, "Despesa")).toBe(691566.94);
-    expect(celula(2, "Receita")).toBeNull();
+    expect(celula(2, "Receita líquida")).toBeNull();
+    expect(celula(2, "Retenção na fonte")).toBeNull();
 
     // Os três blocos entram, inclusive a movimentação — ela é dinheiro que
     // passou na conta, e sumir com ela criaria a pergunta "por que o extrato
     // tem movimento que o sistema não tem".
-    const blocos = [1, 2, 3, 4].map(
+    const blocos = [1, 2, 3, 4, 5].map(
       (i) => planilha.getRow(LINHA_HEADER + i).getCell(1).value,
     );
     expect(blocos).toEqual([
       "Operacional",
       "Operacional",
       "Financeiro",
+      "Investimentos",
       "Movimentação",
     ]);
   });
 
-  it("o rótulo do total avisa que a movimentação não é resultado", async () => {
+  it("o rótulo do total avisa que investimentos e movimentação não são resultado", async () => {
     const { planilha } = await ler(abaDre(dados, "agosto de 2026"));
-    const totais = planilha.getRow(LINHA_HEADER + 5);
-    expect(String(totais.getCell(1).value)).toContain("NÃO é resultado");
+    const totais = planilha.getRow(LINHA_HEADER + 6);
+    expect(String(totais.getCell(1).value)).toContain("NÃO são resultado");
   });
 
   it("o recorte vai escrito no cabeçalho do arquivo", async () => {

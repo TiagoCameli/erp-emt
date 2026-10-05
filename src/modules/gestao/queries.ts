@@ -106,6 +106,13 @@ export interface FiltrosDoBanco {
    */
   centros: string[];
   categorias: string[];
+  /**
+   * O que vai em `p_incluir_investimento`: o CAPEX de volta no custo. O MESMO
+   * valor para todas as RPCs de custo do painel, pelo mesmo motivo da janela:
+   * ligado numa e não na outra, o total por mês deixa de fechar com o por
+   * centro e com o por grupo.
+   */
+  incluirInvestimento: boolean;
 }
 
 /**
@@ -130,6 +137,7 @@ export function filtrosDoBanco(
     janela: filtros.janela,
     centros: efetivos,
     categorias: [...filtros.categoriaIds],
+    incluirInvestimento: filtros.incluirInvestimento,
   };
 }
 
@@ -350,6 +358,7 @@ export async function custoPorMes(
     p_fim: janela.fim,
     p_centros: listaOuTodos(filtros.centros),
     p_categorias: listaOuTodos(filtros.categorias),
+    p_incluir_investimento: filtros.incluirInvestimento,
   });
 
   if (error) {
@@ -414,6 +423,7 @@ export async function custoPorCentroCusto(
     p_fim: janela.fim,
     p_centros: listaOuTodos(filtros.centros),
     p_categorias: listaOuTodos(filtros.categorias),
+    p_incluir_investimento: filtros.incluirInvestimento,
   });
 
   if (error) {
@@ -482,6 +492,7 @@ export async function custoPorGrupo(
     p_fim: janela.fim,
     p_centros: listaOuTodos(filtros.centros),
     p_categorias: listaOuTodos(filtros.categorias),
+    p_incluir_investimento: filtros.incluirInvestimento,
   });
 
   if (error) {
@@ -599,6 +610,7 @@ export async function maioresCustos(
     p_centros: listaOuTodos(filtros.centros),
     p_categorias: listaOuTodos(filtros.categorias),
     p_limite: MAX_MAIORES_CUSTOS,
+    p_incluir_investimento: filtros.incluirInvestimento,
   });
 
   if (error) {
@@ -678,6 +690,7 @@ export async function maioresFornecedores(
       p_centros: listaOuTodos(filtros.centros),
       p_categorias: listaOuTodos(filtros.categorias),
       p_limite: MAX_FORNECEDORES,
+      p_incluir_investimento: filtros.incluirInvestimento,
     },
   );
 
@@ -749,6 +762,10 @@ export async function receitaPorMes(
     p_meses: [...filtros.janela.meses],
     p_centros_custo: centros,
     p_centros_receita: centros,
+    // Só a receita é lida daqui, e ela não muda com o investimento. Vai mesmo
+    // assim: a chamada é a mesma do relatório, e as duas não podem divergir
+    // no dia em que alguém passar a ler o custo desta resposta.
+    p_incluir_investimento: filtros.incluirInvestimento,
   });
 
   if (error) {

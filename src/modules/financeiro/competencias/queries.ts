@@ -14,8 +14,8 @@ export interface CompetenciaMes {
   custo: number;
   /** Quantos lançamentos têm este mês de referência. */
   lancamentos: number;
-  /** Quantos deles estão incompletos (previsto): custo que ainda vai mudar. */
-  incompletos: number;
+  /** Quantos deles estão sem categoria: o DRE e o custo não sabem classificar. */
+  semCategoria: number;
   /** Lançamentos que entraram no mês DEPOIS de ele ser fechado, pela exceção. */
   excecoes: number;
   /** Quantas vezes o mês foi reaberto. */
@@ -24,7 +24,7 @@ export interface CompetenciaMes {
 
 /**
  * Meses para a tela de fechamento: os últimos 13 mais qualquer mês que já tenha
- * lançamento ou fechamento. A agregação (custo, quantidade, incompletos) roda no
+ * lançamento ou fechamento. A agregação (custo, quantidade, sem categoria) roda no
  * banco pela `fn_competencias_painel`, que também respeita a permissão de ver.
  */
 export async function listarCompetencias(): Promise<CompetenciaMes[]> {
@@ -67,7 +67,7 @@ export async function listarCompetencias(): Promise<CompetenciaMes[]> {
     observacao: linha.observacao,
     custo: Number(linha.custo ?? 0),
     lancamentos: linha.lancamentos,
-    incompletos: linha.incompletos,
+    semCategoria: linha.sem_categoria,
     excecoes: linha.excecoes,
     reaberturas: linha.reaberturas,
   }));

@@ -36,6 +36,21 @@ describe("lerRecorte", () => {
     });
   });
 
+  it("lê a série do fluxo quando ela vem no quarto pedaço", () => {
+    expect(lerRecorte("fluxo:2026-11:previsto:amortizacao")).toEqual({
+      tipo: "fluxo",
+      mes: "2026-11",
+      realizado: false,
+      serie: "amortizacao",
+    });
+    expect(lerRecorte("fluxo:2026-07:realizado:emprestimo_tomado")).toEqual({
+      tipo: "fluxo",
+      mes: "2026-07",
+      realizado: true,
+      serie: "emprestimo_tomado",
+    });
+  });
+
   it("lê a fatia de conta paga", () => {
     expect(lerRecorte("conta_paga")).toEqual({ tipo: "conta_paga" });
   });
@@ -54,6 +69,8 @@ describe("lerRecorte", () => {
     "fluxo:2026-00:realizado",
     "fluxo:2026-07:talvez",
     "fluxo:2026-07",
+    "fluxo:2026-07:realizado:banana",
+    "fluxo:2026-07:realizado:a_pagar:extra",
     "conta_paga:extra",
   ])("recusa %s", (entrada) => {
     expect(lerRecorte(entrada as string | undefined)).toBeUndefined();
@@ -71,6 +88,8 @@ describe("escreverRecorte", () => {
       "aging:a_vencer:a_pagar",
       "fluxo:2026-01:previsto",
       "fluxo:2026-12:realizado",
+      "fluxo:2026-12:realizado:a_pagar",
+      "fluxo:2026-11:previsto:amortizacao",
       "conta_paga",
     ]) {
       const recorte = lerRecorte(texto);
@@ -102,6 +121,14 @@ describe("rotuloRecorte", () => {
     expect(
       rotuloRecorte({ tipo: "fluxo", mes: "2026-07", realizado: false }),
     ).toBe("Parcelas previstas para 07/2026");
+    expect(
+      rotuloRecorte({
+        tipo: "fluxo",
+        mes: "2026-11",
+        realizado: false,
+        serie: "amortizacao",
+      }),
+    ).toBe("Parcelas previstas para 11/2026, amortizações");
     expect(rotuloRecorte({ tipo: "conta_paga" })).toBe("Parcelas pagas");
   });
 });
