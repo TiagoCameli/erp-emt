@@ -216,6 +216,7 @@ function sentidoDo(movimento: MovimentoCasavel): Sentido {
  *
  * (c) transferência entre contas sem nome no histórico: uma única de mesmo
  *     valor no mesmo dia do movimento, e ela com um único movimento no dia.
+ * (d) iguais do mesmo dia (roda antes das outras): ver casarIguaisDoMesmoDia.
  *
  * A disputa é contada pelos dois lados: um candidato disputado por mais de um
  * movimento sem nome nunca casa sozinho, mesmo que sobre só ele. O defeito
@@ -229,6 +230,117 @@ export function casarAutomaticamente(
   movimentos: readonly MovimentoCasavel[],
   candidatos: readonly CandidatoCasavel[],
   janelaDias: number = JANELA_AUTOMATICA_DIAS,
+): ParCasado[] {
+  // (d) primeiro: os iguais do mesmo dia. O que sobra segue pelas regras
+  // (a), (b) e (c), já sem os que casaram aqui.
+  const iguais = casarIguaisDoMesmoDia(movimentos, candidatos);
+  const movUsados = new Set(iguais.map((p) => p.transacaoId));
+  const candUsados = new Set(iguais.map((p) => `${p.especie}:${p.alvoId}`));
+  return [
+    ...iguais,
+    ...casarPorRegras(
+      movimentos.filter((m) => !movUsados.has(m.id)),
+      candidatos.filter((c) => !candUsados.has(`${c.especie}:${c.id}`)),
+      janelaDias,
+    ),
+  ];
+}
+
+/** O que identifica um candidato: espécie e nomes normalizados (favorecido, descrição). */
+function chaveDeEquivalencia(c: CandidatoCasavel): string {
+  return `${c.especie}|${c.nomes.map((n) => palavrasDoNome(n).join(" ")).join("|")}`;
+}
+
+/** O histórico sem hora, número e pontuação: o que identifica o movimento. */
+function chaveDoHistorico(memo: string | null): string {
+  return palavrasDoNome(memo).join(" ");
+}
+
+/**
+ * (d) Iguais do mesmo dia (Tiago, 05/10/2026). Movimentos do banco de mesmo
+ * valor, sentido e DIA, com o MESMO histórico (só a hora muda, como os 14 PIX
+ * de R$ 198,15 para o DETRAN em 31/03/2026), são indistinguíveis: qualquer
+ * pareamento com os lançamentos do app daquele dia dá o mesmo resultado,
+ * mesmo que os lançamentos sejam diferentes entre si (uma placa cada).
+ *
+ * - todo lançamento do dia precisa conferir com o histórico (transferência
+ *   entre as mesmas contas dispensa nome);
+ * - com tantos ou mais movimentos que lançamentos, casa todos os lançamentos
+ *   e os movimentos que sobram ficam em "Faltam no app";
+ * - com menos movimentos que lançamentos, só casa se os lançamentos também
+ *   forem idênticos (aí tanto faz qual sobra em "fora do banco"); senão
+ *   importa qual ficou de fora, e fica para quem concilia.
+ * - lançamento cujo favorecido não é o nome do extrato (o nome só aparece na
+ *   descrição) sai com `confira`.
+ */
+function casarIguaisDoMesmoDia(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly CandidatoCasavel[],
+): ParCasado[] {
+  const elegiveis = candidatos.filter(
+    (c) => c.grupo === "paga_na_conta" || c.grupo === "transferencia",
+  );
+  const chave = (sentido: Sentido, valor: number, dia: string) => `${sentido}|${centavos(valor)}|${dia}`;
+  const candPorDia = new Map<string, CandidatoCasavel[]>();
+  for (const c of elegiveis) {
+    const k = chave(c.sentido, c.valor, c.data);
+    const lista = candPorDia.get(k);
+    if (lista) lista.push(c);
+    else candPorDia.set(k, [c]);
+  }
+  // Agrupa os movimentos também pelo histórico: só os indistinguíveis.
+  const movPorDia = new Map<string, MovimentoCasavel[]>();
+  for (const m of movimentos) {
+    const k = chave(sentidoDo(m), m.valor, m.dataMovimento);
+    const lista = movPorDia.get(k);
+    if (lista) lista.push(m);
+    else movPorDia.set(k, [m]);
+  }
+
+  const pares: ParCasado[] = [];
+  for (const [k, movs] of movPorDia) {
+    const cands = candPorDia.get(k);
+    if (!cands || cands.length === 0) continue;
+    const historico = chaveDoHistorico(movs[0].memo);
+    if (!movs.every((m) => chaveDoHistorico(m.memo) === historico)) continue;
+
+    const transferencia = cands.every((c) => c.especie === "transferencia");
+    if (!transferencia && cands.some((c) => c.especie === "transferencia")) continue;
+    if (!transferencia && !cands.every((c) => nomeConfere(movs[0].memo, c.nomes))) continue;
+    // Uma transferência sozinha no dia é coisa das regras (b) e (c).
+    if (transferencia && movs.length === 1 && cands.length === 1) continue;
+
+    if (movs.length < cands.length) {
+      const referencia = chaveDeEquivalencia(cands[0]);
+      if (!cands.every((c) => chaveDeEquivalencia(c) === referencia)) continue;
+    }
+
+    const ordenadosMov = [...movs].sort((a, b) => (a.memo ?? "").localeCompare(b.memo ?? "") || a.id.localeCompare(b.id));
+    const ordenadosCand = [...cands].sort((a, b) => a.id.localeCompare(b.id));
+    const n = Math.min(ordenadosMov.length, ordenadosCand.length);
+    for (let i = 0; i < n; i += 1) {
+      const m = ordenadosMov[i];
+      const c = ordenadosCand[i];
+      // Favorecido (nome, razão social) conferindo; só a descrição não basta
+      // para dispensar a conferência.
+      const favorecidoConfere = transferencia || nomeConfere(m.memo, c.nomes.slice(0, 2));
+      pares.push({
+        transacaoId: m.id,
+        especie: c.especie,
+        alvoId: c.id,
+        dias: 0,
+        nomeBate: !transferencia,
+        confira: !favorecidoConfere,
+      });
+    }
+  }
+  return pares;
+}
+
+function casarPorRegras(
+  movimentos: readonly MovimentoCasavel[],
+  candidatos: readonly CandidatoCasavel[],
+  janelaDias: number,
 ): ParCasado[] {
   const elegiveis = candidatos.filter(
     (c) => c.grupo === "paga_na_conta" || c.grupo === "transferencia",

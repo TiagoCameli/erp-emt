@@ -9,7 +9,8 @@ import type {
  * O que `fn_conciliacao_painel` devolve para UMA conta num período, e como
  * isso vira as três visões da tela:
  *
- * - **Casados**: movimento do extrato já vinculado a parcela ou transferência.
+ * - **Casados**: movimento do extrato já vinculado a parcela, transferência
+ *   ou a outro movimento (estorno: o envio e a devolução).
  * - **Faltam no app**: movimento do extrato sem par.
  * - **No app, fora do banco**: parcela paga nesta conta (ou lado de
  *   transferência) DENTRO do período que nenhum movimento do extrato cobriu.
@@ -42,6 +43,23 @@ const transferenciaVinculadaSchema = z.object({
   data: z.string(),
 });
 
+/** O outro movimento de um estorno (envio e devolução casados entre si). */
+const estornoVinculadoSchema = z.object({
+  id: z.string(),
+  dataMovimento: z.string(),
+  valor: numero,
+  memo: texto,
+});
+
+/** Movimento sem par logo antes ou depois do período (par de estorno). */
+const vizinhoSchema = z.object({
+  id: z.string(),
+  dataMovimento: z.string(),
+  valor: numero,
+  tipo: z.enum(["credito", "debito"]),
+  memo: texto,
+});
+
 const transacaoSchema = z.object({
   id: z.string(),
   extratoId: z.string(),
@@ -53,6 +71,10 @@ const transacaoSchema = z.object({
   automatica: z.boolean(),
   parcela: parcelaVinculadaSchema.nullable(),
   transferencia: transferenciaVinculadaSchema.nullable(),
+  estorno: estornoVinculadoSchema
+    .nullable()
+    .optional()
+    .transform((e) => e ?? null),
 });
 
 const parcelaLivreSchema = z.object({
@@ -130,6 +152,10 @@ export const painelSchema = z.object({
     .optional()
     .transform((s) => s ?? null),
   transacoes: z.array(transacaoSchema),
+  vizinhos: z
+    .array(vizinhoSchema)
+    .optional()
+    .transform((v) => v ?? []),
   pagasNaConta: z.array(parcelaLivreSchema),
   pagasEmOutraConta: z.array(parcelaLivreSchema),
   abertas: z.array(parcelaLivreSchema),
@@ -138,6 +164,7 @@ export const painelSchema = z.object({
 
 export type PainelConciliacao = z.infer<typeof painelSchema>;
 export type TransacaoPainel = z.infer<typeof transacaoSchema>;
+export type VizinhoPainel = z.infer<typeof vizinhoSchema>;
 export type ParcelaLivre = z.infer<typeof parcelaLivreSchema>;
 export type TransferenciaLivre = z.infer<typeof transferenciaLivreSchema>;
 
@@ -237,6 +264,16 @@ export function movimentosLivres(
       valor: t.valor,
       memo: t.memo,
     }));
+}
+
+/** Movimentos sem par fora do período: só servem de envio de um estorno. */
+export function vizinhosLivres(painel: PainelConciliacao): MovimentoCasavel[] {
+  return painel.vizinhos.map((v) => ({
+    id: v.id,
+    dataMovimento: v.dataMovimento,
+    valor: v.valor,
+    memo: v.memo,
+  }));
 }
 
 /** Linha do "no app, fora do banco": parcela paga ou lado de transferência. */

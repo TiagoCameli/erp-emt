@@ -231,12 +231,12 @@ describe("casarAutomaticamente: só com certeza (Bloco A)", () => {
     expect(pares).toEqual([]);
   });
 
-  it("dois movimentos com o mesmo nome para uma parcela só: ninguém casa sozinho", () => {
+  it("dois PIX com o mesmo histórico para uma parcela só: casa uma, o outro fica no Faltam (regra d)", () => {
     const pares = casarAutomaticamente(
       [pix("m1", "PIX - ENVIADO - 15/09 10:00 CICLANO DA SILVA"), pix("m2", "PIX - ENVIADO - 15/09 10:05 CICLANO DA SILVA")],
       [parcela("p1", 500, "Ciclano da Silva", "2026-09-15")],
     );
-    expect(pares).toEqual([]);
+    expect(pares).toHaveLength(1);
   });
 });
 
@@ -357,20 +357,22 @@ describe("transferência entre contas no mesmo dia (regra c)", () => {
     expect(porMovimento).toEqual({ m21: "t21", m22: "t22" });
   });
 
-  it("duas transferências iguais no mesmo dia: nenhuma casa sozinha", () => {
+  it("duas transferências idênticas no mesmo dia: casa uma, a outra fica fora do banco", () => {
+    // Intercambiáveis (regra d): tanto faz qual. A que sobra aparece em
+    // "No app, fora do banco", que é onde a duplicidade tem que aparecer.
     const pares = casarAutomaticamente(
       [recebida("m1", "2025-07-21")],
       [trf("t1", "2025-07-21"), trf("t2", "2025-07-21")],
     );
-    expect(pares).toEqual([]);
+    expect(pares).toHaveLength(1);
   });
 
-  it("dois movimentos iguais no mesmo dia para uma transferência: nenhum casa", () => {
+  it("dois movimentos idênticos no mesmo dia para uma transferência: casa com um só (regra d)", () => {
     const pares = casarAutomaticamente(
       [recebida("m1", "2025-07-21"), recebida("m2", "2025-07-21")],
       [trf("t1", "2025-07-21"), trf("t2", "2025-07-22")],
     );
-    expect(pares.filter((p) => p.alvoId === "t1")).toEqual([]);
+    expect(pares.filter((p) => p.alvoId === "t1")).toHaveLength(1);
   });
 
   it("pagamento de mesmo valor no mesmo dia não usa esta regra", () => {
@@ -379,5 +381,103 @@ describe("transferência entre contas no mesmo dia (regra c)", () => {
       [parcela("p1", 500, "Ciclano", "2025-07-21"), parcela("p2", 500, "Beltrano", "2025-07-22")],
     );
     expect(pares).toEqual([]);
+  });
+});
+
+describe("iguais do mesmo dia (regra d)", () => {
+  const tarifa = (id: string, data: string) => ({
+    ...parcela(id, 13.4, "TARIFAS BANCARIAS", data),
+    nomes: ["TARIFAS BANCARIAS", null, "TARIFA"],
+  });
+  const memoTarifa = (data: string) => `TAR DOC/TED ELETRÔNICO - COBRANÇA REFERENTE ${data}`;
+
+  it("tarifas idênticas do mesmo dia casam uma a uma, sem pegar as do dia seguinte", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -13.4, memoTarifa("30/03/2026"), "2026-03-30"), mov("m2", -13.4, memoTarifa("30/03/2026"), "2026-03-30")],
+      [
+        tarifa("a", "2026-03-30"), tarifa("b", "2026-03-30"),
+        tarifa("c", "2026-03-31"), tarifa("d", "2026-03-31"),
+      ],
+    );
+    expect(pares.map((p) => p.alvoId).sort()).toEqual(["a", "b"]);
+    expect(pares.every((p) => !p.confira)).toBe(true);
+  });
+
+  it("caso BRITAM: o do mesmo dia casa mesmo com outro igual 3 dias antes", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -100000, "PIX - ENVIADO - 31/07 12:39 BRITAS DA AMAZONIA MINERA", "2026-07-31")],
+      [
+        { ...parcela("p31", 100000, "BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", "2026-07-31"), nomes: ["BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", null, "PEDRAS LOTE 09"] },
+        { ...parcela("p28", 100000, "BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", "2026-07-28"), nomes: ["BRITAS DA AMAZONIA MINERACAO E COMERCIO - BRITAM", null, "PEDRAS OBRA"] },
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "p31", confira: false })]);
+  });
+
+  it("mais movimentos idênticos que lançamentos: casa os lançamentos, o resto fica no Faltam", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -13.4, memoTarifa("30/03/2026"), "2026-03-30"), mov("m2", -13.4, memoTarifa("30/03/2026"), "2026-03-30")],
+      [tarifa("a", "2026-03-30")],
+    );
+    expect(pares.map((p) => p.alvoId)).toEqual(["a"]);
+  });
+
+  it("lançamentos diferentes (frete, diária) para PIX idênticos: casa todos, tanto faz a ordem", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -500, "PIX CICLANO DA SILVA", "2026-03-30"), mov("m2", -500, "PIX CICLANO DA SILVA", "2026-03-30")],
+      [
+        { ...parcela("a", 500, "Ciclano da Silva", "2026-03-30"), nomes: ["Ciclano da Silva", null, "Frete"] },
+        { ...parcela("b", 500, "Ciclano da Silva", "2026-03-30"), nomes: ["Ciclano da Silva", null, "Diaria"] },
+      ],
+    );
+    expect(new Set(pares.map((p) => p.alvoId))).toEqual(new Set(["a", "b"]));
+  });
+});
+
+describe("iguais do mesmo dia pelo lado do banco", () => {
+  const pixDetran = (id: string, hora: string) => mov(id, -198.15, `PIX - ENVIADO - 31/03 ${hora} DETRAN`, "2026-03-31");
+  const taxa = (id: string, placa: string) => ({
+    ...parcela(id, 198.15, "Construtora Colorado LTDA", "2026-03-31"),
+    nomes: ["Construtora Colorado LTDA", null, `REFERENTE PAGAMENTO TAXAS DO DETRAN 2025 / 2026 PLACA ${placa}`],
+  });
+
+  it("caso real de 31/03/2026: 14 PIX idênticos para 11 taxas de placas diferentes", () => {
+    const movs = Array.from({ length: 14 }, (_, i) => pixDetran(`m${i}`, `17:${String(i).padStart(2, "0")}`));
+    const cands = ["QLY0530", "MZV9544", "MZV9564", "MZV9594", "QLX9482", "QLX9492", "QLX9502", "QWQ1B22", "QWQ1B32", "MZV9534", "OXP2018"].map((p, i) => taxa(`t${i}`, p));
+    const pares = casarAutomaticamente(movs, cands);
+    expect(pares).toHaveLength(11);
+    expect(new Set(pares.map((p) => p.alvoId)).size).toBe(11);
+    // O favorecido é a Colorado e o extrato diz DETRAN: sai para conferir.
+    expect(pares.every((p) => p.confira)).toBe(true);
+  });
+
+  it("caso real de 24/03/2026: 2 impostos do DETRAN para 2 licenciamentos de placas diferentes", () => {
+    const memo = "IMPOSTOS - DETRAN-ACRE - TAXAS/MULTA";
+    const lic = (id: string, placa: string) => ({
+      ...parcela(id, 198.15, "DEPARTAMENTO ESTADUAL DE TRANSITO - DETRAN", "2026-03-24"),
+      nomes: ["DEPARTAMENTO ESTADUAL DE TRANSITO - DETRAN", null, `TAXA DE LICENCIAMENTO - PLACA ${placa}`],
+    });
+    const pares = casarAutomaticamente(
+      [mov("m1", -198.15, memo, "2026-03-24"), mov("m2", -198.15, memo, "2026-03-24")],
+      [lic("a", "QLU2791"), lic("b", "QWP6B51")],
+    );
+    expect(pares).toHaveLength(2);
+    expect(pares.every((p) => !p.confira)).toBe(true);
+  });
+
+  it("menos movimentos que lançamentos diferentes: importa qual sobra, não casa", () => {
+    const pares = casarAutomaticamente(
+      [pixDetran("m1", "16:43"), pixDetran("m2", "16:51")],
+      [taxa("a", "QLY0530"), taxa("b", "MZV9544"), taxa("c", "MZV9564")],
+    );
+    expect(pares).toEqual([]);
+  });
+
+  it("movimentos do dia com históricos diferentes não são indistinguíveis", () => {
+    const pares = casarAutomaticamente(
+      [mov("m1", -500, "PIX CICLANO DA SILVA", "2026-03-30"), mov("m2", -500, "PIX BELTRANO SOUZA", "2026-03-30")],
+      [parcela("a", 500, "Ciclano da Silva", "2026-03-30"), parcela("b", 500, "Ciclano da Silva", "2026-03-30")],
+    );
+    expect(pares.map((p) => p.transacaoId)).not.toContain("m2");
   });
 });

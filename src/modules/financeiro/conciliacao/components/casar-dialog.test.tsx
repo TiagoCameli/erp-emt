@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { casar } from "@/modules/financeiro/conciliacao/actions";
+import { casar, resumoDoLancamento } from "@/modules/financeiro/conciliacao/actions";
 import type {
   CandidatoDoPainel,
   ParcelaLivre,
@@ -11,6 +11,7 @@ import { CasarDialog, opcoesDeAjuste } from "./casar-dialog";
 
 vi.mock("@/modules/financeiro/conciliacao/actions", () => ({
   casar: vi.fn(async () => ({ ok: true })),
+  resumoDoLancamento: vi.fn(async () => ({ erro: "Sem permissão para ver lançamentos" })),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -38,6 +39,7 @@ const transacao: TransacaoPainel = {
   automatica: false,
   parcela: null,
   transferencia: null,
+  estorno: null,
 };
 
 function candidato(id: string, valor: number, grupo: CandidatoDoPainel["grupo"]): CandidatoDoPainel {
@@ -120,6 +122,25 @@ describe("CasarDialog", () => {
     await waitFor(() =>
       expect(casar).toHaveBeenCalledWith(expect.objectContaining({ ajuste: null })),
     );
+  });
+});
+
+describe("Ver resumo do lançamento", () => {
+  it("abre o resumo do lançamento do candidato sem escolher o candidato", async () => {
+    render(
+      <CasarDialog
+        aberto
+        onAbertoChange={() => {}}
+        transacao={transacao}
+        candidatos={[candidato("38673fc5-c55a-c7be-8687-e9b1d3589ef4", 1183.21, "paga_na_conta")]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver resumo do lançamento" }));
+    await waitFor(() => expect(resumoDoLancamento).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Sem permissão para ver lançamentos")).toBeInTheDocument();
+    // O resumo abre por cima: o Casar fica escondido para leitores de tela.
+    expect(screen.getAllByRole("radio", { hidden: true })[0]).toHaveAttribute("aria-checked", "false");
   });
 });
 

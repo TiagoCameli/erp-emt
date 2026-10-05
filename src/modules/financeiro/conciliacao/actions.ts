@@ -21,15 +21,20 @@ import {
   temPermissao,
 } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
-import { casarAutomaticamente } from "@/modules/financeiro/conciliacao/casamento";
+import { casarTudo } from "@/modules/financeiro/conciliacao/estorno";
 import {
   candidatosDoPainel,
   movimentosLivres,
+  vizinhosLivres,
   periodoDoMes,
   periodoDosExtratos,
   TODOS_OS_MESES,
 } from "@/modules/financeiro/conciliacao/painel";
 import { carregarPainel } from "@/modules/financeiro/conciliacao/queries";
+import {
+  buscarLancamento,
+  type LancamentoDetalhe,
+} from "@/modules/financeiro/lancamentos/queries";
 
 const RECURSO = "financeiro.conciliacao" as const;
 const ROTA = "/financeiro/conciliacao";
@@ -100,7 +105,8 @@ function mensagem(e: unknown, padrao: string): string {
 }
 
 /**
- * Casa sozinho o que bate na conta e no mês: valor exato, mesmo sentido,
+ * Casa sozinho o que bate na conta e no mês. Primeiro os estornos (envio com
+ * a devolução, `estorno.ts`), depois as parcelas: valor exato, mesmo sentido,
  * janela de 3 dias, desempate pelo nome do favorecido (`casamento.ts`). Só
  * vincula parcela paga NESTA conta ou transferência: o que muda o app (outra
  * conta, baixa, centavo) fica como sugestão para quem concilia.
@@ -111,19 +117,28 @@ async function casarNoServidor(
   fim: string,
 ): Promise<{ casadas: number; falhas: { id: string; erro: string }[] }> {
   const painel = await carregarPainel(contaId, inicio, fim);
-  const pares = casarAutomaticamente(
+  const { estornos, pares } = casarTudo(
     movimentosLivres(painel),
+    vizinhosLivres(painel),
     candidatosDoPainel(painel),
   );
-  if (pares.length === 0) return { casadas: 0, falhas: [] };
+  if (pares.length === 0 && estornos.length === 0) return { casadas: 0, falhas: [] };
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_conciliacao_casar_lote", {
-    p_pares: pares.map((par) => ({
-      transacao: par.transacaoId,
-      especie: par.especie,
-      alvo: par.alvoId,
-    })) as unknown as Json,
+    p_pares: [
+      // Estornos primeiro: o envio que voltou não pode casar com parcela.
+      ...estornos.map((par) => ({
+        transacao: par.transacaoId,
+        especie: "estorno",
+        alvo: par.parId,
+      })),
+      ...pares.map((par) => ({
+        transacao: par.transacaoId,
+        especie: par.especie,
+        alvo: par.alvoId,
+      })),
+    ] as unknown as Json,
     // O automático: o banco só aceita parcela paga nesta conta, valor exato.
     p_automatica: true,
   });
@@ -363,6 +378,43 @@ export async function casar(
       "financeiro.conciliacao.casar",
       error,
       mensagem(error, "Não foi possível casar o movimento"),
+    );
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+const casarEstornoSchema = z.object({
+  transacaoId: idSchema,
+  parId: idSchema,
+});
+
+/**
+ * Casa um movimento com outro do extrato como estorno: o envio e a devolução
+ * (PIX rejeitado, TED devolvida). Nenhum dos dois vira lançamento.
+ */
+export async function casarEstorno(
+  entrada: z.input<typeof casarEstornoSchema>,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = casarEstornoSchema.safeParse(entrada);
+  if (!dados.success) return { erro: "Dados do estorno inválidos" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_casar_estorno", {
+    p_transacao_id: dados.data.transacaoId,
+    p_par_id: dados.data.parId,
+    p_automatica: false,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.casar_estorno",
+      error,
+      mensagem(error, "Não foi possível casar o estorno"),
     );
   }
   revalidatePath(ROTA);
@@ -772,4 +824,30 @@ export async function excluirImportacao(extratoId: string, motivo: string): Prom
   revalidatePath(ROTA);
   revalidatePath(`${ROTA}/importacoes`);
   return { ok: true };
+}
+
+/**
+ * Resumo do lançamento para conferir antes de casar (Tiago, 05/10/2026):
+ * favorecido, descrição, parcelas, rateio. Lê com a permissão de ver
+ * lançamentos, pelo RLS de quem pede.
+ */
+export async function resumoDoLancamento(
+  lancamentoId: string,
+): Promise<{ lancamento: LancamentoDetalhe } | { erro: string }> {
+  try {
+    await exigirPermissao("financeiro.lancamentos", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver lançamentos" };
+  }
+  if (!idSchema.safeParse(lancamentoId).success) {
+    return { erro: "Lançamento inválido" };
+  }
+  try {
+    const lancamento = await buscarLancamento(lancamentoId);
+    if (!lancamento) return { erro: "Lançamento não encontrado" };
+    return { lancamento };
+  } catch (e) {
+    logErroServidor("financeiro.conciliacao.resumo_lancamento", e);
+    return { erro: "Não foi possível carregar o lançamento" };
+  }
 }

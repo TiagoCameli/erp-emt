@@ -163,4 +163,48 @@ describe("ImportarOfxDialog", () => {
     expect(enviado.get("de")).toBe("2025-01-01");
     expect(enviado.get("ate")).toBe("2025-01-31");
   });
+
+  it("importa vários arquivos de uma vez, do mês mais antigo ao mais novo", async () => {
+    const ofx = (mes: string) =>
+      `<OFX><DTSTART>2025${mes}01<DTEND>2025${mes}28<STMTTRN><DTPOSTED>2025${mes}10<TRNAMT>-1.00<FITID>${mes}<MEMO>X</STMTTRN></OFX>`;
+    vi.mocked(importarOfx)
+      .mockResolvedValueOnce({ ok: true, inseridas: 3, ignoradas: 0, ignorados: [], casadas: 1, aviso: null })
+      .mockResolvedValueOnce({ erro: "Este arquivo é da conta 30893-5, e não da BANCO DO BRASIL 102.124-9." });
+
+    render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={contas} contaInicialId={CONTA_ID} />);
+    const entrada = document.body.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!entrada) throw new Error("o seletor de arquivo sumiu do diálogo");
+    expect(entrada.multiple).toBe(true);
+    // Fevereiro escolhido antes de janeiro: janeiro tem de subir primeiro.
+    fireEvent.change(entrada, {
+      target: { files: [new File([ofx("02")], "02.2025 BB.ofx"), new File([ofx("01")], "01.2025 BB.ofx")] },
+    });
+
+    const botao = await screen.findByRole("button", { name: "Importar 2 extratos" });
+    await waitFor(() => expect(screen.getAllByLabelText("Usar movimentos de")).toHaveLength(2));
+    await waitFor(() => expect(botao).toBeEnabled());
+    fireEvent.click(botao);
+
+    expect(await screen.findByText("3 transações importadas")).toBeInTheDocument();
+    const enviados = vi.mocked(importarOfx).mock.calls.map((c) => (c[0] as FormData).get("arquivo") as File);
+    expect(enviados.map((a) => a.name)).toEqual(["01.2025 BB.ofx", "02.2025 BB.ofx"]);
+    // O que falhou aparece com o motivo, sem esconder o que deu certo.
+    expect(screen.getByText(/30893-5/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar de novo o que falhou" }));
+    expect(await screen.findByText("02.2025 BB.ofx")).toBeInTheDocument();
+    expect(screen.queryByText("01.2025 BB.ofx")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Importar extrato" })).toBeInTheDocument();
+  });
+
+  it("não põe o mesmo arquivo duas vezes na fila", async () => {
+    render(<ImportarOfxDialog aberto onAbertoChange={() => {}} contas={contas} contaInicialId={CONTA_ID} />);
+    const entrada = document.body.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!entrada) throw new Error("o seletor de arquivo sumiu do diálogo");
+    const arquivo = new File(["<OFX></OFX>"], "01.2026 BB.ofx");
+    fireEvent.change(entrada, { target: { files: [arquivo] } });
+    fireEvent.change(entrada, { target: { files: [arquivo] } });
+    expect(await screen.findAllByText("01.2026 BB.ofx")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Importar extrato" })).toBeInTheDocument();
+  });
 });

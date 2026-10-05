@@ -2601,6 +2601,7 @@ export type Database = {
           conta_bancaria_id: string;
           created_at: string;
           data_movimento: string;
+          estorno_par_id: string | null;
           extrato_id: string;
           fitid: string | null;
           id: string;
@@ -2619,6 +2620,7 @@ export type Database = {
           conta_bancaria_id: string;
           created_at?: string;
           data_movimento: string;
+          estorno_par_id: string | null;
           extrato_id: string;
           fitid?: string | null;
           id?: string;
@@ -2637,6 +2639,7 @@ export type Database = {
           conta_bancaria_id?: string;
           created_at?: string;
           data_movimento?: string;
+          estorno_par_id?: string | null;
           extrato_id?: string;
           fitid?: string | null;
           id?: string;
@@ -9493,6 +9496,10 @@ export type Database = {
           p_especie: string;
           p_transacao_id: string;
         };
+        Returns: undefined;
+      };
+      fn_conciliacao_casar_estorno: {
+        Args: { p_automatica?: boolean; p_par_id: string; p_transacao_id: string };
         Returns: undefined;
       };
       fn_conciliacao_casar_lote: {

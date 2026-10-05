@@ -5104,6 +5104,33 @@ Ajuste no mesmo dia: o banco corta o nome ("CLELTON PEREIRA DE OLIVEIR"), e o pe
 
 **Pedido do Tiago:** "transferências entre contas no mesmo dia e com o mesmo valor são bem raras". Caso: R$ 10.000,00 recebidos da 30.893-5 em 21 e 22/07/2025, com uma transferência em cada dia; como as duas cabiam na janela de 3 dias de cada movimento, nada casava. **Decisão:** regra (c) do automático, só para transferência e sem nome no histórico: uma única transferência de mesmo valor no mesmo dia do movimento, e ela com um único movimento de mesmo valor no dia. Pagamento não usa a regra (mesmo valor no mesmo dia é comum em salários). Efeito nos pendentes do BB 102.124-9: automático de 1 para 23 (22 transferências).
 
+## 2026-10-05 - Conciliação: iguais do mesmo dia casam sozinhos (regra d)
+
+**Casos do Tiago:** PIX de R$ 100.000,00 para a BRITAM em 31/07/2026 com outros dois iguais (24/07 e 28/07) no app, e tarifas de R$ 13,40 do BB (várias por dia, todas "TARIFAS BANCARIAS / TARIFA"). **Decisão:** antes das regras (a), (b) e (c), movimentos e candidatos de mesmo valor, sentido e dia, com todos os candidatos idênticos entre si (espécie e nomes normalizados, incluindo a descrição) e o nome conferindo (transferência dispensa nome), casam um a um: são intercambiáveis. Só age quando não há mais movimentos que candidatos no dia (dois movimentos para uma parcela continuam para quem concilia, regra do Bloco A); candidato que sobra fica em "No app, fora do banco". Efeito nos pendentes do BB 102.124-9 (810): automático de 1 para 114.
+
+## 2026-10-05 - Conciliação: regra (d) olha os movimentos do banco, não os lançamentos
+
+**Caso do Tiago:** em 31/03/2026, 14 PIX de R$ 198,15 "PIX - ENVIADO - DETRAN" (só a hora muda) e 11 taxas no app, uma por placa ("REFERENTE PAGAMENTO TAXAS DO DETRAN ... PLACA X", favorecido Construtora Colorado); em 24/03/2026, 2 "IMPOSTOS - DETRAN-ACRE" para 2 licenciamentos de placas diferentes. A regra (d) não agia: exigia lançamentos idênticos entre si (a placa muda a descrição) e não mais movimentos que lançamentos. **Decisão:** o que torna o pareamento indiferente é o lado do banco. Movimentos do mesmo dia, valor, sentido e MESMO histórico (sem hora e número) são indistinguíveis: qualquer pareamento com os lançamentos daquele dia dá o mesmo resultado, mesmo que os lançamentos sejam diferentes entre si. Então:
+- todo lançamento do dia precisa conferir com o histórico pelo nome ou pela descrição (transferência dispensa nome);
+- com tantos ou mais movimentos que lançamentos, casa todos os lançamentos e os movimentos que sobram ficam em "Faltam no app" (os 3 PIX a mais de 31/03 aparecem lá para lançar). Isso afrouxa a regra do Bloco A de "dois movimentos para uma parcela ficam para quem concilia", e só para movimentos indistinguíveis, em que qualquer escolha é a mesma;
+- com menos movimentos que lançamentos, só casa se os lançamentos também forem idênticos; senão importa qual fica fora do banco, e fica para quem concilia;
+- quando o favorecido não é o nome do extrato (só a descrição bate, caso da Colorado) o par sai com "confira".
+
+Efeito nos pendentes do BB 102.124-9, todos os meses (802): automático de 111 para 227, nenhum casamento anterior perdido, 43 com "confira".
+
+## 2026-10-05 - Conciliação: estorno casa movimento com movimento
+
+**Pergunta do Tiago:** como lançar PIX rejeitado, TED devolvida e boleto devolvido que não estão no app. **Decisão:** não se lança. O banco tirou e devolveu; o envio casa com a devolução no próprio extrato (`extrato_transacoes.estorno_par_id`, um apontando para o outro), e os dois saem do "Faltam no app" sem lançamento. Lançar a devolução como receita e o envio como despesa fecharia o saldo, mas inflaria o DRE dos dois lados.
+- `fn_conciliacao_casar_estorno`: mesma conta, sentidos opostos, mesmo valor, até 10 dias; desfazer solta os dois lados; o lote aceita a espécie "estorno"; o painel traz o par e os movimentos sem par até 10 dias fora do período (o envio de uma TED devolvida pode estar no mês anterior).
+- Automático (`estorno.ts`), antes das regras de parcela: com hora no histórico, o envio é o último até 30 minutos antes da rejeição (caso real: rejeição às 12:58, envios às 12:57 e 16:27; o das 16:27 é outro pagamento); com nome na devolução, só envio com o nome; sem hora, um envio só ou envios indistinguíveis. Devolução sem envio certo nunca cai nas regras de parcela: PIX rejeitado não é recebimento.
+- Tela: botão "Estorno" na devolução (e ícone em qualquer movimento), escolhendo o outro lado; em Casados aparece "Estorno: data · histórico".
+
+Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem concilia a TED de R$ 2.000,00 de 29/08/2025 (5 envios possíveis), o PIX de R$ 6.337,08 de 01/10/2025 e o de R$ 360,00 de 07/02/2025 (o envio rejeitado das 12:57 já está casado com uma parcela).
+
+## 2026-10-05 - Conciliação: ver o resumo do lançamento antes de casar
+
+**Pedido do Tiago:** no "Casar movimento do extrato", um botão para ver o resumo do lançamento candidato (caso: TRANSFERIDO PARA POUPANÇA de R$ 100.000,00 contra o LAN-2026-3101, Simone Maria Gomes Magalhães, "PAGAMENTO PARCELA TERRENO"). **Decisão:** botão "Ver" ao lado de cada candidato que é lançamento, sem escolher o candidato. Abre por cima o resumo: favorecido, descrição, valor, categoria, mês de referência, data da compra, documento, observações, parcelas (data, conta, valor, situação) e rateio por centro de custo, com "Abrir lançamento" em outra aba. Lê por `resumoDoLancamento`, com a permissão de ver lançamentos (quem só tem a Conciliação recebe o aviso de sem permissão).
+
 ## 2026-10-03 - Caixa, resultado e dívida deixam de ser a mesma pergunta (D1 a D4)
 
 **Contexto:** a natureza `movimentacao` respondia "não" a três perguntas diferentes: entra no caixa, entra no resultado, é dívida. Medido em 03/10/2026: 11 prestações de "Pagamento de Empréstimo" pagas em setembro (R$ 471.333,20 no BB 30.893-5 e R$ 150.967,99 na Caixa 578367973-5) estavam fora do saldo, do extrato e do fluxo de caixa; o fluxo de nov e dez escondia R$ 380.821,67 e R$ 302.978,51 de prestações; o "Custo do mês" de jul/2026 nas Competências mostrava R$ 9.020.764,29 contra R$ 5.477.200,29 no Custo por centro. CAPEX (Aquisição de Equipamento, Investimentos, Compra de Terreno: R$ 5.210.383,43 em jan-set/2026) entrava como custo operacional das obras.
