@@ -14,6 +14,7 @@ import {
   LoaderCircle,
   Pencil,
   Trash2,
+  Undo2,
   Upload,
   Wand2,
   X,
@@ -53,13 +54,18 @@ import {
   excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
 import {
-  casarAutomaticamente,
   nomeConfere,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
   sugestoesSeguras,
+  type MovimentoCasavel,
   type Sugestao,
 } from "@/modules/financeiro/conciliacao/casamento";
+import {
+  casarTudo,
+  enviosPossiveis,
+  pareceEstorno,
+} from "@/modules/financeiro/conciliacao/estorno";
 import {
   candidatosDoPainel,
   montarVisoes,
@@ -72,9 +78,11 @@ import {
   type PainelConciliacao,
   type ParcelaLivre,
   type TransacaoPainel,
+  vizinhosLivres,
 } from "@/modules/financeiro/conciliacao/painel";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
+import { EstornoDialog } from "./estorno-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
 import { RevisarSegurasDialog } from "./revisar-seguras-dialog";
 import { LancarDrawer, type OpcoesLancamento } from "./lancar-drawer";
@@ -133,6 +141,10 @@ function vinculoDe(transacao: TransacaoPainel): string {
   if (transacao.transferencia) {
     const t = transacao.transferencia;
     return `${t.numero ? `${t.numero} · ` : ""}${t.origemNome ?? "-"} para ${t.destinoNome ?? "-"}`;
+  }
+  if (transacao.estorno) {
+    const e = transacao.estorno;
+    return `Estorno: ${formatarData(e.dataMovimento)} · ${e.memo ?? "-"}`;
   }
   return "-";
 }
@@ -198,14 +210,22 @@ function ConciliacaoConta({
     [painel, periodo],
   );
   const candidatos = React.useMemo(() => candidatosDoPainel(painel), [painel]);
-  const paresAutomaticos = React.useMemo(
-    () => casarAutomaticamente(movimentosLivres(painel), candidatos),
+  // Livres do período e os vizinhos fora dele: o par de um estorno pode
+  // estar no mês ao lado.
+  const movimentosParaEstorno = React.useMemo(
+    () => [...movimentosLivres(painel), ...vizinhosLivres(painel)],
+    [painel],
+  );
+  const automatico = React.useMemo(
+    () => casarTudo(movimentosLivres(painel), vizinhosLivres(painel), candidatos),
     [painel, candidatos],
   );
+  const qtdAutomaticos = automatico.pares.length + automatico.estornos.length;
 
   const [importarAberto, setImportarAberto] = React.useState(false);
   const [casando, setCasando] = React.useState(false);
   const [casarAlvoId, setCasarAlvoId] = React.useState<string | null>(null);
+  const [estornoAlvoId, setEstornoAlvoId] = React.useState<string | null>(null);
   const [lancarIds, setLancarIds] = React.useState<string[] | null>(null);
   const [transferirIds, setTransferirIds] = React.useState<string[] | null>(
     null,
@@ -227,6 +247,7 @@ function ConciliacaoConta({
     [painel.transacoes],
   );
   const casarAlvo = casarAlvoId ? (porId.get(casarAlvoId) ?? null) : null;
+  const estornoAlvo = estornoAlvoId ? (porId.get(estornoAlvoId) ?? null) : null;
   const transacoesDe = (ids: string[] | null) =>
     (ids ?? [])
       .map((id) => porId.get(id))
@@ -363,7 +384,7 @@ function ConciliacaoConta({
           className="max-w-48 max-md:max-w-full max-md:basis-full"
         />
         <div className="flex flex-wrap gap-2 md:ml-auto">
-          {permissoes.conciliar && paresAutomaticos.length > 0 ? (
+          {permissoes.conciliar && qtdAutomaticos > 0 ? (
             <Button
               type="button"
               size="sm"
@@ -371,7 +392,7 @@ function ConciliacaoConta({
               disabled={casando}
             >
               {casando ? <LoaderCircle className="animate-spin" /> : <Wand2 />}
-              Casar automaticamente ({paresAutomaticos.length})
+              Casar automaticamente ({qtdAutomaticos})
             </Button>
           ) : null}
           <Button asChild size="sm" variant="outline">
@@ -531,8 +552,10 @@ function ConciliacaoConta({
           contaNome={conta.nome}
           transacoes={visoes.faltamNoApp}
           candidatos={candidatos}
+          movimentosParaEstorno={movimentosParaEstorno}
           permissoes={permissoes}
           onCasar={setCasarAlvoId}
+          onEstorno={setEstornoAlvoId}
           onLancar={setLancarIds}
           onTransferir={setTransferirIds}
         />
@@ -566,6 +589,14 @@ function ConciliacaoConta({
         onAbertoChange={(aberto) => !aberto && setCasarAlvoId(null)}
         transacao={casarAlvo}
         candidatos={candidatos}
+      />
+
+      <EstornoDialog
+        key={`estorno-${estornoAlvoId ?? ""}`}
+        aberto={estornoAlvo !== null}
+        onAbertoChange={(aberto) => !aberto && setEstornoAlvoId(null)}
+        transacao={estornoAlvo}
+        movimentos={movimentosParaEstorno}
       />
 
       <LancarDrawer
@@ -674,16 +705,20 @@ function TabelaFaltam({
   contaNome,
   transacoes,
   candidatos,
+  movimentosParaEstorno,
   permissoes,
   onCasar,
+  onEstorno,
   onLancar,
   onTransferir,
 }: {
   contaNome: string;
   transacoes: TransacaoPainel[];
   candidatos: CandidatoDoPainel[];
+  movimentosParaEstorno: MovimentoCasavel[];
   permissoes: PermissoesConciliacao;
   onCasar: (id: string) => void;
+  onEstorno: (id: string) => void;
   onLancar: (ids: string[]) => void;
   onTransferir: (ids: string[]) => void;
 }) {
@@ -797,6 +832,18 @@ function TabelaFaltam({
         header: "O app tem",
         size: 300,
         cell: ({ row }) => {
+          if (pareceEstorno(row.original.memo)) {
+            const envio = enviosPossiveis(row.original, movimentosParaEstorno)[0];
+            return envio ? (
+              <span className="text-status-pendente">
+                Devolução: case com o envio de {formatarData(envio.dataMovimento)}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">
+                Devolução sem envio a até 10 dias
+              </span>
+            );
+          }
           if (pareceAplicacaoAutomatica(row.original.memo)) {
             return (
               <span className="text-muted-foreground">
@@ -825,8 +872,21 @@ function TabelaFaltam({
         cell: ({ row }) => {
           const t = row.original;
           const aplicacao = pareceAplicacaoAutomatica(t.memo);
+          const devolucao = pareceEstorno(t.memo);
           return (
             <div className="flex flex-wrap justify-end gap-1">
+              {permissoes.conciliar && devolucao ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onEstorno(t.id)}
+                  title="Casar com o envio devolvido"
+                >
+                  <Undo2 />
+                  <span className="max-md:sr-only">Estorno</span>
+                </Button>
+              ) : null}
               {permissoes.conciliar ? (
                 <Button
                   type="button"
@@ -839,7 +899,7 @@ function TabelaFaltam({
                   <span className="max-md:sr-only">Casar</span>
                 </Button>
               ) : null}
-              {permissoes.conciliar && permissoes.lancar && !aplicacao ? (
+              {permissoes.conciliar && permissoes.lancar && !aplicacao && !devolucao ? (
                 <Button
                   type="button"
                   size="sm"
@@ -866,12 +926,33 @@ function TabelaFaltam({
                   ) : null}
                 </Button>
               ) : null}
+              {permissoes.conciliar && !devolucao ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onEstorno(t.id)}
+                  aria-label="Casar com estorno"
+                  title="Casar com estorno (envio que o banco devolveu)"
+                >
+                  <Undo2 />
+                </Button>
+              ) : null}
             </div>
           );
         },
       },
     ],
-    [sugestoes, idsSeguros, permissoes, onCasar, onLancar, onTransferir],
+    [
+      sugestoes,
+      idsSeguros,
+      movimentosParaEstorno,
+      permissoes,
+      onCasar,
+      onEstorno,
+      onLancar,
+      onTransferir,
+    ],
   );
 
   const filtros: FiltroConfiguravel[] = [

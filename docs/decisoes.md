@@ -5117,3 +5117,12 @@ Ajuste no mesmo dia: o banco corta o nome ("CLELTON PEREIRA DE OLIVEIR"), e o pe
 - quando o favorecido não é o nome do extrato (só a descrição bate, caso da Colorado) o par sai com "confira".
 
 Efeito nos pendentes do BB 102.124-9, todos os meses (802): automático de 111 para 227, nenhum casamento anterior perdido, 43 com "confira".
+
+## 2026-10-05 - Conciliação: estorno casa movimento com movimento
+
+**Pergunta do Tiago:** como lançar PIX rejeitado, TED devolvida e boleto devolvido que não estão no app. **Decisão:** não se lança. O banco tirou e devolveu; o envio casa com a devolução no próprio extrato (`extrato_transacoes.estorno_par_id`, um apontando para o outro), e os dois saem do "Faltam no app" sem lançamento. Lançar a devolução como receita e o envio como despesa fecharia o saldo, mas inflaria o DRE dos dois lados.
+- `fn_conciliacao_casar_estorno`: mesma conta, sentidos opostos, mesmo valor, até 10 dias; desfazer solta os dois lados; o lote aceita a espécie "estorno"; o painel traz o par e os movimentos sem par até 10 dias fora do período (o envio de uma TED devolvida pode estar no mês anterior).
+- Automático (`estorno.ts`), antes das regras de parcela: com hora no histórico, o envio é o último até 30 minutos antes da rejeição (caso real: rejeição às 12:58, envios às 12:57 e 16:27; o das 16:27 é outro pagamento); com nome na devolução, só envio com o nome; sem hora, um envio só ou envios indistinguíveis. Devolução sem envio certo nunca cai nas regras de parcela: PIX rejeitado não é recebimento.
+- Tela: botão "Estorno" na devolução (e ícone em qualquer movimento), escolhendo o outro lado; em Casados aparece "Estorno: data · histórico".
+
+Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem concilia a TED de R$ 2.000,00 de 29/08/2025 (5 envios possíveis), o PIX de R$ 6.337,08 de 01/10/2025 e o de R$ 360,00 de 07/02/2025 (o envio rejeitado das 12:57 já está casado com uma parcela).
