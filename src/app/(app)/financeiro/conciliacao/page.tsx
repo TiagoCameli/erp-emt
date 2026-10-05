@@ -24,6 +24,7 @@ import {
   listarExtratos,
   mesesDosExtratos,
 } from "@/modules/financeiro/conciliacao/queries";
+import { INICIO_DA_CONCILIACAO } from "@/modules/financeiro/conciliacao/importacoes";
 import {
   listarCategorias,
   listarClientes,
@@ -71,8 +72,13 @@ export default async function PaginaConciliacao({
   ]);
 
   const resumoDe = (contaId: string) => {
-    const meses = mesesDosExtratos(extratos, contaId);
-    const pendentesDaConta = pendentes.get(contaId) ?? new Map<string, number>();
+    // Conciliação exigida de setembro/2026 em diante: antes disso não cobra.
+    const meses = mesesDosExtratos(extratos, contaId).filter((m) => m >= INICIO_DA_CONCILIACAO);
+    const pendentesDaConta = new Map(
+      [...(pendentes.get(contaId) ?? new Map<string, number>())].filter(
+        ([mes]) => mes >= INICIO_DA_CONCILIACAO,
+      ),
+    );
     return {
       contaId,
       qtdExtratos: extratos.filter((e) => e.contaBancariaId === contaId).length,

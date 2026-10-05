@@ -23,7 +23,10 @@ import {
 } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { casarTudo } from "@/modules/financeiro/conciliacao/estorno";
-import { resolverContaDoArquivo } from "@/modules/financeiro/conciliacao/importacoes";
+import {
+  INICIO_DA_CONCILIACAO,
+  resolverContaDoArquivo,
+} from "@/modules/financeiro/conciliacao/importacoes";
 import {
   candidatosDoPainel,
   movimentosLivres,
@@ -884,6 +887,10 @@ export async function fecharMes(
         );
       }
     }
+  }
+
+  if (mes < INICIO_DA_CONCILIACAO) {
+    return { erro: "A conciliação é exigida a partir de 09/2026: meses anteriores não fecham" };
   }
 
   // Fechar o mês é a confirmação (Bloco I): os "Confira" do mês, pela mesma

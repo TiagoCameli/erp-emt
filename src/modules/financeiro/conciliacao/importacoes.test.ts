@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   coberturaMeses,
+  INICIO_DA_CONCILIACAO,
   deslocarMes,
   resolverContaDoArquivo,
   type ContaParaArquivo,
@@ -81,5 +82,13 @@ describe("resolverContaDoArquivo (Bloco M)", () => {
     expect("erro" in resolverContaDoArquivo("999999", contas)).toBe(true);
     expect("erro" in resolverContaDoArquivo("", contas)).toBe(true);
     expect("erro" in resolverContaDoArquivo("1021249", [conta("x", "102.124-9", { ativo: false })])).toBe(true);
+  });
+});
+
+describe("conciliação exigida a partir de 09/2026", () => {
+  it("a cobertura não cobra meses antes do início", () => {
+    const r = coberturaMeses([extrato("2026-09-01", "2026-09-30")], "2026-10", 12, INICIO_DA_CONCILIACAO);
+    expect(r.map((m) => m.mes)).toEqual(["2026-09", "2026-10"]);
+    expect(situacoes(r)).toEqual({ "2026-09": "cheio", "2026-10": "sem" });
   });
 });
