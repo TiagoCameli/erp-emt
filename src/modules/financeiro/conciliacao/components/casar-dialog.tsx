@@ -177,6 +177,8 @@ export function CasarDialog({
       especie: escolhida.candidato.especie,
       alvoId: escolhida.candidato.id,
       ajuste: precisaAjuste ? ajuste : null,
+      // Nome que não aparece no extrato: o cedente vira apelido (Bloco I).
+      aprender: !escolhida.nomeBate,
     });
     setEnviando(false);
     if ("erro" in resposta) {

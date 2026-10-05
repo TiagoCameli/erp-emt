@@ -34,6 +34,7 @@ function parcela(parcial: Partial<ParcelaLivre>): ParcelaLivre {
     status: "pago",
     contaNome: "BB",
     contaId: "bb",
+    apelidos: [],
     ...parcial,
   };
 }
@@ -52,6 +53,7 @@ const painel: PainelConciliacao = {
       memo: "BOLETO",
       conciliada: true,
       automatica: true,
+      confiraConfirmado: false,
       parcela: null,
       transferencia: null,
       estorno: null,
@@ -65,6 +67,7 @@ const painel: PainelConciliacao = {
       memo: "PIX",
       conciliada: false,
       automatica: false,
+      confiraConfirmado: false,
       parcela: null,
       transferencia: null,
       estorno: null,

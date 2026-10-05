@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   casarAutomaticamente,
+  cedenteDoHistorico,
   nomeConfere,
   palavrasEmComum,
   pareceAplicacaoAutomatica,
@@ -479,5 +480,70 @@ describe("iguais do mesmo dia pelo lado do banco", () => {
       [parcela("a", 500, "Ciclano da Silva", "2026-03-30"), parcela("b", 500, "Ciclano da Silva", "2026-03-30")],
     );
     expect(pares.map((p) => p.transacaoId)).not.toContain("m2");
+  });
+});
+
+describe("cedenteDoHistorico", () => {
+  // Os mesmos 15 casos da prova SQL (supabase/provas/conciliacao_apelidos.sql):
+  // o apelido gravado pelo banco e o cedente daqui precisam sair iguais.
+  const casos: [string, string | null][] = [
+    ["PIX - ENVIADO - 01/09 19:22 JOSE AUGUSTO DA SILVA PRA", "JOSE AUGUSTO DA SILVA PRA"],
+    ["PAGAMENTO DE BOLETO - FORTBRAS AUTOPECAS S.A.", "FORTBRAS AUTOPECAS S A"],
+    ["PAGAMENTO DE BOLETO - SHIRLEY O SILVA LTDA", "SHIRLEY O SILVA LTDA"],
+    ["PAGAMENTO DE BOLETO - PJBANK PAGAMENTOS S/A", "PJBANK PAGAMENTOS S A"],
+    ["PIX - RECEBIDO - 28/04 17:14 19892960000131 JOSIAS O DA", "JOSIAS O DA"],
+    ["TED TRANSF.ELETR.DISPONIV - 104 0803 03604733 FRANCISCO ALDENI", "FRANCISCO ALDENI"],
+    ["TRANSFERÊNCIA ENVIADA - 28/02 09:57 AMAZONIA AGROINDUSTRIA", "AMAZONIA AGROINDUSTRIA"],
+    ["TRANSFERIDO PARA POUPANÇA - 07/01 13:09 SEBASTIAO A OLIVEIRA", "SEBASTIAO A OLIVEIRA"],
+    ["PAGTO VIA AUTO-ATEND.BB - F PELEGRINELLI", "F PELEGRINELLI"],
+    ["IMPOSTOS - DETRAN-ACRE - TAXAS/MULTA", "DETRAN ACRE TAXAS MULTA"],
+    ["PAGTO CONTA TELEFONE - VIVO MOVEL", "VIVO MOVEL"],
+    ["PAGAMENTO CONTA LUZ - ENERGISA AC", "ENERGISA AC"],
+    ["TARIFA PACOTE DE SERVIÇOS - COBRANÇA REFERENTE 05/09/2025", null],
+    ["BB RENDE FÁCIL - RENDE FACIL", null],
+    ["PIX - ENVIADO - 01/09 19:22 12", null],
+  ];
+  it.each(casos)("%s", (memo, esperado) => {
+    expect(cedenteDoHistorico(memo)).toBe(esperado);
+  });
+});
+
+describe("apelido bancário (Bloco I)", () => {
+  const rondobras = (id: string) => ({
+    ...parcela(id, 1250, "RONDOBRAS"),
+    nomes: ["RONDOBRAS", "RONDOBRAS COMERCIO DE PECAS LTDA", "PECAS DO CAMINHAO"],
+  });
+  const fortbras = mov("m1", -1250, "PAGAMENTO DE BOLETO - FORTBRAS AUTOPECAS S.A.");
+
+  it("sem apelido, FORTBRAS x RONDOBRAS casa só pelo valor, com selo Confira", () => {
+    const [par] = casarAutomaticamente([fortbras], [rondobras("p")]);
+    expect(par).toMatchObject({ alvoId: "p", nomeBate: false, confira: true });
+  });
+
+  it("com o apelido aprendido, o nome bate e o selo some", () => {
+    const [par] = casarAutomaticamente(
+      [fortbras],
+      [{ ...rondobras("p"), apelidos: ["FORTBRAS AUTOPECAS S A"] }],
+    );
+    expect(par).toMatchObject({ alvoId: "p", nomeBate: true, confira: false });
+  });
+
+  it("o apelido desempata entre dois candidatos de mesmo valor", () => {
+    const pares = casarAutomaticamente(
+      [fortbras],
+      [
+        { ...rondobras("certo"), apelidos: ["FORTBRAS AUTOPECAS S A"] },
+        { ...parcela("outro", 1250, "MEGA AUTO PECAS"), nomes: ["MEGA AUTO PECAS"] },
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "certo", confira: false })]);
+  });
+
+  it("apelido de outro cedente não conta", () => {
+    const [par] = casarAutomaticamente(
+      [fortbras],
+      [{ ...rondobras("p"), apelidos: ["PJBANK PAGAMENTOS S A"] }],
+    );
+    expect(par).toMatchObject({ nomeBate: false, confira: true });
   });
 });

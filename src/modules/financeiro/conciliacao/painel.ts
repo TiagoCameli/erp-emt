@@ -1,8 +1,9 @@
 import { z } from "zod";
 
-import type {
-  CandidatoCasavel,
-  MovimentoCasavel,
+import {
+  nomeConfereComCandidato,
+  type CandidatoCasavel,
+  type MovimentoCasavel,
 } from "@/modules/financeiro/conciliacao/casamento";
 
 /**
@@ -32,6 +33,12 @@ const parcelaVinculadaSchema = z.object({
   numeroParcela: numero,
   valorLiquido: numero,
   dataPagamento: texto,
+  /** Apelidos bancários do favorecido (Bloco I). */
+  apelidos: z
+    .array(z.string())
+    .nullable()
+    .optional()
+    .transform((a) => a ?? []),
 });
 
 const transferenciaVinculadaSchema = z.object({
@@ -69,6 +76,11 @@ const transacaoSchema = z.object({
   memo: texto,
   conciliada: z.boolean(),
   automatica: z.boolean(),
+  /** O "Confira" deste casamento já foi confirmado por uma pessoa (Bloco I). */
+  confiraConfirmado: z
+    .boolean()
+    .optional()
+    .transform((c) => c ?? false),
   parcela: parcelaVinculadaSchema.nullable(),
   transferencia: transferenciaVinculadaSchema.nullable(),
   estorno: estornoVinculadoSchema
@@ -97,6 +109,12 @@ const parcelaLivreSchema = z.object({
   status: z.string(),
   contaNome: texto,
   contaId: texto,
+  /** Apelidos bancários do favorecido (Bloco I). */
+  apelidos: z
+    .array(z.string())
+    .nullable()
+    .optional()
+    .transform((a) => a ?? []),
 });
 
 const transferenciaLivreSchema = z.object({
@@ -228,6 +246,7 @@ export function candidatosDoPainel(
     valor: parcela.valorLiquido,
     sentido: sentidoDaParcela(parcela),
     nomes: [parcela.nome, parcela.razaoSocial, parcela.descricao],
+    apelidos: parcela.apelidos,
     // A conciliação só dá baixa em parcela a pagar já aprovada.
     podeBaixar: !(grupo === "aberta" && parcela.tipo === "a_pagar" && parcela.status !== "aprovado"),
     registro: parcela,
@@ -250,6 +269,19 @@ export function candidatosDoPainel(
     ...painel.pagasEmOutraConta.map((p) => daParcela(p, "paga_outra_conta")),
     ...painel.abertas.map((p) => daParcela(p, "aberta")),
   ];
+}
+
+/**
+ * O casamento leva o selo "Confira": automático, com parcela, o nome do app
+ * não aparece no histórico (nem pelo apelido bancário) e ninguém confirmou.
+ * A tela mostra o selo e o fechamento do mês confirma estes (Bloco I).
+ */
+export function precisaConferir(t: TransacaoPainel): boolean {
+  if (!t.automatica || !t.parcela || t.confiraConfirmado) return false;
+  return !nomeConfereComCandidato(t.memo, {
+    nomes: [t.parcela.nome, t.parcela.descricao],
+    apelidos: t.parcela.apelidos,
+  });
 }
 
 /** Movimentos sem par, no formato do motor. */

@@ -5140,3 +5140,13 @@ Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem 
 - Semeadura: "BB Rende Fácil" na BB 102.124-9, automática, com a aplicação "Banco do Brasil - Rende Fácil" (o cadastro de `aplicacoes` não tem a subconta do BB, por isso a regra carrega a aplicação).
 
 Efeito medido no BB 102.124-9 (6.919 pendentes, conciliação zerada): automático de 6.002 para 6.250 (248 Rende Fácil), "Confira" 1.234, sugestões 380, sem par de 522 para 274.
+
+## 2026-10-05 - Conciliação v2, Bloco I: apelido bancário do fornecedor
+
+**Defeito:** o banco escreve o cedente do boleto (PJBANK, FORTBRAS, PMCS BB ARRECADACAO) e o app tem o fornecedor; o automático casa pela regra (b) com o selo "Confira" e a pessoa revisa o mesmo par todo mês. **Decisão:** tabela `fornecedor_apelidos_bancarios` (cedente normalizado para fornecedor ou colaborador). `cedenteDoHistorico` (TS) e `fn_conciliacao_cedente` (SQL) tiram o prefixo do BB e os números soltos e devolvem o resto; sem prefixo conhecido devolvem null (tarifa, DARF sem prefixo, Rende Fácil). Os dois são provados com os mesmos 15 históricos. O motor dá pontuação máxima de nome quando o cedente é apelido do candidato: o par cai na regra (a), sem selo.
+- Aprende só com confirmação humana: casar manual sem nome batendo; "Confirmar" nos Casados (uma a uma ou em lote, tira o selo com `confira_confirmado_em/_por`); e fechar o mês. **Fechar o mês é a confirmação:** os "Confira" do mês são confirmados e ensinam o apelido. Nunca aprende de automático sem confirmação, de estorno nem de transferência.
+- Quem sabe quais casamentos são "Confira" é a regra do TS (`precisaConferir`, agora em `painel.ts`). Por isso o fechamento passa por `fn_conciliacao_fechar_mes_confirmando(conta, mes, ids)`: o servidor calcula os ids com a mesma regra da tela e a função confirma, aprende e fecha na mesma transação (fechamento recusado não deixa confirmação pela metade). `fn_conciliacao_fechar_mes` continua igual, porque está em uso pelo código no ar.
+- Cadastros > Fornecedores ganhou a aba "Apelidos bancários" (listar, cadastrar, remover). Nos Casados, o "Confira" mostra o cedente ao lado do nome do app ("PJBANK PAGAMENTOS S A → INVIOLAVEL").
+- `vezes_usado` conta pelo trigger quando um movimento casa com parcela cujo favorecido tem o apelido do cedente.
+
+Sem aprendizado retroativo: os 30 pares mais repetidos vão para o Tiago aprovar antes de semear com origem manual. No BB 102.124-9 (pendentes), os "Confira" seguem 1.234 até a semeadura; os 30 pares cobrem 591 deles.
