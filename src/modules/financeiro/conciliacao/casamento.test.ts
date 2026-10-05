@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   casarAutomaticamente,
+  gruposEquivalentes,
+  cedenteDoHistorico,
   nomeConfere,
   palavrasEmComum,
   pareceAplicacaoAutomatica,
@@ -479,5 +481,135 @@ describe("iguais do mesmo dia pelo lado do banco", () => {
       [parcela("a", 500, "Ciclano da Silva", "2026-03-30"), parcela("b", 500, "Ciclano da Silva", "2026-03-30")],
     );
     expect(pares.map((p) => p.transacaoId)).not.toContain("m2");
+  });
+});
+
+describe("cedenteDoHistorico", () => {
+  // Os mesmos 15 casos da prova SQL (supabase/provas/conciliacao_apelidos.sql):
+  // o apelido gravado pelo banco e o cedente daqui precisam sair iguais.
+  const casos: [string, string | null][] = [
+    ["PIX - ENVIADO - 01/09 19:22 JOSE AUGUSTO DA SILVA PRA", "JOSE AUGUSTO DA SILVA PRA"],
+    ["PAGAMENTO DE BOLETO - FORTBRAS AUTOPECAS S.A.", "FORTBRAS AUTOPECAS S A"],
+    ["PAGAMENTO DE BOLETO - SHIRLEY O SILVA LTDA", "SHIRLEY O SILVA LTDA"],
+    ["PAGAMENTO DE BOLETO - PJBANK PAGAMENTOS S/A", "PJBANK PAGAMENTOS S A"],
+    ["PIX - RECEBIDO - 28/04 17:14 19892960000131 JOSIAS O DA", "JOSIAS O DA"],
+    ["TED TRANSF.ELETR.DISPONIV - 104 0803 03604733 FRANCISCO ALDENI", "FRANCISCO ALDENI"],
+    ["TRANSFERÊNCIA ENVIADA - 28/02 09:57 AMAZONIA AGROINDUSTRIA", "AMAZONIA AGROINDUSTRIA"],
+    ["TRANSFERIDO PARA POUPANÇA - 07/01 13:09 SEBASTIAO A OLIVEIRA", "SEBASTIAO A OLIVEIRA"],
+    ["PAGTO VIA AUTO-ATEND.BB - F PELEGRINELLI", "F PELEGRINELLI"],
+    ["IMPOSTOS - DETRAN-ACRE - TAXAS/MULTA", "DETRAN ACRE TAXAS MULTA"],
+    ["PAGTO CONTA TELEFONE - VIVO MOVEL", "VIVO MOVEL"],
+    ["PAGAMENTO CONTA LUZ - ENERGISA AC", "ENERGISA AC"],
+    ["TARIFA PACOTE DE SERVIÇOS - COBRANÇA REFERENTE 05/09/2025", null],
+    ["BB RENDE FÁCIL - RENDE FACIL", null],
+    ["PIX - ENVIADO - 01/09 19:22 12", null],
+  ];
+  it.each(casos)("%s", (memo, esperado) => {
+    expect(cedenteDoHistorico(memo)).toBe(esperado);
+  });
+});
+
+describe("apelido bancário (Bloco I)", () => {
+  const rondobras = (id: string) => ({
+    ...parcela(id, 1250, "RONDOBRAS"),
+    nomes: ["RONDOBRAS", "RONDOBRAS COMERCIO DE PECAS LTDA", "PECAS DO CAMINHAO"],
+  });
+  const fortbras = mov("m1", -1250, "PAGAMENTO DE BOLETO - FORTBRAS AUTOPECAS S.A.");
+
+  it("sem apelido, FORTBRAS x RONDOBRAS casa só pelo valor, com selo Confira", () => {
+    const [par] = casarAutomaticamente([fortbras], [rondobras("p")]);
+    expect(par).toMatchObject({ alvoId: "p", nomeBate: false, confira: true });
+  });
+
+  it("com o apelido aprendido, o nome bate e o selo some", () => {
+    const [par] = casarAutomaticamente(
+      [fortbras],
+      [{ ...rondobras("p"), apelidos: ["FORTBRAS AUTOPECAS S A"] }],
+    );
+    expect(par).toMatchObject({ alvoId: "p", nomeBate: true, confira: false });
+  });
+
+  it("o apelido desempata entre dois candidatos de mesmo valor", () => {
+    const pares = casarAutomaticamente(
+      [fortbras],
+      [
+        { ...rondobras("certo"), apelidos: ["FORTBRAS AUTOPECAS S A"] },
+        { ...parcela("outro", 1250, "MEGA AUTO PECAS"), nomes: ["MEGA AUTO PECAS"] },
+      ],
+    );
+    expect(pares).toEqual([expect.objectContaining({ alvoId: "certo", confira: false })]);
+  });
+
+  it("apelido de outro cedente não conta", () => {
+    const [par] = casarAutomaticamente(
+      [fortbras],
+      [{ ...rondobras("p"), apelidos: ["PJBANK PAGAMENTOS S A"] }],
+    );
+    expect(par).toMatchObject({ nomeBate: false, confira: true });
+  });
+});
+
+describe("gruposEquivalentes (Bloco J)", () => {
+  const dia = "2026-03-30";
+  const pix = (id: string, hora: string, nome: string, valor = -500) =>
+    mov(id, valor, `PIX - ENVIADO - 30/03 ${hora} ${nome}`, dia);
+  const folha = (id: string, nome: string, valor = 500) => ({ ...parcela(id, valor, nome, dia), nomes: [nome] });
+
+  it("3x3 sem nome nenhum vira um grupo, pareado pela hora", () => {
+    const grupos = gruposEquivalentes(
+      [pix("m3", "15:00", "FULANO A"), pix("m1", "09:00", "BELTRANO B"), pix("m2", "11:00", "CICLANO C")],
+      [folha("c1", "JOAO X"), folha("c2", "PEDRO Y"), folha("c3", "LUCAS Z")],
+    );
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].pares).toEqual([
+      { transacaoId: "m1", alvoId: "c1", nomeBate: false },
+      { transacaoId: "m2", alvoId: "c2", nomeBate: false },
+      { transacaoId: "m3", alvoId: "c3", nomeBate: false },
+    ]);
+  });
+
+  it("3 movimentos para 2 candidatos não é grupo", () => {
+    expect(
+      gruposEquivalentes(
+        [pix("m1", "09:00", "A"), pix("m2", "10:00", "B"), pix("m3", "11:00", "C")],
+        [folha("c1", "JOAO X"), folha("c2", "PEDRO Y")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("um par de nome batendo fica fixo e os outros dois pareiam", () => {
+    const [grupo] = gruposEquivalentes(
+      [pix("m1", "09:00", "FULANO A"), pix("m2", "10:00", "ROSILDO DE SOUZA MENEZES"), pix("m3", "11:00", "BELTRANO B")],
+      [folha("c1", "JOAO X"), folha("c2", "ROSILDO DE SOUZA MENEZES"), folha("c3", "PEDRO Y")],
+    );
+    expect(grupo.pares).toContainEqual({ transacaoId: "m2", alvoId: "c2", nomeBate: true });
+    expect(grupo.pares.filter((p) => !p.nomeBate).map((p) => p.alvoId).sort()).toEqual(["c1", "c3"]);
+  });
+
+  it("candidato com nome batendo num movimento de fora do grupo invalida o grupo", () => {
+    expect(
+      gruposEquivalentes(
+        [pix("m1", "09:00", "FULANO A"), pix("m2", "10:00", "BELTRANO B"), mov("fora", -500, "PIX - ENVIADO - 31/03 08:00 ROSILDO DE SOUZA MENEZES", "2026-03-31")],
+        [folha("c1", "JOAO X"), folha("c2", "ROSILDO DE SOUZA MENEZES")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("movimento com nome batendo num candidato de fora invalida o grupo", () => {
+    expect(
+      gruposEquivalentes(
+        [pix("m1", "09:00", "ROSILDO DE SOUZA MENEZES"), pix("m2", "10:00", "BELTRANO B")],
+        [folha("c1", "JOAO X"), folha("c2", "PEDRO Y"), { ...parcela("fora", 500, "ROSILDO DE SOUZA MENEZES", "2026-03-31"), nomes: ["ROSILDO DE SOUZA MENEZES"] }],
+      ),
+    ).toEqual([]);
+  });
+
+  it("candidato que não é pago nesta conta não forma grupo", () => {
+    expect(
+      gruposEquivalentes(
+        [pix("m1", "09:00", "A"), pix("m2", "10:00", "B")],
+        [folha("c1", "JOAO X"), { ...folha("c2", "PEDRO Y"), grupo: "aberta" as const }],
+      ),
+    ).toEqual([]);
   });
 });

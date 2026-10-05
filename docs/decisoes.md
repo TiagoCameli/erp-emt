@@ -5141,6 +5141,24 @@ Efeito no BB 102.124-9: das 16 devoluções, 12 casam sozinhas; ficam para quem 
 
 Efeito medido no BB 102.124-9 (6.919 pendentes, conciliação zerada): automático de 6.002 para 6.250 (248 Rende Fácil), "Confira" 1.234, sugestões 380, sem par de 522 para 274.
 
+## 2026-10-05 - Conciliação v2, Bloco I: apelido bancário do fornecedor
+
+**Defeito:** o banco escreve o cedente do boleto (PJBANK, FORTBRAS, PMCS BB ARRECADACAO) e o app tem o fornecedor; o automático casa pela regra (b) com o selo "Confira" e a pessoa revisa o mesmo par todo mês. **Decisão:** tabela `fornecedor_apelidos_bancarios` (cedente normalizado para fornecedor ou colaborador). `cedenteDoHistorico` (TS) e `fn_conciliacao_cedente` (SQL) tiram o prefixo do BB e os números soltos e devolvem o resto; sem prefixo conhecido devolvem null (tarifa, DARF sem prefixo, Rende Fácil). Os dois são provados com os mesmos 15 históricos. O motor dá pontuação máxima de nome quando o cedente é apelido do candidato: o par cai na regra (a), sem selo.
+- Aprende só com confirmação humana: casar manual sem nome batendo; "Confirmar" nos Casados (uma a uma ou em lote, tira o selo com `confira_confirmado_em/_por`); e fechar o mês. **Fechar o mês é a confirmação:** os "Confira" do mês são confirmados e ensinam o apelido. Nunca aprende de automático sem confirmação, de estorno nem de transferência.
+- Quem sabe quais casamentos são "Confira" é a regra do TS (`precisaConferir`, agora em `painel.ts`). Por isso o fechamento passa por `fn_conciliacao_fechar_mes_confirmando(conta, mes, ids)`: o servidor calcula os ids com a mesma regra da tela e a função confirma, aprende e fecha na mesma transação (fechamento recusado não deixa confirmação pela metade). `fn_conciliacao_fechar_mes` continua igual, porque está em uso pelo código no ar.
+- Cadastros > Fornecedores ganhou a aba "Apelidos bancários" (listar, cadastrar, remover). Nos Casados, o "Confira" mostra o cedente ao lado do nome do app ("PJBANK PAGAMENTOS S A → INVIOLAVEL").
+- `vezes_usado` conta pelo trigger quando um movimento casa com parcela cujo favorecido tem o apelido do cedente.
+
+Sem aprendizado retroativo: os 30 pares mais repetidos vão para o Tiago aprovar antes de semear com origem manual. No BB 102.124-9 (pendentes), os "Confira" seguem 1.234 até a semeadura; os 30 pares cobrem 591 deles.
+
+## 2026-10-05 - Conciliação v2, Bloco J: grupo equivalente N:N com um clique
+
+**Caso:** N movimentos de mesmo valor e dia contra N parcelas de mesmo valor, sem nome batendo em nenhum lado (folha de valores iguais, diárias, PIX redondo). A regra (d) exige o mesmo histórico em todos os movimentos; com nomes diferentes cai fora e era diálogo linha a linha. **Decisão:** `gruposEquivalentes` roda depois do automático sobre o que sobrou: mesmo sentido, valor e dia exato, N movimentos e N parcelas pagas nesta conta (N ≥ 2), e ninguém do grupo com nome batendo em alguém de fora (aí o par certo está fora e não é grupo). Dentro do grupo, os pares de nome único ficam fixos; o resto pareia pela hora do histórico. Não é automático: em "Faltam no app" a linha mostra "Grupo de N" e "Casar grupo"; "Revisar N grupos" passa por todos. O diálogo mostra os pares lado a lado com "Nome bate" ou "Equivalente" e o aviso de que a ordem não muda saldo nem resultado.
+- Os pares de nome batendo vão como manuais; os equivalentes vão como automáticos, para continuarem no filtro "Para conferir" dos Casados (o nome não confere). É o jeito de deixar rastreável sem coluna nova.
+- Mais movimentos que parcelas (ou o contrário) não é grupo: é lançamento faltando ou sobrando, e continua sugestão.
+
+Efeito no BB 102.124-9 (6.671 pendentes): 51 grupos com 115 movimentos; sugestões de 380 para 265; automático (6.002) e "Confira" (1.234) iguais. Os grupos levam 94 ms em todos os meses.
+
 ## 2026-10-03 - Caixa, resultado e dívida deixam de ser a mesma pergunta (D1 a D4)
 
 **Contexto:** a natureza `movimentacao` respondia "não" a três perguntas diferentes: entra no caixa, entra no resultado, é dívida. Medido em 03/10/2026: 11 prestações de "Pagamento de Empréstimo" pagas em setembro (R$ 471.333,20 no BB 30.893-5 e R$ 150.967,99 na Caixa 578367973-5) estavam fora do saldo, do extrato e do fluxo de caixa; o fluxo de nov e dez escondia R$ 380.821,67 e R$ 302.978,51 de prestações; o "Custo do mês" de jul/2026 nas Competências mostrava R$ 9.020.764,29 contra R$ 5.477.200,29 no Custo por centro. CAPEX (Aquisição de Equipamento, Investimentos, Compra de Terreno: R$ 5.210.383,43 em jan-set/2026) entrava como custo operacional das obras.

@@ -2694,6 +2694,8 @@ export type Database = {
           conciliacao_automatica: boolean;
           conciliado_em: string | null;
           conciliado_por: string | null;
+          confira_confirmado_em: string | null;
+          confira_confirmado_por: string | null;
           conta_bancaria_id: string;
           created_at: string;
           data_movimento: string;
@@ -2713,6 +2715,8 @@ export type Database = {
           conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
+          confira_confirmado_em: string | null;
+          confira_confirmado_por: string | null;
           conta_bancaria_id: string;
           created_at?: string;
           data_movimento: string;
@@ -2732,6 +2736,8 @@ export type Database = {
           conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
+          confira_confirmado_em?: string | null;
+          confira_confirmado_por?: string | null;
           conta_bancaria_id?: string;
           created_at?: string;
           data_movimento?: string;
@@ -3383,6 +3389,57 @@ export type Database = {
           tipo?: string;
         };
         Relationships: [];
+      };
+      fornecedor_apelidos_bancarios: {
+        Row: {
+          apelido: string;
+          colaborador_id: string | null;
+          created_at: string;
+          created_by: string | null;
+          fornecedor_id: string | null;
+          id: string;
+          origem: string;
+          ultimo_uso: string | null;
+          vezes_usado: number;
+        };
+        Insert: {
+          apelido: string;
+          colaborador_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          origem: string;
+          ultimo_uso?: string | null;
+          vezes_usado?: number;
+        };
+        Update: {
+          apelido?: string;
+          colaborador_id?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          origem?: string;
+          ultimo_uso?: string | null;
+          vezes_usado?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fornecedor_apelidos_bancarios_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fornecedor_apelidos_bancarios_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       fornecedores: {
         Row: {
@@ -9557,6 +9614,26 @@ export type Database = {
       };
       fn_conciliacao_fechar_mes: {
         Args: { p_conta_id: string; p_mes: string };
+        Returns: string;
+      };
+      fn_conciliacao_aprender_apelido: {
+        Args: { p_transacao_id: string };
+        Returns: boolean;
+      };
+      fn_conciliacao_confirmar_conferencia: {
+        Args: { p_transacao_ids: string[] };
+        Returns: Json;
+      };
+      fn_conciliacao_fechar_mes_confirmando: {
+        Args: { p_confira_ids: string[]; p_conta_id: string; p_mes: string };
+        Returns: string;
+      };
+      fn_fornecedor_apelido_remover: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      fn_fornecedor_apelido_salvar: {
+        Args: { p_apelido: string; p_colaborador_id: string; p_fornecedor_id: string };
         Returns: string;
       };
       fn_conciliacao_aplicar_regra: {

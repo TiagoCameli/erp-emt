@@ -37,6 +37,7 @@ const transacao: TransacaoPainel = {
   memo: "PAGAMENTO DE BOLETO - RB TRATOR PECAS LTDA",
   conciliada: false,
   automatica: false,
+  confiraConfirmado: false,
   parcela: null,
   transferencia: null,
   estorno: null,
@@ -61,6 +62,7 @@ function candidato(id: string, valor: number, grupo: CandidatoDoPainel["grupo"])
     status: grupo === "aberta" ? "aprovado" : "pago",
     contaNome: "BB",
     contaId: "bb",
+    apelidos: [],
   };
   return {
     especie: "parcela",
@@ -102,6 +104,7 @@ describe("CasarDialog", () => {
         especie: "parcela",
         alvoId: "38673fc5-c55a-c7be-8687-e9b1d3589ef2",
         ajuste: "custo",
+        aprender: expect.any(Boolean),
       }),
     );
   });

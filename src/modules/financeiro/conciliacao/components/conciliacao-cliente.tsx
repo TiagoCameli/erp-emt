@@ -49,6 +49,7 @@ import { usePaginacaoCliente } from "@/modules/_shared/filtros-cliente";
 import {
   aplicarRegra,
   casarAutomatico,
+  confirmarConferencias,
   desconciliar,
   desconciliarVarios,
   fecharMes,
@@ -56,7 +57,9 @@ import {
   excluirLancamentoDaConciliacao,
 } from "@/modules/financeiro/conciliacao/actions";
 import {
-  nomeConfere,
+  cedenteDoHistorico,
+  gruposEquivalentes,
+  type GrupoEquivalente,
   pareceAplicacaoAutomatica,
   sugerirParaMovimento,
   sugestoesSeguras,
@@ -77,6 +80,7 @@ import {
   candidatosDoPainel,
   montarVisoes,
   movimentosLivres,
+  precisaConferir,
   somar,
   statusDoMes,
   TODOS_OS_MESES,
@@ -90,6 +94,7 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
 import { EstornoDialog } from "./estorno-dialog";
+import { GrupoDialog } from "./grupo-dialog";
 import { RegraDialog, type RegraEmEdicao } from "./regra-dialog";
 import { ImportarOfxDialog } from "./importar-ofx-dialog";
 import { RevisarSegurasDialog } from "./revisar-seguras-dialog";
@@ -249,6 +254,36 @@ function ConciliacaoConta({
   const qtdRegrasAutomaticas = [...regraPorMovimento.values()].filter((r) => r.automatica).length;
   const qtdAutomaticos =
     automatico.pares.length + automatico.estornos.length + qtdRegrasAutomaticas;
+  // Grupos equivalentes N:N (Bloco J): sobre o que o automático e as regras
+  // deixam livre. Faixa 2: um clique com revisão.
+  const grupos = React.useMemo(() => {
+    const usados = new Set([
+      ...automatico.pares.map((p) => p.transacaoId),
+      ...automatico.estornos.flatMap((e) => [e.transacaoId, e.parId]),
+      ...regraPorMovimento.keys(),
+    ]);
+    const candUsados = new Set(automatico.pares.map((p) => `${p.especie}:${p.alvoId}`));
+    return gruposEquivalentes(
+      movimentosLivres(painel).filter((m) => !usados.has(m.id)),
+      candidatos.filter((c) => !candUsados.has(`${c.especie}:${c.id}`)),
+    );
+  }, [painel, candidatos, automatico, regraPorMovimento]);
+  const grupoPorMovimento = React.useMemo(() => {
+    const mapa = new Map<string, GrupoEquivalente>();
+    for (const g of grupos) for (const p of g.pares) mapa.set(p.transacaoId, g);
+    return mapa;
+  }, [grupos]);
+  const candidatoPorId = React.useMemo(
+    () => new Map(candidatos.map((c) => [c.id, c])),
+    [candidatos],
+  );
+  const [gruposAbertos, setGruposAbertos] = React.useState<GrupoEquivalente[] | null>(null);
+  const [chaveGrupos, setChaveGrupos] = React.useState(0);
+  function abrirGrupos(lista: GrupoEquivalente[]) {
+    setChaveGrupos((k) => k + 1);
+    setGruposAbertos(lista);
+  }
+
   const [regraEmEdicao, setRegraEmEdicao] = React.useState<RegraEmEdicao | null>(null);
   const [chaveRegra, setChaveRegra] = React.useState(0);
 
@@ -265,6 +300,21 @@ function ConciliacaoConta({
       ativa: true,
       historicoDeOrigem: t.memo,
     });
+  }
+
+  async function confirmar(ids: string[]) {
+    const resposta = await confirmarConferencias(ids);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return;
+    }
+    toast.success(
+      `${quantos(resposta.confirmadas, "casamento confirmado", "casamentos confirmados")}` +
+        (resposta.aprendidos > 0
+          ? `, ${quantos(resposta.aprendidos, "apelido bancário aprendido", "apelidos bancários aprendidos")}`
+          : ""),
+    );
+    router.refresh();
   }
 
   async function aplicarRegras(pares: { regraId: string; ids: string[] }[]) {
@@ -624,6 +674,9 @@ function ConciliacaoConta({
           onCasar={setCasarAlvoId}
           onEstorno={setEstornoAlvoId}
           onAplicarRegras={aplicarRegras}
+          grupoPorMovimento={grupoPorMovimento}
+          grupos={grupos}
+          onCasarGrupos={abrirGrupos}
           onCriarRegra={permissoes.lancar ? criarRegraDe : undefined}
           onLancar={setLancarIds}
           onTransferir={setTransferirIds}
@@ -641,6 +694,7 @@ function ConciliacaoConta({
           permissoes={permissoes}
           onDesfazer={setDesfazerAlvo}
           onDesfazerVarios={setDesfazerIds}
+          onConfirmar={confirmar}
         />
       )}
 
@@ -658,6 +712,14 @@ function ConciliacaoConta({
         onAbertoChange={(aberto) => !aberto && setCasarAlvoId(null)}
         transacao={casarAlvo}
         candidatos={candidatos}
+      />
+
+      <GrupoDialog
+        key={`grupos-${chaveGrupos}`}
+        grupos={gruposAbertos}
+        onFechar={() => setGruposAbertos(null)}
+        transacoes={porId}
+        candidatos={candidatoPorId}
       />
 
       <RegraDialog
@@ -793,6 +855,9 @@ function TabelaFaltam({
   onEstorno,
   onAplicarRegras,
   onCriarRegra,
+  grupoPorMovimento,
+  grupos,
+  onCasarGrupos,
   onLancar,
   onTransferir,
 }: {
@@ -806,6 +871,9 @@ function TabelaFaltam({
   onEstorno: (id: string) => void;
   onAplicarRegras: (pares: { regraId: string; ids: string[] }[]) => Promise<void>;
   onCriarRegra?: (t: TransacaoPainel) => void;
+  grupoPorMovimento: Map<string, GrupoEquivalente>;
+  grupos: GrupoEquivalente[];
+  onCasarGrupos: (grupos: GrupoEquivalente[]) => void;
   onLancar: (ids: string[]) => void;
   onTransferir: (ids: string[]) => void;
 }) {
@@ -919,6 +987,15 @@ function TabelaFaltam({
         header: "O app tem",
         size: 300,
         cell: ({ row }) => {
+          const grupo = grupoPorMovimento.get(row.original.id);
+          if (grupo) {
+            return (
+              <span className="flex items-center gap-1.5 text-status-pendente">
+                <StatusBadge status="pendente_aprovacao" rotulo={`Grupo de ${grupo.pares.length}`} />
+                Mesmo valor e dia no app
+              </span>
+            );
+          }
           const regra = regraPorMovimento.get(row.original.id);
           if (regra) {
             return (
@@ -970,8 +1047,21 @@ function TabelaFaltam({
           const aplicacao = pareceAplicacaoAutomatica(t.memo);
           const devolucao = pareceEstorno(t.memo);
           const regra = regraPorMovimento.get(t.id);
+          const grupo = grupoPorMovimento.get(t.id);
           return (
             <div className="flex flex-wrap justify-end gap-1">
+              {permissoes.conciliar && grupo ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onCasarGrupos([grupo])}
+                  title={`Casar o grupo de ${grupo.pares.length}`}
+                >
+                  <Link2 />
+                  <span className="max-md:sr-only">Casar grupo</span>
+                </Button>
+              ) : null}
               {permissoes.conciliar && regra ? (
                 <Button
                   type="button"
@@ -1069,11 +1159,13 @@ function TabelaFaltam({
       idsSeguros,
       movimentosParaEstorno,
       regraPorMovimento,
+      grupoPorMovimento,
       permissoes,
       onCasar,
       onEstorno,
       onAplicarRegras,
       onCriarRegra,
+      onCasarGrupos,
       onLancar,
       onTransferir,
     ],
@@ -1151,8 +1243,25 @@ function TabelaFaltam({
   }
   const [aplicando, setAplicando] = React.useState(false);
 
+  // Grupos que aparecem nesta lista (filtros à parte, todos do período).
+  const idsDaLista = new Set(transacoes.map((t) => t.id));
+  const gruposDaLista = grupos.filter((g) => g.pares.some((p) => idsDaLista.has(p.transacaoId)));
+
   return (
     <div className="flex flex-col gap-2">
+      {permissoes.conciliar && gruposDaLista.length > 0 ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
+          <span>
+            {gruposDaLista.length === 1
+              ? "1 grupo de movimentos com o mesmo valor e dia que o app."
+              : `${gruposDaLista.length} grupos de movimentos com o mesmo valor e dia que o app.`}
+          </span>
+          <Button type="button" size="sm" onClick={() => onCasarGrupos(gruposDaLista)}>
+            <Link2 />
+            Revisar {gruposDaLista.length} {gruposDaLista.length === 1 ? "grupo" : "grupos"}
+          </Button>
+        </div>
+      ) : null}
       {permissoes.conciliar && comRegra.length > 0 ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm">
           <span>
@@ -1432,22 +1541,22 @@ function TabelaForaDoBanco({
 // Casados
 // ---------------------------------------------------------------------------
 
-function precisaConferir(t: TransacaoPainel): boolean {
-  if (!t.automatica || !t.parcela) return false;
-  return !nomeConfere(t.memo, [t.parcela.nome, t.parcela.descricao]);
-}
 
 function TabelaCasados({
   transacoes,
   permissoes,
   onDesfazer,
   onDesfazerVarios,
+  onConfirmar,
 }: {
   transacoes: TransacaoPainel[];
   permissoes: PermissoesConciliacao;
   onDesfazer: (t: TransacaoPainel) => void;
   onDesfazerVarios: (ids: string[]) => void;
+  /** Confirma casamentos com selo "Confira" e aprende o apelido (Bloco I). */
+  onConfirmar: (ids: string[]) => Promise<void>;
 }) {
+  const [confirmando, setConfirmando] = React.useState(false);
   const [busca, setBusca] = React.useState("");
   const [situacao, setSituacao] = React.useState("");
   const [selecionados, setSelecionados] = React.useState<string[]>([]);
@@ -1512,7 +1621,21 @@ function TabelaCasados({
         id: "vinculo",
         header: "No app",
         size: 320,
-        cell: ({ row }) => vinculoDe(row.original),
+        cell: ({ row }) => {
+          // No "Confira", o cedente que vai virar apelido ao confirmar.
+          const cedente = precisaConferir(row.original)
+            ? cedenteDoHistorico(row.original.memo)
+            : null;
+          return cedente ? (
+            <span title={`Ao confirmar, ${cedente} vira apelido bancário deste favorecido`}>
+              <span className="text-status-pendente">{cedente}</span>
+              {" → "}
+              {vinculoDe(row.original)}
+            </span>
+          ) : (
+            vinculoDe(row.original)
+          );
+        },
       },
       {
         id: "como",
@@ -1531,24 +1654,38 @@ function TabelaCasados({
       {
         id: "acoes",
         header: "",
-        size: 130,
+        size: 230,
         meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
         cell: ({ row }) =>
           permissoes.conciliar ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => onDesfazer(row.original)}
-              title="Desfazer"
-            >
-              <X />
-              <span className="max-md:sr-only">Desfazer</span>
-            </Button>
+            <div className="flex justify-end gap-1">
+              {precisaConferir(row.original) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void onConfirmar([row.original.id])}
+                  title="Confirmar: está certo, e o banco passa a reconhecer este nome"
+                >
+                  <CheckCheck />
+                  <span className="max-md:sr-only">Confirmar</span>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => onDesfazer(row.original)}
+                title="Desfazer"
+              >
+                <X />
+                <span className="max-md:sr-only">Desfazer</span>
+              </Button>
+            </div>
           ) : null,
       },
     ],
-    [permissoes, onDesfazer],
+    [permissoes, onDesfazer, onConfirmar],
   );
 
   const qtdConferir = transacoes.filter(precisaConferir).length;
@@ -1596,6 +1733,10 @@ function TabelaCasados({
     },
   ];
 
+  const paraConfirmar = transacoes
+    .filter((t) => validos.includes(t.id) && precisaConferir(t))
+    .map((t) => t.id);
+
   return (
     <div className="flex flex-col gap-2">
       {validos.length > 0 ? (
@@ -1612,6 +1753,22 @@ function TabelaCasados({
             ),
           )}`}
         >
+          {permissoes.conciliar && paraConfirmar.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={confirmando}
+              onClick={async () => {
+                setConfirmando(true);
+                await onConfirmar(paraConfirmar);
+                setConfirmando(false);
+                setSelecionados([]);
+              }}
+            >
+              {confirmando ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
+              Confirmar {paraConfirmar.length}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
