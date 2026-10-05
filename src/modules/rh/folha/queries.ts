@@ -604,6 +604,8 @@ function normalizarStatusParcela(status: string): StatusParcela {
 export async function listarLancamentosDaFolha(
   folhaId: string,
   idsLancamentoSalario: string[],
+  /** Ids dos itens da folha: acham também o lançamento da gratificação. */
+  idsItens: string[] = [],
 ): Promise<LancamentoDaFolha[]> {
   const supabase = await createClient();
 
@@ -617,9 +619,25 @@ export async function listarLancamentosDaFolha(
     throw new Error("Não foi possível carregar os lançamentos da folha");
   }
 
+  // Gratificação (05/10/2026): a aprovação gera um segundo lançamento por
+  // item, com a mesma origem; folha_itens.lancamento_id só aponta o salário.
+  const { data: gratificacoes, error: erroGrat } = idsItens.length
+    ? await supabase
+        .from("lancamentos")
+        .select("id")
+        .eq("origem", "folha")
+        .in("origem_id", idsItens)
+    : { data: [], error: null };
+  if (erroGrat) {
+    throw new Error("Não foi possível carregar os lançamentos da folha");
+  }
+
   const idsLancamento = [
-    ...idsLancamentoSalario,
-    ...(guias ?? []).map((guia) => guia.lancamento_id),
+    ...new Set([
+      ...idsLancamentoSalario,
+      ...(gratificacoes ?? []).map((l) => l.id),
+      ...(guias ?? []).map((guia) => guia.lancamento_id),
+    ]),
   ].filter((id): id is string => id !== null);
 
   if (idsLancamento.length === 0) return [];
