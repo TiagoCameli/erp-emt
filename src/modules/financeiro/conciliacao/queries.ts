@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { RegraConciliacao } from "@/modules/financeiro/conciliacao/regras";
 import {
   ROTULO_BANCO,
   type BancoConta,
@@ -177,6 +178,36 @@ export async function contarPendentesPorConta(): Promise<
     contagem.set(linha.conta_bancaria_id, daConta);
   }
   return contagem;
+}
+
+/** Regras de conciliação por histórico (Bloco H), todas as contas. */
+export async function listarRegras(): Promise<RegraConciliacao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("conciliacao_regras")
+    .select(
+      "id, conta_bancaria_id, nome, padrao, sentido, acao, conta_contraparte_id, fornecedor_id, categoria_id, centro_custo_id, automatica, ativa, vezes_aplicada, ultima_aplicacao",
+    )
+    .order("nome");
+  if (error) {
+    throw new Error("Não foi possível carregar as regras de conciliação");
+  }
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    contaBancariaId: r.conta_bancaria_id,
+    nome: r.nome,
+    padrao: r.padrao,
+    sentido: r.sentido === "credito" || r.sentido === "debito" ? r.sentido : null,
+    acao: r.acao as RegraConciliacao["acao"],
+    contaContraparteId: r.conta_contraparte_id,
+    fornecedorId: r.fornecedor_id,
+    categoriaId: r.categoria_id,
+    centroCustoId: r.centro_custo_id,
+    automatica: r.automatica,
+    ativa: r.ativa,
+    vezesAplicada: r.vezes_aplicada,
+    ultimaAplicacao: r.ultima_aplicacao,
+  }));
 }
 
 /** Meses fechados (ativos) por conta: conjunto de "YYYY-MM". */
