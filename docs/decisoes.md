@@ -5214,3 +5214,9 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - A folha de 09/2026, já aprovada e paga, foi separada do mesmo jeito (29 gratificações; o total continua R$ 173.168,49; cópia dos lançamentos antes em `arquivo_morto.folha_set2026_antes_da_separacao`). Com isso a conciliação de setembro do BB 102.124-9 casou mais 45 movimentos.
 - Exceção vista: Jeferson Melo recebeu 1.499,43 + 200,57, e a folha diz 1.399,43 + 300,57 (mesmo total).
 - Subconta do Rende Fácil do BB: saldo inicial estimado em R$ 178.326,66 em 31/08/2026 (o saldo inicial antigo da corrente, R$ 155.484,34 em 21/08, era o Rende Fácil porque a corrente estava zerada; mais R$ 22.842,32 aplicados de 22 a 31/08 no OFX de agosto). Falta o rendimento desses dias, que só o extrato de investimentos traz.
+
+## 2026-10-05 - Folha gerencial: o adiantamento sai da gratificação
+
+**Correção do Tiago:** o salário e a gratificação do Jeferson Melo e o salário da Maria Raimunda de 09/2026 estavam errados. **Causa:** a primeira versão tirava a gratificação cheia do líquido, e o adiantamento caía no salário (Jeferson: 1.399,43 + 300,57 no app, 1.499,43 + 200,57 no banco). **Decisão:** o lançamento da gratificação é gratificação − adiantamento, e o salário é o resto do líquido. Conferido contra o banco nos 23 funcionários com gratificação pagos em 30/09/2026: bate em todos. A regra "salário base − descontos" foi testada e descartada, porque quebrava quem tem outros componentes no líquido (Jacson, Micharle, Rosildo, Francisco Aldeni).
+- Jeferson de 09/2026 refeito para 1.499,43 + 200,57 e casado com o banco.
+- Maria Raimunda: o item da folha foi editado à mão com R$ 412,90 de descontos (R$ 291,33 a mais que os R$ 121,57 dos demais); o banco pagou R$ 1.499,43. O lançamento do salário foi corrigido para R$ 1.499,43, com evento na parcela, e casado. O item da folha continua com os descontos antigos.

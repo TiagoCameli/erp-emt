@@ -1,5 +1,5 @@
 -- Prova (05/10/2026): a aprovacao da folha gera salario e gratificacao em
--- lancamentos separados. Roda depois da migration 20261005220000, ROLLBACK.
+-- lancamentos separados. Roda depois da migration 20261005230000, ROLLBACK.
 
 begin;
 
@@ -15,8 +15,10 @@ begin
   select id into v_conta from public.contas_bancarias where ativo and tipo = 'corrente' limit 1;
 
   insert into public.folhas (competencia, status, data_vencimento) values (date '2027-01-01', 'pendente_aprovacao', date '2027-02-05') returning id into v_folha;
-  insert into public.folha_itens (folha_id, colaborador_id, centro_custo_id, salario_base, gratificacao, valor_liquido, custo_total)
-  values (v_folha, v_c1, v_cc, 1800, 600, 2400, 2400) returning id into v_i1;
+  insert into public.folha_itens (folha_id, colaborador_id, centro_custo_id, salario_base, gratificacao, adiantamentos, valor_liquido, custo_total)
+  values (v_folha, v_c1, v_cc, 1800, 600, 100, 2300, 2400) returning id into v_i1;
+  -- 1800 de salario, 600 de gratificacao, 100 de adiantamento: liquido 2300.
+  -- Salario 1800 (sem descontos) e gratificacao 500 (o adiantamento sai dela).
   insert into public.folha_itens (folha_id, colaborador_id, centro_custo_id, salario_base, gratificacao, valor_liquido, custo_total)
   values (v_folha, v_c2, v_cc, 1000, 0, 1000, 1000) returning id into v_i2;
 
@@ -25,7 +27,7 @@ begin
   select count(*) into v_n from public.lancamentos where origem = 'folha' and origem_id = v_i1;
   if v_n <> 2 then raise exception 'FALHA 1: com gratificacao gerou % lancamentos', v_n; end if;
   if not exists (select 1 from public.lancamentos where origem = 'folha' and origem_id = v_i1 and descricao like 'Salario %' and valor = 1800)
-     or not exists (select 1 from public.lancamentos where origem = 'folha' and origem_id = v_i1 and descricao like 'Gratificacao %' and valor = 600) then
+     or not exists (select 1 from public.lancamentos where origem = 'folha' and origem_id = v_i1 and descricao like 'Gratificacao %' and valor = 500) then
     raise exception 'FALHA 1: valores';
   end if;
   if (select count(*) from public.lancamentos where origem = 'folha' and origem_id = v_i2) <> 1 then
@@ -38,7 +40,7 @@ begin
              where l.origem = 'folha' and l.origem_id in (v_i1, v_i2) and lp.conta_bancaria_id is distinct from v_conta) then
     raise exception 'FALHA 4: a conta nao foi programada nas duas parcelas';
   end if;
-  raise notice 'OK salario 1800 + gratificacao 600; sem gratificacao um so; conta nos dois';
+  raise notice 'OK salario 1800 + gratificacao 500 (adiantamento sai da gratificacao); sem gratificacao um so; conta nos dois';
 
   perform public.fn_desaprovar_folha(v_folha, 'prova');
   if exists (select 1 from public.lancamentos where origem = 'folha' and origem_id in (v_i1, v_i2)) then
