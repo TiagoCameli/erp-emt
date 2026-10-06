@@ -2732,6 +2732,7 @@ export type Database = {
         Row: {
           chave_dedup: string | null;
           conciliada: boolean;
+          cartao_fatura_id: string | null;
           conciliacao_automatica: boolean;
           conciliado_em: string | null;
           conciliado_por: string | null;
@@ -2753,6 +2754,7 @@ export type Database = {
         Insert: {
           chave_dedup?: string | null;
           conciliada?: boolean;
+          cartao_fatura_id?: string | null;
           conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
@@ -2774,6 +2776,7 @@ export type Database = {
         Update: {
           chave_dedup?: string | null;
           conciliada?: boolean;
+          cartao_fatura_id?: string | null;
           conciliacao_automatica?: boolean;
           conciliado_em?: string | null;
           conciliado_por?: string | null;
@@ -9749,6 +9752,14 @@ export type Database = {
       fn_conciliacao_casar_estorno: {
         Args: { p_automatica?: boolean; p_par_id: string; p_transacao_id: string };
         Returns: undefined;
+      };
+      fn_conciliacao_casar_fatura: {
+        Args: { p_cartao_id: string; p_encargos?: Json; p_parcela_ids: string[]; p_transacao_id: string };
+        Returns: string;
+      };
+      fn_conciliacao_compras_do_cartao: {
+        Args: { p_cartao_id: string; p_transacao_id: string };
+        Returns: Json;
       };
       fn_conciliacao_casar_lote: {
         Args: { p_automatica: boolean; p_pares: Json };

@@ -9,6 +9,7 @@ import {
   History,
   ArrowLeftRight,
   CheckCheck,
+  CreditCard,
   FilePlus2,
   Link2,
   ListPlus,
@@ -105,6 +106,7 @@ import {
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
 import { DevolucaoDialog } from "./devolucao-dialog";
+import { FaturaDialog } from "./fatura-dialog";
 import { EstornoDialog } from "./estorno-dialog";
 import { GrupoDialog } from "./grupo-dialog";
 import { RegraDialog, type RegraEmEdicao } from "./regra-dialog";
@@ -141,6 +143,8 @@ export interface ConciliacaoClienteProps {
   opcoes: OpcoesLancamento;
   /** Regras por histórico (Bloco H): a tela mostra qual vale para cada movimento. */
   regras: RegraConciliacao[];
+  /** Cartões ativos: o débito da fatura casa com as compras de um deles. */
+  cartoes: { id: string; nome: string }[];
   permissoes: PermissoesConciliacao;
 }
 
@@ -168,6 +172,10 @@ function vinculoDe(transacao: TransacaoPainel): string {
   if (transacao.transferencia) {
     const t = transacao.transferencia;
     return `${t.numero ? `${t.numero} · ` : ""}${t.origemNome ?? "-"} para ${t.destinoNome ?? "-"}`;
+  }
+  if (transacao.fatura) {
+    const f = transacao.fatura;
+    return `Fatura do cartão ${f.cartaoNome ?? ""} · ${f.qtdCompras} ${f.qtdCompras === 1 ? "item" : "itens"}`;
   }
   if (transacao.estorno) {
     const e = transacao.estorno;
@@ -229,6 +237,7 @@ function ConciliacaoConta({
   visao,
   opcoes,
   regras,
+  cartoes,
   permissoes,
   podeFechar,
 }: ConciliacaoClienteProps & { podeFechar: boolean }) {
@@ -354,6 +363,7 @@ function ConciliacaoConta({
   const [casarAlvoId, setCasarAlvoId] = React.useState<string | null>(null);
   const [estornoAlvoId, setEstornoAlvoId] = React.useState<string | null>(null);
   const [devolucaoAlvoId, setDevolucaoAlvoId] = React.useState<string | null>(null);
+  const [faturaAlvoId, setFaturaAlvoId] = React.useState<string | null>(null);
   const [lancarIds, setLancarIds] = React.useState<string[] | null>(null);
   const [transferirIds, setTransferirIds] = React.useState<string[] | null>(
     null,
@@ -377,6 +387,7 @@ function ConciliacaoConta({
   const casarAlvo = casarAlvoId ? (porId.get(casarAlvoId) ?? null) : null;
   const estornoAlvo = estornoAlvoId ? (porId.get(estornoAlvoId) ?? null) : null;
   const devolucaoAlvo = devolucaoAlvoId ? (porId.get(devolucaoAlvoId) ?? null) : null;
+  const faturaAlvo = faturaAlvoId ? (porId.get(faturaAlvoId) ?? null) : null;
   const transacoesDe = (ids: string[] | null) =>
     (ids ?? [])
       .map((id) => porId.get(id))
@@ -715,6 +726,7 @@ function ConciliacaoConta({
           onCasar={setCasarAlvoId}
           onEstorno={setEstornoAlvoId}
           onDevolucao={permissoes.lancar ? setDevolucaoAlvoId : undefined}
+          onFatura={cartoes.length > 0 ? setFaturaAlvoId : undefined}
           onAplicarRegras={aplicarRegras}
           grupoPorMovimento={grupoPorMovimento}
           grupos={grupos}
@@ -804,6 +816,15 @@ function ConciliacaoConta({
           categorias: opcoes.categorias,
           fornecedores: opcoes.fornecedores,
         }}
+      />
+
+      <FaturaDialog
+        key={`fatura-${faturaAlvoId ?? ""}`}
+        transacao={faturaAlvo}
+        onFechar={() => setFaturaAlvoId(null)}
+        cartoes={cartoes}
+        categorias={opcoes.categorias}
+        centros={opcoes.centros}
       />
 
       <DevolucaoDialog
@@ -932,6 +953,7 @@ function TabelaFaltam({
   onCasar,
   onEstorno,
   onDevolucao,
+  onFatura,
   onAplicarRegras,
   onCriarRegra,
   grupoPorMovimento,
@@ -950,6 +972,8 @@ function TabelaFaltam({
   onEstorno: (id: string) => void;
   /** Crédito que é o fornecedor devolvendo um pagamento (Bloco L). */
   onDevolucao?: (id: string) => void;
+  /** Débito que é a fatura do cartão (várias compras num movimento). */
+  onFatura?: (id: string) => void;
   onAplicarRegras: (pares: { regraId: string; ids: string[] }[]) => Promise<void>;
   onCriarRegra?: (t: TransacaoPainel) => void;
   grupoPorMovimento: Map<string, GrupoEquivalente>;
@@ -1206,6 +1230,19 @@ function TabelaFaltam({
                   ) : null}
                 </Button>
               ) : null}
+              {permissoes.conciliar && onFatura && t.valor < 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={/CART/i.test(t.memo ?? "") ? "outline" : "ghost"}
+                  onClick={() => onFatura(t.id)}
+                  aria-label="Fatura do cartão"
+                  title="Fatura do cartão: casar com as compras do cartão"
+                >
+                  <CreditCard />
+                  {/CART/i.test(t.memo ?? "") ? <span className="max-md:sr-only">Fatura</span> : null}
+                </Button>
+              ) : null}
               {permissoes.conciliar && onDevolucao && t.valor > 0 && !devolucao ? (
                 <Button
                   type="button"
@@ -1257,6 +1294,7 @@ function TabelaFaltam({
       onCasar,
       onEstorno,
       onDevolucao,
+      onFatura,
       onAplicarRegras,
       onCriarRegra,
       onCasarGrupos,

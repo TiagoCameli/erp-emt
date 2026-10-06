@@ -87,6 +87,18 @@ const transacaoSchema = z.object({
     .nullable()
     .optional()
     .transform((e) => e ?? null),
+  /** Fatura do cartão paga por este débito (várias compras num movimento). */
+  fatura: z
+    .object({
+      id: z.string(),
+      cartaoNome: texto,
+      vencimento: z.string(),
+      qtdCompras: numero,
+      encargos: numero,
+    })
+    .nullable()
+    .optional()
+    .transform((f) => f ?? null),
 });
 
 const parcelaLivreSchema = z.object({
