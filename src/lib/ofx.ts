@@ -255,7 +255,13 @@ export function parseOfx(conteudo: string): ExtratoOfx {
  * duplicidade. Sem isso, duas diárias de R$ 150,00 no mesmo dia para a mesma
  * pessoa viravam uma só e a segunda era descartada como "já importada".
  * Reimportar o mesmo arquivo continua deduplicando, porque as posições se
- * repetem. Movimento com FITID recebe null: o FITID já o identifica.
+ * repetem.
+ *
+ * FITID só identifica quando é único no arquivo e não é só zeros. A Caixa
+ * repete o FITID em movimentos diferentes (06/10/2026: "000000" em sete,
+ * "374751" nos cinco consórcios do dia 15/09, "081108" no PIX e na tarifa
+ * dele), e 11 dos 23 movimentos de setembro foram descartados como
+ * repetidos. Nesses casos o movimento segue sem FITID, pela posição.
  */
 export function numerarRepetidos<
   T extends {
@@ -265,13 +271,20 @@ export function numerarRepetidos<
     fitid: string | null;
   },
 >(transacoes: readonly T[]): (T & { n: number | null })[] {
+  const vezesDoFitid = new Map<string, number>();
+  for (const t of transacoes) {
+    if (t.fitid) vezesDoFitid.set(t.fitid, (vezesDoFitid.get(t.fitid) ?? 0) + 1);
+  }
+  const identifica = (fitid: string | null): fitid is string =>
+    !!fitid && !/^0+$/.test(fitid) && vezesDoFitid.get(fitid) === 1;
+
   const contagem = new Map<string, number>();
   return transacoes.map((t) => {
-    if (t.fitid) return { ...t, n: null };
+    if (identifica(t.fitid)) return { ...t, n: null };
     const chave = `${t.data}|${t.valor.toFixed(2)}|${t.memo ?? ""}`;
     const n = (contagem.get(chave) ?? 0) + 1;
     contagem.set(chave, n);
-    return { ...t, n };
+    return { ...t, fitid: null, n };
   });
 }
 
