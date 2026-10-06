@@ -20,6 +20,7 @@ import {
   contarPendentesPorConta,
   listarContasBancarias,
   listarMesesFechados,
+  listarCartoes,
   listarRegras,
   listarExtratos,
   mesesDosExtratos,
@@ -154,13 +155,14 @@ export default async function PaginaConciliacao({
     );
   }
 
-  const [painel, centros, categorias, fornecedores, clientes, regras] = await Promise.all([
+  const [painel, centros, categorias, fornecedores, clientes, regras, cartoes] = await Promise.all([
     carregarPainel(conta.id, periodo.inicio, periodo.fim),
     listarCentrosCusto(),
     permissoes.lancar ? listarCategorias() : Promise.resolve([]),
     permissoes.lancar ? listarFornecedores() : Promise.resolve([]),
     permissoes.lancar ? listarClientes() : Promise.resolve([]),
     listarRegras(),
+    listarCartoes(),
   ]);
 
   // Sem `ver` na URL, abre onde está o trabalho: primeiro o que falta no app,
@@ -192,6 +194,7 @@ export default async function PaginaConciliacao({
         visao={visao}
         opcoes={{ centros, categorias, fornecedores, clientes }}
         regras={regras}
+        cartoes={cartoes}
         permissoes={permissoes}
       />
     </>

@@ -41,6 +41,7 @@ const transacao: TransacaoPainel = {
   parcela: null,
   transferencia: null,
   estorno: null,
+  fatura: null,
 };
 
 function candidato(id: string, valor: number, grupo: CandidatoDoPainel["grupo"]): CandidatoDoPainel {

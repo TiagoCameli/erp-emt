@@ -180,6 +180,21 @@ export async function contarPendentesPorConta(): Promise<
   return contagem;
 }
 
+/** Cartões de crédito ativos, para casar a fatura na conciliação. */
+export async function listarCartoes(): Promise<{ id: string; nome: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("cartoes_credito")
+    .select("id, nome, ultimos_digitos")
+    .eq("ativo", true)
+    .order("nome");
+  if (error) throw new Error("Não foi possível carregar os cartões");
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    nome: c.ultimos_digitos ? `${c.nome} (final ${c.ultimos_digitos})` : c.nome,
+  }));
+}
+
 /** Saldo conhecido de uma conta no fim de um dia (Bloco K). */
 export interface AncoraSaldo {
   id: string;

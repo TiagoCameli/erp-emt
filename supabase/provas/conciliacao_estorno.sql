@@ -1,13 +1,13 @@
 -- Prova de aceite (05/10/2026): estorno casa movimento com movimento.
 -- Roda depois da migration 20261005120000 e termina em ROLLBACK.
--- Usa o PIX rejeitado real de R$ 360,00 de 07/02/2025 do BB 102.124-9.
+-- O PIX rejeitado de R$ 360,00 de 07/02/2025, numa conta de prova.
 
 begin;
 
 do $prova$
 declare
   v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
-  v_bb uuid := '40fb6875-ad20-45ed-9346-d1b59e7d9723';
+  v_bb uuid;
   v_dev uuid;
   v_env uuid;
   v_outro uuid;
@@ -18,11 +18,16 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
 
-  select id into v_dev from public.extrato_transacoes
-   where conta_bancaria_id = v_bb and data_movimento = date '2025-02-07' and valor = 360 and memo ilike 'PIX - REJEITADO%';
-  select id into v_env from public.extrato_transacoes
-   where conta_bancaria_id = v_bb and data_movimento between date '2025-02-02' and date '2025-02-07'
-     and valor = -360 and not conciliada order by data_movimento desc, memo limit 1;
+  -- Conta de prova (os extratos reais de 2025 foram apagados em 05/10/2026).
+  insert into public.contas_bancarias (nome, banco, tipo, conta, ativo, saldo_inicial, saldo_inicial_data)
+  values ('PROVA ESTORNO', 'outro', 'corrente', '222.222-2', true, 0, date '2025-01-31') returning id into v_bb;
+  perform public.fn_conciliacao_importar(v_bb, 'E.ofx', date '2025-02-01', date '2025-02-28', null, null, jsonb_build_array(
+    jsonb_build_object('data', '2025-02-07', 'valor', -360, 'memo', 'PIX - ENVIADO - 07/02 12:57 MATHEUS SANTOS DE SOUZA', 'fitid', 'e-1'),
+    jsonb_build_object('data', '2025-02-07', 'valor', 360, 'memo', 'PIX - REJEITADO - 07/02 12:58 ERRO. TEMPO EXCEDIDO', 'fitid', 'e-2'),
+    jsonb_build_object('data', '2025-02-07', 'valor', 500, 'memo', 'PIX - RECEBIDO - CLIENTE', 'fitid', 'e-3'),
+    jsonb_build_object('data', '2025-02-05', 'valor', -200, 'memo', 'PIX - ENVIADO - FULANO', 'fitid', 'e-4')));
+  select id into v_dev from public.extrato_transacoes where conta_bancaria_id = v_bb and fitid = 'e-2';
+  select id into v_env from public.extrato_transacoes where conta_bancaria_id = v_bb and fitid = 'e-1';
   if v_dev is null or v_env is null then raise exception 'FALHA 0: nao achei o par real'; end if;
 
   -- recusas

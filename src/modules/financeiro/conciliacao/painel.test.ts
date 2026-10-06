@@ -57,6 +57,7 @@ const painel: PainelConciliacao = {
       parcela: null,
       transferencia: null,
       estorno: null,
+      fatura: null,
     },
     {
       id: "t2",
@@ -71,6 +72,7 @@ const painel: PainelConciliacao = {
       parcela: null,
       transferencia: null,
       estorno: null,
+      fatura: null,
     },
   ],
   pagasNaConta: [

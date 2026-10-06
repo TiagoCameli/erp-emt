@@ -1292,3 +1292,82 @@ export async function devolucaoDeFornecedor(
   revalidatePath(ROTA);
   return { ok: true, modo };
 }
+
+const compraDoCartaoSchema = z.object({
+  parcelaId: z.string(),
+  lancamentoId: z.string(),
+  lancamentoNumero: z.string().nullable(),
+  descricao: z.string().nullable(),
+  fornecedor: z.string().nullable(),
+  numeroParcela: z.coerce.number(),
+  qtdParcelas: z.coerce.number(),
+  valor: z.coerce.number(),
+  vencimento: z.string(),
+  status: z.string(),
+  contaNome: z.string().nullable(),
+  dataPagamento: z.string().nullable(),
+});
+
+export type CompraDoCartao = z.infer<typeof compraDoCartaoSchema>;
+
+/** Compras do cartão que podem estar na fatura paga por este débito. */
+export async function comprasDoCartao(
+  transacaoId: string,
+  cartaoId: string,
+): Promise<{ compras: CompraDoCartao[] } | { erro: string }> {
+  try {
+    await exigirPermissao(RECURSO, "ver");
+  } catch {
+    return { erro: "Sem permissão para ver a conciliação" };
+  }
+  if (!idSchema.safeParse(transacaoId).success || !idSchema.safeParse(cartaoId).success) {
+    return { erro: "Dados inválidos" };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_compras_do_cartao", {
+    p_transacao_id: transacaoId,
+    p_cartao_id: cartaoId,
+  });
+  if (error) {
+    return erroAcao("financeiro.conciliacao.comprasDoCartao", error, mensagem(error, "Não foi possível carregar as compras"));
+  }
+  return { compras: z.array(compraDoCartaoSchema).parse(data ?? []) };
+}
+
+const faturaSchema = z.object({
+  transacaoId: idSchema,
+  cartaoId: idSchema,
+  parcelaIds: z.array(idSchema).max(500),
+  encargos: z
+    .object({ valor: z.number().positive(), categoriaId: idSchema, centroCustoId: idSchema })
+    .nullable(),
+});
+
+/**
+ * Casa o débito da fatura com as compras do cartão: as compras ficam pagas
+ * na conta e na data do débito, e a diferença (juros, IOF, anuidade) vira
+ * "Encargos do cartão".
+ */
+export async function casarFatura(
+  entrada: z.input<typeof faturaSchema>,
+): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  const dados = faturaSchema.safeParse(entrada);
+  if (!dados.success) return { erro: "Dados da fatura inválidos" };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_casar_fatura", {
+    p_transacao_id: dados.data.transacaoId,
+    p_cartao_id: dados.data.cartaoId,
+    p_parcela_ids: dados.data.parcelaIds,
+    ...(dados.data.encargos ? { p_encargos: dados.data.encargos as unknown as Json } : {}),
+  });
+  if (error) {
+    return erroAcao("financeiro.conciliacao.casarFatura", error, mensagem(error, "Não foi possível casar a fatura"));
+  }
+  revalidatePath(ROTA);
+  return { ok: true };
+}
