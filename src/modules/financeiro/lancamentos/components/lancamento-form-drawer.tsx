@@ -4,6 +4,7 @@ import * as React from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  CalendarRange,
   Check,
   LoaderCircle,
   Plus,
@@ -71,6 +72,11 @@ import type {
 } from "@/modules/financeiro/lancamentos/queries";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries";
 import { RetencaoPainel } from "@/modules/financeiro/lancamentos/components/retencao-painel";
+import {
+  gerarParcelasMensais,
+  MAX_PARCELAS_MENSAIS,
+  quantidadeValida,
+} from "@/modules/financeiro/lancamentos/parcelamento-mensal";
 import {
   lancamentoFormSchemaCom,
   paraNumero,
@@ -468,6 +474,9 @@ export function LancamentoFormDrawer({
   const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
   const [subindoAnexos, setSubindoAnexos] = React.useState(false);
   const [gerandoParcelas, setGerandoParcelas] = React.useState(false);
+  // Quantidade digitada para "Gerar N parcelas mensais". Fica fora do form de
+  // propósito: não é dado do lançamento, só o atalho que monta as parcelas.
+  const [quantidadeParcelas, setQuantidadeParcelas] = React.useState("");
   const tipoInicial = tipoFixo ?? "a_pagar";
 
   /**
@@ -655,6 +664,62 @@ export function LancamentoFormDrawer({
         shouldValidate: true,
       });
     }
+    void form.trigger("parcelas");
+  }
+
+  /**
+   * Primeiro vencimento do parcelamento mensal: o que a pessoa já deixou na
+   * tela. Em parcela única é o campo Vencimento do topo; com a tabela aberta, a
+   * data mais cedo das parcelas (a ordem das linhas não é a dos vencimentos).
+   * Sem nenhuma das duas, a data da compra, igual a uma parcela nova.
+   */
+  function primeiroVencimentoDaTela(): string {
+    if (parcelaUnica) {
+      return form.getValues("dataVencimento") || dataCompraValor;
+    }
+    const datas = (form.getValues("parcelas") ?? [])
+      .map((parcela) => parcela.dataVencimento)
+      .filter((data) => data !== "")
+      .sort();
+    return datas[0] ?? dataCompraValor;
+  }
+
+  const quantidadeDigitada = Number(quantidadeParcelas);
+  // Mesmas travas do "Gerar pela condição": sem valor não há o que dividir, e
+  // com duas ou mais formas um parcelamento plano não sabe de qual forma é
+  // cada parcela.
+  const podeGerarMensais =
+    valorAlvo > 0 &&
+    formaUnica &&
+    quantidadeValida(valorAlvo, quantidadeDigitada);
+
+  /**
+   * Gera N parcelas mensais iguais a partir do primeiro vencimento da tela,
+   * substituindo as que existem. É o caminho do consórcio: dezenas de parcelas
+   * num lançamento só, sem condição de pagamento cadastrada para isso. O
+   * resultado continua editável linha a linha.
+   */
+  function gerarParcelasMensaisDaTela() {
+    const primeiro = primeiroVencimentoDaTela();
+    if (primeiro === "") {
+      toast.error("Informe a data da compra ou o vencimento da 1ª parcela");
+      return;
+    }
+    const geradas = gerarParcelasMensais(
+      valorAlvo,
+      quantidadeDigitada,
+      primeiro,
+    );
+    if (geradas.length === 0) return;
+    const forma = formaHerdada();
+    parcelas.replace(
+      geradas.map((parcela) => ({
+        valor: String(parcela.valor).replace(".", ","),
+        dataVencimento: parcela.dataVencimento,
+        formaPagamentoId: forma,
+      })),
+    );
+    setQuantidadeParcelas("");
     void form.trigger("parcelas");
   }
 
@@ -1795,7 +1860,47 @@ export function LancamentoFormDrawer({
         <SecaoFormulario
           titulo="Parcelas"
           acao={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* Atalho do consórcio: quantas parcelas, e o botão gera todas
+                  mensais a partir do primeiro vencimento. Enter no campo gera
+                  sem enviar o formulário. */}
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={2}
+                  max={MAX_PARCELAS_MENSAIS}
+                  step={1}
+                  placeholder="Qtd."
+                  aria-label="Quantidade de parcelas mensais"
+                  className="h-8 w-20 tabular-nums"
+                  value={quantidadeParcelas}
+                  disabled={salvando}
+                  onChange={(evento) =>
+                    setQuantidadeParcelas(evento.target.value)
+                  }
+                  onKeyDown={(evento) => {
+                    if (evento.key !== "Enter") return;
+                    evento.preventDefault();
+                    if (podeGerarMensais) gerarParcelasMensaisDaTela();
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={salvando || !podeGerarMensais}
+                  title={
+                    formaUnica
+                      ? "Divide o valor em parcelas mensais iguais a partir do 1º vencimento"
+                      : "Com duas ou mais formas, acrescente as parcelas dentro de cada forma"
+                  }
+                  onClick={gerarParcelasMensaisDaTela}
+                >
+                  <CalendarRange />
+                  Gerar mensais
+                </Button>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -1830,14 +1935,16 @@ export function LancamentoFormDrawer({
           {parcelaUnica ? (
             <p className="text-legenda text-muted-foreground">
               Parcela única: o valor e o vencimento são os dos campos Valor e
-              Vencimento acima. Adicione uma parcela para dividir em duas ou
-              mais, e aí cada uma passa a ter a sua data.
+              Vencimento acima. Para dividir, informe a quantidade e gere as
+              parcelas mensais (a 1ª no Vencimento acima), ou adicione uma a
+              uma; aí cada parcela passa a ter a sua data.
             </p>
           ) : (
             <p className="text-legenda text-muted-foreground">
               A numeração é dada pela ordem de vencimento quando você salva.
-              Gere pela condição de pagamento ou preencha na mão; a soma precisa
-              fechar com o valor.
+              Gere pela condição de pagamento, pela quantidade (parcelas
+              mensais iguais) ou preencha na mão; a soma precisa fechar com o
+              valor.
             </p>
           )}
 
