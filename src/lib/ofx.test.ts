@@ -326,6 +326,27 @@ describe("numerarRepetidos (Bloco C)", () => {
   });
 });
 
+describe("numerarRepetidos: FITID repetido ou zerado (Caixa, 06/10/2026)", () => {
+  it("os cinco consórcios do dia 15/09 com o mesmo FITID entram todos", () => {
+    const consorcio = { data: "2026-09-15", valor: -1152.6, memo: "CONSORCIO", fitid: "374751" };
+    const numerados = numerarRepetidos([consorcio, consorcio, consorcio, consorcio, consorcio]);
+    expect(numerados.map((t) => t.fitid)).toEqual([null, null, null, null, null]);
+    expect(numerados.map((t) => t.n)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("FITID só de zeros nunca identifica; FITID único continua valendo", () => {
+    const numerados = numerarRepetidos([
+      { data: "2026-09-01", valor: -146.3, memo: "DEBITO DE IOF", fitid: "000000" },
+      { data: "2026-09-01", valor: 146.3, memo: "RESGATE AUTOMAT - CLIENTE", fitid: "000000" },
+      { data: "2026-09-04", valor: -250000, memo: "ENVIO DE TED", fitid: "822350" },
+      { data: "2026-09-08", valor: -239357.97, memo: "DEB PIX CHAVE", fitid: "081108" },
+      { data: "2026-09-08", valor: -8.5, memo: "TAR PIX", fitid: "081108" },
+    ]);
+    expect(numerados.map((t) => t.fitid)).toEqual([null, null, "822350", null, null]);
+    expect(numerados.map((t) => t.n)).toEqual([1, 1, null, 1, 1]);
+  });
+});
+
 describe("conferirMovimentosNoPeriodo (Bloco C)", () => {
   const extrato = (
     inicio: string | null,

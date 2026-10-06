@@ -5228,3 +5228,8 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - A soma das compras mais os encargos tem de fechar o débito. A diferença para mais vira o lançamento "Encargos do cartão" (juros, IOF, anuidade), pago, com a categoria e o centro de custo escolhidos. Compra que faltou marcar no cartão se lança antes.
 - Ao casar, as compras ficam pagas na conta e na data do débito, inclusive a que estava paga em outra conta. O estado de antes de cada parcela fica guardado: desfazer o casamento devolve tudo como estava e apaga os encargos.
 - As compras da fatura saem de "No app, fora do banco"; nos Casados, o débito mostra "Fatura do cartão".
+
+## 2026-10-06 - Importação de OFX: FITID repetido ou zerado
+
+**Relato do Tiago:** o OFX de 09/2026 da Caixa (conta 578367973-5) não trazia todos os movimentos, sobretudo os de documento 000000. **Causa:** a chave do movimento era o FITID, e a Caixa repete o FITID em movimentos diferentes: "000000" em sete (IOF, resgate automático, prestação e amortização do SIEMP, juros, empréstimo, aplicação), "374751" nos cinco consórcios de 15/09, "081108" no PIX de 08/09 e na tarifa dele. Dos 23 movimentos, 11 foram descartados como repetidos. **Decisão:** o FITID só identifica o movimento quando é único no arquivo e não é só zeros; fora disso o movimento entra sem FITID, pela chave de data, valor, histórico e posição (`numerarRepetidos`), como já era com quem não tem FITID.
+- Os 3 movimentos repetidos que já estavam no banco (IOF de 01/09, um consórcio de 15/09, PIX de 08/09) tiveram a chave trocada para a nova, sem mexer na conciliação, e o OFX foi reimportado: entraram só os que faltavam.
