@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import type { SaldoDaAplicacao } from "@/modules/financeiro/contas-bancarias/aplicacoes-da-subconta";
 import {
   extratoFechaNoSaldo,
   montarExtrato,
@@ -181,6 +182,31 @@ export async function listarContas(): Promise<ContaLista[]> {
       ativo: conta.ativo,
     };
   });
+}
+
+/**
+ * Saldo atual de cada aplicação, para expandir a subconta de investimentos na
+ * listagem (pedido do Tiago em 08/10/2026). Só a página de Contas bancárias
+ * chama: `listarContas` também serve ao extrato, que não precisa disto.
+ *
+ * A RPC filtra por `fn_pode_ver_saldo`: aplicação de subconta cujo saldo o
+ * usuário não vê não vem, e ausência não é zero.
+ */
+export async function listarSaldosDasAplicacoes(): Promise<SaldoDaAplicacao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_saldos_das_aplicacoes");
+  if (error) {
+    throw new Error("Não foi possível calcular o saldo das aplicações");
+  }
+  return (data ?? []).map((linha) => ({
+    aplicacaoId: linha.aplicacao_id,
+    subcontaId: linha.conta_bancaria_id,
+    nome: linha.nome,
+    produto: linha.produto,
+    ativa: linha.ativa,
+    saldo: Number(linha.saldo),
+    ultimaPosicao: linha.ultima_posicao,
+  }));
 }
 
 /**

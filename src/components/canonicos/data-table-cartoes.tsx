@@ -265,7 +265,7 @@ function Cartao<TData>({
         ) : null}
       </div>
 
-      {linhaExpandida ? (
+      {linhaExpandida && linha.getCanExpand() ? (
         <>
           <button
             type="button"

@@ -28,8 +28,10 @@ import {
 } from "@/modules/_shared/filtros-cliente";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
+import type { SaldoDaAplicacao } from "@/modules/financeiro/contas-bancarias/aplicacoes-da-subconta";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";
+import { AplicacoesDaSubcontaExpandida } from "./aplicacoes-da-subconta-expandida";
 import { ContasFormDrawer } from "./contas-form-drawer";
 import { SaldoInicialSubcontaDrawer } from "./saldo-inicial-subconta-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -162,6 +164,8 @@ const colunas: ColumnDef<ContaLista, unknown>[] = [
 
 export interface ContasTabelaProps {
   contas: ContaLista[];
+  /** Saldo de cada aplicação, para expandir a subconta de investimentos. */
+  aplicacoes: SaldoDaAplicacao[];
   podeEditar: boolean;
 }
 
@@ -175,7 +179,7 @@ export interface ContasTabelaProps {
  * conta se mexe uma vez por ano. A edição não sumiu: está no menu "..." da linha
  * e no cabeçalho do próprio extrato.
  */
-export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
+export function ContasTabela({ contas, aplicacoes, podeEditar }: ContasTabelaProps) {
   const router = useRouter();
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
@@ -385,6 +389,13 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         pageSize={paginacao.pageSize}
         onPaginationChange={setPaginacao}
         onRowClick={abrirExtrato}
+        // Só a subconta de investimentos expande, e só para quem vê o saldo
+        // dela: o detalhe são os investimentos e quanto tem em cada um.
+        linhaExpandida={(conta) => (
+          <AplicacoesDaSubcontaExpandida subconta={conta} aplicacoes={aplicacoes} />
+        )}
+        podeExpandir={(conta) => conta.tipo === "investimento" && conta.podeVerSaldo}
+        idDaLinha={(conta) => conta.id}
         // A edição ficou aqui quando a linha passou a abrir o extrato. "Abrir
         // extrato" também aparece no menu, e é de propósito: o menu é o lugar em
         // que quem não sabe que a linha clica descobre que dá.

@@ -4,7 +4,10 @@ import { GradeKpis, KPICard, MoneyText, PageHeader } from "@/components/canonico
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { ContasAcoesCabecalho } from "@/modules/financeiro/contas-bancarias/components/contas-acoes-cabecalho";
 import { ContasTabela } from "@/modules/financeiro/contas-bancarias/components/contas-tabela";
-import { listarContas } from "@/modules/financeiro/contas-bancarias/queries";
+import {
+  listarContas,
+  listarSaldosDasAplicacoes,
+} from "@/modules/financeiro/contas-bancarias/queries";
 
 export default async function PaginaContasBancarias() {
   const usuario = await getUsuarioLogado();
@@ -12,7 +15,10 @@ export default async function PaginaContasBancarias() {
     notFound();
   }
 
-  const contas = await listarContas();
+  const [contas, aplicacoes] = await Promise.all([
+    listarContas(),
+    listarSaldosDasAplicacoes(),
+  ]);
 
   const podeCriar = temPermissao(usuario, "financeiro.contas-bancarias", "criar");
   const podeEditar = temPermissao(
@@ -71,7 +77,7 @@ export default async function PaginaContasBancarias() {
         )}
       </GradeKpis>
 
-      <ContasTabela contas={contas} podeEditar={podeEditar} />
+      <ContasTabela contas={contas} aplicacoes={aplicacoes} podeEditar={podeEditar} />
     </>
   );
 }
