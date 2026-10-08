@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { rotuloAplicacao } from "@/modules/financeiro/aplicacoes/calculo";
 import { salvarRegra } from "@/modules/financeiro/conciliacao/actions";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import {
@@ -35,6 +36,8 @@ export interface OpcoesRegra {
   centros: CentroCustoOpcao[];
   categorias: CategoriaOpcao[];
   fornecedores: FornecedorOpcao[];
+  /** Por etapa de Investimentos, a conta corrente onde a aplicação está. */
+  contaPorEtapa: Record<string, string>;
 }
 
 /** O que abre o diálogo: uma regra para editar ou um rascunho para criar. */
@@ -86,8 +89,11 @@ export function RegraDialog({ regra, onFechar, opcoes }: RegraDialogProps) {
     );
     return opcoes.centros
       .filter((c) => c.paiId && raizes.has(c.paiId))
-      .map((c) => ({ valor: c.id, rotulo: c.nome }));
-  }, [opcoes.centros]);
+      .map((c) => ({
+        valor: c.id,
+        rotulo: rotuloAplicacao({ nome: c.nome, contaNome: opcoes.contaPorEtapa[c.id] }),
+      }));
+  }, [opcoes.centros, opcoes.contaPorEtapa]);
 
   const opcoesCategoria = React.useMemo(
     () =>

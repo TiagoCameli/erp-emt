@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { contaPorEtapa } from "@/modules/financeiro/aplicacoes/queries";
 import { RegrasCliente } from "@/modules/financeiro/conciliacao/components/regras-cliente";
 import {
   listarContasBancarias,
@@ -24,12 +25,13 @@ export default async function PaginaRegras() {
     notFound();
   }
 
-  const [regras, contas, centros, categorias, fornecedores] = await Promise.all([
+  const [regras, contas, centros, categorias, fornecedores, contasDasAplicacoes] = await Promise.all([
     listarRegras(),
     listarContasBancarias(),
     listarCentrosCusto(),
     listarCategorias(),
     listarFornecedores(),
+    contaPorEtapa(),
   ]);
 
   return (
@@ -41,7 +43,7 @@ export default async function PaginaRegras() {
       />
       <RegrasCliente
         regras={regras}
-        opcoes={{ contas, centros, categorias, fornecedores }}
+        opcoes={{ contas, centros, categorias, fornecedores, contaPorEtapa: contasDasAplicacoes }}
         podeEditar={temPermissao(usuario, "financeiro.conciliacao", "editar")}
       />
     </>

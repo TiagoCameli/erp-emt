@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { rotuloAplicacao } from "@/modules/financeiro/aplicacoes/calculo";
 import { transferirMovimentos } from "@/modules/financeiro/conciliacao/actions";
 import { pareceAplicacaoAutomatica } from "@/modules/financeiro/conciliacao/casamento";
 import { somar, type TransacaoPainel } from "@/modules/financeiro/conciliacao/painel";
@@ -29,6 +30,8 @@ export interface TransferirDialogProps {
   conta: ContaBancariaOpcao;
   contas: ContaBancariaOpcao[];
   centros: CentroCustoOpcao[];
+  /** Por etapa de Investimentos, a conta corrente onde a aplicação está. */
+  contaPorEtapa: Record<string, string>;
 }
 
 /**
@@ -48,6 +51,7 @@ export function TransferirDialog({
   conta,
   contas,
   centros,
+  contaPorEtapa,
 }: TransferirDialogProps) {
   const router = useRouter();
   const subconta = contas.find(
@@ -74,8 +78,8 @@ export function TransferirDialog({
     );
     return centros
       .filter((c) => c.paiId && raizes.has(c.paiId))
-      .map((c) => ({ valor: c.id, rotulo: c.nome }));
-  }, [centros]);
+      .map((c) => ({ valor: c.id, rotulo: rotuloAplicacao({ nome: c.nome, contaNome: contaPorEtapa[c.id] }) }));
+  }, [centros, contaPorEtapa]);
 
   const credito = (transacoes[0]?.valor ?? 0) >= 0;
   const total = Math.abs(somar(transacoes.map((t) => t.valor)));

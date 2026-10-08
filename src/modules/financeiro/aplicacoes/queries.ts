@@ -192,3 +192,18 @@ export async function carregarAplicacoes(): Promise<DadosAplicacoes> {
   movimentos.sort((a, b) => b.data.localeCompare(a.data) || a.chave.localeCompare(b.chave));
   return { aplicacoes, linhas, movimentos };
 }
+
+/**
+ * Por etapa de Investimentos, o nome da conta corrente onde a aplicação está.
+ * Sai de `fn_aplicacoes_das_etapas` porque a tabela `aplicacoes` só é legível
+ * por quem vê a aba Aplicações, e o nome da conta não é saldo: transferência e
+ * conciliação precisam dele para distinguir aplicações de mesmo nome.
+ */
+export async function contaPorEtapa(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_aplicacoes_das_etapas");
+  if (error) throw new Error("Não foi possível carregar as contas das aplicações");
+  const porEtapa: Record<string, string> = {};
+  for (const linha of data ?? []) porEtapa[linha.centro_custo_id] = linha.conta_nome;
+  return porEtapa;
+}

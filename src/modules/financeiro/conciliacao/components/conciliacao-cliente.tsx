@@ -145,6 +145,8 @@ export interface ConciliacaoClienteProps {
   regras: RegraConciliacao[];
   /** Cartões ativos: o débito da fatura casa com as compras de um deles. */
   cartoes: { id: string; nome: string }[];
+  /** Por etapa de Investimentos, a conta corrente onde a aplicação está. */
+  contaPorEtapa: Record<string, string>;
   permissoes: PermissoesConciliacao;
 }
 
@@ -238,6 +240,7 @@ function ConciliacaoConta({
   opcoes,
   regras,
   cartoes,
+  contaPorEtapa,
   permissoes,
   podeFechar,
 }: ConciliacaoClienteProps & { podeFechar: boolean }) {
@@ -815,6 +818,7 @@ function ConciliacaoConta({
           centros: opcoes.centros,
           categorias: opcoes.categorias,
           fornecedores: opcoes.fornecedores,
+          contaPorEtapa,
         }}
       />
 
@@ -857,6 +861,7 @@ function ConciliacaoConta({
         conta={conta}
         contas={contas}
         centros={opcoes.centros}
+        contaPorEtapa={contaPorEtapa}
       />
 
       <TrocarContaDialog
