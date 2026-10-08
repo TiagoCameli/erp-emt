@@ -41,10 +41,15 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 export interface ListarOrdensParams {
   pagina: number;
   tamanho: number;
-  status?: StatusOC;
+  /**
+   * Os filtros de seleção são LISTAS (08/10/2026, pedido do Tiago: "em todos os
+   * filtros eu quero poder selecionar mais de uma opção"). Lista vazia ou
+   * ausente é "todos"; dentro da lista vale OU, entre filtros vale E.
+   */
+  status?: StatusOC[];
   busca?: string;
   /** Filtro por fornecedor. */
-  fornecedorId?: string;
+  fornecedorIds?: string[];
   /** Período da data da compra (inclusive), yyyy-mm-dd. */
   de?: string;
   ate?: string;
@@ -58,11 +63,11 @@ export interface ListarOrdensParams {
   competenciaDe?: string;
   competenciaAte?: string;
   /** Categoria financeira do custo. */
-  categoriaId?: string;
+  categoriaIds?: string[];
   /** Forma de pagamento (o método: PIX, boleto, cartão...). */
-  formaPagamentoId?: string;
+  formaPagamentoIds?: string[];
   /** Condição de pagamento (o prazo: à vista, 30/60...). */
-  condicaoPagamentoId?: string;
+  condicaoPagamentoIds?: string[];
   /** Faixa de valor total da OC, em reais (inclusive nas duas pontas). */
   valorDe?: number;
   valorAte?: number;
@@ -70,15 +75,15 @@ export interface ListarOrdensParams {
   criadaDe?: string;
   criadaAte?: string;
   /** Centro de custo de algum item da OC. */
-  centroCustoId?: string;
+  centroCustoIds?: string[];
   /** Insumo comprado em algum item da OC. */
-  insumoId?: string;
+  insumoIds?: string[];
   /** OC com ou sem nota fiscal registrada (recebimento). */
-  nota?: FiltroNotaOC;
+  nota?: FiltroNotaOC[];
   /** OC gerada de cotação ou emitida direto. */
-  origem?: FiltroOrigemOC;
+  origem?: FiltroOrigemOC[];
   /** Recorte por autoria. Só vale junto com `usuarioLogadoId`. */
-  autoria?: FiltroAutoriaOC;
+  autoria?: FiltroAutoriaOC[];
   /** Quem está olhando a lista, para o filtro de autoria. */
   usuarioLogadoId?: string;
 }
@@ -415,6 +420,8 @@ type FiltrosOrdens = Omit<ListarOrdensParams, "pagina" | "tamanho">;
 /** O pedaço do builder do PostgREST que os filtros das ordens usam. */
 interface ConsultaFiltravelOrdens<T> {
   eq: (coluna: string, valor: string) => T;
+  in: (coluna: string, valores: string[]) => T;
+  overlaps: (coluna: string, valores: string[]) => T;
   gte: (coluna: string, valor: string | number) => T;
   lte: (coluna: string, valor: string | number) => T;
   lt: (coluna: string, valor: string) => T;
@@ -432,16 +439,18 @@ interface ConsultaFiltravelOrdens<T> {
  * Síncrona, com os ids de fornecedor da busca já resolvidos: o builder é
  * "thenable", e uma função async o dispararia no return (ver
  * `aplicarFiltrosPagas`).
+ *
+ * Exportada só para o teste olhar a consulta montada sem banco.
  */
-function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
+export function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
   consultaInicial: T,
   filtros: FiltrosOrdens,
   idsFornecedoresBusca: string[],
 ): T {
   let consulta = consultaInicial;
-  if (filtros.status) consulta = consulta.eq("status", filtros.status);
-  if (filtros.fornecedorId) {
-    consulta = consulta.eq("fornecedor_id", filtros.fornecedorId);
+  if (temItens(filtros.status)) consulta = consulta.in("status", filtros.status);
+  if (temItens(filtros.fornecedorIds)) {
+    consulta = consulta.in("fornecedor_id", filtros.fornecedorIds);
   }
   if (filtros.de) consulta = consulta.gte("data_compra", filtros.de);
   if (filtros.ate) consulta = consulta.lte("data_compra", filtros.ate);
@@ -454,21 +463,21 @@ function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
   if (filtros.competenciaAte) {
     consulta = consulta.lte("mes_competencia", filtros.competenciaAte);
   }
-  if (filtros.categoriaId) {
-    // `contains` e não `eq`: o filtro casa a ordem que tem AQUELA categoria em
-    // algum item, e não só a que a tem como predominante. Filtrar por
-    // `categoria_id` escondia a compra de R$ 40 mil de peça que veio junto com
-    // R$ 60 mil de material — a ordem existe, o custo existe, e ela não
-    // aparecia no recorte de peças.
-    consulta = consulta.contains("categoria_ids", [filtros.categoriaId]);
+  if (temItens(filtros.categoriaIds)) {
+    // `overlaps` sobre `categoria_ids`, e não `in` sobre `categoria_id`: o filtro
+    // casa a ordem que tem ALGUMA das categorias escolhidas em algum item, e não
+    // só a que a tem como predominante. Filtrar por `categoria_id` escondia a
+    // compra de R$ 40 mil de peça que veio junto com R$ 60 mil de material — a
+    // ordem existe, o custo existe, e ela não aparecia no recorte de peças.
+    consulta = consulta.overlaps("categoria_ids", filtros.categoriaIds);
   }
-  if (filtros.formaPagamentoId) {
-    consulta = consulta.eq("forma_pagamento_id", filtros.formaPagamentoId);
+  if (temItens(filtros.formaPagamentoIds)) {
+    consulta = consulta.in("forma_pagamento_id", filtros.formaPagamentoIds);
   }
-  if (filtros.condicaoPagamentoId) {
-    consulta = consulta.eq(
+  if (temItens(filtros.condicaoPagamentoIds)) {
+    consulta = consulta.in(
       "condicao_pagamento_id",
-      filtros.condicaoPagamentoId,
+      filtros.condicaoPagamentoIds,
     );
   }
   if (filtros.valorDe !== undefined) {
@@ -488,26 +497,26 @@ function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
   // Centro de custo e insumo vivem no item, não na OC: o filtro cai no embed e o
   // `oc_itens=not.is.null` é o que descarta a OC sem nenhum item batendo (mesmo
   // efeito de um !inner, sem precisar mudar o select).
-  if (filtros.centroCustoId) {
-    consulta = consulta.eq("oc_itens.centro_custo_id", filtros.centroCustoId);
+  if (temItens(filtros.centroCustoIds)) {
+    consulta = consulta.in("oc_itens.centro_custo_id", filtros.centroCustoIds);
   }
-  if (filtros.insumoId) {
-    consulta = consulta.eq("oc_itens.insumo_id", filtros.insumoId);
+  if (temItens(filtros.insumoIds)) {
+    consulta = consulta.in("oc_itens.insumo_id", filtros.insumoIds);
   }
-  if (filtros.centroCustoId || filtros.insumoId) {
+  if (temItens(filtros.centroCustoIds) || temItens(filtros.insumoIds)) {
     consulta = consulta.not("oc_itens", "is", null);
   }
+  // Nota e origem são catálogos de dois valores que se excluem: os dois
+  // marcados é o mesmo que nenhum, então só um marcado recorta.
   // recebimentos tem unique(ordem_compra_id): o embed é 1-para-1, então nulo
   // significa exatamente "nota fiscal ainda não registrada".
-  if (filtros.nota === "com") {
-    consulta = consulta.not("recebimentos", "is", null);
-  }
-  if (filtros.nota === "sem") consulta = consulta.is("recebimentos", null);
-  if (filtros.origem === "cotacao") {
-    consulta = consulta.not("cotacao_id", "is", null);
-  }
-  if (filtros.origem === "direta") consulta = consulta.is("cotacao_id", null);
-  if (filtros.autoria === "minhas" && filtros.usuarioLogadoId) {
+  const nota = soUm(filtros.nota);
+  if (nota === "com") consulta = consulta.not("recebimentos", "is", null);
+  if (nota === "sem") consulta = consulta.is("recebimentos", null);
+  const origem = soUm(filtros.origem);
+  if (origem === "cotacao") consulta = consulta.not("cotacao_id", "is", null);
+  if (origem === "direta") consulta = consulta.is("cotacao_id", null);
+  if (filtros.autoria?.includes("minhas") && filtros.usuarioLogadoId) {
     consulta = consulta.eq("created_by", filtros.usuarioLogadoId);
   }
 
@@ -527,6 +536,16 @@ function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
   return consulta;
 }
 
+/** Lista com pelo menos um item (estreita o tipo para o `in` do PostgREST). */
+function temItens<T>(lista: T[] | undefined): lista is T[] {
+  return lista !== undefined && lista.length > 0;
+}
+
+/** O valor escolhido quando a lista tem exatamente um; senão nenhum. */
+function soUm<T>(lista: T[] | undefined): T | undefined {
+  return lista?.length === 1 ? lista[0] : undefined;
+}
+
 /** Os filtros de seleção da barra, na chave que a tabela usa. */
 export type FacetaOrdens =
   | "status"
@@ -543,14 +562,14 @@ export type FacetaOrdens =
 /** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
 const PARAMETRO_DA_FACETA: Record<FacetaOrdens, keyof FiltrosOrdens> = {
   status: "status",
-  fornecedor: "fornecedorId",
-  categoria: "categoriaId",
-  forma: "formaPagamentoId",
-  condicao: "condicaoPagamentoId",
+  fornecedor: "fornecedorIds",
+  categoria: "categoriaIds",
+  forma: "formaPagamentoIds",
+  condicao: "condicaoPagamentoIds",
   nota: "nota",
   origem: "origem",
-  centro: "centroCustoId",
-  insumo: "insumoId",
+  centro: "centroCustoIds",
+  insumo: "insumoIds",
   autoria: "autoria",
 };
 
@@ -573,38 +592,41 @@ export async function facetasOrdens(
 
   return facetasNoServidor<LinhaFacetaOrdens, FacetaOrdens>(
     {
-      status: { ativo: !!params.status, chave: (o) => o.status },
+      status: { ativo: temItens(params.status), chave: (o) => o.status },
       fornecedor: {
-        ativo: !!params.fornecedorId,
+        ativo: temItens(params.fornecedorIds),
         chave: (o) => o.fornecedor_id,
       },
-      categoria: { ativo: !!params.categoriaId, chave: (o) => o.categoria_ids },
+      categoria: {
+        ativo: temItens(params.categoriaIds),
+        chave: (o) => o.categoria_ids,
+      },
       forma: {
-        ativo: !!params.formaPagamentoId,
+        ativo: temItens(params.formaPagamentoIds),
         chave: (o) => o.forma_pagamento_id,
       },
       condicao: {
-        ativo: !!params.condicaoPagamentoId,
+        ativo: temItens(params.condicaoPagamentoIds),
         chave: (o) => o.condicao_pagamento_id,
       },
       nota: {
-        ativo: !!params.nota,
+        ativo: soUm(params.nota) !== undefined,
         chave: (o) => (temRecebimento(o.recebimentos) ? "com" : "sem"),
       },
       origem: {
-        ativo: !!params.origem,
+        ativo: soUm(params.origem) !== undefined,
         chave: (o) => (o.cotacao_id ? "cotacao" : "direta"),
       },
       centro: {
-        ativo: !!params.centroCustoId,
+        ativo: temItens(params.centroCustoIds),
         chave: (o) => o.oc_itens.map((item) => item.centro_custo_id),
       },
       insumo: {
-        ativo: !!params.insumoId,
+        ativo: temItens(params.insumoIds),
         chave: (o) => o.oc_itens.map((item) => item.insumo_id),
       },
       autoria: {
-        ativo: !!params.autoria,
+        ativo: temItens(params.autoria),
         chave: (o) =>
           params.usuarioLogadoId && o.created_by === params.usuarioLogadoId
             ? "minhas"

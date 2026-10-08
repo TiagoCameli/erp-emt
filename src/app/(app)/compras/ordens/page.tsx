@@ -8,9 +8,11 @@ import { listarFormasPagamento } from "@/modules/compras/_shared/pagamento";
 import {
   lerParametrosLista,
   parametroData,
-  parametroUuid,
-  parametroValido,
 } from "@/modules/compras/_shared/lista";
+import {
+  lerCatalogoDaUrl,
+  lerUuidsDaUrl,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import {
   lerFaixaValor,
   VALORES_AUTORIA_OC,
@@ -52,27 +54,22 @@ export default async function PaginaOrdens({
   const podeExcluir = temPermissao(usuario, "compras.ordens", "excluir");
 
   const params = await searchParams;
-  const {
-    pagina,
-    tamanho,
-    busca,
-    fornecedorId,
-    de,
-    ate,
-    competenciaDe,
-    competenciaAte,
-  } = lerParametrosLista(params);
-  const status = parametroValido(params.status, STATUS_VALIDOS);
+  const { pagina, tamanho, busca, de, ate, competenciaDe, competenciaAte } =
+    lerParametrosLista(params);
 
-  // Filtros só desta tela. Parâmetro inválido é ignorado, nunca vai pro banco.
-  const categoriaId = parametroUuid(params.categoria);
-  const formaPagamentoId = parametroUuid(params.forma);
-  const condicaoPagamentoId = parametroUuid(params.condicao);
-  const centroCustoId = parametroUuid(params.centro);
-  const insumoId = parametroUuid(params.insumo);
-  const nota = parametroValido(params.nota, VALORES_NOTA_OC);
-  const origem = parametroValido(params.origem, VALORES_ORIGEM_OC);
-  const autoria = parametroValido(params.autoria, VALORES_AUTORIA_OC);
+  // Todo filtro de seleção é lista (`?fornecedor=id1,id2`), no formato de
+  // `listas-na-url`. Link antigo com um valor só continua valendo: é uma lista
+  // de um. Parâmetro inválido é descartado, nunca vai pro banco.
+  const status = lerCatalogoDaUrl(params.status, STATUS_VALIDOS);
+  const fornecedorIds = lerUuidsDaUrl(params.fornecedor);
+  const categoriaIds = lerUuidsDaUrl(params.categoria);
+  const formaPagamentoIds = lerUuidsDaUrl(params.forma);
+  const condicaoPagamentoIds = lerUuidsDaUrl(params.condicao);
+  const centroCustoIds = lerUuidsDaUrl(params.centro);
+  const insumoIds = lerUuidsDaUrl(params.insumo);
+  const nota = lerCatalogoDaUrl(params.nota, VALORES_NOTA_OC);
+  const origem = lerCatalogoDaUrl(params.origem, VALORES_ORIGEM_OC);
+  const autoria = lerCatalogoDaUrl(params.autoria, VALORES_AUTORIA_OC);
   const faixaValor = lerFaixaValor(params.valorDe, params.valorAte);
   let criadaDe = parametroData(params.criadaDe);
   let criadaAte = parametroData(params.criadaAte);
@@ -90,20 +87,20 @@ export default async function PaginaOrdens({
   const filtrosLista = {
     status,
     busca,
-    fornecedorId,
+    fornecedorIds,
     de,
     ate,
     competenciaDe,
     competenciaAte,
-    categoriaId,
-    formaPagamentoId,
-    condicaoPagamentoId,
+    categoriaIds,
+    formaPagamentoIds,
+    condicaoPagamentoIds,
     valorDe: faixaValor.valorDe,
     valorAte: faixaValor.valorAte,
     criadaDe,
     criadaAte,
-    centroCustoId,
-    insumoId,
+    centroCustoIds,
+    insumoIds,
     nota,
     origem,
     autoria,
@@ -162,23 +159,23 @@ export default async function PaginaOrdens({
         total={total}
         pagina={pagina}
         tamanho={tamanho}
-        status={status ?? ""}
+        status={status}
         busca={busca ?? ""}
-        fornecedorId={fornecedorId ?? ""}
+        fornecedorIds={fornecedorIds}
         de={de ?? ""}
         ate={ate ?? ""}
         competenciaDe={competenciaDe ?? ""}
         competenciaAte={competenciaAte ?? ""}
-        categoriaId={categoriaId ?? ""}
-        formaPagamentoId={formaPagamentoId ?? ""}
-        condicaoPagamentoId={condicaoPagamentoId ?? ""}
+        categoriaIds={categoriaIds}
+        formaPagamentoIds={formaPagamentoIds}
+        condicaoPagamentoIds={condicaoPagamentoIds}
         criadaDe={criadaDe ?? ""}
         criadaAte={criadaAte ?? ""}
-        centroCustoId={centroCustoId ?? ""}
-        insumoId={insumoId ?? ""}
-        nota={nota ?? ""}
-        origem={origem ?? ""}
-        autoria={autoria ?? ""}
+        centroCustoIds={centroCustoIds}
+        insumoIds={insumoIds}
+        nota={nota}
+        origem={origem}
+        autoria={autoria}
         fornecedores={fornecedores}
         categorias={categorias}
         formasPagamento={formasPagamento}
