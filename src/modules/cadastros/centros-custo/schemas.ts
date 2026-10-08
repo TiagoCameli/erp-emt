@@ -85,3 +85,32 @@ export const editarNoSchema = z.object({
 });
 
 export type EditarNoInput = z.infer<typeof editarNoSchema>;
+
+/**
+ * Tipos de aplicação. Igual ao check de `aplicacoes.produto`. Etapa do centro
+ * Investimentos É uma aplicação (pedido do Tiago em 07/10/2026): ao criá-la ou
+ * editá-la escolhe-se a conta e o tipo.
+ */
+export const PRODUTOS_APLICACAO = ["cdb", "fundo", "lca", "lci", "tesouro", "outro"] as const;
+
+export type ProdutoAplicacao = (typeof PRODUTOS_APLICACAO)[number];
+
+export const ROTULO_PRODUTO_APLICACAO: Record<ProdutoAplicacao, string> = {
+  cdb: "CDB",
+  fundo: "Fundo",
+  lca: "LCA",
+  lci: "LCI",
+  tesouro: "Tesouro",
+  outro: "Outro",
+};
+
+/**
+ * A aplicação de uma etapa de Investimentos. A conta é a CORRENTE: o dinheiro
+ * mora na subconta de investimentos dela, que o banco resolve.
+ */
+export const aplicacaoDaEtapaSchema = z.object({
+  conta_id: idSchemaCom("Escolha a conta da aplicação"),
+  produto: z.enum(PRODUTOS_APLICACAO, { error: "Escolha o tipo da aplicação" }),
+});
+
+export type AplicacaoDaEtapaInput = z.infer<typeof aplicacaoDaEtapaSchema>;

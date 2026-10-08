@@ -121,6 +121,7 @@ export async function carregarAplicacoes(): Promise<DadosAplicacoes> {
     cdiPct: numeroOuNulo(l.cdi_pct),
     pctCdi: numeroOuNulo(l.pct_cdi),
     ultimaPosicao: l.ultima_posicao,
+    saldoInicial: numero(l.saldo_inicial),
   }));
   // Só entra movimento de aplicação que a pessoa enxerga na função de saldo.
   const visiveis = new Set(linhas.map((l) => l.aplicacaoId));

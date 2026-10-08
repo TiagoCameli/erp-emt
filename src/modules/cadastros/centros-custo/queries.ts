@@ -1,7 +1,10 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { TipoCentro } from "@/modules/cadastros/centros-custo/schemas";
+import type {
+  ProdutoAplicacao,
+  TipoCentro,
+} from "@/modules/cadastros/centros-custo/schemas";
 
 /**
  * Um nó da árvore de centros de custo (centro, etapa ou item).
@@ -57,4 +60,55 @@ export async function listarArvore(): Promise<NoCentroCusto[]> {
     sistema: no.sistema,
     ativo: no.ativo,
   }));
+}
+
+/** A conta e o tipo da aplicação de uma etapa de Investimentos. */
+export interface AplicacaoDaEtapa {
+  contaId: string;
+  contaNome: string;
+  produto: ProdutoAplicacao;
+}
+
+/** Conta corrente ou poupança que pode receber aplicação. */
+export interface ContaParaAplicacao {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Por etapa de Investimentos, a conta e o tipo da aplicação. Sai de
+ * `fn_aplicacoes_das_etapas` porque a tabela `aplicacoes` só é legível por quem
+ * vê a aba Aplicações, e a conta não é saldo: quem cadastra centro de custo
+ * precisa enxergá-la.
+ */
+export async function listarAplicacoesDasEtapas(): Promise<Record<string, AplicacaoDaEtapa>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_aplicacoes_das_etapas");
+  if (error) {
+    throw new Error("Não foi possível carregar as contas das aplicações");
+  }
+  const porEtapa: Record<string, AplicacaoDaEtapa> = {};
+  for (const linha of data ?? []) {
+    porEtapa[linha.centro_custo_id] = {
+      contaId: linha.conta_id,
+      contaNome: linha.conta_nome,
+      produto: linha.produto as ProdutoAplicacao,
+    };
+  }
+  return porEtapa;
+}
+
+/** Contas correntes e poupanças ativas: as que têm subconta de investimentos. */
+export async function listarContasParaAplicacao(): Promise<ContaParaAplicacao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contas_bancarias")
+    .select("id, nome")
+    .in("tipo", ["corrente", "poupanca"])
+    .eq("ativo", true)
+    .order("nome");
+  if (error) {
+    throw new Error("Não foi possível carregar as contas bancárias");
+  }
+  return data ?? [];
 }

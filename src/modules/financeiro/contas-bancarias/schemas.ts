@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 import type { BancoConta } from "@/modules/financeiro/_shared/formato";
 
 /** Bancos possíveis de uma conta. Igual ao check do banco. */
@@ -108,3 +110,29 @@ export type ContaFormInput = z.infer<typeof contaFormSchema>;
 
 /** Reexporta o tipo do banco para quem importa só dos schemas da aba. */
 export type { BancoConta };
+
+/**
+ * Saldo inicial da SUBCONTA de investimentos, dividido por aplicação (pedido do
+ * Tiago em 07/10/2026). O saldo inicial da subconta é a soma, e o banco é quem
+ * soma: aqui só vai a parte de cada aplicação e a data do extrato.
+ */
+export const saldoInicialSubcontaSchema = z.object({
+  subcontaId: idSchemaCom("Subconta inválida"),
+  data: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Informe a data do extrato" }),
+  saldos: z
+    .array(
+      z.object({
+        aplicacaoId: idSchemaCom("Aplicação inválida"),
+        valor: z
+          .number({ error: "Saldo inválido" })
+          .min(0, { error: "O saldo de uma aplicação não pode ser negativo" })
+          .max(9999999999.99, { error: "Saldo acima do permitido" }),
+      }),
+    )
+    .min(1, { error: "Esta subconta não tem aplicação cadastrada" }),
+});
+
+export type SaldoInicialSubcontaInput = z.infer<typeof saldoInicialSubcontaSchema>;

@@ -12,9 +12,11 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { motivoParaNaoAlternar } from "@/modules/cadastros/centros-custo/travas-de-status";
 import { createClient } from "@/lib/supabase/server";
 import {
+  aplicacaoDaEtapaSchema,
   criarEtapaSchema,
   criarItemSchema,
   editarNoSchema,
+  type AplicacaoDaEtapaInput,
   type CriarEtapaInput,
   type CriarItemInput,
   type EditarNoInput,
@@ -29,6 +31,7 @@ export type ResultadoAcao = { ok: true } | { erro: string };
 /** Campos que governam as travas: sistema, equipamento e obra são geridos pelo banco. */
 interface NoTravas {
   nivel: number;
+  tipo: string | null;
   sistema: boolean;
   equipamento_id: string | null;
   obra_id: string | null;
@@ -42,7 +45,7 @@ async function carregarNo(
 ): Promise<NoTravas | null> {
   const { data } = await supabase
     .from(TABELA)
-    .select("nivel, sistema, equipamento_id, obra_id, pai_id")
+    .select("nivel, tipo, sistema, equipamento_id, obra_id, pai_id")
     .eq("id", id)
     .maybeSingle();
   return data;
@@ -57,10 +60,37 @@ function noGerido(no: NoTravas): boolean {
 }
 
 /**
+ * Etapa sob o centro Investimentos: é uma aplicação, e a conta dela se escolhe
+ * aqui (pedido do Tiago em 07/10/2026).
+ */
+async function ehEtapaDeInvestimento(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  no: NoTravas,
+): Promise<boolean> {
+  if (no.nivel !== 2 || !no.pai_id) return false;
+  const pai = await carregarNo(supabase, no.pai_id);
+  return pai?.tipo === "investimento";
+}
+
+/** Valida a conta e o tipo da aplicação, no contrato { erro } das actions. */
+function validarAplicacao(
+  aplicacao: AplicacaoDaEtapaInput | undefined,
+): { ok: AplicacaoDaEtapaInput } | { erro: string } {
+  const validado = aplicacaoDaEtapaSchema.safeParse(aplicacao ?? {});
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Escolha a conta e o tipo da aplicação" };
+  }
+  return { ok: validado.data };
+}
+
+/**
  * Cria uma etapa (nível 2) sob um centro (nível 1). O pai precisa existir e
  * ser de nível 1. A etapa nasce manual: sistema=false, sem equipamento.
  */
-export async function criarEtapa(dados: CriarEtapaInput): Promise<ResultadoAcao> {
+export async function criarEtapa(
+  dados: CriarEtapaInput,
+  aplicacao?: AplicacaoDaEtapaInput,
+): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "criar");
 
   const validado = criarEtapaSchema.safeParse(dados);
@@ -73,6 +103,30 @@ export async function criarEtapa(dados: CriarEtapaInput): Promise<ResultadoAcao>
   if (!pai) return { erro: "Centro não encontrado" };
   if (pai.nivel !== 1) {
     return { erro: "Etapas só podem ser criadas sob um centro" };
+  }
+
+  // Em Investimentos a etapa nasce JUNTO com a aplicação, numa transação só:
+  // etapa sem conta não aparece em Aplicações nem divide saldo.
+  if (pai.tipo === "investimento") {
+    const apl = validarAplicacao(aplicacao);
+    if ("erro" in apl) return apl;
+    const { error } = await supabase.rpc("fn_criar_etapa_de_investimento", {
+      p_pai: validado.data.pai_id,
+      p_nome: validado.data.nome,
+      p_orcamento: validado.data.orcamento,
+      p_conta: apl.ok.conta_id,
+      p_produto: apl.ok.produto,
+    });
+    if (error) {
+      return erroAcao(
+        "cadastros.centros-custo.criarEtapa",
+        error,
+        error.message || "Não foi possível criar a aplicação. Tente novamente",
+      );
+    }
+    revalidatePath(ROTA);
+    revalidatePath("/financeiro/aplicacoes");
+    return { ok: true };
   }
 
   const { error } = await supabase.from(TABELA).insert({
@@ -145,6 +199,7 @@ export async function criarItem(dados: CriarItemInput): Promise<ResultadoAcao> {
 export async function editarNo(
   id: string,
   dados: EditarNoInput,
+  aplicacao?: AplicacaoDaEtapaInput,
 ): Promise<ResultadoAcao> {
   await exigirPermissao(RECURSO, "editar");
 
@@ -161,6 +216,10 @@ export async function editarNo(
   if (!no) return { erro: "Centro de custo não encontrado" };
 
   const orcamento = validado.data.orcamento ?? null;
+
+  const investimento = await ehEtapaDeInvestimento(supabase, no);
+  const apl = investimento ? validarAplicacao(aplicacao) : null;
+  if (apl && "erro" in apl) return apl;
 
   // Nó gerido (sistema, equipamento, raiz de obra) ou de nível 1: só orçamento.
   // Nó manual (etapa/item criado à mão): nome, código e orçamento.
@@ -183,6 +242,23 @@ export async function editarNo(
       error,
       "Não foi possível salvar. Tente novamente",
     );
+  }
+
+  if (apl) {
+    const { error: erroAplicacao } = await supabase.rpc("fn_vincular_aplicacao_da_etapa", {
+      p_etapa: idValido.data,
+      p_conta: apl.ok.conta_id,
+      p_produto: apl.ok.produto,
+    });
+    if (erroAplicacao) {
+      revalidatePath(ROTA);
+      return erroAcao(
+        "cadastros.centros-custo.editarNo",
+        erroAplicacao,
+        erroAplicacao.message || "Não foi possível salvar a conta da aplicação",
+      );
+    }
+    revalidatePath("/financeiro/aplicacoes");
   }
 
   revalidatePath(ROTA);

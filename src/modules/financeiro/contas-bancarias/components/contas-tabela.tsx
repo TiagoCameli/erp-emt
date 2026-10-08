@@ -31,6 +31,7 @@ import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";
 import { ContasFormDrawer } from "./contas-form-drawer";
+import { SaldoInicialSubcontaDrawer } from "./saldo-inicial-subconta-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 const OPCOES_STATUS = [
@@ -178,6 +179,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
   const router = useRouter();
   const [selecionadaId, setSelecionadaId] = React.useState<string | null>(null);
   const [aberto, setAberto] = React.useState(false);
+  const [subcontaAberta, setSubcontaAberta] = React.useState<ContaLista | null>(null);
   const { paginacao, setPaginacao, zerarPagina } = usePaginacaoCliente();
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = React.useState("ativos");
@@ -272,10 +274,11 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
 
   function abrirEdicao(conta: ContaLista) {
     // A subconta é mantida pelo banco (nome, banco, agência e ativo seguem a
-    // conta-mãe): o clique leva ao extrato dela, não a um formulário que não
-    // teria o que editar.
+    // conta-mãe). O que se edita nela é o saldo inicial, dividido por aplicação
+    // (pedido do Tiago em 07/10/2026); sem ver o saldo, vai para o extrato.
     if (conta.tipo === "investimento") {
-      abrirExtrato(conta);
+      if (podeEditar && conta.podeVerSaldo) setSubcontaAberta(conta);
+      else abrirExtrato(conta);
       return;
     }
     if (!podeEditar) return;
@@ -394,7 +397,7 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
             {podeEditar ? (
               <DropdownMenuItem onSelect={() => abrirEdicao(conta)}>
                 <Pencil />
-                Editar conta
+                {conta.tipo === "investimento" ? "Editar saldo inicial" : "Editar conta"}
               </DropdownMenuItem>
             ) : null}
           </>
@@ -426,6 +429,17 @@ export function ContasTabela({ contas, podeEditar }: ContasTabelaProps) {
         onAbertoChange={setAberto}
         conta={contaSelecionada}
       />
+
+      {subcontaAberta ? (
+        <SaldoInicialSubcontaDrawer
+          key={subcontaAberta.id}
+          aberto
+          onAbertoChange={(valor) => {
+            if (!valor) setSubcontaAberta(null);
+          }}
+          subconta={subcontaAberta}
+        />
+      ) : null}
     </div>
   );
 }

@@ -39,8 +39,13 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { alternarAtivo } from "@/modules/cadastros/centros-custo/actions";
-import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
+import type {
+  AplicacaoDaEtapa,
+  ContaParaAplicacao,
+  NoCentroCusto,
+} from "@/modules/cadastros/centros-custo/queries";
 import {
+  ROTULO_PRODUTO_APLICACAO,
   ROTULO_TIPO_CENTRO,
   TIPOS_CENTRO,
   type TipoCentro,
@@ -72,6 +77,10 @@ export interface ArvoreCentrosCustoProps {
   nos: NoCentroCusto[];
   podeCriar: boolean;
   podeEditar: boolean;
+  /** Conta e tipo de cada etapa de Investimentos, por id da etapa. */
+  aplicacoes: Record<string, AplicacaoDaEtapa>;
+  /** Contas que podem receber aplicação (correntes e poupanças ativas). */
+  contas: ContaParaAplicacao[];
 }
 
 /** Nó já com a lista de filhos resolvida, para renderização recursiva. */
@@ -181,6 +190,8 @@ export function ArvoreCentrosCusto({
   nos,
   podeCriar,
   podeEditar,
+  aplicacoes,
+  contas,
 }: ArvoreCentrosCustoProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   // "todos" para não mudar o que a tela mostra hoje: a árvore sempre exibiu nó
@@ -285,7 +296,7 @@ export function ArvoreCentrosCusto({
   }
 
   function abrirEditar(no: NoCentroCusto) {
-    setModo({ tipo: "editar", no });
+    setModo({ tipo: "editar", no, investimento: ehEtapaDeInvestimento(no) });
     setDrawerAberto(true);
   }
 
@@ -307,6 +318,15 @@ export function ArvoreCentrosCusto({
       return;
     }
     toast.success("Nó ativado");
+  }
+
+  // Etapa sob o centro Investimentos: é uma aplicação, tem conta e tipo.
+  const tipoPorId = React.useMemo(
+    () => new Map(nos.map((no) => [no.id, no.tipo])),
+    [nos],
+  );
+  function ehEtapaDeInvestimento(no: NoCentroCusto): boolean {
+    return no.nivel === 2 && !!no.pai_id && tipoPorId.get(no.pai_id) === "investimento";
   }
 
   function renderNo(no: NoArvore, profundidade: number): React.ReactNode {
@@ -379,6 +399,21 @@ export function ArvoreCentrosCusto({
               <span className="shrink-0 font-mono text-legenda text-muted-foreground">
                 {no.codigo}
               </span>
+            ) : null}
+
+            {ehEtapaDeInvestimento(no) ? (
+              aplicacoes[no.id] ? (
+                <span className="truncate text-legenda text-muted-foreground">
+                  {ROTULO_PRODUTO_APLICACAO[aplicacoes[no.id]!.produto]} ·{" "}
+                  {aplicacoes[no.id]!.contaNome}
+                </span>
+              ) : (
+                <StatusBadge
+                  status="pendente"
+                  rotulo="Sem conta"
+                  className="shrink-0"
+                />
+              )
             ) : null}
 
             {tipoCentro ? (
@@ -603,6 +638,8 @@ export function ArvoreCentrosCusto({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           modo={modo}
+          aplicacoes={aplicacoes}
+          contas={contas}
         />
       ) : null}
 
