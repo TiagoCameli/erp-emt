@@ -136,3 +136,27 @@ describe("DataTable com linhaExpandida", () => {
     expect(itens).toHaveLength(1);
   });
 });
+
+describe("DataTable com podeExpandir", () => {
+  it("só a linha aceita ganha chevron; a recusada fica com a célula vazia", () => {
+    render(
+      <DataTable
+        columns={COLUNAS}
+        data={DADOS}
+        linhaExpandida={detalhe}
+        podeExpandir={(l) => l.id === "b"}
+        idDaLinha={(l) => l.id}
+      />,
+    );
+    const botoes = screen.getAllByRole("button", { name: "Expandir detalhes" });
+    expect(botoes).toHaveLength(1);
+    // Linha de controle: a coluna do chevron continua lá na linha recusada.
+    const celulaA = screen.getAllByRole("row")[1].querySelector("td");
+    expect(celulaA?.getAttribute("data-coluna")).toBe("__expansao__");
+    expect(celulaA?.querySelector("button")).toBeNull();
+
+    fireEvent.click(botoes[0]);
+    expect(screen.getByText("Detalhe de Frete B")).toBeInTheDocument();
+    expect(screen.queryByText("Detalhe de Frete A")).toBeNull();
+  });
+});

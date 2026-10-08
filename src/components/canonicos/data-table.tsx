@@ -580,6 +580,8 @@ function colunaExpansao<TData>(): ColumnDef<TData, unknown> {
     meta: { fixa: true, naoTruncar: true },
     header: () => <span className="sr-only">Expandir</span>,
     cell: ({ row }) => {
+      // Linha que `podeExpandir` recusou: célula vazia, sem botão que não abre nada.
+      if (!row.getCanExpand()) return null;
       const aberta = row.getIsExpanded();
       return (
         <Button
@@ -831,6 +833,13 @@ export interface DataTableProps<TData> {
    * aberta quando o filtro ou a ordenação mudam a posição dela.
    */
   linhaExpandida?: (registro: TData) => React.ReactNode;
+  /**
+   * Quais linhas têm o que expandir, quando não são todas (só a subconta de
+   * investimentos, em Contas bancárias). Recusada, a linha fica sem chevron.
+   * Sem esta prop, toda linha expande, como sempre foi. Só vale com
+   * `linhaExpandida`.
+   */
+  podeExpandir?: (registro: TData) => boolean;
   /**
    * Chave estável da linha. Sem ela, o TanStack identifica a linha pela posição
    * no array `data`, e filtrar na tela (que troca o array) faria a linha aberta
@@ -1154,6 +1163,7 @@ export function DataTable<TData>({
   filtros,
   selecao,
   linhaExpandida,
+  podeExpandir,
   idDaLinha,
   subLinhas,
 }: DataTableProps<TData>) {
@@ -2487,7 +2497,11 @@ export function DataTable<TData>({
       ? { getRowId: (registro: TData) => idDaLinha(registro) }
       : {}),
     ...(expansivel
-      ? { onExpandedChange: setExpandidas, getRowCanExpand: () => true }
+      ? {
+          onExpandedChange: setExpandidas,
+          getRowCanExpand: (linha: Row<TData>) =>
+            podeExpandir ? podeExpandir(linha.original) : true,
+        }
       : {}),
     ...(arvoreAtiva
       ? {

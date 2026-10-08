@@ -11049,6 +11049,18 @@ export type Database = {
         Returns: undefined;
       };
       fn_saldo_conta: { Args: { p_conta: string }; Returns: number };
+      fn_saldos_das_aplicacoes: {
+        Args: never;
+        Returns: {
+          aplicacao_id: string;
+          ativa: boolean;
+          conta_bancaria_id: string;
+          nome: string;
+          produto: string;
+          saldo: number;
+          ultima_posicao: string | null;
+        }[];
+      };
       fn_saldos_das_contas: {
         Args: never;
         Returns: {
