@@ -1,4 +1,4 @@
-import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 
 /**

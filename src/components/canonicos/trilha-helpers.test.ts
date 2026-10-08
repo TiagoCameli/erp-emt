@@ -107,3 +107,39 @@ describe("eventosDoAuditLog", () => {
     expect(e.descricao).not.toContain("aprovado");
   });
 });
+
+describe("eventosDoAuditLog: categoria e ids crus", () => {
+  const CAT = "15ac7507-c642-4cfa-9af7-1061f6798080";
+  const CAT2 = "9351f74e-df06-4f84-b1ee-98b2ea770d8a";
+  const nomes = { [CAT]: "Material de construção", [CAT2]: "Combustível" };
+
+  it("categoria_id vira o nome; categoria_ids que só repete a mesma não duplica a linha", () => {
+    const [e] = eventosDoAuditLog(
+      [reg({ dados_antes: { categoria_id: null, categoria_ids: [] }, dados_depois: { categoria_id: CAT, categoria_ids: [CAT] } })],
+      { nomes },
+    );
+    expect(e.descricao).toBe("Categoria: Material de construção");
+  });
+
+  it("categoria_ids com mais de uma categoria lista os nomes", () => {
+    const [e] = eventosDoAuditLog(
+      [reg({ dados_antes: { categoria_id: CAT, categoria_ids: [CAT] }, dados_depois: { categoria_id: CAT, categoria_ids: [CAT, CAT2] } })],
+      { nomes },
+    );
+    expect(e.descricao).toBe("Categorias: Material de construção, Combustível");
+  });
+
+  it("sem nome resolvido, a categoria some em vez de mostrar o uuid", () => {
+    const [e] = eventosDoAuditLog(
+      [reg({ dados_antes: {}, dados_depois: { categoria_id: CAT, categoria_ids: [CAT, CAT2] } })],
+    );
+    expect(e.descricao).toBeUndefined();
+  });
+
+  it("campo fora do mapa com uuid (ou lista de uuids) nunca aparece cru", () => {
+    const [e] = eventosDoAuditLog(
+      [reg({ dados_antes: {}, dados_depois: { obra_id: CAT, equipamento_ids: [CAT2], numero_nf: "123" } })],
+    );
+    expect(e.descricao).toBe("Nota fiscal: 123");
+  });
+});

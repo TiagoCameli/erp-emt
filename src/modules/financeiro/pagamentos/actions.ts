@@ -12,7 +12,7 @@ import {
   temPermissao,
 } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
-import type { EventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { anexosDoDocumento } from "@/modules/_shared/anexos/actions";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import {

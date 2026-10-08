@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { EventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import type {
