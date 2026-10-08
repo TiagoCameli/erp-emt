@@ -20,13 +20,14 @@ import {
   FiltroBusca,
   FiltroMesPeriodo,
   FiltroPeriodo,
-  FiltroSelect,
+  FiltroSelectMulti,
   FiltroValor,
   SeloAnexos,
   StatusBadge,
   useBuscaUrl,
   useFaixaUrl,
   useFiltrosUrl,
+  type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -54,9 +55,12 @@ import type {
 } from "@/modules/compras/ordens/queries";
 import {
   restringirOpcoes,
-  selecao,
   type FacetasPresentes,
 } from "@/modules/_shared/filtros-facetados";
+import {
+  escreverListaNaUrl,
+  MAX_ITENS_FILTRO,
+} from "@/modules/financeiro/_shared/listas-na-url";
 import { LoteExcluirOrdens } from "./lote-excluir-ordens";
 import { useNovaOrdem } from "./nova-ordem-provider";
 
@@ -216,29 +220,32 @@ export interface OrdensTabelaProps {
   total: number;
   pagina: number;
   tamanho: number;
-  status: string;
+  /**
+   * Filtros de seleção: todos aceitam mais de uma opção (lista vazia = todos).
+   */
+  status: string[];
   busca: string;
-  fornecedorId: string;
+  fornecedorIds: string[];
   de: string;
   ate: string;
   /** Mês de referência do filtro, no formato do input (yyyy-MM). */
   /** A janela de mês de referência (`yyyy-MM-01` nas duas pontas). */
   competenciaDe: string;
   competenciaAte: string;
-  categoriaId: string;
-  formaPagamentoId: string;
-  condicaoPagamentoId: string;
+  categoriaIds: string[];
+  formaPagamentoIds: string[];
+  condicaoPagamentoIds: string[];
   /** Período de criação no sistema, yyyy-mm-dd. */
   criadaDe: string;
   criadaAte: string;
-  centroCustoId: string;
-  insumoId: string;
-  /** "com" ou "sem" nota fiscal registrada. Vazio = todas. */
-  nota: string;
-  /** "cotacao" ou "direta". Vazio = todas. */
-  origem: string;
-  /** "minhas" ou vazio. */
-  autoria: string;
+  centroCustoIds: string[];
+  insumoIds: string[];
+  /** "com" e/ou "sem" nota fiscal registrada. Vazio = todas. */
+  nota: string[];
+  /** "cotacao" e/ou "direta". Vazio = todas. */
+  origem: string[];
+  /** ["minhas"] ou vazio. */
+  autoria: string[];
   fornecedores: FornecedorOpcao[];
   categorias: CategoriaOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
@@ -272,18 +279,18 @@ export function OrdensTabela({
   tamanho,
   status,
   busca: buscaUrl,
-  fornecedorId,
+  fornecedorIds,
   de,
   ate,
   competenciaDe,
   competenciaAte,
-  categoriaId,
-  formaPagamentoId,
-  condicaoPagamentoId,
+  categoriaIds,
+  formaPagamentoIds,
+  condicaoPagamentoIds,
   criadaDe,
   criadaAte,
-  centroCustoId,
-  insumoId,
+  centroCustoIds,
+  insumoIds,
   nota,
   origem,
   autoria,
@@ -304,12 +311,52 @@ export function OrdensTabela({
   function facetar<O extends OpcaoFiltro>(
     id: FacetaOrdens,
     base: readonly O[],
-    valor: string,
+    valores: readonly string[],
   ): O[] {
     if (!facetas) return [...base];
-    return restringirOpcoes(base, new Set(facetas[id]), selecao(valor));
+    return restringirOpcoes(base, new Set(facetas[id]), valores);
   }
   const { setMuitos, limparTodos } = useFiltrosUrl();
+
+  /**
+   * Filtro de seleção MÚLTIPLA preso a um parâmetro da URL (o `id` do filtro é
+   * a própria chave). Trocar a escolha zera a página: filtrar e cair numa
+   * página vazia parece lista sem resultado.
+   */
+  function filtroLista(config: {
+    chave: FacetaOrdens;
+    rotulo: string;
+    valores: string[];
+    opcoes: OpcaoFiltro[];
+    placeholder: string;
+    todosRotulo: string;
+    oculto?: boolean;
+    largura?: string;
+  }): FiltroConfiguravel {
+    return {
+      id: config.chave,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: config.oculto,
+      temValor: config.valores.length > 0,
+      onLimpar: () => setMuitos({ [config.chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroSelectMulti
+          valores={config.valores}
+          onValoresChange={(valores) =>
+            setMuitos({
+              [config.chave]: escreverListaNaUrl(valores),
+              pagina: "1",
+            })
+          }
+          maximo={MAX_ITENS_FILTRO}
+          opcoes={facetar(config.chave, config.opcoes, config.valores)}
+          placeholder={config.placeholder}
+          todosRotulo={config.todosRotulo}
+          className={config.largura}
+        />
+      ),
+    };
+  }
   const { busca, setBusca } = useBuscaUrl(buscaUrl);
   const novaOrdem = useNovaOrdem();
 
@@ -446,51 +493,26 @@ export function OrdensTabela({
               />
             ),
           },
-          {
-            id: "status",
+          filtroLista({
+            chave: "status",
             rotulo: "Status",
-            temValor: status !== "",
-            onLimpar: () => setMuitos({ status: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={status}
-                onValorChange={(valor) =>
-                  setMuitos({ status: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar("status", OPCOES_STATUS, status)}
-                placeholder="Status"
-                todosRotulo="Todos os status"
-              />
-            ),
-          },
-          {
-            id: "fornecedor",
+            valores: status,
+            opcoes: OPCOES_STATUS,
+            placeholder: "Status",
+            todosRotulo: "Todos os status",
+          }),
+          filtroLista({
+            chave: "fornecedor",
             rotulo: "Fornecedor",
-            temValor: fornecedorId !== "",
-            onLimpar: () => setMuitos({ fornecedor: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={fornecedorId}
-                onValorChange={(valor) =>
-                  setMuitos({
-                    fornecedor: valor === "" ? null : valor,
-                    pagina: "1",
-                  })
-                }
-                opcoes={facetar(
-                  "fornecedor",
-                  fornecedores.map((fornecedor) => ({
-                    valor: fornecedor.id,
-                    rotulo: fornecedor.nome,
-                  })),
-                  fornecedorId,
-                )}
-                placeholder="Fornecedor"
-                todosRotulo="Todos os fornecedores"
-                className="max-w-56"
-              />
-            ),
-          },
+            valores: fornecedorIds,
+            opcoes: fornecedores.map((fornecedor) => ({
+              valor: fornecedor.id,
+              rotulo: fornecedor.nome,
+            })),
+            placeholder: "Fornecedor",
+            todosRotulo: "Todos os fornecedores",
+            largura: "max-w-56",
+          }),
           {
             id: "mes",
             rotulo: "Mês de referência",
@@ -539,86 +561,44 @@ export function OrdensTabela({
               />
             ),
           },
-          {
-            id: "categoria",
+          filtroLista({
+            chave: "categoria",
             rotulo: "Categoria do custo",
-            ocultoPorPadrao: true,
-            temValor: categoriaId !== "",
-            onLimpar: () => setMuitos({ categoria: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={categoriaId}
-                onValorChange={(valor) =>
-                  setMuitos({
-                    categoria: valor === "" ? null : valor,
-                    pagina: "1",
-                  })
-                }
-                opcoes={facetar(
-                  "categoria",
-                  categorias.map((categoria) => ({
-                    valor: categoria.id,
-                    rotulo: categoria.nome,
-                  })),
-                  categoriaId,
-                )}
-                placeholder="Categoria do custo"
-                todosRotulo="Todas as categorias"
-                className="max-w-56"
-              />
-            ),
-          },
-          {
-            id: "forma",
+            oculto: true,
+            valores: categoriaIds,
+            opcoes: categorias.map((categoria) => ({
+              valor: categoria.id,
+              rotulo: categoria.nome,
+            })),
+            placeholder: "Categoria do custo",
+            todosRotulo: "Todas as categorias",
+            largura: "max-w-56",
+          }),
+          filtroLista({
+            chave: "forma",
             rotulo: "Forma de pagamento",
-            ocultoPorPadrao: true,
-            temValor: formaPagamentoId !== "",
-            onLimpar: () => setMuitos({ forma: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={formaPagamentoId}
-                onValorChange={(valor) =>
-                  setMuitos({ forma: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar(
-                  "forma",
-                  formasPagamento.map((forma) => ({
-                    valor: forma.id,
-                    rotulo: forma.nome,
-                  })),
-                  formaPagamentoId,
-                )}
-                placeholder="Forma"
-                todosRotulo="Todas as formas"
-              />
-            ),
-          },
-          {
-            id: "condicao",
+            oculto: true,
+            valores: formaPagamentoIds,
+            opcoes: formasPagamento.map((forma) => ({
+              valor: forma.id,
+              rotulo: forma.nome,
+            })),
+            placeholder: "Forma",
+            todosRotulo: "Todas as formas",
+          }),
+          filtroLista({
+            chave: "condicao",
             rotulo: "Condição de pagamento",
-            ocultoPorPadrao: true,
-            temValor: condicaoPagamentoId !== "",
-            onLimpar: () => setMuitos({ condicao: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={condicaoPagamentoId}
-                onValorChange={(valor) =>
-                  setMuitos({ condicao: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar(
-                  "condicao",
-                  condicoesPagamento.map((condicao) => ({
-                    valor: condicao.id,
-                    rotulo: condicao.descricao,
-                  })),
-                  condicaoPagamentoId,
-                )}
-                placeholder="Condição"
-                todosRotulo="Todas as condições"
-                className="max-w-56"
-              />
-            ),
-          },
+            oculto: true,
+            valores: condicaoPagamentoIds,
+            opcoes: condicoesPagamento.map((condicao) => ({
+              valor: condicao.id,
+              rotulo: condicao.descricao,
+            })),
+            placeholder: "Condição",
+            todosRotulo: "Todas as condições",
+            largura: "max-w-56",
+          }),
           {
             id: "valor",
             rotulo: "Faixa de valor",
@@ -661,115 +641,62 @@ export function OrdensTabela({
               />
             ),
           },
-          {
-            id: "nota",
+          filtroLista({
+            chave: "nota",
             rotulo: "Nota fiscal",
-            ocultoPorPadrao: true,
-            temValor: nota !== "",
-            onLimpar: () => setMuitos({ nota: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={nota}
-                onValorChange={(valor) =>
-                  setMuitos({ nota: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar("nota", OPCOES_NOTA_OC, nota)}
-                placeholder="Nota fiscal"
-                todosRotulo="Com e sem nota"
-              />
-            ),
-          },
-          {
-            id: "origem",
+            oculto: true,
+            valores: nota,
+            opcoes: OPCOES_NOTA_OC,
+            placeholder: "Nota fiscal",
+            todosRotulo: "Com e sem nota",
+          }),
+          filtroLista({
+            chave: "origem",
             rotulo: "Origem",
-            ocultoPorPadrao: true,
-            temValor: origem !== "",
-            onLimpar: () => setMuitos({ origem: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={origem}
-                onValorChange={(valor) =>
-                  setMuitos({ origem: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar("origem", OPCOES_ORIGEM_OC, origem)}
-                placeholder="Origem"
-                todosRotulo="Qualquer origem"
-              />
-            ),
-          },
-          {
-            id: "centro",
+            oculto: true,
+            valores: origem,
+            opcoes: OPCOES_ORIGEM_OC,
+            placeholder: "Origem",
+            todosRotulo: "Qualquer origem",
+          }),
+          filtroLista({
+            chave: "centro",
             rotulo: "Centro de custo",
-            ocultoPorPadrao: true,
-            temValor: centroCustoId !== "",
-            onLimpar: () => setMuitos({ centro: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={centroCustoId}
-                onValorChange={(valor) =>
-                  setMuitos({ centro: valor === "" ? null : valor, pagina: "1" })
-                }
-                // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
-                opcoes={facetar(
-                  "centro",
-                  centrosCusto.map((centro) => ({
-                    valor: centro.id,
-                    rotulo: centro.codigo
-                      ? `${centro.codigo} ${centro.nome}`
-                      : centro.nome,
-                  })),
-                  centroCustoId,
-                )}
-                placeholder="Centro de custo"
-                todosRotulo="Todos os centros de custo"
-                className="max-w-56"
-              />
-            ),
-          },
-          {
-            id: "insumo",
+            oculto: true,
+            valores: centroCustoIds,
+            // Mesmo rótulo "CÓDIGO Nome" que o formulário da OC usa.
+            opcoes: centrosCusto.map((centro) => ({
+              valor: centro.id,
+              rotulo: centro.codigo
+                ? `${centro.codigo} ${centro.nome}`
+                : centro.nome,
+            })),
+            placeholder: "Centro de custo",
+            todosRotulo: "Todos os centros de custo",
+            largura: "max-w-56",
+          }),
+          filtroLista({
+            chave: "insumo",
             rotulo: "Insumo comprado",
-            ocultoPorPadrao: true,
-            temValor: insumoId !== "",
-            onLimpar: () => setMuitos({ insumo: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={insumoId}
-                onValorChange={(valor) =>
-                  setMuitos({ insumo: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar(
-                  "insumo",
-                  insumos.map((insumo) => ({
-                    valor: insumo.id,
-                    rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
-                  })),
-                  insumoId,
-                )}
-                placeholder="Insumo"
-                todosRotulo="Todos os insumos"
-                className="max-w-56"
-              />
-            ),
-          },
-          {
-            id: "autoria",
+            oculto: true,
+            valores: insumoIds,
+            opcoes: insumos.map((insumo) => ({
+              valor: insumo.id,
+              rotulo: rotuloInsumo(insumo.nome, insumo.unidade),
+            })),
+            placeholder: "Insumo",
+            todosRotulo: "Todos os insumos",
+            largura: "max-w-56",
+          }),
+          filtroLista({
+            chave: "autoria",
             rotulo: "Autoria",
-            ocultoPorPadrao: true,
-            temValor: autoria !== "",
-            onLimpar: () => setMuitos({ autoria: null, pagina: "1" }),
-            elemento: (
-              <FiltroSelect
-                valor={autoria}
-                onValorChange={(valor) =>
-                  setMuitos({ autoria: valor === "" ? null : valor, pagina: "1" })
-                }
-                opcoes={facetar("autoria", OPCOES_AUTORIA_OC, autoria)}
-                placeholder="Autoria"
-                todosRotulo="Qualquer autor"
-              />
-            ),
-          },
+            oculto: true,
+            valores: autoria,
+            opcoes: OPCOES_AUTORIA_OC,
+            placeholder: "Autoria",
+            todosRotulo: "Qualquer autor",
+          }),
         ]}
         acoesLinha={(ordem) => (
           <>
