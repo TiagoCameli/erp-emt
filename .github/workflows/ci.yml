@@ -28,10 +28,12 @@ jobs:
   verificar:
     name: Typecheck, lint, testes e build
     runs-on: ubuntu-latest
-    # Teto duro. O portão local inteiro roda em ~1 minuto nesta base, e a rodada
-    # típica aqui leva 2. Passar de 10 significa que algo travou, e travado tem
-    # que morrer rápido em vez de consumir a cota do mês.
-    timeout-minutes: 10
+    # Teto duro: travado tem que morrer rápido em vez de consumir a cota do mês.
+    # Era 10. Em 08/10/2026 a suíte (~5.950 testes) passou a levar 8 minutos só
+    # nos testes, e o job inteiro estourava os 10 com tudo verde: a main e vários
+    # PRs foram cancelados seguidos (o #411 quatro vezes, 467 de 476 arquivos
+    # passando no corte). 15 dá folga sem deixar travamento correr solto.
+    timeout-minutes: 15
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
