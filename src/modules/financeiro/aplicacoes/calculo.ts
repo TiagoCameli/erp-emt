@@ -41,6 +41,7 @@ export interface LinhaAba {
 export interface AplicacaoCadastro {
   id: string;
   nome: string;
+  /** A conta corrente onde a aplicação está (a dona da subconta de investimentos). */
   contaNome: string;
   contaId: string;
   /** A etapa do centro de investimento: é o que a transferência leva. */
@@ -90,6 +91,15 @@ const centavos = (valor: number) => Math.round(valor * 100);
 const reais = (c: number) => c / 100;
 
 /** Dias entre duas datas yyyy-MM-dd (b − a). */
+/**
+ * Nome da aplicação com a conta corrente onde ela está: duas aplicações de
+ * mesmo produto em contas diferentes (o Rende Fácil do BB) só se distinguem
+ * pela conta.
+ */
+export function rotuloAplicacao(aplicacao: { nome: string; contaNome?: string | null }): string {
+  return aplicacao.contaNome ? `${aplicacao.nome} · ${aplicacao.contaNome}` : aplicacao.nome;
+}
+
 export function diasEntre(a: string, b: string): number {
   const ms = Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`);
   return Math.round(ms / 86_400_000);

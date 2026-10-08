@@ -170,6 +170,8 @@ export async function listarContasAtivas(): Promise<ContaOpcao[]> {
 export interface AplicacaoOpcao {
   id: string;
   nome: string;
+  /** A conta corrente onde a aplicação está; vazio se ainda não tem cadastro. */
+  contaNome: string;
 }
 
 /**
@@ -192,14 +194,26 @@ export async function listarAplicacoes(): Promise<AplicacaoOpcao[]> {
   const ids = (raizes.data ?? []).map((raiz) => raiz.id);
   if (ids.length === 0) return [];
 
-  const etapas = await supabase
-    .from("centros_custo")
-    .select("id, nome")
-    .in("pai_id", ids)
-    .eq("ativo", true)
-    .order("nome");
-  if (etapas.error) {
+  // A conta sai de `fn_aplicacoes_das_etapas`: a tabela `aplicacoes` só é
+  // legível por quem vê a aba Aplicações, e o nome da conta não é saldo.
+  const [etapas, contas] = await Promise.all([
+    supabase
+      .from("centros_custo")
+      .select("id, nome")
+      .in("pai_id", ids)
+      .eq("ativo", true)
+      .order("nome"),
+    supabase.rpc("fn_aplicacoes_das_etapas"),
+  ]);
+  if (etapas.error || contas.error) {
     throw new Error("Não foi possível carregar as aplicações");
   }
-  return (etapas.data ?? []).map((etapa) => ({ id: etapa.id, nome: etapa.nome }));
+  const contaPorEtapa = new Map(
+    (contas.data ?? []).map((linha) => [linha.centro_custo_id, linha.conta_nome]),
+  );
+  return (etapas.data ?? []).map((etapa) => ({
+    id: etapa.id,
+    nome: etapa.nome,
+    contaNome: contaPorEtapa.get(etapa.id) ?? "",
+  }));
 }

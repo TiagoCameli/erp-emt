@@ -23,6 +23,7 @@ import {
   mesAMes,
   ROTULO_PRODUTO,
   ROTULO_TIPO_MOVIMENTO,
+  rotuloAplicacao,
   rotuloLiquidez,
   rotuloTaxa,
   seriePosicao,
@@ -62,7 +63,14 @@ const colunasAplicacao: ColumnDef<ResumoAplicacao, unknown>[] = [
     id: "nome",
     header: "Aplicação",
     size: 240,
-    cell: ({ row }) => <span className="font-medium">{row.original.aplicacao.nome}</span>,
+    cell: ({ row }) => (
+      <div className="flex flex-col">
+        <span className="font-medium">{row.original.aplicacao.nome}</span>
+        {row.original.aplicacao.contaNome ? (
+          <span className="text-legenda text-muted-foreground">{row.original.aplicacao.contaNome}</span>
+        ) : null}
+      </div>
+    ),
   },
   {
     id: "produto",
@@ -197,10 +205,10 @@ export interface AplicacoesPainelProps {
 
 export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }: AplicacoesPainelProps) {
   const nomes = React.useMemo(
-    () => new Map(aplicacoes.map((a) => [a.aplicacao.id, a.aplicacao.nome])),
+    () => new Map(aplicacoes.map((a) => [a.aplicacao.id, rotuloAplicacao(a.aplicacao)])),
     [aplicacoes],
   );
-  const opcoesAplicacao = aplicacoes.map((a) => ({ valor: a.aplicacao.id, rotulo: a.aplicacao.nome }));
+  const opcoesAplicacao = aplicacoes.map((a) => ({ valor: a.aplicacao.id, rotulo: rotuloAplicacao(a.aplicacao) }));
 
   // Mês a mês
   const [aplicacaoMes, setAplicacaoMes] = useFiltroSessao("aplicacaoMes", "");
@@ -343,7 +351,7 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
         <ItemGrade titulo="Posição mês a mês" idCard="posicao" larguraPadrao={12}>
           <div className="flex flex-col rounded-md border border-border p-3">
             <PosicaoGrafico
-              aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: a.aplicacao.nome }))}
+              aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: rotuloAplicacao(a.aplicacao) }))}
               serie={serie}
             />
           </div>
@@ -387,7 +395,7 @@ export function AplicacoesPainel({ aplicacoes, linhas, movimentos, podeEditar }:
       <PosicaoFormDrawer
         aberto={posicaoAberta !== null}
         onAbertoChange={(v) => { if (!v) setPosicaoAberta(null); }}
-        aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: a.aplicacao.nome }))}
+        aplicacoes={aplicacoes.map((a) => ({ id: a.aplicacao.id, nome: rotuloAplicacao(a.aplicacao) }))}
         posicao={posicaoAberta}
         podeEditar={podeEditar}
       />

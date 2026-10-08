@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatarBRL } from "@/lib/formatadores";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
+import { rotuloAplicacao } from "@/modules/financeiro/aplicacoes/calculo";
 import { salvarTransferencia } from "@/modules/financeiro/transferencias/actions";
 import type {
   AplicacaoOpcao,
@@ -315,7 +316,7 @@ export function TransferenciaFormDrawer({
               }
               opcoes={aplicacoes.map((aplicacao) => ({
                 valor: aplicacao.id,
-                rotulo: aplicacao.nome,
+                rotulo: rotuloAplicacao(aplicacao),
               }))}
               placeholder="Selecione a aplicação"
               disabled={salvando}
