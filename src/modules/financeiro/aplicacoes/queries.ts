@@ -47,7 +47,7 @@ export async function carregarAplicacoes(): Promise<DadosAplicacoes> {
       `id, produto, indexador, taxa_percentual, liquidez, liquidez_dias, carencia_ate,
        vencimento, tipo_ir, ativa, centro_custo_id, conta_bancaria_id,
        etapa:centros_custo!aplicacoes_centro_custo_id_fkey(nome),
-       conta:contas_bancarias!aplicacoes_conta_bancaria_id_fkey(nome)`,
+       conta:contas_bancarias!aplicacoes_conta_bancaria_id_fkey(nome, pai:contas_bancarias!conta_pai_id(nome))`,
     )
     .order("created_at");
   if (cadastro.error) throw new Error("Não foi possível carregar as aplicações");
@@ -55,7 +55,7 @@ export async function carregarAplicacoes(): Promise<DadosAplicacoes> {
   const aplicacoes: AplicacaoCadastro[] = (cadastro.data ?? []).map((a) => ({
     id: a.id,
     nome: a.etapa?.nome ?? "Aplicação",
-    contaNome: a.conta?.nome ?? "",
+    contaNome: a.conta?.pai?.nome ?? a.conta?.nome ?? "",
     contaId: a.conta_bancaria_id,
     etapaId: a.centro_custo_id,
     produto: a.produto,

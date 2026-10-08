@@ -7,6 +7,7 @@ import {
   montarPainel,
   percentualDoConjunto,
   posicaoVelha,
+  rotuloAplicacao,
   type AplicacaoCadastro,
   type LinhaAba,
   type MovimentoAplicacao,
@@ -60,6 +61,18 @@ const RENDE_FACIL: LinhaAba[] = [
   linha({ aplicacaoId: "rende", mes: "2026-08-01", saldoInicial: 178326.66, posicaoFinal: 178326.66 }),
   linha({ aplicacaoId: "rende", mes: "2026-09-01", posicaoInicial: 178326.66, aplicado: 790226.26, resgatado: 798329.46, posicaoFinal: 170223.46 }),
 ];
+
+describe("rotuloAplicacao", () => {
+  it("junta a conta corrente ao nome", () => {
+    expect(rotuloAplicacao({ nome: "Banco do Brasil - Rende Fácil", contaNome: "BANCO DO BRASIL 102.124-9" })).toBe(
+      "Banco do Brasil - Rende Fácil · BANCO DO BRASIL 102.124-9",
+    );
+  });
+
+  it("sem conta cadastrada fica só o nome", () => {
+    expect(rotuloAplicacao({ nome: "Caixa - Fundo", contaNome: "" })).toBe("Caixa - Fundo");
+  });
+});
 
 describe("saldo inicial por aplicação", () => {
   it("o principal conta o saldo inicial: sem ele o Rende Fácil sairia com −8.103,20", () => {
