@@ -28,16 +28,14 @@ import { removerDiaria } from "@/modules/rh/diaristas/actions";
 import type { DiariaLista } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
 import { filtrarDiarias, SEM_OBRA } from "@/modules/rh/diaristas/filtros";
-import type {
-  DiaristaOpcao,
-  ObraOpcao,
-} from "@/modules/rh/_shared/queries";
+import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
 /** Opções do filtro de situação: espelham a coluna Situação da tabela. */
 const OPCOES_SITUACAO = [
   { valor: "aberto", rotulo: "Em aberto" },
+  { valor: "fechada", rotulo: "Fechada, a pagar" },
   { valor: "paga", rotulo: "Paga" },
 ];
 
@@ -64,8 +62,9 @@ function opcoesCompetencia(diarias: DiariaLista[]) {
 
 /**
  * Listagem de diárias: busca por diarista, filtro por competência, registro,
- * edição e exclusão no drawer. Editar e excluir só aparecem para diárias em
- * aberto (não fechadas) e com permissão de editar.
+ * edição e exclusão no drawer. Editar e excluir aparecem, com permissão de
+ * editar, para a diária aberta e para a fechada cujo pagamento ainda não foi
+ * aprovado nem pago: o banco acerta o lançamento a pagar junto.
  */
 export function DiariasTabela({
   diarias,
@@ -77,7 +76,10 @@ export function DiariasTabela({
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
   const [obraId, setObraId] = useFiltroSessao("obraId", "");
-  const [colaboradorId, setColaboradorId] = useFiltroSessao("colaboradorId", "");
+  const [colaboradorId, setColaboradorId] = useFiltroSessao(
+    "colaboradorId",
+    "",
+  );
   const [dataDe, setDataDe] = useFiltroSessao("dataDe", "");
   const [dataAte, setDataAte] = useFiltroSessao("dataAte", "");
   const [valorDe, setValorDe] = useFiltroSessao("valorDe", "");
@@ -112,13 +114,14 @@ export function DiariasTabela({
       toast.error(resultado.erro);
       return;
     }
-    toast.success("Diária excluída");
+    toast.success(
+      aExcluir.fechada
+        ? "Diária excluída e lançamento a pagar acertado"
+        : "Diária excluída",
+    );
   }
 
-  const opcoesMes = React.useMemo(
-    () => opcoesCompetencia(diarias),
-    [diarias],
-  );
+  const opcoesMes = React.useMemo(() => opcoesCompetencia(diarias), [diarias]);
 
   const opcoesObra = React.useMemo(
     () => [
@@ -201,7 +204,9 @@ export function DiariasTabela({
         accessorKey: "data",
         header: "Data",
         cell: ({ row }) => (
-          <span className="tabular-nums">{formatarData(row.original.data)}</span>
+          <span className="tabular-nums">
+            {formatarData(row.original.data)}
+          </span>
         ),
       },
       {
@@ -219,12 +224,21 @@ export function DiariasTabela({
       {
         accessorKey: "fechada",
         header: "Situação",
-        cell: ({ row }) =>
-          row.original.fechada ? (
-            <StatusBadge status="pago" rotulo="Paga" />
-          ) : (
-            <StatusBadge status="rascunho" rotulo="Em aberto" />
-          ),
+        cell: ({ row }) => {
+          switch (row.original.situacao) {
+            case "paga":
+              return <StatusBadge status="pago" rotulo="Paga" />;
+            case "fechada":
+              return (
+                <StatusBadge
+                  status="pendente_aprovacao"
+                  rotulo="Fechada, a pagar"
+                />
+              );
+            default:
+              return <StatusBadge status="rascunho" rotulo="Em aberto" />;
+          }
+        },
       },
     ];
 
@@ -236,8 +250,8 @@ export function DiariasTabela({
       meta: { alinharDireita: true, fixa: true, rotulo: "Ações" },
       cell: ({ row }) => {
         const diaria = row.original;
-        // Travada quando fechada/paga: sem ações de editar/excluir.
-        if (diaria.fechada) return null;
+        // Travada quando paga, aprovada para pagamento ou paga pela folha.
+        if (!diaria.alteravel) return null;
 
         return (
           <DropdownMenu>
@@ -437,7 +451,11 @@ export function DiariasTabela({
             aExcluir
               ? `Excluir a diária de ${aExcluir.colaboradorNome} de ${formatarData(
                   aExcluir.data,
-                )}? Essa ação não pode ser desfeita.`
+                )}?${
+                  aExcluir.fechada
+                    ? " Ela já foi fechada: o valor sai do lançamento a pagar, e o lançamento é apagado se ela for a única."
+                    : ""
+                } Essa ação não pode ser desfeita.`
               : ""
           }
           textoConfirmar="Excluir"

@@ -1,6 +1,10 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  situacaoDaDiaria,
+  type SituacaoDiaria,
+} from "@/modules/rh/diaristas/situacao";
 
 /** Filtros opcionais da listagem de diárias. */
 export interface FiltrosDiarias {
@@ -25,8 +29,12 @@ export interface DiariaLista {
   observacao: string | null;
   /** Id do lançamento a pagar, ou null se ainda em aberto. */
   lancamentoId: string | null;
-  /** True quando já fechada/paga: linha travada (sem editar/excluir). */
+  /** True quando já fechada (virou lançamento a pagar). */
   fechada: boolean;
+  /** Em aberto, fechada (a pagar) ou paga. Ver `situacaoDaDiaria`. */
+  situacao: SituacaoDiaria;
+  /** Dá para editar ou excluir (só esconde o menu; o banco decide). */
+  alteravel: boolean;
 }
 
 /**
@@ -42,7 +50,7 @@ export async function listarDiarias(
   let consulta = supabase
     .from("rh_diarias")
     .select(
-      "id, colaborador_id, obra_id, data, competencia, valor, observacao, lancamento_id, colaboradores(nome), obras(nome, lote)",
+      "id, colaborador_id, obra_id, data, competencia, valor, observacao, lancamento_id, folha_id, colaboradores(nome), obras(nome, lote)",
     )
     .order("data", { ascending: false });
 
@@ -53,11 +61,20 @@ export async function listarDiarias(
     consulta = consulta.eq("colaborador_id", filtros.colaboradorId);
   }
 
-  const { data, error } = await consulta;
+  // O status das parcelas vem por RPC: o RLS do lançamento é do Financeiro, e
+  // quem é só do RH não o enxerga (ver `fn_diarias_status_parcelas`).
+  const [{ data, error }, status] = await Promise.all([
+    consulta,
+    supabase.rpc("fn_diarias_status_parcelas"),
+  ]);
 
-  if (error) {
+  if (error || status.error) {
     throw new Error("Não foi possível carregar as diárias");
   }
+
+  const parcelasPorLancamento = new Map(
+    (status.data ?? []).map((linha) => [linha.lancamento_id, linha.status]),
+  );
 
   return (data ?? []).map((linha) => ({
     id: linha.id,
@@ -72,6 +89,13 @@ export async function listarDiarias(
     observacao: linha.observacao,
     lancamentoId: linha.lancamento_id,
     fechada: linha.lancamento_id !== null,
+    ...situacaoDaDiaria({
+      lancamentoId: linha.lancamento_id,
+      folhaId: linha.folha_id,
+      statusParcelas: linha.lancamento_id
+        ? (parcelasPorLancamento.get(linha.lancamento_id) ?? [])
+        : [],
+    }),
   }));
 }
 

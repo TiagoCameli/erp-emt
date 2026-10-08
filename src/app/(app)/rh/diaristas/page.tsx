@@ -35,7 +35,7 @@ export default async function PaginaDiaristas() {
     <>
       <PageHeader
         modulo="RH"
-        titulo="Diaristas"
+        titulo="Diárias"
         descricao="Diárias por diarista. O fechamento da competência gera um lançamento a pagar no financeiro"
         acoes={
           podeCriar ? (

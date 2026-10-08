@@ -513,7 +513,7 @@ export const RECURSOS = [
   },
   {
     id: "rh.diaristas",
-    nome: "Diaristas",
+    nome: "Diárias",
     modulo: "rh",
     rota: "/rh/diaristas",
     acoes: ["ver", "criar", "editar"],

@@ -10058,6 +10058,22 @@ export type Database = {
         Args: { p_mes: string; p_observacao?: string };
         Returns: undefined;
       };
+      fn_diarias_status_parcelas: {
+        Args: never;
+        Returns: { lancamento_id: string; status: string[] }[];
+      };
+      fn_editar_diaria: {
+        Args: {
+          p_colaborador: string;
+          p_data: string;
+          p_id: string;
+          p_obra: string;
+          p_observacao: string;
+          p_valor: number;
+        };
+        Returns: undefined;
+      };
+      fn_excluir_diaria: { Args: { p_id: string }; Returns: undefined };
       fn_fechar_diarias: {
         Args: {
           p_colaborador: string;
