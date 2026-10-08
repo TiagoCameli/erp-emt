@@ -17,7 +17,7 @@ export interface FiltrosTelaDiarias {
   /** Id da obra ou `SEM_OBRA`. */
   obraId: string;
   colaboradorId: string;
-  /** "aberto" | "paga" */
+  /** "aberto" | "fechada" | "paga" */
   situacao: string;
   dataDe: string;
   dataAte: string;
@@ -51,7 +51,7 @@ export function filtrarDiarias(
       },
       situacao: {
         selecionados: selecao(f.situacao),
-        chave: (item) => (item.fechada ? "paga" : "aberto"),
+        chave: (item) => item.situacao,
       },
     },
     [

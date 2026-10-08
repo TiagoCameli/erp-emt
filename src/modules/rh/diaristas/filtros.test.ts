@@ -21,6 +21,8 @@ function diaria(parcial: Partial<DiariaLista>): DiariaLista {
     observacao: null,
     lancamentoId: null,
     fechada: false,
+    situacao: "aberto",
+    alteravel: true,
     ...parcial,
   };
 }
@@ -39,7 +41,21 @@ const VAZIO: FiltrosTelaDiarias = {
 
 const DIARIAS = [
   diaria({ id: "1", colaboradorId: "c1", obraId: "o1" }),
-  diaria({ id: "2", colaboradorId: "c2", obraId: null, fechada: true }),
+  diaria({
+    id: "2",
+    colaboradorId: "c2",
+    obraId: null,
+    fechada: true,
+    situacao: "paga",
+    alteravel: false,
+  }),
+  diaria({
+    id: "4",
+    colaboradorId: "c2",
+    obraId: "o1",
+    fechada: true,
+    situacao: "fechada",
+  }),
   diaria({
     id: "3",
     colaboradorId: "c3",
@@ -61,8 +77,8 @@ describe("filtrarDiarias (facetado)", () => {
       ...VAZIO,
       colaboradorId: "c2",
     });
-    expect(linhas.map((l) => l.id)).toEqual(["2"]);
-    expect(opcoes("obra", OBRAS).map((o) => o.valor)).toEqual([SEM_OBRA]);
+    expect(linhas.map((l) => l.id)).toEqual(["2", "4"]);
+    expect(opcoes("obra", OBRAS).map((o) => o.valor)).toEqual(["o1", SEM_OBRA]);
   });
 
   it("a competência (filtro de data) restringe os outros", () => {
@@ -77,5 +93,13 @@ describe("filtrarDiarias (facetado)", () => {
         { valor: "paga", rotulo: "Paga" },
       ]).map((o) => o.valor),
     ).toEqual(["aberto"]);
+  });
+
+  it("fechada a pagar e paga são situações diferentes", () => {
+    const { linhas } = filtrarDiarias(DIARIAS, {
+      ...VAZIO,
+      situacao: "fechada",
+    });
+    expect(linhas.map((l) => l.id)).toEqual(["4"]);
   });
 });

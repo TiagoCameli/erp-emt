@@ -30,35 +30,6 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
   }
 }
 
-/**
- * Garante que a diária existe e ainda não foi fechada. Com lancamento_id
- * preenchido a diária está paga: fica travada (sem editar nem excluir), e o
- * RLS no banco também barra. Aqui devolvemos a mensagem amigável.
- */
-async function garantirEmAberto(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  id: string,
-): Promise<ResultadoAcao> {
-  const { data, error } = await supabase
-    .from(TABELA)
-    .select("lancamento_id")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (error) {
-    return erroAcao(
-      "rh.diaristas.garantirEmAberto",
-      error,
-      "Não foi possível carregar a diária",
-    );
-  }
-  if (!data) return { erro: "Diária não encontrada" };
-  if (data.lancamento_id !== null) {
-    return { erro: "Diária já fechada/paga" };
-  }
-  return { ok: true };
-}
-
 /** Cria uma diária. A competência é o 1o dia do mês da data (derivada). */
 export async function criarDiaria(dados: DiariaInput): Promise<ResultadoAcao> {
   if (!(await checarPermissao("criar"))) {
@@ -92,7 +63,13 @@ export async function criarDiaria(dados: DiariaInput): Promise<ResultadoAcao> {
   return { ok: true };
 }
 
-/** Edita uma diária. Bloqueia se já estiver fechada/paga. */
+/**
+ * Edita uma diária, aberta ou já fechada, pela `fn_editar_diaria`. Na fechada o
+ * banco acerta o lançamento a pagar com a nova soma, e recusa (com a mensagem
+ * que vai para o toast) quando o pagamento já foi aprovado, pago ou conciliado,
+ * quando a diária foi paga pela folha, ou quando a edição troca o diarista ou o
+ * mês de uma diária fechada.
+ */
 export async function editarDiaria(
   id: string,
   dados: DiariaInput,
@@ -110,27 +87,21 @@ export async function editarDiaria(
   }
 
   const supabase = await createClient();
-
-  const aberto = await garantirEmAberto(supabase, idValido.data);
-  if ("erro" in aberto) return aberto;
-
-  const { error } = await supabase
-    .from(TABELA)
-    .update({
-      colaborador_id: validado.data.colaboradorId,
-      obra_id: validado.data.obraId ?? null,
-      data: validado.data.data,
-      competencia: validado.data.competencia,
-      valor: validado.data.valor,
-      observacao: validado.data.observacao ?? null,
-    })
-    .eq("id", idValido.data);
+  const { error } = await supabase.rpc("fn_editar_diaria", {
+    p_id: idValido.data,
+    p_colaborador: validado.data.colaboradorId,
+    // A RPC aceita null (sem obra); o tipo gerado não sabe disso.
+    p_obra: (validado.data.obraId ?? null) as string,
+    p_data: validado.data.data,
+    p_valor: validado.data.valor,
+    p_observacao: validado.data.observacao ?? "",
+  });
 
   if (error) {
     return erroAcao(
       "rh.diaristas.editar",
       error,
-      "Não foi possível salvar a diária. Tente novamente",
+      error.message || "Não foi possível salvar a diária. Tente novamente",
     );
   }
 
@@ -138,7 +109,11 @@ export async function editarDiaria(
   return { ok: true };
 }
 
-/** Remove uma diária. Bloqueia se já estiver fechada/paga (RLS editar). */
+/**
+ * Exclui uma diária, aberta ou já fechada, pela `fn_excluir_diaria`. Na fechada
+ * o banco tira o valor dela do lançamento a pagar, ou apaga o lançamento quando
+ * ela era a única. Mesmas travas da edição.
+ */
 export async function removerDiaria(id: string): Promise<ResultadoAcao> {
   if (!(await checarPermissao("editar"))) {
     return { erro: "Sem permissão para excluir diárias" };
@@ -148,17 +123,15 @@ export async function removerDiaria(id: string): Promise<ResultadoAcao> {
   if (!idValido.success) return { erro: "Diária inválida" };
 
   const supabase = await createClient();
-
-  const aberto = await garantirEmAberto(supabase, idValido.data);
-  if ("erro" in aberto) return aberto;
-
-  const { error } = await supabase.from(TABELA).delete().eq("id", idValido.data);
+  const { error } = await supabase.rpc("fn_excluir_diaria", {
+    p_id: idValido.data,
+  });
 
   if (error) {
     return erroAcao(
       "rh.diaristas.remover",
       error,
-      "Não foi possível excluir a diária. Tente novamente",
+      error.message || "Não foi possível excluir a diária. Tente novamente",
     );
   }
 

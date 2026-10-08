@@ -59,8 +59,9 @@ export interface DiariaFormDrawerProps {
 /**
  * Drawer com o formulário de diária. Registra quando não recebe diária e edita
  * quando recebe. Ao escolher o diarista numa nova diária, pré-preenche o valor
- * com a diária do cadastro. Diárias já fechadas ficam travadas e não chegam
- * aqui (a tabela esconde a ação). Fecha sozinho ao salvar.
+ * com a diária do cadastro. Diária já fechada também chega aqui: o diarista
+ * fica travado (o lançamento é de uma pessoa) e o banco recusa mudar de mês.
+ * Fecha sozinho ao salvar.
  */
 export function DiariaFormDrawer({
   aberto,
@@ -70,6 +71,7 @@ export function DiariaFormDrawer({
   diaria,
 }: DiariaFormDrawerProps) {
   const editando = Boolean(diaria);
+  const fechada = diaria?.fechada ?? false;
 
   const form = useForm<DiariaFormInput>({
     resolver: zodResolver(diariaFormSchema),
@@ -129,7 +131,11 @@ export function DiariaFormDrawer({
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar diária" : "Nova diária"}
-      descricao="Diárias em aberto são somadas no fechamento da competência e viram um lançamento a pagar."
+      descricao={
+        fechada
+          ? "Esta diária já foi fechada. Ao salvar, o lançamento a pagar é acertado com o novo valor. Diarista e mês não mudam: para isso, exclua e lance de novo."
+          : "Diárias em aberto são somadas no fechamento da competência e viram um lançamento a pagar."
+      }
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
@@ -170,6 +176,7 @@ export function DiariaFormDrawer({
             placeholder="Selecione o diarista"
             className="w-full"
             id="diaria-colaborador"
+            disabled={fechada}
           />
         </CampoFormulario>
 
