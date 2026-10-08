@@ -11,11 +11,12 @@ export interface ColaboradorOpcao {
   vinculo: string;
 }
 
-/** Diarista para os selects, com o valor padrão da diária. */
+/** Diarista para os selects, com o valor padrão da diária e a função do cadastro. */
 export interface DiaristaOpcao {
   id: string;
   nome: string;
   valorDiaria: number | null;
+  funcaoId: string | null;
 }
 
 /** Obra para os selects. */
@@ -51,7 +52,7 @@ export async function listarDiaristas(): Promise<DiaristaOpcao[]> {
 
   const { data, error } = await supabase
     .from("colaboradores")
-    .select("id, nome, valor_diaria")
+    .select("id, nome, valor_diaria, funcao_id")
     .eq("ativo", true)
     .eq("vinculo", "diarista")
     .order("nome");
@@ -62,6 +63,7 @@ export async function listarDiaristas(): Promise<DiaristaOpcao[]> {
     id: c.id,
     nome: c.nome,
     valorDiaria: c.valor_diaria,
+    funcaoId: c.funcao_id,
   }));
 }
 

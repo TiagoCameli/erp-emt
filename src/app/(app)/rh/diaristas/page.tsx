@@ -5,9 +5,11 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { AcoesCabecalho } from "@/modules/rh/diaristas/components/acoes-cabecalho";
 import { DiariasTabela } from "@/modules/rh/diaristas/components/diarias-tabela";
 import { FechamentosPainel } from "@/modules/rh/diaristas/components/fechamentos-painel";
+import { ValoresFuncao } from "@/modules/rh/diaristas/components/valores-funcao";
 import {
   listarDiarias,
   listarFechamentosPendentes,
+  listarFuncoesDiaria,
 } from "@/modules/rh/diaristas/queries";
 import { listarFormasPagamento } from "@/modules/financeiro/lancamentos/queries";
 import { listarDiaristas, listarObras } from "@/modules/rh/_shared/queries";
@@ -21,7 +23,7 @@ export default async function PaginaDiaristas() {
   const podeCriar = temPermissao(usuario, "rh.diaristas", "criar");
   const podeEditar = temPermissao(usuario, "rh.diaristas", "editar");
 
-  const [diarias, fechamentos, diaristas, obras, formasPagamento] =
+  const [diarias, fechamentos, diaristas, obras, formasPagamento, funcoes] =
     await Promise.all([
       listarDiarias(),
       listarFechamentosPendentes(),
@@ -29,6 +31,7 @@ export default async function PaginaDiaristas() {
       listarObras(),
       // O fechamento exige a forma de pagamento, então a lista vem com a página.
       listarFormasPagamento(),
+      listarFuncoesDiaria(),
     ]);
 
   return (
@@ -39,7 +42,11 @@ export default async function PaginaDiaristas() {
         descricao="Diárias por diarista. O fechamento da competência gera um lançamento a pagar no financeiro"
         acoes={
           podeCriar ? (
-            <AcoesCabecalho diaristas={diaristas} obras={obras} />
+            <AcoesCabecalho
+              diaristas={diaristas}
+              obras={obras}
+              funcoes={funcoes}
+            />
           ) : undefined
         }
       />
@@ -58,9 +65,19 @@ export default async function PaginaDiaristas() {
         diarias={diarias}
         diaristas={diaristas}
         obras={obras}
+        funcoes={funcoes}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
       />
+
+      <section className="mt-8 flex flex-col gap-3">
+        <h2 className="text-secao font-semibold">Valores por função</h2>
+        <p className="text-sm text-muted-foreground">
+          Último valor de diária de cada função. Atualiza sozinho com a diária
+          mais recente da função.
+        </p>
+        <ValoresFuncao funcoes={funcoes} />
+      </section>
     </>
   );
 }

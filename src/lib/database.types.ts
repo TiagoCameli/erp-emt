@@ -7838,6 +7838,45 @@ export type Database = {
           },
         ];
       };
+      rh_diaria_valores: {
+        Row: {
+          atualizado_em: string;
+          atualizado_por: string | null;
+          diaria_id: string | null;
+          funcao_id: string;
+          valor: number;
+        };
+        Insert: {
+          atualizado_em?: string;
+          atualizado_por?: string | null;
+          diaria_id?: string | null;
+          funcao_id: string;
+          valor: number;
+        };
+        Update: {
+          atualizado_em?: string;
+          atualizado_por?: string | null;
+          diaria_id?: string | null;
+          funcao_id?: string;
+          valor?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_diaria_valores_diaria_id_fkey";
+            columns: ["diaria_id"];
+            isOneToOne: false;
+            referencedRelation: "rh_diarias";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_diaria_valores_funcao_id_fkey";
+            columns: ["funcao_id"];
+            isOneToOne: true;
+            referencedRelation: "funcoes";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rh_diarias: {
         Row: {
           colaborador_id: string;
@@ -7845,13 +7884,19 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           data: string;
+          data_fim: string | null;
+          dias_falta: string[];
+          dias_meia: string[];
           folha_id: string | null;
+          funcao_id: string | null;
           id: string;
           lancamento_id: string | null;
           obra_id: string | null;
           observacao: string | null;
+          qtd_diarias: number | null;
           updated_at: string;
           valor: number;
+          valor_diaria: number | null;
         };
         Insert: {
           colaborador_id: string;
@@ -7859,13 +7904,19 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data?: string;
+          data_fim?: string | null;
+          dias_falta?: string[];
+          dias_meia?: string[];
           folha_id?: string | null;
+          funcao_id?: string | null;
           id?: string;
           lancamento_id?: string | null;
           obra_id?: string | null;
           observacao?: string | null;
+          qtd_diarias?: number | null;
           updated_at?: string;
           valor: number;
+          valor_diaria?: number | null;
         };
         Update: {
           colaborador_id?: string;
@@ -7873,13 +7924,19 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data?: string;
+          data_fim?: string | null;
+          dias_falta?: string[];
+          dias_meia?: string[];
           folha_id?: string | null;
+          funcao_id?: string | null;
           id?: string;
           lancamento_id?: string | null;
           obra_id?: string | null;
           observacao?: string | null;
+          qtd_diarias?: number | null;
           updated_at?: string;
           valor?: number;
+          valor_diaria?: number | null;
         };
         Relationships: [
           {
@@ -7894,6 +7951,13 @@ export type Database = {
             columns: ["folha_id"];
             isOneToOne: false;
             referencedRelation: "folhas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_diarias_funcao_id_fkey";
+            columns: ["funcao_id"];
+            isOneToOne: false;
+            referencedRelation: "funcoes";
             referencedColumns: ["id"];
           },
           {
@@ -10071,9 +10135,35 @@ export type Database = {
         Args: { p_mes: string; p_observacao?: string };
         Returns: undefined;
       };
+      fn_criar_funcao_diaria: {
+        Args: { p_nome: string; p_valor: number };
+        Returns: string;
+      };
+      fn_diaria_calcular: {
+        Args: {
+          p_faltas: string[];
+          p_fim: string;
+          p_inicio: string;
+          p_meias: string[];
+        };
+        Returns: number;
+      };
+      fn_diaria_funcoes: {
+        Args: never;
+        Returns: {
+          atualizado_em: string;
+          diaria_id: string;
+          id: string;
+          nome: string;
+          valor: number;
+        }[];
+      };
       fn_diarias_status_parcelas: {
         Args: never;
-        Returns: { lancamento_id: string; status: string[] }[];
+        Returns: {
+          lancamento_id: string;
+          status: string[];
+        }[];
       };
       fn_editar_diaria: {
         Args: {
@@ -10087,6 +10177,21 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_diaria: { Args: { p_id: string }; Returns: undefined };
+      fn_salvar_diaria: {
+        Args: {
+          p_colaborador: string;
+          p_faltas: string[];
+          p_fim: string;
+          p_funcao: string;
+          p_id: string;
+          p_inicio: string;
+          p_meias: string[];
+          p_obra: string;
+          p_observacao: string;
+          p_valor_diaria: number;
+        };
+        Returns: string;
+      };
       fn_fechar_diarias: {
         Args: {
           p_colaborador: string;

@@ -23,9 +23,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { removerDiaria } from "@/modules/rh/diaristas/actions";
-import type { DiariaLista } from "@/modules/rh/diaristas/queries";
+import type { DiariaLista, FuncaoDiaria } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
 import { filtrarDiarias, SEM_OBRA } from "@/modules/rh/diaristas/filtros";
 import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
@@ -43,6 +43,7 @@ export interface DiariasTabelaProps {
   diarias: DiariaLista[];
   diaristas: DiaristaOpcao[];
   obras: ObraOpcao[];
+  funcoes: FuncaoDiaria[];
   podeCriar: boolean;
   podeEditar: boolean;
 }
@@ -70,6 +71,7 @@ export function DiariasTabela({
   diarias,
   diaristas,
   obras,
+  funcoes,
   podeCriar,
   podeEditar,
 }: DiariasTabelaProps) {
@@ -201,13 +203,49 @@ export function DiariasTabela({
         },
       },
       {
+        accessorKey: "funcaoNome",
+        header: "Função",
+        cell: ({ row }) =>
+          row.original.funcaoNome ?? (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
         accessorKey: "data",
-        header: "Data",
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatarData(row.original.data)}
-          </span>
-        ),
+        header: "Período",
+        cell: ({ row }) => {
+          const { data, dataFim } = row.original;
+          return (
+            <span className="tabular-nums">
+              {dataFim && dataFim !== data
+                ? `${formatarData(data)} a ${formatarData(dataFim)}`
+                : formatarData(data)}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "qtdDiarias",
+        header: "Diárias",
+        meta: { alinharDireita: true },
+        cell: ({ row }) => {
+          const { qtdDiarias, valorDiaria } = row.original;
+          if (qtdDiarias == null) {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          return (
+            <span
+              className="tabular-nums"
+              title={
+                valorDiaria != null
+                  ? `${qtdDiarias.toLocaleString("pt-BR")} × ${formatarBRL(valorDiaria)}`
+                  : undefined
+              }
+            >
+              {qtdDiarias.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}
+            </span>
+          );
+        },
       },
       {
         accessorKey: "competencia",
@@ -438,6 +476,7 @@ export function DiariasTabela({
           onAbertoChange={setDrawerAberto}
           diaristas={diaristas}
           obras={obras}
+          funcoes={funcoes}
           diaria={emEdicao}
         />
       ) : null}
