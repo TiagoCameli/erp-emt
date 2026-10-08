@@ -68,11 +68,9 @@ export function SaldoInicialSubcontaDrawer({
 
   React.useEffect(() => {
     if (!aberto) return;
+    // Sem reset aqui: quem usa monta o drawer só aberto e com `key` por
+    // subconta, então o estado já nasce limpo.
     let vivo = true;
-    setAplicacoes(null);
-    setErroCarga(null);
-    setErro(null);
-    setData(subconta.saldoInicialData ?? "");
     carregarSaldoInicialSubconta(subconta.id).then((resultado) => {
       if (!vivo) return;
       if ("erro" in resultado) {
@@ -89,7 +87,7 @@ export function SaldoInicialSubcontaDrawer({
     return () => {
       vivo = false;
     };
-  }, [aberto, subconta.id, subconta.saldoInicialData]);
+  }, [aberto, subconta.id]);
 
   const centavos = (aplicacoes ?? []).map((a) => centavosDe(valores[a.aplicacaoId] ?? ""));
   const totalCentavos = centavos.reduce((s, c) => s + (Number.isNaN(c) ? 0 : c), 0);
