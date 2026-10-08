@@ -11,7 +11,7 @@
  * Quem lê resolve o nome atual e passa o mapa.
  */
 
-import type { EventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { formatarBRL } from "@/lib/formatadores";
 import { diffDoRateio, type RateioValor } from "./rateio-editavel";
 

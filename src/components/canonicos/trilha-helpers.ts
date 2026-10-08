@@ -1,7 +1,7 @@
 import type { Json } from "@/lib/database.types";
 import { formatarBRL, formatarData, formatarDataHora } from "@/lib/formatadores";
 
-import type { EventoTrilha, TipoEventoTrilha } from "./trilha";
+import type { EventoTrilha, TipoEventoTrilha } from "./trilha-tipos";
 
 /** Linha do audit_log, com nome do usuário se a query fizer o join. */
 export interface RegistroAuditLog {
@@ -17,14 +17,23 @@ export interface RegistroAuditLog {
 }
 
 export type TabelaFk =
+  | "categorias_financeiras"
   | "condicoes_pagamento"
   | "fornecedores"
   | "centros_custo"
   | "insumos"
   | "usuarios";
 
-type TipoCampo = "texto" | "dinheiro" | "data" | "datahora" | "situacao" | "booleano" | "fk";
-interface MetaCampo { rotulo?: string; tipo?: TipoCampo; oculto?: boolean; fkTabela?: TabelaFk; }
+type TipoCampo =
+  | "texto" | "dinheiro" | "data" | "datahora" | "situacao" | "booleano" | "fk" | "fkLista";
+interface MetaCampo {
+  rotulo?: string;
+  tipo?: TipoCampo;
+  oculto?: boolean;
+  fkTabela?: TabelaFk;
+  /** Oculta a lista quando ela só repete o id deste outro campo (evita "Categoria: X · Categorias: X"). */
+  redundanteCom?: string;
+}
 
 const CAMPOS: Record<string, MetaCampo> = {
   status: { rotulo: "Situação", tipo: "situacao" },
@@ -37,6 +46,10 @@ const CAMPOS: Record<string, MetaCampo> = {
   fornecedor_id: { rotulo: "Fornecedor", tipo: "fk", fkTabela: "fornecedores" },
   centro_custo_id: { rotulo: "Centro de custo", tipo: "fk", fkTabela: "centros_custo" },
   insumo_id: { rotulo: "Insumo", tipo: "fk", fkTabela: "insumos" },
+  categoria_id: { rotulo: "Categoria", tipo: "fk", fkTabela: "categorias_financeiras" },
+  categoria_ids: {
+    rotulo: "Categorias", tipo: "fkLista", fkTabela: "categorias_financeiras", redundanteCom: "categoria_id",
+  },
   vencedor_fornecedor_id: { rotulo: "Fornecedor vencedor", tipo: "fk", fkTabela: "fornecedores" },
   motivo_selecao: { rotulo: "Motivo da seleção" },
   motivo_rejeicao: { rotulo: "Motivo" },
@@ -80,6 +93,14 @@ function ehObjetoJson(v: Json | null): v is ObjetoJson {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** UUID cru ou lista só de UUIDs: id de outra tabela que a trilha não sabe nomear. */
+function ehIdCru(valor: Json | undefined): boolean {
+  if (typeof valor === "string") return UUID.test(valor);
+  return Array.isArray(valor) && valor.length > 0 && valor.every((v) => typeof v === "string" && UUID.test(v));
+}
+
 /** Rótulo amigável de um campo do banco; sem entrada no mapa, cai pro nome com espaço. */
 export function rotuloCampo(campo: string): string {
   return CAMPOS[campo]?.rotulo ?? campo.replace(/_/g, " ");
@@ -98,6 +119,15 @@ function valorFormatado(
     const nome = nomes[valor];
     return nome ?? null; // sem nome resolvido: ocultar (não mostra uuid cru)
   }
+  if (meta.tipo === "fkLista") {
+    if (!Array.isArray(valor)) return null;
+    const resolvidos = valor
+      .map((id) => (typeof id === "string" ? nomes[id] : undefined))
+      .filter((nome): nome is string => Boolean(nome));
+    return resolvidos.length ? resolvidos.join(", ") : null; // sem nome: ocultar
+  }
+  // Campo fora do mapa com cara de id (algum *_id ainda sem rótulo): ocultar, nunca uuid cru.
+  if (!meta.tipo && ehIdCru(valor)) return null;
   if (valor === null || valor === undefined) return "—";
   switch (meta.tipo) {
     case "dinheiro":
@@ -133,6 +163,10 @@ export function formatarValorCampo(
   switch (meta?.tipo) {
     case "fk":
       return typeof valor === "string" && valor ? (nomes[valor] ?? valor) : undefined;
+    case "fkLista":
+      return Array.isArray(valor) && valor.length
+        ? valor.map((id) => (typeof id === "string" ? (nomes[id] ?? id) : String(id))).join(", ")
+        : undefined;
     case "dinheiro":
       return formatarBRL(Number(valor));
     case "data":
@@ -190,6 +224,13 @@ function tituloEvento(
   return { titulo: "Dados alterados", tipo: "edicao" };
 }
 
+function ehRedundante(campo: string, depois: ObjetoJson): boolean {
+  const outro = CAMPOS[campo]?.redundanteCom;
+  const lista = depois[campo];
+  if (!outro || !Array.isArray(lista)) return false;
+  return lista.length === 0 || (lista.length === 1 && lista[0] === depois[outro]);
+}
+
 /** Linhas "Rótulo: valor novo" dos campos que mudaram (só valor novo, sem "→"). */
 function descricaoDasMudancas(
   antes: ObjetoJson | null,
@@ -202,6 +243,7 @@ function descricaoDasMudancas(
   for (const campo of Object.keys(depois)) {
     if (campo === "status") continue; // já vira título
     if (JSON.stringify(antesObj[campo] ?? null) === JSON.stringify(depois[campo] ?? null)) continue;
+    if (ehRedundante(campo, depois)) continue;
     const v = valorFormatado(campo, depois[campo], nomes);
     if (v === null) continue;
     linhas.push(`${rotuloCampo(campo)}: ${v}`);

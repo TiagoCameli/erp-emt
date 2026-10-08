@@ -1,4 +1,4 @@
-import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { rotuloStatusMedicao } from "@/modules/medicao/_shared/rotulos";
 
 import type { EventoMedicao } from "./tipos";

@@ -20,9 +20,12 @@ function coletarIdsPorTabela(
       if (!dados || typeof dados !== "object" || Array.isArray(dados)) continue;
       for (const [campo, tabela] of Object.entries(CAMPOS_FK)) {
         const v = (dados as Record<string, unknown>)[campo];
-        if (typeof v === "string" && v) {
+        // FK simples (uuid) ou lista de FKs (uuid[], ex.: categoria_ids).
+        const ids = Array.isArray(v) ? v : [v];
+        for (const id of ids) {
+          if (typeof id !== "string" || !id) continue;
           if (!mapa.has(tabela)) mapa.set(tabela, new Set());
-          mapa.get(tabela)!.add(v);
+          mapa.get(tabela)!.add(id);
         }
       }
     }
@@ -44,6 +47,14 @@ async function buscarNomes(
   const nomes: Record<string, string> = {};
   try {
     switch (tabela) {
+      case "categorias_financeiras": {
+        const { data } = await supabase
+          .from("categorias_financeiras")
+          .select("id, nome")
+          .in("id", ids);
+        for (const linha of data ?? []) nomes[linha.id] = linha.nome;
+        break;
+      }
       case "condicoes_pagamento": {
         const { data } = await supabase
           .from("condicoes_pagamento")
@@ -95,7 +106,7 @@ async function buscarNomes(
 
 /**
  * Resolve os UUIDs de campos FK (fornecedor_id, centro_custo_id, insumo_id,
- * condicao_pagamento_id, usuario_id) presentes nos dados_antes/dados_depois
+ * condicao_pagamento_id, categoria_id/categoria_ids, usuario_id) presentes nos dados_antes/dados_depois
  * do audit_log para o nome de exibição, em lote (uma query por tabela).
  * Usado pelas telas de detalhe para passar `{ nomes }` a `eventosDoAuditLog`.
  */

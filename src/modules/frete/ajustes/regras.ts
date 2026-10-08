@@ -1,4 +1,4 @@
-import type { EventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { formatarBRL } from "@/lib/formatadores";
 import type { SinalAjuste } from "@/modules/frete/ajustes/schemas";
 

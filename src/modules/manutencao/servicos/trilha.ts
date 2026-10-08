@@ -1,4 +1,4 @@
-import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha";
+import type { EventoTrilha, TipoEventoTrilha } from "@/components/canonicos/trilha-tipos";
 import { ROTULO_STATUS_OS, STATUS_OS, type StatusOs } from "@/modules/manutencao/_shared/rotulos";
 
 /**
