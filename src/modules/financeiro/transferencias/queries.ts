@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { contaPorEtapa } from "@/modules/financeiro/aplicacoes/queries";
 
 /** Uma transferência da listagem, com o nome das duas contas resolvido. */
 export interface TransferenciaLista {
@@ -194,26 +195,21 @@ export async function listarAplicacoes(): Promise<AplicacaoOpcao[]> {
   const ids = (raizes.data ?? []).map((raiz) => raiz.id);
   if (ids.length === 0) return [];
 
-  // A conta sai de `fn_aplicacoes_das_etapas`: a tabela `aplicacoes` só é
-  // legível por quem vê a aba Aplicações, e o nome da conta não é saldo.
-  const [etapas, contas] = await Promise.all([
+  const [etapas, contaPorAplicacao] = await Promise.all([
     supabase
       .from("centros_custo")
       .select("id, nome")
       .in("pai_id", ids)
       .eq("ativo", true)
       .order("nome"),
-    supabase.rpc("fn_aplicacoes_das_etapas"),
+    contaPorEtapa(),
   ]);
-  if (etapas.error || contas.error) {
+  if (etapas.error) {
     throw new Error("Não foi possível carregar as aplicações");
   }
-  const contaPorEtapa = new Map(
-    (contas.data ?? []).map((linha) => [linha.centro_custo_id, linha.conta_nome]),
-  );
   return (etapas.data ?? []).map((etapa) => ({
     id: etapa.id,
     nome: etapa.nome,
-    contaNome: contaPorEtapa.get(etapa.id) ?? "",
+    contaNome: contaPorAplicacao[etapa.id] ?? "",
   }));
 }

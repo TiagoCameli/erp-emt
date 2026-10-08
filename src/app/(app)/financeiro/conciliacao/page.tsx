@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/canonicos";
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { contaPorEtapa } from "@/modules/financeiro/aplicacoes/queries";
 import {
   ConciliacaoCliente,
   type VisaoConciliacao,
@@ -155,7 +156,7 @@ export default async function PaginaConciliacao({
     );
   }
 
-  const [painel, centros, categorias, fornecedores, clientes, regras, cartoes] = await Promise.all([
+  const [painel, centros, categorias, fornecedores, clientes, regras, cartoes, contasDasAplicacoes] = await Promise.all([
     carregarPainel(conta.id, periodo.inicio, periodo.fim),
     listarCentrosCusto(),
     permissoes.lancar ? listarCategorias() : Promise.resolve([]),
@@ -163,6 +164,7 @@ export default async function PaginaConciliacao({
     permissoes.lancar ? listarClientes() : Promise.resolve([]),
     listarRegras(),
     listarCartoes(),
+    contaPorEtapa(),
   ]);
 
   // Sem `ver` na URL, abre onde está o trabalho: primeiro o que falta no app,
@@ -195,6 +197,7 @@ export default async function PaginaConciliacao({
         opcoes={{ centros, categorias, fornecedores, clientes }}
         regras={regras}
         cartoes={cartoes}
+        contaPorEtapa={contasDasAplicacoes}
         permissoes={permissoes}
       />
     </>
