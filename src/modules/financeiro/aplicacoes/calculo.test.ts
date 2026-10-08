@@ -125,8 +125,9 @@ describe("mesAMes", () => {
         + Math.round((m.rendimento ?? 0) * 100) + Math.round((m.ajusteAbertura ?? 0) * 100);
       expect(Math.round(m.posicaoFinal * 100)).toBe(conta);
     }
-    const outubro = mesAMes(linhas)[1];
-    expect(outubro.rendimento).toBe(49880.1);
+    // Pelo mês, não pelo índice: o Rende Fácil abre a série em agosto (corte).
+    const outubro = mesAMes(linhas).find((m) => m.mes === "2026-10-01");
+    expect(outubro?.rendimento).toBe(49880.1);
   });
 });
 
