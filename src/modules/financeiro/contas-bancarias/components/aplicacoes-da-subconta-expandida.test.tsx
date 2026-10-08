@@ -9,6 +9,9 @@ import { AplicacoesDaSubcontaExpandida } from "./aplicacoes-da-subconta-expandid
 
 afterEach(cleanup);
 
+/** O `Intl` põe espaço não separável depois do R$; o testing-library normaliza o do DOM. */
+const brl = (valor: number) => formatarBRL(valor).replace(/\u00a0/g, " ");
+
 const SUBCONTA: ContaLista = {
   id: "caixa-inv",
   nome: "CAIXA ECONOMICA 578367973-5 · INVESTIMENTOS",
@@ -40,9 +43,9 @@ function linhaDe(texto: string) {
 describe("AplicacoesDaSubcontaExpandida", () => {
   it("lista os investimentos da subconta com o saldo de cada um e o total", () => {
     render(<AplicacoesDaSubcontaExpandida subconta={SUBCONTA} aplicacoes={APLICACOES} />);
-    expect(linhaDe("Caixa Econômica - CDB 95").getByText(formatarBRL(5030408.62))).toBeInTheDocument();
-    expect(linhaDe("Caixa Econômica - Fundo").getByText(formatarBRL(1012470.45))).toBeInTheDocument();
-    expect(linhaDe("Total da subconta").getByText(formatarBRL(6042879.07))).toBeInTheDocument();
+    expect(linhaDe("Caixa Econômica - CDB 95").getByText(brl(5030408.62))).toBeInTheDocument();
+    expect(linhaDe("Caixa Econômica - Fundo").getByText(brl(1012470.45))).toBeInTheDocument();
+    expect(linhaDe("Total da subconta").getByText(brl(6042879.07))).toBeInTheDocument();
     // Aplicação de outra subconta não entra.
     expect(screen.queryByText("Banco do Brasil - Rende Fácil")).toBeNull();
     expect(screen.queryByText("Fora dos investimentos")).toBeNull();
@@ -55,7 +58,7 @@ describe("AplicacoesDaSubcontaExpandida", () => {
         aplicacoes={APLICACOES}
       />,
     );
-    expect(linhaDe("Fora dos investimentos").getByText(formatarBRL(120.93))).toBeInTheDocument();
+    expect(linhaDe("Fora dos investimentos").getByText(brl(120.93))).toBeInTheDocument();
   });
 
   it("subconta sem investimento diz como cadastrar", () => {
