@@ -38,18 +38,26 @@ describe("gerarFolhaSchema", () => {
 });
 
 describe("diariaSchema", () => {
-  it("aceita diária válida (obra opcional)", () => {
-    expect(
-      diariaSchema.safeParse({ colaboradorId: UUID_A, data: "2026-06-05", competencia: "2026-06-01", valor: 150 }).success,
-    ).toBe(true);
-    expect(
-      diariaSchema.safeParse({ colaboradorId: UUID_A, obraId: UUID_B, data: "2026-06-05", competencia: "2026-06-01", valor: 150 }).success,
-    ).toBe(true);
+  const base = {
+    colaboradorId: UUID_A,
+    funcaoId: UUID_B,
+    inicio: "2026-06-01",
+    fim: "2026-06-10",
+    meias: ["2026-06-02"],
+    faltas: [],
+    valorDiaria: 150,
+  };
+
+  it("aceita diária por período válida (obra opcional)", () => {
+    expect(diariaSchema.safeParse(base).success).toBe(true);
+    expect(diariaSchema.safeParse({ ...base, obraId: UUID_A }).success).toBe(true);
   });
 
-  it("recusa valor negativo e data inválida", () => {
-    expect(diariaSchema.safeParse({ colaboradorId: UUID_A, data: "2026-06-05", competencia: "2026-06-01", valor: -1 }).success).toBe(false);
-    expect(diariaSchema.safeParse({ colaboradorId: UUID_A, data: "05/06/2026", competencia: "2026-06-01", valor: 150 }).success).toBe(false);
+  it("recusa sem função, valor zero e data inválida", () => {
+    const { funcaoId: _, ...semFuncao } = base;
+    expect(diariaSchema.safeParse(semFuncao).success).toBe(false);
+    expect(diariaSchema.safeParse({ ...base, valorDiaria: 0 }).success).toBe(false);
+    expect(diariaSchema.safeParse({ ...base, inicio: "01/06/2026" }).success).toBe(false);
   });
 });
 

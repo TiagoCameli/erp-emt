@@ -10,13 +10,14 @@ import { createClient } from "@/lib/supabase/server";
 import {
   diariaSchema,
   fecharSchema,
+  novaFuncaoSchema,
   type DiariaInput,
   type FecharInput,
+  type NovaFuncaoInput,
 } from "@/modules/rh/diaristas/schemas";
 
 const RECURSO = "rh.diaristas" as const;
 const ROTA = "/rh/diaristas";
-const TABELA = "rh_diarias" as const;
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
@@ -30,76 +31,40 @@ async function checarPermissao(acao: Acao): Promise<boolean> {
   }
 }
 
-/** Cria uma diária. A competência é o 1o dia do mês da data (derivada). */
-export async function criarDiaria(dados: DiariaInput): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("criar"))) {
-    return { erro: "Sem permissão para registrar diárias" };
-  }
-
-  const validado = diariaSchema.safeParse(dados);
-  if (!validado.success) {
-    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.from(TABELA).insert({
-    colaborador_id: validado.data.colaboradorId,
-    obra_id: validado.data.obraId ?? null,
-    data: validado.data.data,
-    competencia: validado.data.competencia,
-    valor: validado.data.valor,
-    observacao: validado.data.observacao ?? null,
-  });
-
-  if (error) {
-    return erroAcao(
-      "rh.diaristas.criar",
-      error,
-      "Não foi possível salvar a diária. Tente novamente",
-    );
-  }
-
-  revalidatePath(ROTA);
-  return { ok: true };
-}
-
 /**
- * Edita uma diária, aberta ou já fechada, pela `fn_editar_diaria`. Na fechada o
- * banco acerta o lançamento a pagar com a nova soma, e recusa (com a mensagem
- * que vai para o toast) quando o pagamento já foi aprovado, pago ou conciliado,
- * quando a diária foi paga pela folha, ou quando a edição troca o diarista ou o
- * mês de uma diária fechada.
+ * Grava a diária por período pela `fn_salvar_diaria` (p_id nulo cria). O banco
+ * calcula quantidade e total a partir dos dias, grava o último valor da função
+ * e, na diária fechada, acerta o lançamento a pagar com as travas de sempre
+ * (pagamento aprovado/pago/conciliado, folha, troca de diarista ou mês).
  */
-export async function editarDiaria(
-  id: string,
+async function salvarDiaria(
+  id: string | null,
   dados: DiariaInput,
+  contexto: string,
 ): Promise<ResultadoAcao> {
-  if (!(await checarPermissao("editar"))) {
-    return { erro: "Sem permissão para editar diárias" };
-  }
-
-  const idValido = idSchema.safeParse(id);
-  if (!idValido.success) return { erro: "Diária inválida" };
-
   const validado = diariaSchema.safeParse(dados);
   if (!validado.success) {
     return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.rpc("fn_editar_diaria", {
-    p_id: idValido.data,
+  const { error } = await supabase.rpc("fn_salvar_diaria", {
+    // As RPCs aceitam null (criar / sem obra); o tipo gerado não sabe disso.
+    p_id: id as string,
     p_colaborador: validado.data.colaboradorId,
-    // A RPC aceita null (sem obra); o tipo gerado não sabe disso.
+    p_funcao: validado.data.funcaoId,
     p_obra: (validado.data.obraId ?? null) as string,
-    p_data: validado.data.data,
-    p_valor: validado.data.valor,
+    p_inicio: validado.data.inicio,
+    p_fim: validado.data.fim,
+    p_meias: validado.data.meias,
+    p_faltas: validado.data.faltas,
+    p_valor_diaria: validado.data.valorDiaria,
     p_observacao: validado.data.observacao ?? "",
   });
 
   if (error) {
     return erroAcao(
-      "rh.diaristas.editar",
+      contexto,
       error,
       error.message || "Não foi possível salvar a diária. Tente novamente",
     );
@@ -107,6 +72,64 @@ export async function editarDiaria(
 
   revalidatePath(ROTA);
   return { ok: true };
+}
+
+/** Registra uma diária por período. */
+export async function criarDiaria(dados: DiariaInput): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("criar"))) {
+    return { erro: "Sem permissão para registrar diárias" };
+  }
+  return salvarDiaria(null, dados, "rh.diaristas.criar");
+}
+
+/** Edita uma diária, aberta ou já fechada. */
+export async function editarDiaria(
+  id: string,
+  dados: DiariaInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar diárias" };
+  }
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Diária inválida" };
+  return salvarDiaria(idValido.data, dados, "rh.diaristas.editar");
+}
+
+/**
+ * Cria uma função no catálogo único pelo formulário da diária
+ * (`fn_criar_funcao_diaria`). Nome repetido reaproveita a existente. O valor
+ * vira o valor atual da função na tabela "Valores por função".
+ */
+export async function criarFuncaoDiaria(
+  dados: NovaFuncaoInput,
+): Promise<{ ok: true; id: string; nome: string } | { erro: string }> {
+  if (!(await checarPermissao("criar"))) {
+    return { erro: "Sem permissão para criar função" };
+  }
+
+  const validado = novaFuncaoSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_criar_funcao_diaria", {
+    p_nome: validado.data.nome,
+    p_valor: validado.data.valor,
+  });
+
+  if (error || !data) {
+    return erroAcao(
+      "rh.diaristas.criarFuncao",
+      error,
+      error?.message || "Não foi possível criar a função",
+    );
+  }
+
+  revalidatePath(ROTA);
+  // Mesmo nome que o banco grava: maiúsculo, espaços colapsados.
+  const nome = validado.data.nome.replace(/\s+/g, " ").toUpperCase();
+  return { ok: true, id: data, nome };
 }
 
 /**

@@ -21,8 +21,18 @@ export interface DiariaLista {
   obraId: string | null;
   obraNome: string | null;
   obraLote: string | null;
-  /** Data da diária (yyyy-MM-dd). */
+  /** Início do período, ou o dia da diária antiga (yyyy-MM-dd). */
   data: string;
+  /** Fim do período (yyyy-MM-dd). Null nas diárias antigas, de um dia. */
+  dataFim: string | null;
+  funcaoId: string | null;
+  funcaoNome: string | null;
+  /** Valor de uma diária integral. Null nas antigas. */
+  valorDiaria: number | null;
+  /** Quantidade de diárias do período. Null nas antigas. */
+  qtdDiarias: number | null;
+  diasMeia: string[];
+  diasFalta: string[];
   /** Competência (yyyy-MM-01): primeiro dia do mês. */
   competencia: string;
   valor: number;
@@ -50,7 +60,7 @@ export async function listarDiarias(
   let consulta = supabase
     .from("rh_diarias")
     .select(
-      "id, colaborador_id, obra_id, data, competencia, valor, observacao, lancamento_id, folha_id, colaboradores(nome), obras(nome, lote)",
+      "id, colaborador_id, obra_id, data, data_fim, funcao_id, valor_diaria, qtd_diarias, dias_meia, dias_falta, competencia, valor, observacao, lancamento_id, folha_id, colaboradores(nome), obras(nome, lote)",
     )
     .order("data", { ascending: false });
 
@@ -63,15 +73,19 @@ export async function listarDiarias(
 
   // O status das parcelas vem por RPC: o RLS do lançamento é do Financeiro, e
   // quem é só do RH não o enxerga (ver `fn_diarias_status_parcelas`).
-  const [{ data, error }, status] = await Promise.all([
+  // O nome da função também vem por RPC: o catálogo `funcoes` só abre para
+  // quem tem Cadastros (ver `fn_diaria_funcoes`).
+  const [{ data, error }, status, funcoes] = await Promise.all([
     consulta,
     supabase.rpc("fn_diarias_status_parcelas"),
+    supabase.rpc("fn_diaria_funcoes"),
   ]);
 
-  if (error || status.error) {
+  if (error || status.error || funcoes.error) {
     throw new Error("Não foi possível carregar as diárias");
   }
 
+  const nomeDaFuncao = new Map((funcoes.data ?? []).map((f) => [f.id, f.nome]));
   const parcelasPorLancamento = new Map(
     (status.data ?? []).map((linha) => [linha.lancamento_id, linha.status]),
   );
@@ -84,6 +98,15 @@ export async function listarDiarias(
     obraNome: linha.obras?.nome ?? null,
     obraLote: linha.obras?.lote ?? null,
     data: linha.data,
+    dataFim: linha.data_fim,
+    funcaoId: linha.funcao_id,
+    funcaoNome: linha.funcao_id
+      ? (nomeDaFuncao.get(linha.funcao_id) ?? null)
+      : null,
+    valorDiaria: linha.valor_diaria,
+    qtdDiarias: linha.qtd_diarias,
+    diasMeia: linha.dias_meia,
+    diasFalta: linha.dias_falta,
     competencia: linha.competencia,
     valor: linha.valor,
     observacao: linha.observacao,
@@ -158,4 +181,33 @@ export async function listarFechamentosPendentes(
     if (porCompetencia !== 0) return porCompetencia;
     return a.colaboradorNome.localeCompare(b.colaboradorNome, "pt-BR");
   });
+}
+
+/** Função do catálogo com o último valor de diária (null se nunca teve). */
+export interface FuncaoDiaria {
+  id: string;
+  nome: string;
+  valor: number | null;
+  /** Quando o valor mudou pela última vez (ISO). */
+  atualizadoEm: string | null;
+  /** Diária de onde veio o valor; null se veio da criação da função. */
+  diariaId: string | null;
+}
+
+/**
+ * Funções ativas com o último valor de diária, pela `fn_diaria_funcoes` (o
+ * catálogo só abre para Cadastros). Alimenta o seletor do formulário e a
+ * tabela "Valores por função".
+ */
+export async function listarFuncoesDiaria(): Promise<FuncaoDiaria[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_diaria_funcoes");
+  if (error) throw new Error("Não foi possível carregar as funções");
+  return (data ?? []).map((f) => ({
+    id: f.id,
+    nome: f.nome,
+    valor: f.valor,
+    atualizadoEm: f.atualizado_em,
+    diariaId: f.diaria_id,
+  }));
 }
