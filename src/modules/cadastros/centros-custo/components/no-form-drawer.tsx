@@ -7,6 +7,7 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
+  Combobox,
   FormDrawer,
   InputDecimal,
 } from "@/components/canonicos";
@@ -18,11 +19,19 @@ import {
   editarNo,
 } from "@/modules/cadastros/centros-custo/actions";
 import {
+  PRODUTOS_APLICACAO,
+  ROTULO_PRODUTO_APLICACAO,
   criarEtapaSchema,
   criarItemSchema,
   editarNoSchema,
+  type AplicacaoDaEtapaInput,
+  type ProdutoAplicacao,
 } from "@/modules/cadastros/centros-custo/schemas";
-import type { NoCentroCusto } from "@/modules/cadastros/centros-custo/queries";
+import type {
+  AplicacaoDaEtapa,
+  ContaParaAplicacao,
+  NoCentroCusto,
+} from "@/modules/cadastros/centros-custo/queries";
 
 const ID_FORM = "form-no-centro-custo";
 
@@ -30,12 +39,22 @@ const ID_FORM = "form-no-centro-custo";
 export type ModoNo =
   | { tipo: "criar-etapa"; pai: NoCentroCusto }
   | { tipo: "criar-item"; pai: NoCentroCusto }
-  | { tipo: "editar"; no: NoCentroCusto };
+  /** `investimento`: etapa do centro Investimentos, que é uma aplicação. */
+  | { tipo: "editar"; no: NoCentroCusto; investimento?: boolean };
 
 export interface NoFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   modo: ModoNo | null;
+  aplicacoes: Record<string, AplicacaoDaEtapa>;
+  contas: ContaParaAplicacao[];
+}
+
+/** O drawer está criando ou editando uma etapa de Investimentos (uma aplicação)? */
+function ehAplicacao(modo: ModoNo | null): boolean {
+  if (modo?.tipo === "criar-etapa") return modo.pai.tipo === "investimento";
+  if (modo?.tipo === "editar") return modo.investimento === true;
+  return false;
 }
 
 /** Converte o texto do campo orçamento em number ou undefined. */
@@ -52,13 +71,23 @@ function lerOrcamento(texto: string): number | undefined {
  * estado atual, dizer se a pessoa mexeu em algo (este drawer não usa React Hook
  * Form, então não há `formState.isDirty` para consultar).
  */
-function valoresIniciais(modo: ModoNo | null): {
+function valoresIniciais(
+  modo: ModoNo | null,
+  aplicacoes: Record<string, AplicacaoDaEtapa>,
+): {
   nome: string;
   codigo: string;
   orcamento: string;
+  contaId: string;
+  produto: string;
 } {
-  if (modo?.tipo !== "editar") return { nome: "", codigo: "", orcamento: "" };
+  if (modo?.tipo !== "editar") {
+    return { nome: "", codigo: "", orcamento: "", contaId: "", produto: "" };
+  }
+  const aplicacao = aplicacoes[modo.no.id];
   return {
+    contaId: aplicacao?.contaId ?? "",
+    produto: aplicacao?.produto ?? "",
     nome: modo.no.nome,
     codigo: modo.no.codigo ?? "",
     orcamento:
@@ -73,8 +102,18 @@ function valoresIniciais(modo: ModoNo | null): {
  * sistema (sistema=true ou equipamento), o nome e o código ficam travados e só
  * o orçamento é editável.
  */
-export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps) {
+export function NoFormDrawer({
+  aberto,
+  onAbertoChange,
+  modo,
+  aplicacoes,
+  contas,
+}: NoFormDrawerProps) {
   const [nome, setNome] = React.useState("");
+  const [contaId, setContaId] = React.useState("");
+  const [produto, setProduto] = React.useState("");
+  const [erroAplicacao, setErroAplicacao] = React.useState<string | null>(null);
+  const aplicacao = ehAplicacao(modo);
   const [codigo, setCodigo] = React.useState("");
   const [orcamento, setOrcamento] = React.useState("");
   const [erroNome, setErroNome] = React.useState<string | null>(null);
@@ -104,7 +143,10 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
     setUltimaAbertura(chaveAbertura);
     setErroNome(null);
     setErroOrcamento(null);
-    const iniciais = valoresIniciais(modo);
+    setErroAplicacao(null);
+    const iniciais = valoresIniciais(modo, aplicacoes);
+    setContaId(iniciais.contaId);
+    setProduto(iniciais.produto);
     setNome(iniciais.nome);
     setCodigo(iniciais.codigo);
     setOrcamento(iniciais.orcamento);
@@ -114,7 +156,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
 
   function titulo(): string {
     if (!modo) return "";
-    if (modo.tipo === "criar-etapa") return "Adicionar etapa";
+    if (modo.tipo === "criar-etapa") return aplicacao ? "Adicionar aplicação" : "Adicionar etapa";
     if (modo.tipo === "criar-item") return "Adicionar item";
     return geridoSistema ? "Editar orçamento" : "Editar nó";
   }
@@ -138,6 +180,17 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
 
     setErroNome(null);
     setErroOrcamento(null);
+    setErroAplicacao(null);
+
+    // Etapa de Investimentos é uma aplicação: a conta e o tipo são obrigatórios.
+    let dadosAplicacao: AplicacaoDaEtapaInput | undefined;
+    if (aplicacao) {
+      if (!contaId || !produto) {
+        setErroAplicacao("Escolha a conta e o tipo da aplicação");
+        return;
+      }
+      dadosAplicacao = { conta_id: contaId, produto: produto as ProdutoAplicacao };
+    }
 
     const orcamentoNumero = lerOrcamento(orcamento);
     if (orcamentoNumero !== undefined && Number.isNaN(orcamentoNumero)) {
@@ -157,12 +210,12 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
           setErroNome(validado.error.issues[0]?.message ?? "Dados inválidos");
           return;
         }
-        const resultado = await criarEtapa(validado.data);
+        const resultado = await criarEtapa(validado.data, dadosAplicacao);
         if ("erro" in resultado) {
           toast.error(resultado.erro);
           return;
         }
-        toast.success("Etapa criada");
+        toast.success(aplicacao ? "Aplicação criada" : "Etapa criada");
       } else if (modo.tipo === "criar-item") {
         const validado = criarItemSchema.safeParse({
           nome,
@@ -189,7 +242,7 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
           setErroNome(validado.error.issues[0]?.message ?? "Dados inválidos");
           return;
         }
-        const resultado = await editarNo(modo.no.id, validado.data);
+        const resultado = await editarNo(modo.no.id, validado.data, dadosAplicacao);
         if ("erro" in resultado) {
           toast.error(resultado.erro);
           return;
@@ -206,9 +259,11 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
 
   // Substitui o `formState.isDirty` do React Hook Form, que este drawer não tem:
   // compara os campos com o valor que eles ganharam ao abrir.
-  const iniciais = valoresIniciais(modo);
+  const iniciais = valoresIniciais(modo, aplicacoes);
   const alterado =
     nome !== iniciais.nome ||
+    contaId !== iniciais.contaId ||
+    produto !== iniciais.produto ||
     codigo !== iniciais.codigo ||
     orcamento !== iniciais.orcamento;
 
@@ -258,6 +313,46 @@ export function NoFormDrawer({ aberto, onAbertoChange, modo }: NoFormDrawerProps
             autoFocus={!nomeTravado}
           />
         </CampoFormulario>
+
+        {aplicacao ? (
+          <>
+            <CampoFormulario
+              id="no-conta"
+              rotulo="Conta"
+              obrigatorio
+              ajuda="A conta onde a aplicação está. O dinheiro aplicado mora na subconta de investimentos dela."
+              erro={erroAplicacao && !contaId ? erroAplicacao : undefined}
+            >
+              <Combobox
+                id="no-conta"
+                valor={contaId}
+                onValorChange={setContaId}
+                opcoes={contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }))}
+                rotuloDoValor={modo?.tipo === "editar" ? aplicacoes[modo.no.id]?.contaNome : undefined}
+                placeholder="Selecione a conta"
+                className="w-full"
+              />
+            </CampoFormulario>
+            <CampoFormulario
+              id="no-produto"
+              rotulo="Tipo da aplicação"
+              obrigatorio
+              erro={erroAplicacao && !produto ? erroAplicacao : undefined}
+            >
+              <Combobox
+                id="no-produto"
+                valor={produto}
+                onValorChange={setProduto}
+                opcoes={PRODUTOS_APLICACAO.map((p) => ({
+                  valor: p,
+                  rotulo: ROTULO_PRODUTO_APLICACAO[p],
+                }))}
+                placeholder="Selecione o tipo"
+                className="w-full"
+              />
+            </CampoFormulario>
+          </>
+        ) : null}
 
         {editando ? (
           <CampoFormulario

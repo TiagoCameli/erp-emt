@@ -537,6 +537,7 @@ export type Database = {
           liquidez_dias: number | null;
           observacoes: string | null;
           produto: string;
+          saldo_inicial: number;
           taxa_percentual: number | null;
           tipo_ir: string;
           updated_at: string;
@@ -555,6 +556,7 @@ export type Database = {
           liquidez_dias?: number | null;
           observacoes?: string | null;
           produto: string;
+          saldo_inicial?: number;
           taxa_percentual?: number | null;
           tipo_ir: string;
           updated_at?: string;
@@ -573,6 +575,7 @@ export type Database = {
           liquidez_dias?: number | null;
           observacoes?: string | null;
           produto?: string;
+          saldo_inicial?: number;
           taxa_percentual?: number | null;
           tipo_ir?: string;
           updated_at?: string;
@@ -9339,7 +9342,17 @@ export type Database = {
           rendimento: number | null;
           rendimento_pct: number | null;
           resgatado: number;
+          saldo_inicial: number;
           ultima_posicao: string | null;
+        }[];
+      };
+      fn_aplicacoes_das_etapas: {
+        Args: never;
+        Returns: {
+          centro_custo_id: string;
+          conta_id: string;
+          conta_nome: string;
+          produto: string;
         }[];
       };
       fn_adiantamento_em_folha: {
@@ -11149,6 +11162,34 @@ export type Database = {
           p_tarifa?: number;
           p_valor: number;
         };
+        Returns: string;
+      };
+      fn_saldo_inicial_da_subconta: {
+        Args: { p_subconta: string };
+        Returns: {
+          aplicacao_id: string;
+          ativa: boolean;
+          nome: string;
+          produto: string;
+          saldo_inicial: number;
+        }[];
+      };
+      fn_salvar_saldo_inicial_subconta: {
+        Args: { p_data: string; p_saldos: Json; p_subconta: string };
+        Returns: undefined;
+      };
+      fn_criar_etapa_de_investimento: {
+        Args: {
+          p_conta: string;
+          p_nome: string;
+          p_orcamento?: number;
+          p_pai: string;
+          p_produto: string;
+        };
+        Returns: string;
+      };
+      fn_vincular_aplicacao_da_etapa: {
+        Args: { p_conta: string; p_etapa: string; p_produto: string };
         Returns: string;
       };
       fn_simular_posicao_aplicacao: {

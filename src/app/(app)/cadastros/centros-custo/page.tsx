@@ -7,7 +7,11 @@ import {
   validarImport,
 } from "@/modules/cadastros/centros-custo/actions";
 import { ArvoreCentrosCusto } from "@/modules/cadastros/centros-custo/components/arvore-centros-custo";
-import { listarArvore } from "@/modules/cadastros/centros-custo/queries";
+import {
+  listarAplicacoesDasEtapas,
+  listarArvore,
+  listarContasParaAplicacao,
+} from "@/modules/cadastros/centros-custo/queries";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
 
 export default async function PaginaCentrosCusto() {
@@ -16,7 +20,11 @@ export default async function PaginaCentrosCusto() {
     notFound();
   }
 
-  const nos = await listarArvore();
+  const [nos, aplicacoes, contas] = await Promise.all([
+    listarArvore(),
+    listarAplicacoesDasEtapas(),
+    listarContasParaAplicacao(),
+  ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.centros-custo", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.centros-custo", "editar");
@@ -42,6 +50,8 @@ export default async function PaginaCentrosCusto() {
         nos={nos}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
+        aplicacoes={aplicacoes}
+        contas={contas}
       />
     </>
   );

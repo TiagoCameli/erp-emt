@@ -29,6 +29,13 @@ export interface LinhaAba {
   /** % do CDI (95 = 95% do CDI). */
   pctCdi: number | null;
   ultimaPosicao: string | null;
+  /**
+   * No mês da data de corte da subconta: o quanto o saldo inicial desta
+   * aplicação acrescenta ao que as transferências até o corte já somavam. Zero
+   * quando o histórico está todo lançado (a Caixa); o saldo inteiro quando não
+   * há histórico (o Rende Fácil, 178.326,66 em 31/08/2026).
+   */
+  saldoInicial: number;
 }
 
 export interface AplicacaoCadastro {
@@ -135,6 +142,7 @@ export function compor(pcts: readonly (number | null)[]): number | null {
 export interface LinhaMes {
   mes: string;
   posicaoInicial: number;
+  saldoInicial: number;
   aplicado: number;
   resgatado: number;
   rendimento: number | null;
@@ -147,8 +155,8 @@ export interface LinhaMes {
 
 /**
  * Mês a mês do conjunto (ou de uma aplicação só, quando `aplicacaoId`).
- * Identidade que o teste trava: final = inicial + aplicado − resgatado +
- * rendimento + ajuste, mês a mês, no centavo.
+ * Identidade que o teste trava: final = inicial + saldo inicial + aplicado −
+ * resgatado + rendimento + ajuste, mês a mês, no centavo.
  */
 export function mesAMes(linhas: readonly LinhaAba[], aplicacaoId?: string): LinhaMes[] {
   const doRecorte = aplicacaoId
@@ -172,6 +180,7 @@ export function mesAMes(linhas: readonly LinhaAba[], aplicacaoId?: string): Linh
       return {
         mes,
         posicaoInicial: soma((l) => l.posicaoInicial),
+        saldoInicial: soma((l) => l.saldoInicial),
         aplicado: soma((l) => l.aplicado),
         resgatado: soma((l) => l.resgatado),
         rendimento: somaNula((l) => l.rendimento),
@@ -186,7 +195,7 @@ export function mesAMes(linhas: readonly LinhaAba[], aplicacaoId?: string): Linh
 
 export interface ResumoAplicacao {
   aplicacao: AplicacaoCadastro;
-  /** Aplicado − resgatado desde sempre. */
+  /** Saldo inicial + aplicado − resgatado desde sempre. */
   principal: number;
   posicaoLiquida: number;
   /** Soma dos rendimentos desde a abertura (a abertura não conta). Nulo sem nenhum. */
@@ -242,7 +251,10 @@ export function montarPainel(
     .map((a) => {
       const minhas = linhas.filter((l) => l.aplicacaoId === a.id).sort((x, y) => x.mes.localeCompare(y.mes));
       const ultima = minhas[minhas.length - 1];
-      const principalC = minhas.reduce((s, l) => s + centavos(l.aplicado) - centavos(l.resgatado), 0);
+      const principalC = minhas.reduce(
+        (s, l) => s + centavos(l.saldoInicial) + centavos(l.aplicado) - centavos(l.resgatado),
+        0,
+      );
       const comRend = minhas.filter((l) => l.rendimento !== null);
       const pctAcum = compor(comRend.map((l) => l.rendimentoPct));
       const cdiAcum = compor(comRend.map((l) => l.cdiPct));

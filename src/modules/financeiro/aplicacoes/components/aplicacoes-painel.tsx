@@ -87,7 +87,7 @@ const colunasAplicacao: ColumnDef<ResumoAplicacao, unknown>[] = [
     id: "principal",
     header: "Principal",
     size: 150,
-    meta: { alinharDireita: true, rotulo: "Principal (aplicado − resgatado)" },
+    meta: { alinharDireita: true, rotulo: "Principal (saldo inicial + aplicado − resgatado)" },
     cell: ({ row }) => <MoneyText valor={row.original.principal} />,
   },
   {
@@ -133,6 +133,14 @@ const colunasAplicacao: ColumnDef<ResumoAplicacao, unknown>[] = [
 const colunasMes: ColumnDef<LinhaMes, unknown>[] = [
   { id: "mes", header: "Mês", size: 90, cell: ({ row }) => formatarMesAno(row.original.mes) },
   { id: "inicial", header: "Posição inicial", size: 150, meta: { alinharDireita: true }, cell: ({ row }) => <MoneyText valor={row.original.posicaoInicial} /> },
+  {
+    id: "saldoInicial",
+    header: "Saldo inicial",
+    size: 140,
+    meta: { alinharDireita: true },
+    // Só o mês do corte tem valor; nos outros, traço em vez de R$ 0,00.
+    cell: ({ row }) => <Dinheiro valor={row.original.saldoInicial === 0 ? null : row.original.saldoInicial} />,
+  },
   { id: "aplicado", header: "Aplicado", size: 140, meta: { alinharDireita: true }, cell: ({ row }) => <MoneyText valor={row.original.aplicado} /> },
   { id: "resgatado", header: "Resgatado", size: 140, meta: { alinharDireita: true }, cell: ({ row }) => <MoneyText valor={row.original.resgatado} /> },
   { id: "rendimento", header: "Rendimento", size: 130, meta: { alinharDireita: true }, cell: ({ row }) => <Dinheiro valor={row.original.rendimento} /> },

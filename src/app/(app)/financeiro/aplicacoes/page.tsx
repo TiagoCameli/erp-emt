@@ -93,7 +93,7 @@ export default async function PaginaAplicacoes() {
         <KPICard
           titulo="Principal aplicado"
           valor={<MoneyText valor={cards.principal} />}
-          detalhe="Tudo o que foi aplicado menos o que foi resgatado"
+          detalhe="Saldo inicial mais tudo o que foi aplicado, menos o que foi resgatado"
         />
         <KPICard
           titulo="Rendimento do mês"

@@ -9,7 +9,9 @@ import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
   contaSchema,
+  saldoInicialSubcontaSchema,
   type ContaInput,
+  type SaldoInicialSubcontaInput,
 } from "@/modules/financeiro/contas-bancarias/schemas";
 
 const RECURSO = "financeiro.contas-bancarias" as const;
@@ -183,5 +185,93 @@ export async function alternarAtivo(
   }
 
   revalidarTelasDaConta();
+  return { ok: true };
+}
+
+/** Uma aplicação da subconta, com a parte dela no saldo inicial. */
+export interface SaldoInicialDaAplicacao {
+  aplicacaoId: string;
+  nome: string;
+  produto: string;
+  ativa: boolean;
+  saldoInicial: number;
+}
+
+/**
+ * As aplicações da subconta e o saldo inicial de cada uma. Vazio quando a
+ * pessoa não pode ver o saldo da conta (a função filtra) ou quando a subconta
+ * não tem aplicação: a tela diferencia pelos dois casos com o `podeVerSaldo`
+ * que já tem da listagem.
+ */
+export async function carregarSaldoInicialSubconta(
+  subcontaId: string,
+): Promise<{ aplicacoes: SaldoInicialDaAplicacao[] } | { erro: string }> {
+  if (!(await checarPermissao("ver"))) {
+    return { erro: "Sem permissão para ver contas bancárias" };
+  }
+  const idValido = idSchema.safeParse(subcontaId);
+  if (!idValido.success) return { erro: "Subconta inválida" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_saldo_inicial_da_subconta", {
+    p_subconta: idValido.data,
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.contas-bancarias.carregarSaldoInicialSubconta",
+      error,
+      "Não foi possível carregar as aplicações da subconta",
+    );
+  }
+  return {
+    aplicacoes: (data ?? []).map((linha) => ({
+      aplicacaoId: linha.aplicacao_id,
+      nome: linha.nome,
+      produto: linha.produto,
+      ativa: linha.ativa,
+      saldoInicial: Number(linha.saldo_inicial),
+    })),
+  };
+}
+
+/**
+ * Grava o saldo inicial da subconta dividido por aplicação. A função do banco
+ * soma as partes no saldo inicial da subconta e refaz o rendimento das posições
+ * a partir do corte; é ela que barra permissão, saldo visível e aplicação de
+ * fora da subconta.
+ */
+export async function salvarSaldoInicialSubconta(
+  dados: SaldoInicialSubcontaInput,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar contas bancárias" };
+  }
+  const validado = saldoInicialSubcontaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+  const v = validado.data;
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_salvar_saldo_inicial_subconta", {
+    p_subconta: v.subcontaId,
+    p_data: v.data,
+    // Centavo exato: 0,1 + 0,2 em ponto flutuante não pode chegar ao banco.
+    p_saldos: v.saldos.map((s) => ({
+      aplicacaoId: s.aplicacaoId,
+      valor: Math.round(s.valor * 100) / 100,
+    })),
+  });
+  if (error) {
+    return erroAcao(
+      "financeiro.contas-bancarias.salvarSaldoInicialSubconta",
+      error,
+      error.message || "Não foi possível salvar o saldo inicial",
+    );
+  }
+
+  revalidarTelasDaConta();
+  revalidatePath("/financeiro/aplicacoes");
+  revalidatePath("/financeiro/relatorios");
   return { ok: true };
 }

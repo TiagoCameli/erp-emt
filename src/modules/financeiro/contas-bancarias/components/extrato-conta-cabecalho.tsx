@@ -10,6 +10,7 @@ import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 import { ROTULO_TIPO_CONTA } from "@/modules/financeiro/contas-bancarias/schemas";
 import { ContasFormDrawer } from "./contas-form-drawer";
+import { SaldoInicialSubcontaDrawer } from "./saldo-inicial-subconta-drawer";
 
 export interface ExtratoContaCabecalhoProps {
   conta: ContaLista;
@@ -70,7 +71,7 @@ export function ExtratoContaCabecalho({
           )
         }
         acoes={
-          podeEditar ? (
+          podeEditar && (conta.tipo !== "investimento" || conta.podeVerSaldo) ? (
             <Button
               type="button"
               variant="outline"
@@ -78,7 +79,7 @@ export function ExtratoContaCabecalho({
               onClick={() => setAberto(true)}
             >
               <Pencil />
-              Editar conta
+              {conta.tipo === "investimento" ? "Editar saldo inicial" : "Editar conta"}
             </Button>
           ) : null
         }
@@ -158,12 +159,23 @@ export function ExtratoContaCabecalho({
         </p>
       ) : null}
 
-      <ContasFormDrawer
-        key={conta.id}
-        aberto={aberto}
-        onAbertoChange={setAberto}
-        conta={conta}
-      />
+      {/* A subconta não tem cadastro para editar: o que se edita nela é o
+          saldo inicial, dividido por aplicação. */}
+      {conta.tipo === "investimento" ? (
+        <SaldoInicialSubcontaDrawer
+          key={conta.id}
+          aberto={aberto}
+          onAbertoChange={setAberto}
+          subconta={conta}
+        />
+      ) : (
+        <ContasFormDrawer
+          key={conta.id}
+          aberto={aberto}
+          onAbertoChange={setAberto}
+          conta={conta}
+        />
+      )}
     </div>
   );
 }

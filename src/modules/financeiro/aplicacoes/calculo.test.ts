@@ -42,6 +42,7 @@ function linha(parcial: Partial<LinhaAba> & Pick<LinhaAba, "aplicacaoId" | "mes"
     cdiPct: null,
     pctCdi: null,
     ultimaPosicao: null,
+    saldoInicial: 0,
     ...parcial,
   };
 }
@@ -51,6 +52,27 @@ const SETEMBRO: LinhaAba[] = [
   linha({ aplicacaoId: "cdb", mes: "2026-09-01", posicaoInicial: 3943139.39, aplicado: 2000000, resgatado: 1017000, ajusteAbertura: 90374.18, posicaoFinal: 5016513.57, ultimaPosicao: "2026-09-25" }),
   linha({ aplicacaoId: "fundo", mes: "2026-09-01", posicaoInicial: -12806.3, aplicado: 1000000, resgatado: 146.3, ajusteAbertura: 13923.78, posicaoFinal: 1000971.18, ultimaPosicao: "2026-09-25" }),
 ];
+
+// O Rende Fácil da BB 102.124-9: o saldo inicial (178.326,66 em 31/08/2026) não
+// tem transferência por trás, só o extrato. Números reais do banco em 07/10/2026.
+const RENDE: AplicacaoCadastro = { ...CDB, id: "rende", nome: "Banco do Brasil - Rende Fácil", taxaPercentual: null };
+const RENDE_FACIL: LinhaAba[] = [
+  linha({ aplicacaoId: "rende", mes: "2026-08-01", saldoInicial: 178326.66, posicaoFinal: 178326.66 }),
+  linha({ aplicacaoId: "rende", mes: "2026-09-01", posicaoInicial: 178326.66, aplicado: 790226.26, resgatado: 798329.46, posicaoFinal: 170223.46 }),
+];
+
+describe("saldo inicial por aplicação", () => {
+  it("o principal conta o saldo inicial: sem ele o Rende Fácil sairia com −8.103,20", () => {
+    const painel = montarPainel([RENDE], RENDE_FACIL, [], "2026-09-30");
+    expect(painel.aplicacoes[0].principal).toBe(170223.46);
+    expect(painel.aplicacoes[0].posicaoLiquida).toBe(170223.46);
+  });
+
+  it("o mês do corte mostra o saldo inicial, e só ele", () => {
+    const meses = mesAMes(RENDE_FACIL);
+    expect(meses.map((m) => m.saldoInicial)).toEqual([178326.66, 0]);
+  });
+});
 
 describe("montarPainel", () => {
   it("a posição total fecha no centavo com a subconta depois da abertura", () => {
@@ -91,19 +113,21 @@ describe("montarPainel", () => {
 });
 
 describe("mesAMes", () => {
-  it("fecha a identidade final = inicial + aplicado − resgatado + rendimento + ajuste", () => {
+  it("fecha a identidade final = inicial + saldo inicial + aplicado − resgatado + rendimento + ajuste", () => {
     const linhas: LinhaAba[] = [
       ...SETEMBRO,
+      ...RENDE_FACIL,
       linha({ aplicacaoId: "cdb", mes: "2026-10-01", posicaoInicial: 5016513.57, rendimento: 50000.11, posicaoFinal: 5066513.68, rendimentoPct: 0.9967, cdiPct: 1.05, pctCdi: 94.92 }),
       linha({ aplicacaoId: "fundo", mes: "2026-10-01", posicaoInicial: 1000971.18, resgatado: 500.5, rendimento: -120.01, posicaoFinal: 1000350.67, rendimentoPct: -0.012, cdiPct: 1.05, pctCdi: -1.14 }),
     ];
     for (const m of mesAMes(linhas)) {
-      const conta = Math.round(m.posicaoInicial * 100) + Math.round(m.aplicado * 100) - Math.round(m.resgatado * 100)
+      const conta = Math.round(m.posicaoInicial * 100) + Math.round(m.saldoInicial * 100) + Math.round(m.aplicado * 100) - Math.round(m.resgatado * 100)
         + Math.round((m.rendimento ?? 0) * 100) + Math.round((m.ajusteAbertura ?? 0) * 100);
       expect(Math.round(m.posicaoFinal * 100)).toBe(conta);
     }
-    const outubro = mesAMes(linhas)[1];
-    expect(outubro.rendimento).toBe(49880.1);
+    // Pelo mês, não pelo índice: o Rende Fácil abre a série em agosto (corte).
+    const outubro = mesAMes(linhas).find((m) => m.mes === "2026-10-01");
+    expect(outubro?.rendimento).toBe(49880.1);
   });
 });
 
