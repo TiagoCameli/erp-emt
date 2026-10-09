@@ -135,6 +135,22 @@ begin
     r := r || jsonb_build_object('3j_depois', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24')));
   end;
 
+  -- 3k, 3l, 3m. Padrão da empresa e entrada nula. Usa os valores atuais do Padrão EMT, então nada mais muda.
+  --     Esperado: 3k true; 3l "recusou: Escolha outro calendário como padrão da empresa antes de tirar este";
+  --     3m "recusou: Situação inválida"
+  declare v_pad uuid; v_dados jsonb;
+  begin
+    select id, to_jsonb(c) - 'padrao_empresa' into v_pad, v_dados from public.ex_calendarios c where padrao_empresa and excluido_em is null;
+    perform public.fn_ex_calendario_salvar(v_dados, v_pad);
+    r := r || jsonb_build_object('3k_edita_padrao_mantem', (select padrao_empresa from public.ex_calendarios where id = v_pad));
+    begin perform public.fn_ex_calendario_salvar(v_dados || '{"padrao_empresa": false}'::jsonb, v_pad);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('3l_tirar_padrao', v_txt);
+    begin perform public.fn_ex_cronograma_status(v_cron, null);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('3m_status_nulo', v_txt);
+  end;
+
   -- 3h. Local em ciclo: B filho de A, depois A filho de B. Esperado: "recusou: ..."
   declare v_la uuid; v_lb uuid;
   begin
