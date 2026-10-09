@@ -322,6 +322,8 @@ Cada opção diz o que implica. A recomendação vem primeiro.
 
 (emenda 09/10/2026): a F1 foi dividida em **F1a** (banco base, acesso, pastas, cronogramas, locais, calendário e feriados, motor CPM, grade editável, guia para agentes) e **F1b** (importação Excel e modelos × locais), um PR cada. Na F1a, reordenar e recuar na grade é por botão e atalho; arrastar com o mouse (@dnd-kit) entra na F1b. `ex_atividade_recursos` sai da F1 e entra na F3, com o histograma, que é quem a usa. Na Q1 (a), "você entra na lista de todas" vira regra: ao nascer a pasta, entram na lista quem criou e todos os usuários ativos do perfil Admin.
 
+(emenda 09/10/2026, decisão do Tiago): "eu devo poder dizer quando é feriado ou não no app". `ex_feriados` ganha cadastro na aba Modelos (`fn_ex_feriado_salvar`/`excluir`, recalcula todos os cronogramas). A carga 2026 a 2030 é ponto de partida, sem conferência prévia. Exceção por calendário continua sendo o jeito de trabalhar num feriado num cronograma só. Execução da F1a por subagentes.
+
 ## 15. Fora do escopo
 
 - Qualquer escrita em outro módulo: Compras, RH (folha, diárias, rescisão, `colaboradores.obra_id`), Manutenção, Medição, Financeiro.
