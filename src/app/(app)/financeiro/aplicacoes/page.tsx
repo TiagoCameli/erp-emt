@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { GradeKpis, KPICard, MoneyText, PageHeader } from "@/components/canonicos";
 import { dataHojeISO, formatarBRL, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
-import { montarPainel } from "@/modules/financeiro/aplicacoes/calculo";
+import { montarPainel, rotuloAplicacao } from "@/modules/financeiro/aplicacoes/calculo";
 import { AplicacoesAcoesCabecalho } from "@/modules/financeiro/aplicacoes/components/aplicacoes-acoes-cabecalho";
 import { AplicacoesPainel } from "@/modules/financeiro/aplicacoes/components/aplicacoes-painel";
 import { carregarAplicacoes } from "@/modules/financeiro/aplicacoes/queries";
@@ -50,7 +50,8 @@ export default async function PaginaAplicacoes() {
     .map((r) => ({
       id: r.aplicacao.id,
       etapaId: r.aplicacao.etapaId,
-      nome: r.aplicacao.nome,
+      // Com a conta: duas "Rende Fácil" do BB só se distinguem por ela.
+      nome: rotuloAplicacao(r.aplicacao),
       subcontaId: r.aplicacao.contaId,
       contaPaiId: contaPai.get(r.aplicacao.contaId) ?? null,
     }));
