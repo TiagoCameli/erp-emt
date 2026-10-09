@@ -8,6 +8,7 @@ declare
   v_tiago constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_obra uuid; v_obra2 uuid; v_cron uuid; v_cal uuid; v_n bigint; v_txt text; v_j jsonb; r jsonb := '{}'::jsonb;
+  v_lista bigint; v_admins bigint;
   v_obras0 bigint; v_cc0 bigint; v_colab0 bigint;
 begin
   select count(*) into v_obras0 from public.obras;
@@ -51,6 +52,110 @@ begin
     values (v_pai, '2026-04-06', 0, 'paralisacao', 'Prova'), (v_filho, '2026-04-05', 8, 'extra', 'Prova');
     r := r || jsonb_build_object('2d_heranca', (select jsonb_agg(data order by data) from public.fn_ex_dias_uteis(v_filho, '2026-04-01', '2026-04-07')));
   end;
+
+  -- 3. Acesso por obra. As permissões do backfill (Task 7) ainda não estão aplicadas: a prova dá ao
+  --    Tiago as 9 da fase dentro da transação.
+  insert into public.usuario_permissoes (usuario_id, recurso, acao)
+  select v_tiago, x.recurso, x.acao from (values ('execucao.obras', 'ver'),
+    ('execucao.cronogramas', 'ver'), ('execucao.cronogramas', 'criar'), ('execucao.cronogramas', 'editar'), ('execucao.cronogramas', 'excluir'),
+    ('execucao.modelos', 'ver'), ('execucao.modelos', 'criar'), ('execucao.modelos', 'editar'), ('execucao.modelos', 'excluir')) x(recurso, acao)
+  on conflict do nothing;
+  select count(*) into v_admins from public.usuarios u join public.perfis p on p.id = u.perfil_id and p.nome = 'Admin'
+   where u.ativo and u.excluido_em is null;
+  select o.id into v_obra2 from public.obras o where o.ativo and not exists (select 1 from public.ex_obras e where e.obra_id = o.id)
+   order by o.nome desc limit 1;
+
+  -- 3a. Tiago cria o primeiro cronograma da obra 2: a pasta nasce e a lista recebe Tiago + Admins. Esperado: lista = admins
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_cron := public.fn_ex_cronograma_salvar(jsonb_build_object('obra_id', v_obra2, 'tipo_obra', 'edificacao',
+    'codigo', 'FUND', 'nome', 'Fundação', 'data_inicio', '2026-03-02'));
+  reset role;
+  select count(*) into v_lista from public.ex_obra_usuarios where obra_id = v_obra2;
+  r := r || jsonb_build_object('3a_pasta_e_lista', jsonb_build_object('lista', v_lista, 'admins', v_admins,
+    'calendario_herdado', (select c.pai_id = (select id from public.ex_calendarios where padrao_empresa)
+                           from public.ex_cronogramas k join public.ex_calendarios c on c.id = k.calendario_id where k.id = v_cron)));
+
+  -- 3b. Usuário zero sem permissão nenhuma não vê nada. Esperado: 0
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('3b_zero_sem_permissao', (select count(*) from public.ex_cronogramas));
+  reset role;
+
+  -- 3c. Zero com execucao.cronogramas/ver mas fora da lista: continua sem ver. Esperado: 0
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'execucao.cronogramas', 'ver');
+  set local role authenticated;
+  r := r || jsonb_build_object('3c_zero_fora_da_lista', (select count(*) from public.ex_cronogramas));
+  reset role;
+
+  -- 3d. Tiago põe o zero na lista: zero vê 1.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  perform public.fn_ex_acesso_definir(v_obra2, v_zero, true);
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('3d_zero_na_lista', (select count(*) from public.ex_cronogramas));
+  reset role;
+
+  -- 3e. Zero desativado: deixa de ver na hora, e a RPC recusa. Esperado: 0 e "recusou: ..."
+  update public.usuarios set ativo = false where id = v_zero;
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'execucao.cronogramas', 'editar');
+  set local role authenticated;
+  r := r || jsonb_build_object('3e_desativado_ve', (select count(*) from public.ex_cronogramas));
+  begin perform public.fn_ex_cronograma_salvar(jsonb_build_object('codigo', 'FUND', 'nome', 'Mudou', 'data_inicio', '2026-03-02'), v_cron);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('3e_desativado_edita', v_txt);
+  reset role;
+  update public.usuarios set ativo = true where id = v_zero;
+  delete from public.usuario_permissoes where usuario_id = v_zero and recurso like 'execucao.%';
+
+  -- 3f. Tirar o último da lista é recusado. Esperado: "recusou: A obra não pode ficar sem ninguém na lista"
+  delete from public.ex_obra_usuarios where obra_id = v_obra2 and usuario_id <> v_tiago;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform public.fn_ex_acesso_definir(v_obra2, v_tiago, false);
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('3f_ultimo_da_lista', v_txt);
+
+  -- 3g. Código repetido na mesma obra. Esperado: "recusou: Já existe outro cronograma com o código FUND nesta obra"
+  begin perform public.fn_ex_cronograma_salvar(jsonb_build_object('obra_id', v_obra2, 'codigo', 'fund', 'nome', 'Outra', 'data_inicio', '2026-03-02'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('3g_codigo_repetido', v_txt);
+
+  -- 3j. Feriado pelo app: 24/12/2026 (quinta) vira feriado nacional e sai dos dias úteis; excluir devolve.
+  --     Esperado: {"antes": true, "feriado": false, "depois": true}
+  declare v_fer uuid;
+  begin
+    r := r || jsonb_build_object('3j_feriado_app', jsonb_build_object(
+      'antes', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24'))));
+    v_fer := public.fn_ex_feriado_salvar(jsonb_build_object('data', '2026-12-24', 'nome', 'Véspera de Natal', 'abrangencia', 'nacional'));
+    r := r || jsonb_build_object('3j_feriado', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24')));
+    perform public.fn_ex_feriado_excluir(v_fer);
+    r := r || jsonb_build_object('3j_depois', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24')));
+  end;
+
+  -- 3h. Local em ciclo: B filho de A, depois A filho de B. Esperado: "recusou: ..."
+  declare v_la uuid; v_lb uuid;
+  begin
+    v_la := public.fn_ex_local_salvar(v_obra2, jsonb_build_object('tipo', 'bloco', 'codigo', 'A', 'nome', 'Bloco A'));
+    v_lb := public.fn_ex_local_salvar(v_obra2, jsonb_build_object('tipo', 'pavimento', 'codigo', 'A-T', 'nome', 'Térreo', 'pai_id', v_la));
+    begin perform public.fn_ex_local_salvar(v_obra2, jsonb_build_object('tipo', 'bloco', 'codigo', 'A', 'nome', 'Bloco A', 'pai_id', v_lb), v_la);
+      v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+    r := r || jsonb_build_object('3h_local_em_ciclo', v_txt);
+  end;
+  reset role;
+
+  -- 3i. Zero com criar, fora da lista, tenta criar cronograma numa obra que já tem pasta.
+  --     Esperado: "recusou: Esta obra já tem cronogramas e você não está na lista de acesso dela..."
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'execucao.cronogramas', 'criar');
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform public.fn_ex_cronograma_salvar(jsonb_build_object('obra_id', v_obra2, 'codigo', 'OUTRO', 'nome', 'Outro', 'data_inicio', '2026-03-02'));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('3i_criar_fora_da_lista', v_txt);
+  reset role;
+  delete from public.usuario_permissoes where usuario_id = v_zero and recurso like 'execucao.%';
 
   -- 4. CPM (tabela feita à mão no plano, Task 3)
   declare v_c4 uuid; v_cal4 uuid; v_a uuid; v_b uuid; v_cc uuid; v_d uuid; v_e uuid; v_f uuid; v_m uuid; v_res uuid; v_t0 timestamptz;
