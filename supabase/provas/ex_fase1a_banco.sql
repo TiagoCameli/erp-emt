@@ -110,6 +110,38 @@ begin
       'a', (select jsonb_build_array(inicio_cedo, fim_cedo, critica) from public.ex_atividade_datas where atividade_id = v_a),
       'b', (select jsonb_build_array(inicio_cedo, fim_cedo) from public.ex_atividade_datas where atividade_id = v_b)));
 
+    -- 4h. Marco ancorado em data (cronograma à parte, mesmo calendário seg a sex, início 02/03/2026).
+    --     Esperado: não antes de 05/03 (quinta) = ["2026-03-05","2026-03-05"]; não antes de 07/03 (sábado) =
+    --     ["2026-03-09","2026-03-09"] (próximo dia útil, nunca a sexta); real 05/03 a 05/03 = ["2026-03-05","2026-03-05"].
+    --     Resumo R com R.1 concluída (real 02/03 a 03/03) e R.2 de 1 dia sem vínculo (ES 0, EF 1). O cronograma
+    --     termina no marco M2 (EF 6, 09/03; L de 5 dias acaba antes, EF 5), então R.2 tem folga 6 - 1 = 5 e a folga
+    --     do resumo é 5 (a concluída, com folga 0 por regra, não conta; pela regra antiga daria 0). Esperado 5.
+    declare v_c6 uuid := gen_random_uuid(); v_m1 uuid; v_m2 uuid; v_m3 uuid; v_r uuid;
+    begin
+      insert into public.ex_cronogramas (id, obra_id, codigo, nome, calendario_id, data_inicio)
+      values (v_c6, v_obra, 'PROVA6', 'Prova marcos', v_cal4, '2026-03-02');
+      insert into public.ex_atividades (cronograma_id, obra_id, tipo, codigo, nome, ordem, duracao_dias, restricao_data, restricao_data_em)
+      values (v_c6, v_obra, 'marco', 'M1', 'Marco quinta', 1, 0, 'inicio_nao_antes', '2026-03-05') returning id into v_m1;
+      insert into public.ex_atividades (cronograma_id, obra_id, tipo, codigo, nome, ordem, duracao_dias, restricao_data, restricao_data_em)
+      values (v_c6, v_obra, 'marco', 'M2', 'Marco sábado', 2, 0, 'inicio_nao_antes', '2026-03-07') returning id into v_m2;
+      insert into public.ex_atividades (cronograma_id, obra_id, tipo, codigo, nome, ordem, duracao_dias, inicio_real, fim_real)
+      values (v_c6, v_obra, 'marco', 'M3', 'Marco real', 3, 0, '2026-03-05', '2026-03-05') returning id into v_m3;
+      insert into public.ex_atividades (cronograma_id, obra_id, tipo, codigo, nome, ordem, duracao_dias)
+      values (v_c6, v_obra, 'resumo', 'R', 'Resumo', 4, 0) returning id into v_r;
+      insert into public.ex_atividades (cronograma_id, obra_id, pai_id, codigo, nome, ordem, duracao_dias, inicio_real, fim_real)
+      values (v_c6, v_obra, v_r, 'R.1', 'Concluída', 5, 2, '2026-03-02', '2026-03-03');
+      insert into public.ex_atividades (cronograma_id, obra_id, pai_id, codigo, nome, ordem, duracao_dias)
+      values (v_c6, v_obra, v_r, 'R.2', 'Aberta', 6, 1);
+      insert into public.ex_atividades (cronograma_id, obra_id, codigo, nome, ordem, duracao_dias)
+      values (v_c6, v_obra, 'L', 'Longa', 7, 5);
+      perform public.fn_ex_cpm_recalcular(v_c6);
+      r := r || jsonb_build_object('4h_marco_ancorado', jsonb_build_object(
+        'nao_antes_quinta', (select jsonb_build_array(inicio_cedo, fim_cedo) from public.ex_atividade_datas where atividade_id = v_m1),
+        'nao_antes_sabado', (select jsonb_build_array(inicio_cedo, fim_cedo) from public.ex_atividade_datas where atividade_id = v_m2),
+        'real', (select jsonb_build_array(inicio_cedo, fim_cedo) from public.ex_atividade_datas where atividade_id = v_m3),
+        'resumo_folga', (select folga_total from public.ex_atividade_datas where atividade_id = v_r)));
+    end;
+
     -- 4f. Ciclo gravado direto (as RPCs nunca deixam): o cálculo recusa e diz as linhas.
     insert into public.ex_dependencias (cronograma_id, obra_id, predecessora_id, sucessora_id) values (v_c4, v_obra, v_m, v_a);
     begin perform public.fn_ex_cpm_recalcular(v_c4); v_txt := 'PASSOU (errado)';
