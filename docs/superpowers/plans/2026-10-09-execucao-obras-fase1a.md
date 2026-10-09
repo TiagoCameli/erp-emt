@@ -620,17 +620,13 @@ No `ex_fase1a_banco.sql`, antes da linha `-- (os casos 2 a 9 ...)`:
 
 Rodar: falha com `function public.fn_ex_pascoa(integer) does not exist`.
 
-- [ ] **Step 2: Montar a lista de feriados e mostrar ao Tiago (checkpoint)**
+- [ ] **Step 2: Lista de feriados (decidida)**
 
-Antes de escrever a carga, mande ao Tiago esta lista e espere o ok (o spec manda conferir antes de gravar):
-
-- **Nacionais fixos** (2026 a 2030): 01/01 Confraternização Universal; 21/04 Tiradentes; 01/05 Dia do Trabalho; 07/09 Independência; 12/10 Nossa Senhora Aparecida; 02/11 Finados; 15/11 Proclamação da República; 20/11 Dia Nacional de Zumbi e da Consciência Negra (Lei 14.759/2023); 25/12 Natal.
-- **Nacional móvel:** Sexta-feira Santa (Páscoa − 2 dias).
-- **Acre (a conferir com o Tiago):** 23/01 Dia do Evangélico; 08/03 Dia Internacional da Mulher; 15/06 Aniversário do Acre; 06/08 Início da Revolução Acreana; 05/09 Dia da Amazônia; 17/11 Tratado de Petrópolis.
-- **Fora da carga, a menos que o Tiago peça:** Carnaval e Corpus Christi (ponto facultativo nacional) e os municipais (entram por calendário, como exceção).
-- **Calendário padrão da empresa:** seg a sex 9 h, sáb 5 h, dom 0 (o exemplo do pedido), feriados nacionais e do AC, sem período chuvoso marcado (o Tiago liga na tela, ex.: nov a abr).
-
-Ajuste o Step 3 conforme a resposta. Sem o ok, a Task 2 para aqui.
+Decisão do Tiago (09/10/2026): ele mesmo diz no app o que é ou não feriado (cadastro de feriados na aba Modelos, Tasks 4 e 11; e a exceção por calendário, que já existe, transforma um feriado em dia de trabalho num cronograma só). A carga abaixo é o ponto de partida, sem checkpoint:
+- **Nacionais fixos** (2026 a 2030): 01/01, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 20/11 (Lei 14.759/2023), 25/12. **Móvel:** Sexta-feira Santa (Páscoa − 2).
+- **Acre:** 23/01 Dia do Evangélico; 08/03 Dia Internacional da Mulher; 15/06 Aniversário do Acre; 06/08 Início da Revolução Acreana; 05/09 Dia da Amazônia; 17/11 Tratado de Petrópolis.
+- **Fora:** Carnaval e Corpus Christi (ponto facultativo); municipais entram pelo cadastro.
+- **Calendário padrão:** seg a sex 9 h, sáb 5 h, dom 0, nacionais + AC, sem período chuvoso.
 
 - [ ] **Step 3: Escrever a migration**
 
@@ -639,7 +635,7 @@ Ajuste o Step 3 conforme a resposta. Sem o ok, a Task 2 para aqui.
 ```sql
 -- Execução de Obras, Fase 1a: calendário.
 -- Dia útil = dia com horas > 0, depois de exceções e feriados (spec 7.3; Q7 suposição (a)).
--- Feriados e calendário padrão conferidos pelo Tiago em <data do ok>.
+-- Feriados: carga inicial; o Tiago corrige no app (fn_ex_feriado_salvar/excluir, aba Modelos). Decisão de 09/10/2026.
 
 -- Páscoa pelo algoritmo de Meeus/Jones/Butcher (calendário gregoriano).
 create or replace function public.fn_ex_pascoa(p_ano integer)
@@ -698,7 +694,7 @@ revoke all on function public.fn_ex_somar_dias_uteis(uuid, date, integer) from p
 grant execute on function public.fn_ex_dias_uteis(uuid, date, date) to authenticated;
 grant execute on function public.fn_ex_somar_dias_uteis(uuid, date, integer) to authenticated;
 
--- Carga de feriados 2026 a 2030 (lista conferida pelo Tiago no Step 2).
+-- Carga inicial de feriados 2026 a 2030 (Step 2). Ponto de partida: o Tiago edita no app.
 insert into public.ex_feriados (data, nome, abrangencia)
 select make_date(a, f.mes, f.dia), f.nome, 'nacional'
 from generate_series(2026, 2030) a
@@ -727,7 +723,7 @@ begin
 end $confere$;
 ```
 
-O `80` muda se o Tiago tirar ou incluir datas no Step 2: recalcule (feriados por ano × 5).
+
 
 - [ ] **Step 4: Aplicar, renomear se preciso, rodar a prova**
 
@@ -1148,6 +1144,7 @@ git commit -m "Execução F1a: motor CPM no banco (4 vínculos, atraso, restriç
   - `fn_ex_calendario_salvar(p_dados jsonb, p_id uuid default null) returns uuid`. Criar = calendário **modelo** (`execucao.modelos/criar`). Editar um modelo exige `execucao.modelos/editar`; editar o calendário próprio de um cronograma exige `execucao.cronogramas/editar` e a lista da obra. Chaves: `nome`, `horas_seg` ... `horas_dom`, `feriados_abrangencia` (array), `municipio`, `chuvoso_inicio_mes`, `chuvoso_fim_mes`, `padrao_empresa` (só modelo), `observacoes`.
   - `fn_ex_calendario_excecao_salvar(p_cal uuid, p_data date, p_horas numeric, p_tipo text, p_descricao text) returns void` e `fn_ex_calendario_excecao_excluir(p_cal uuid, p_data date) returns void`. Mesma regra de permissão do calendário.
   - Toda mudança de calendário recalcula os cronogramas que usam o calendário ou um filho dele.
+  - `fn_ex_feriado_salvar(p_dados jsonb, p_id uuid default null) returns uuid` (chaves `data`, `nome`, `abrangencia`, `municipio`) e `fn_ex_feriado_excluir(p_id uuid) returns void`: o Tiago diz no app o que é feriado (decisão de 09/10/2026). Criar exige `execucao.modelos/criar`, editar `editar`, excluir `excluir`. Feriado é global: depois de gravar, recalcula todos os cronogramas vivos (`fn_ex_recalcular_todos()`, interna). Excluir é definitivo (a trilha fica no `audit_log`). Para "este feriado não vale nesta obra", o caminho é a exceção do calendário do cronograma com horas > 0.
 
 - [ ] **Step 1: Escrever o caso 3 da prova (falha)**
 
@@ -1224,6 +1221,18 @@ No `ex_fase1a_banco.sql`, depois do caso 2 e antes do caso 4. Declare no topo do
     v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
   r := r || jsonb_build_object('3g_codigo_repetido', v_txt);
 
+  -- 3j. Feriado pelo app: 24/12/2026 (quinta) vira feriado nacional e sai dos dias úteis; excluir devolve.
+  --     Esperado: {"antes": true, "feriado": false, "depois": true}
+  declare v_fer uuid;
+  begin
+    r := r || jsonb_build_object('3j_feriado_app', jsonb_build_object(
+      'antes', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24'))));
+    v_fer := public.fn_ex_feriado_salvar(jsonb_build_object('data', '2026-12-24', 'nome', 'Véspera de Natal', 'abrangencia', 'nacional'));
+    r := r || jsonb_build_object('3j_feriado', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24')));
+    perform public.fn_ex_feriado_excluir(v_fer);
+    r := r || jsonb_build_object('3j_depois', exists (select 1 from public.fn_ex_dias_uteis((select id from public.ex_calendarios where padrao_empresa), '2026-12-24', '2026-12-24')));
+  end;
+
   -- 3h. Local em ciclo: B filho de A, depois A filho de B. Esperado: "recusou: ..."
   declare v_la uuid; v_lb uuid;
   begin
@@ -1249,7 +1258,7 @@ No `ex_fase1a_banco.sql`, depois do caso 2 e antes do caso 4. Declare no topo do
 
 Declare também `v_obra2 uuid;` no topo (já existe na Task 1 como `v_obra2`). Rodar: falha com `function public.fn_ex_cronograma_salvar(jsonb) does not exist`.
 
-Esperado depois da migration: `3a {"lista": <admins>, "admins": <admins>, "calendario_herdado": true}` (o Tiago é Admin, então lista = admins = 4); `3b 0`; `3c 0`; `3d 1`; `3e_desativado_ve 0`; `3e_desativado_edita "recusou: ..."`; `3f "recusou: A obra não pode ficar sem ninguém na lista"`; `3g "recusou: Já existe outro cronograma com o código FUND nesta obra"`; `3h "recusou: Um local não pode ficar dentro dele mesmo"`; `3i "recusou: Esta obra já tem cronogramas e você não está na lista de acesso dela..."`.
+Esperado depois da migration: `3a {"lista": <admins>, "admins": <admins>, "calendario_herdado": true}` (o Tiago é Admin, então lista = admins = 4); `3b 0`; `3c 0`; `3d 1`; `3e_desativado_ve 0`; `3e_desativado_edita "recusou: ..."`; `3f "recusou: A obra não pode ficar sem ninguém na lista"`; `3g "recusou: Já existe outro cronograma com o código FUND nesta obra"`; `3h "recusou: Um local não pode ficar dentro dele mesmo"`; `3i "recusou: Esta obra já tem cronogramas e você não está na lista de acesso dela..."`; `3j_feriado_app {"antes": true}`, `3j_feriado false`, `3j_depois true`.
 
 - [ ] **Step 2: Escrever a migration**
 
@@ -1634,6 +1643,51 @@ begin
   perform public.fn_ex_recalcular_calendario(p_cal);
 end $$;
 
+create or replace function public.fn_ex_recalcular_todos()
+returns void language plpgsql security definer set search_path to '' as $$
+declare v_c uuid;
+begin
+  for v_c in select id from public.ex_cronogramas where excluido_em is null loop
+    perform public.fn_ex_cpm_recalcular(v_c);
+  end loop;
+end $$;
+
+create or replace function public.fn_ex_feriado_salvar(p_dados jsonb, p_id uuid default null)
+returns uuid language plpgsql security definer set search_path to '' as $$
+declare v_id uuid; v_data date := nullif(p_dados ->> 'data', '')::date; v_nome text := btrim(coalesce(p_dados ->> 'nome', ''));
+  v_abr text := p_dados ->> 'abrangencia'; v_mun text := nullif(btrim(p_dados ->> 'municipio'), '');
+begin
+  perform public.fn_ex_exigir('execucao.modelos', case when p_id is null then 'criar' else 'editar' end, null,
+    'Sem permissão para cadastrar feriado');
+  if v_data is null then raise exception 'Informe a data do feriado' using errcode = 'P0001'; end if;
+  if v_nome = '' then raise exception 'Informe o nome do feriado' using errcode = 'P0001'; end if;
+  if v_abr not in ('nacional', 'AC', 'municipal') then raise exception 'Abrangência deve ser nacional, AC ou municipal' using errcode = 'P0001'; end if;
+  if (v_abr = 'municipal') <> (v_mun is not null) then
+    raise exception 'Feriado municipal precisa do município; nacional e estadual não têm município' using errcode = 'P0001';
+  end if;
+  begin
+    if p_id is null then
+      insert into public.ex_feriados (data, nome, abrangencia, municipio) values (v_data, v_nome, v_abr, v_mun) returning id into v_id;
+    else
+      update public.ex_feriados set data = v_data, nome = v_nome, abrangencia = v_abr, municipio = v_mun where id = p_id returning id into v_id;
+      if v_id is null then raise exception 'Feriado não encontrado' using errcode = 'P0001'; end if;
+    end if;
+  exception when unique_violation then
+    raise exception 'Já existe feriado com essa abrangência em %', to_char(v_data, 'DD/MM/YYYY') using errcode = 'P0001';
+  end;
+  perform public.fn_ex_recalcular_todos();
+  return v_id;
+end $$;
+
+create or replace function public.fn_ex_feriado_excluir(p_id uuid)
+returns void language plpgsql security definer set search_path to '' as $$
+begin
+  perform public.fn_ex_exigir('execucao.modelos', 'excluir', null, 'Sem permissão para excluir feriado');
+  delete from public.ex_feriados where id = p_id;
+  if not found then raise exception 'Feriado não encontrado' using errcode = 'P0001'; end if;
+  perform public.fn_ex_recalcular_todos();
+end $$;
+
 create or replace function public.fn_ex_calendario_excecao_excluir(p_cal uuid, p_data date)
 returns void language plpgsql security definer set search_path to '' as $$
 begin
@@ -1651,11 +1705,11 @@ begin
     'fn_ex_obra_configurar(uuid, jsonb)', 'fn_ex_acesso_definir(uuid, uuid, boolean)', 'fn_ex_usuarios_da_obra(uuid)',
     'fn_ex_local_salvar(uuid, jsonb, uuid)', 'fn_ex_local_excluir(uuid, text)', 'fn_ex_servico_salvar(jsonb, uuid)',
     'fn_ex_calendario_salvar(jsonb, uuid)', 'fn_ex_calendario_excecao_salvar(uuid, date, numeric, text, text)',
-    'fn_ex_calendario_excecao_excluir(uuid, date)'] loop
+    'fn_ex_calendario_excecao_excluir(uuid, date)', 'fn_ex_feriado_salvar(jsonb, uuid)', 'fn_ex_feriado_excluir(uuid)'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
-  foreach f in array array['fn_ex_recalcular_calendario(uuid)', 'fn_ex_exigir_calendario(uuid, text)'] loop
+  foreach f in array array['fn_ex_recalcular_calendario(uuid)', 'fn_ex_exigir_calendario(uuid, text)', 'fn_ex_recalcular_todos()'] loop
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
 end $fn$;
@@ -3553,7 +3607,9 @@ git commit -m "Execução F1a: pastas por obra, novo cronograma, locais, acesso 
 - Consumes: `fn_ex_servico_salvar`, `fn_ex_calendario_salvar`, `fn_ex_calendario_excecao_salvar`, `fn_ex_calendario_excecao_excluir` (Task 4).
 - Produces:
   - `servicoSchema`, `calendarioSchema`, `excecaoSchema` e os `payloadDo*`.
-  - Actions: `salvarServico(id | null, dados)`, `salvarCalendario(id | null, dados)`, `salvarExcecao(calendarioId, dados)`, `excluirExcecao(calendarioId, data)`. Retornos no mesmo formato da Task 10.
+  - Actions: `salvarServico(id | null, dados)`, `salvarCalendario(id | null, dados)`, `salvarExcecao(calendarioId, dados)`, `excluirExcecao(calendarioId, data)`, `salvarFeriado(id | null, dados)`, `excluirFeriado(id)`. Retornos no mesmo formato da Task 10.
+  - `feriadoSchema` (`data`, `nome`, `abrangencia`, `municipio` obrigatório só em municipal) e `payloadDoFeriado`.
+  - Query `listarFeriados(ano?: number): Promise<Feriado[]>` (todos os anos se ausente, ordem por data).
   - Queries: `listarServicos(): Promise<Servico[]>` (com `unidadeSigla`), `listarCalendarios(): Promise<Calendario[]>` (só modelos), `calendarioPorId(id): Promise<Calendario | null>`, `excecoesDoCalendario(id): Promise<Excecao[]>`, `unidadesMedida(): Promise<{ id: string; sigla: string; nome: string }[]>`.
   - `CalendarioDrawer` aceita `calendario: Calendario | null` e `excecoes: Excecao[]`, e serve tanto aos modelos quanto ao calendário próprio de um cronograma (sem o campo "Padrão da empresa" quando `calendario.modelo` é falso).
   - Estas queries também servem à grade (Task 13): `listarServicos` e `unidadesMedida` alimentam as listas das colunas Serviço e Unidade.
@@ -3701,6 +3757,8 @@ Run: PASS.
 2. `salvarCalendario(null, dados)` chama `fn_ex_calendario_salvar` sem `p_id` e com `p_dados.horas_sab = "5"`.
 3. `salvarExcecao(ID, { data: "2026-12-24", horas: "4", tipo: "extra", descricao: "Véspera" })` chama `fn_ex_calendario_excecao_salvar` com `{ p_cal: ID, p_data: "2026-12-24", p_horas: "4", p_tipo: "extra", p_descricao: "Véspera" }`.
 4. `excluirExcecao(ID, "2026-13-01")` → `{ erro: "Dados inválidos" }` sem chamada.
+5. `salvarFeriado(null, { data: "2026-12-24", nome: "Véspera de Natal", abrangencia: "nacional" })` chama `fn_ex_feriado_salvar` com `p_dados = { data: "2026-12-24", nome: "Véspera de Natal", abrangencia: "nacional", municipio: null }`; sem `execucao.modelos/criar` → `{ erro: "Sem permissão para cadastrar feriado" }`.
+6. `salvarFeriado(null, { data: "2026-06-01", nome: "Aniversário", abrangencia: "municipal" })` (sem município) → erro do schema "Informe o município", sem chamada.
 
 `src/modules/execucao/modelos/actions.ts`: mesmo molde de `obras/actions.ts`, com `RECURSO = "execucao.modelos"` para serviço e para **criar** calendário. Editar calendário e mexer em exceção podem ser do calendário próprio de um cronograma (aí a permissão é `execucao.cronogramas/editar`): a action confere `execucao.modelos/editar` **ou** `execucao.cronogramas/editar` (passa se tiver uma das duas) e deixa a decisão final com o banco (`fn_ex_exigir_calendario`), que sabe se o calendário é modelo ou de cronograma. Revalida `/execucao/modelos` e `/execucao/cronogramas`.
 
@@ -3721,9 +3779,11 @@ Run: `npx vitest run src/modules/execucao/modelos`. Expected: PASS.
 1. **Serviços**: `ServicosTabela` (`DataTable`: código mono, nome, unidade, produtividade padrão com `formatarQuantidade`, "Céu aberto" Sim/Não, situação Ativo/Inativo) + "Novo serviço" e Editar no "⋮" (`ServicoDrawer`, campos do `servicoSchema`, unidade em `Combobox`). Sem serviço: `EmptyState` "Nenhum serviço na biblioteca" com a ação.
 2. **Calendários**: `CalendariosTabela` (nome, horas da semana em texto curto "seg a sex 9 h, sáb 5 h", feriados "Nacionais e AC", selo "Padrão da empresa") + "Novo calendário" e Editar (`CalendarioDrawer`: nome, sete campos de horas lado a lado com `InputHoras`, caixas Nacionais / Acre / Municipais, município, período chuvoso com dois selects de mês, "Padrão da empresa"). Dentro do drawer de um calendário salvo, `ExcecoesCalendario`: tabela de exceções (data, horas, tipo, descrição, "herdada de <nome>" quando vem do pai) + formulário em linha "Nova exceção" e excluir por linha.
 
+3. **Feriados** (decisão do Tiago, 09/10/2026: ele diz no app o que é feriado): `FeriadosTabela` com filtro por ano (padrão o ano corrente), colunas data (`formatarData` + dia da semana), nome, abrangência (Nacional, Acre, Municipal: <município>); "Novo feriado", Editar e Excluir (`ConfirmDialog`, sem motivo: a trilha fica no `audit_log`) conforme `execucao.modelos`. Ajuda da seção: "Feriado vale para todos os cronogramas cujo calendário usa essa abrangência, e as datas são recalculadas ao salvar. Para trabalhar num feriado em um cronograma só, use uma exceção no calendário dele com as horas do dia."
+
 Texto de ajuda no topo da seção Calendários: "Cada cronograma tem o próprio calendário, criado a partir de um destes. Mudar um modelo recalcula as datas de todos os cronogramas que vêm dele."
 
-`page.test.tsx`: sem `ver` → `notFound`; com `ver` e sem `criar` → sem os botões "Novo serviço" e "Novo calendário".
+`page.test.tsx`: sem `ver` → `notFound`; com `ver` e sem `criar` → sem os botões "Novo serviço", "Novo calendário" e "Novo feriado".
 
 - [ ] **Step 6: tsc, lint, testes e commit**
 
