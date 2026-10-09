@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import type { DesvioDoFechamento } from "@/modules/financeiro/conciliacao/desvios";
 import type { RegraConciliacao } from "@/modules/financeiro/conciliacao/regras";
 import {
   ROTULO_BANCO,
@@ -323,4 +324,23 @@ export async function listarImportacoes(): Promise<Importacao[]> {
     throw new Error("As importações vieram num formato inesperado");
   }
   return lista.data;
+}
+
+/**
+ * Meses fechados desta conta cujo saldo do app mudou depois do fechamento. Erro
+ * na leitura vira lista vazia com log: o aviso é extra, não pode derrubar a tela.
+ */
+export async function listarDesvios(contaId: string): Promise<DesvioDoFechamento[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_conciliacao_desvios", { p_conta_id: contaId });
+  if (error) {
+    console.error("[conciliacao.listarDesvios]", error.message);
+    return [];
+  }
+  return (data ?? []).map((d) => ({
+    mes: d.mes,
+    saldoFechamento: Number(d.saldo_fechamento),
+    saldoAgora: Number(d.saldo_agora),
+    diferenca: Number(d.diferenca),
+  }));
 }

@@ -93,6 +93,7 @@ import {
   type TransacaoPainel,
   vizinhosLivres,
 } from "@/modules/financeiro/conciliacao/painel";
+import { textoDesvio, type DesvioDoFechamento } from "@/modules/financeiro/conciliacao/desvios";
 import type { ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 import { CasarDialog } from "./casar-dialog";
 import { DevolucaoDialog } from "./devolucao-dialog";
@@ -137,6 +138,8 @@ export interface ConciliacaoClienteProps {
   cartoes: { id: string; nome: string; contaBancariaId: string }[];
   /** Por etapa de Investimentos, a conta corrente onde a aplicação está. */
   contaPorEtapa: Record<string, string>;
+  /** Meses fechados desta conta que mudaram depois do fechamento. */
+  desvios: DesvioDoFechamento[];
   permissoes: PermissoesConciliacao;
 }
 
@@ -231,6 +234,7 @@ function ConciliacaoConta({
   regras,
   cartoes,
   contaPorEtapa,
+  desvios,
   permissoes,
   podeFechar,
 }: ConciliacaoClienteProps & { podeFechar: boolean }) {
@@ -556,6 +560,18 @@ function ConciliacaoConta({
           ) : null}
         </div>
       </div>
+
+      {desvios.length > 0 ? (
+        <div role="alert" className="rounded-md border border-status-rejeitado/40 bg-status-rejeitado/10 px-3 py-2 text-sm text-status-rejeitado">
+          <p className="font-medium">Mês fechado mudou depois do fechamento</p>
+          <ul className="mt-1 list-disc pl-5">
+            {desvios.map((d) => (
+              <li key={d.mes}>{textoDesvio(d)}</li>
+            ))}
+          </ul>
+          <p className="mt-1">Reabra o mês para conferir o que entrou ou saiu.</p>
+        </div>
+      ) : null}
 
       {painel.fechamento ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-aprovado/40 bg-status-aprovado/10 px-3 py-2 text-sm">

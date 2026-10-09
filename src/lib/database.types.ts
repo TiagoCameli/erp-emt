@@ -9491,6 +9491,15 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_conciliacao_desvios: {
+        Args: { p_conta_id: string };
+        Returns: {
+          diferenca: number;
+          mes: string;
+          saldo_agora: number;
+          saldo_fechamento: number;
+        }[];
+      };
       fn_alterar_saldo_inicial: {
         Args: { p_conta: string; p_data: string | null; p_motivo: string; p_saldo: number };
         Returns: undefined;
