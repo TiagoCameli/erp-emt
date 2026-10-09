@@ -193,9 +193,9 @@ describe("statusDoMes", () => {
     subconta: null,
   });
 
-  it("subconta com saldo do extrato diferente do app: falta bater (Bloco K)", () => {
+  it("subconta diferente do app não trava o mês: vale o saldo da conta", () => {
     const comSubconta = { ...saldo(true), subconta: { banco: 90, app: 100, temAncora: true, bate: false } };
-    expect(statusDoMes(vazio, comSubconta)).toBe("falta_saldo");
+    expect(statusDoMes(vazio, comSubconta)).toBe("conciliado");
     const batendo = { ...saldo(true), subconta: { banco: 100, app: 100, temAncora: true, bate: true } };
     expect(statusDoMes(vazio, batendo)).toBe("conciliado");
   });

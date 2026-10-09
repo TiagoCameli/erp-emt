@@ -25,7 +25,6 @@ import {
 
 import {
   BarraSelecao,
-  CampoFormulario,
   CelulaVazia,
   ConfirmDialog,
   DataTable,
@@ -40,16 +39,7 @@ import {
 } from "@/components/canonicos";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { toast } from "@/components/canonicos/toast";
-import { InputMoeda } from "@/components/canonicos/input-numerico";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   formatarBRL,
   formatarData,
@@ -445,28 +435,15 @@ function ConciliacaoConta({
     router.refresh();
   }
 
-  const [saldoSubconta, setSaldoSubconta] = React.useState("");
-  const [pedirSubconta, setPedirSubconta] = React.useState(false);
-
-  async function fechar(comSubconta = false) {
-    // Com subconta, o fechamento pede o saldo dela no extrato de
-    // investimentos do último dia do mês (Bloco K).
-    if (saldo?.subconta && !comSubconta) {
-      setPedirSubconta(true);
-      return;
-    }
+  async function fechar() {
     setFechando(true);
-    const valorSubconta = saldoSubconta.trim()
-      ? Number(saldoSubconta.replace(/\./g, "").replace(",", "."))
-      : null;
-    const resposta = await fecharMes(conta.id, mes, valorSubconta);
+    const resposta = await fecharMes(conta.id, mes);
     setFechando(false);
     if ("erro" in resposta) {
       toast.error(resposta.erro);
       return;
     }
     toast.success(`${rotuloDoMes(mes)} conciliado e fechado`);
-    setPedirSubconta(false);
     router.refresh();
   }
 
@@ -776,36 +753,6 @@ function ConciliacaoConta({
         transacao={casarAlvo}
         candidatos={candidatos}
       />
-
-      <Dialog open={pedirSubconta} onOpenChange={(aberto) => !fechando && setPedirSubconta(aberto)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Saldo da subconta</DialogTitle>
-            <DialogDescription>
-              Saldo da subconta de investimentos em{" "}
-              {saldo ? formatarData(saldo.data) : "-"}, do extrato de investimentos do banco.
-              Se ela não teve movimento, deixe em branco.
-            </DialogDescription>
-          </DialogHeader>
-          <CampoFormulario id="saldo-subconta" rotulo="Saldo no extrato">
-            <InputMoeda
-              id="saldo-subconta"
-              valor={saldoSubconta}
-              onValorChange={setSaldoSubconta}
-              disabled={fechando}
-            />
-          </CampoFormulario>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setPedirSubconta(false)} disabled={fechando}>
-              Cancelar
-            </Button>
-            <Button type="button" onClick={() => void fechar(true)} disabled={fechando}>
-              {fechando ? <LoaderCircle className="animate-spin" /> : <CheckCheck />}
-              Fechar mês
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <GrupoDialog
         key={`grupos-${chaveGrupos}`}

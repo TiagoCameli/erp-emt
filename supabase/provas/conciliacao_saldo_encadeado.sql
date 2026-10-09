@@ -73,24 +73,14 @@ begin
     raise exception 'FALHA 3: painel = %', v_painel->'saldo';
   end if;
 
-  begin
-    perform public.fn_conciliacao_fechar_mes(v_c3, date '2026-10-01');
-    raise exception 'FALHA 3: fechou sem saldo da subconta';
-  exception when others then
-    if sqlerrm like 'FALHA%' then raise; end if;
-    if sqlerrm not like '%informe o saldo da subconta%' then raise exception 'FALHA 3: mensagem = %', sqlerrm; end if;
-  end;
+  -- 09/10/2026: a subconta nao trava mais o fechamento (sem saldo dela, ou
+  -- divergente). Vale o saldo da conta.
   perform public.fn_conciliacao_registrar_ancora(v_sub, date '2026-10-31', 90, 'extrato_pdf', 'pdf investimentos');
-  begin
-    perform public.fn_conciliacao_fechar_mes(v_c3, date '2026-10-01');
-    raise exception 'FALHA 3: fechou com subconta divergente';
-  exception when others then
-    if sqlerrm like 'FALHA%' then raise; end if;
-    if sqlerrm not like 'Subconta: banco R$ 90,00, app R$ 100,00%' then raise exception 'FALHA 3: mensagem = %', sqlerrm; end if;
-  end;
-  perform public.fn_conciliacao_registrar_ancora(v_sub, date '2026-10-31', 100, 'extrato_pdf', 'pdf investimentos');
   perform public.fn_conciliacao_fechar_mes(v_c3, date '2026-10-01');
-  raise notice 'OK 3 LEDGERBAL do fim vira ancora; subconta sem saldo e divergente recusam; batendo fecha';
+  if not exists (select 1 from public.conciliacao_fechamentos where conta_bancaria_id = v_c3 and mes = date '2026-10-01') then
+    raise exception 'FALHA 3: nao fechou com a subconta divergente';
+  end if;
+  raise notice 'OK 3 LEDGERBAL do fim vira ancora; subconta divergente nao trava o fechamento';
 end;
 $prova$;
 
