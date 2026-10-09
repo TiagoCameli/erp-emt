@@ -904,7 +904,7 @@ function ConciliacaoConta({
         aberto={desfazerIds !== null}
         onAbertoChange={(aberto) => !aberto && setDesfazerIds(null)}
         titulo={`Desfazer ${quantos(desfazerIds?.length ?? 0, "casamento", "casamentos")}`}
-        descricao="Os movimentos voltam para Faltam no app e os lançamentos ficam livres para casar com outros. O que os casamentos mudaram nas parcelas (conta, baixa, ajuste) continua como está."
+        descricao="Os movimentos voltam para Faltam no app e os lançamentos ficam livres para casar com outros. O que a própria conciliação lançou (transferência ou lançamento) é apagado e vai para a lixeira. O que os casamentos mudaram nas parcelas (conta, baixa, ajuste) continua como está."
         textoConfirmar="Desfazer"
         variante="destrutivo"
         onConfirmar={confirmarDesfazerVarios}
@@ -914,7 +914,7 @@ function ConciliacaoConta({
         aberto={desfazerAlvo !== null}
         onAbertoChange={(aberto) => !aberto && setDesfazerAlvo(null)}
         titulo="Desfazer casamento"
-        descricao="O movimento volta para Faltam no app e o lançamento fica livre para casar com outro. O que o casamento mudou na parcela (conta, baixa, ajuste) continua como está."
+        descricao="O movimento volta para Faltam no app e o lançamento fica livre para casar com outro. Se foi a própria conciliação que lançou (transferência ou lançamento), ele é apagado e vai para a lixeira. O que o casamento mudou na parcela (conta, baixa, ajuste) continua como está."
         textoConfirmar="Desfazer"
         variante="destrutivo"
         onConfirmar={confirmarDesfazer}
