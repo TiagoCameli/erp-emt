@@ -9809,6 +9809,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_conciliacao_importacoes: { Args: never; Returns: Json };
+      fn_conciliacao_excluir_ancora: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
       fn_conciliacao_excluir_extrato: {
         Args: { p_extrato_id: string; p_motivo: string };
         Returns: undefined;
