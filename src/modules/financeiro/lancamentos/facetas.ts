@@ -29,6 +29,13 @@ export type FacetaLancamentos =
   | "forma"
   | "origem";
 
+/**
+ * Valor da opção "(sem categoria)" no filtro de categoria. Não é uuid, então não
+ * vai para `categoria=`: viaja na URL como `sem_categoria=1`. É também a chave da
+ * linha sem categoria na faceta, para a opção só aparecer quando há o que achar.
+ */
+export const SEM_CATEGORIA = "__sem_categoria__";
+
 /** O que a consulta de facetas traz de cada lançamento. */
 export interface LinhaFacetaLancamentos {
   tipo: string;
@@ -125,8 +132,8 @@ export function facetasDaListagem(
       chave: (linha) => linha.fornecedor_id,
     },
     categoria: {
-      ativo: !!filtros.categoriaIds?.length,
-      chave: (linha) => linha.categoria_id,
+      ativo: !!filtros.categoriaIds?.length || !!filtros.semCategoria,
+      chave: (linha) => linha.categoria_id ?? SEM_CATEGORIA,
     },
     // Centro devolve o id cru do rateio: a tabela sobe cada um até a raiz com o
     // cadastro que já tem (`raizesPresentes`).
@@ -178,7 +185,7 @@ export function filtrosSemFaceta(
     case "fornecedor":
       return { ...filtros, fornecedorIds: undefined };
     case "categoria":
-      return { ...filtros, categoriaIds: undefined };
+      return { ...filtros, categoriaIds: undefined, semCategoria: undefined };
     case "centro":
       return {
         ...filtros,

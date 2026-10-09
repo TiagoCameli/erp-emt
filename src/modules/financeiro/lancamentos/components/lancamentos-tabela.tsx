@@ -50,6 +50,7 @@ import {
 import { excluirLancamento } from "@/modules/financeiro/lancamentos/actions";
 import {
   raizesPresentes,
+  SEM_CATEGORIA,
   type FacetaLancamentos,
 } from "@/modules/financeiro/lancamentos/facetas";
 import { BotaoDuplicarLancamento } from "@/modules/financeiro/lancamentos/components/botao-duplicar-lancamento";
@@ -496,12 +497,26 @@ export function LancamentosTabela({
   );
 
   const opcoesCategoria = React.useMemo<OpcaoFiltro[]>(
-    () =>
-      categorias.map((categoria) => ({
+    () => [
+      // Primeira da lista: é quem falta classificar, e some sozinha pela faceta
+      // quando não há lançamento sem categoria no filtro.
+      { valor: SEM_CATEGORIA, rotulo: "(sem categoria)" },
+      ...categorias.map((categoria) => ({
         valor: categoria.id,
         rotulo: categoria.nome,
       })),
+    ],
     [categorias],
+  );
+
+  // O que o filtro de categoria mostra marcado: os ids da URL mais o
+  // "(sem categoria)", que viaja num parâmetro próprio.
+  const categoriasEscolhidas = React.useMemo(
+    () =>
+      valores.semCategoria
+        ? [SEM_CATEGORIA, ...valores.categorias]
+        : valores.categorias,
+    [valores.semCategoria, valores.categorias],
   );
 
   /**
@@ -904,11 +919,23 @@ export function LancamentosTabela({
     selecaoMulti({
       chave: "categoria",
       rotulo: "Categoria",
-      valores: valores.categorias,
-      opcoes: facetar("categoria", opcoesCategoria, valores.categorias),
+      valores: categoriasEscolhidas,
+      opcoes: facetar("categoria", opcoesCategoria, categoriasEscolhidas),
       todosRotulo: "Todas as categorias",
       oculto: true,
       largura: LARGURA_NOME,
+      // "(sem categoria)" sai da lista de ids e vai para o parâmetro próprio,
+      // na mesma navegação.
+      onValores: (escolhidas) =>
+        setMuitos({
+          categoria: escreverListaNaUrl(
+            escolhidas.filter((valor) => valor !== SEM_CATEGORIA),
+          ),
+          sem_categoria: escolhidas.includes(SEM_CATEGORIA) ? "1" : null,
+          pagina: "1",
+        }),
+      onLimpar: () =>
+        setMuitos({ categoria: null, sem_categoria: null, pagina: "1" }),
     }),
     selecaoMulti({
       chave: "centro",

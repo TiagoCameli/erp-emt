@@ -130,6 +130,8 @@ export interface ListarLancamentosParams {
   fornecedorIds?: string[];
   /** Categorias do custo (categorias_financeiras). */
   categoriaIds?: string[];
+  /** Inclui também os lançamentos SEM categoria. */
+  semCategoria?: boolean;
   /**
    * Centros de custo do rateio. Cada um vale pela SUBÁRVORE dele. Mora em
    * lancamento_rateios (um lançamento pode ser rateado entre vários centros),
@@ -1352,13 +1354,19 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
   if (params.fornecedorIds?.length) {
     consulta = consulta.in("fornecedor_id", params.fornecedorIds);
   }
-  if (params.categoriaIds?.length) {
-    consulta = consulta.in("categoria_id", params.categoriaIds);
+  // Categoria e forma têm duas pernas, e `in` não casa nulo: "sem categoria" e
+  // "sem forma informada" só entram por `is.null`, então cada par vira um `or`.
+  if (params.categoriaIds?.length || params.semCategoria) {
+    const pernas: string[] = [];
+    if (params.categoriaIds?.length) {
+      pernas.push(`categoria_id.in.(${params.categoriaIds.join(",")})`);
+    }
+    if (params.semCategoria) pernas.push("categoria_id.is.null");
+    consulta = consulta.or(pernas.join(","));
   }
-  // Forma é a única com duas pernas, e `in` não casa nulo: "sem forma informada"
-  // (880 lançamentos, R$ 13,4 mi) só entra por `is.null`, então as duas viram um
-  // `or` só. Dois `or` na mesma consulta (este e o da busca) o PostgREST aceita:
-  // conferido contra a API do projeto, cada um vira uma condição AND-ada.
+  // "Sem forma informada" são 880 lançamentos (R$ 13,4 mi). Vários `or` na mesma
+  // consulta (estes dois e o da busca) o PostgREST aceita: conferido contra a API
+  // do projeto, cada um vira uma condição AND-ada.
   if (params.formaPagamentoIds?.length || params.semForma) {
     const pernas: string[] = [];
     if (params.formaPagamentoIds?.length) {

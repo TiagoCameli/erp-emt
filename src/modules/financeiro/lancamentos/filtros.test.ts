@@ -460,6 +460,22 @@ describe("lerFiltrosLancamentos: filtros de múltipla escolha", () => {
     }
   });
 
+  it("sem_categoria entra como filtro próprio e volta para a barra", () => {
+    const { filtros, valores } = lerFiltrosLancamentos({ sem_categoria: "1" });
+    expect(filtros.semCategoria).toBe(true);
+    expect(valores.semCategoria).toBe("1");
+  });
+
+  it("sem_categoria liga só no literal 1", () => {
+    for (const valor of ["0", "true", "sim", ""]) {
+      const { filtros, valores } = lerFiltrosLancamentos({
+        sem_categoria: valor,
+      });
+      expect(filtros.semCategoria).toBeUndefined();
+      expect(valores.semCategoria).toBe("");
+    }
+  });
+
   it("status_in é status LITERAL e não mexe no status de situação", () => {
     const { filtros } = lerFiltrosLancamentos({ status_in: "aprovado,pago" });
     expect(filtros.statusIn).toEqual(["aprovado", "pago"]);
