@@ -19,6 +19,7 @@ export interface AplicacaoParaAcao {
   id: string;
   /** A etapa do centro de investimento (o que a transferência leva). */
   etapaId: string;
+  /** O rótulo com a conta (`rotuloAplicacao`), que é o que a pessoa escolhe. */
   nome: string;
   subcontaId: string;
   contaPaiId: string | null;
