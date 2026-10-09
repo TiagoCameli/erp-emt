@@ -13,6 +13,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { paraNumero } from "@/modules/compras/ordens/calculo";
 import {
   carregarSaldoInicialSubconta,
@@ -64,6 +65,7 @@ export function SaldoInicialSubcontaDrawer({
   const [data, setData] = React.useState(subconta.saldoInicialData ?? "");
   const [valores, setValores] = React.useState<Record<string, string>>({});
   const [erro, setErro] = React.useState<string | null>(null);
+  const [motivo, setMotivo] = React.useState("");
   const [salvando, setSalvando] = React.useState(false);
 
   React.useEffect(() => {
@@ -109,6 +111,10 @@ export function SaldoInicialSubcontaDrawer({
       setErro("Cada saldo precisa ser um valor maior ou igual a zero");
       return;
     }
+    if (motivo.trim().length < 3) {
+      setErro("Informe o motivo da mudança do saldo inicial");
+      return;
+    }
 
     setSalvando(true);
     try {
@@ -119,6 +125,7 @@ export function SaldoInicialSubcontaDrawer({
           aplicacaoId: a.aplicacaoId,
           valor: (centavos[i] ?? 0) / 100,
         })),
+        motivo,
       });
       if ("erro" in resultado) {
         toast.error(resultado.erro);
@@ -211,6 +218,20 @@ export function SaldoInicialSubcontaDrawer({
               <span className="font-medium">Saldo inicial da subconta</span>
               <MoneyText valor={totalCentavos / 100} className="font-semibold" />
             </div>
+
+            <CampoFormulario
+              id="saldo-inicial-motivo"
+              rotulo="Motivo da mudança"
+              obrigatorio
+              ajuda="Fica registrado com seu nome. Com mês conciliado fechado na conta, o saldo inicial não muda: reabra os meses na Conciliação."
+            >
+              <Textarea
+                id="saldo-inicial-motivo"
+                rows={2}
+                value={motivo}
+                onChange={(evento) => setMotivo(evento.target.value)}
+              />
+            </CampoFormulario>
 
             {erro ? (
               <p role="alert" className="text-detalhe text-status-rejeitado">

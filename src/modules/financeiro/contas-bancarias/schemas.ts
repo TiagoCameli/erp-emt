@@ -68,9 +68,28 @@ export const contaSchema = z.object({
    */
   saldoInicialData: z.string().trim().nullable(),
   ativo: z.boolean(),
+  /**
+   * Por que o saldo inicial mudou. O banco recusa a mudança sem ele (o saldo
+   * inicial é a base da prova da conciliação); só é exigido quando o saldo ou a
+   * data mudam, e quem decide isso é a action, que conhece o valor gravado.
+   */
+  motivoSaldoInicial: z.string().trim().max(500, { error: "Máximo de 500 caracteres" }).optional(),
 });
 
 export type ContaInput = z.infer<typeof contaSchema>;
+
+interface SaldoInicialDaConta {
+  saldoInicial: number | null;
+  saldoInicialData: string | null;
+}
+
+/** O saldo inicial ou a data de corte mudou? Data vazia e nula são a mesma. */
+export function saldoInicialMudou(antes: SaldoInicialDaConta, depois: SaldoInicialDaConta): boolean {
+  return (
+    antes.saldoInicial !== depois.saldoInicial ||
+    (antes.saldoInicialData || null) !== (depois.saldoInicialData || null)
+  );
+}
 
 /**
  * Schema do formulário (client). Campos texto e o saldo continuam string para
@@ -104,6 +123,8 @@ export const contaFormSchema = z.object({
       error: "Informe uma data válida",
     }),
   ativo: z.boolean(),
+  // Só aparece (e só é exigido) quando o saldo inicial ou a data mudam.
+  motivoSaldoInicial: z.string().trim().max(500, { error: "Máximo de 500 caracteres" }),
 });
 
 export type ContaFormInput = z.infer<typeof contaFormSchema>;
@@ -133,6 +154,7 @@ export const saldoInicialSubcontaSchema = z.object({
       }),
     )
     .min(1, { error: "Esta subconta não tem aplicação cadastrada" }),
+  motivo: z.string().trim().min(3, { error: "Informe o motivo da mudança do saldo inicial" }).max(500),
 });
 
 export type SaldoInicialSubcontaInput = z.infer<typeof saldoInicialSubcontaSchema>;

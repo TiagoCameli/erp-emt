@@ -18,6 +18,7 @@ import {
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ROTULO_BANCO } from "@/modules/financeiro/_shared/formato";
 import {
   criarConta,
@@ -29,6 +30,7 @@ import {
   ROTULO_TIPO_CONTA,
   TIPO_CONTA,
   contaFormSchema,
+  saldoInicialMudou,
   type ContaFormInput,
 } from "@/modules/financeiro/contas-bancarias/schemas";
 
@@ -54,7 +56,13 @@ function valoresIniciais(conta: ContaLista | null): ContaFormInput {
         : "",
     saldoInicialData: conta?.saldoInicialData ?? "",
     ativo: conta?.ativo ?? true,
+    motivoSaldoInicial: "",
   };
+}
+
+/** Saldo inicial digitado no formulário, como número (vazio é zero). */
+function saldoDigitado(texto: string): number {
+  return texto.trim() === "" ? 0 : Number(texto.replace(",", "."));
 }
 
 export interface ContasFormDrawerProps {
@@ -96,11 +104,25 @@ export function ContasFormDrawer({
    */
   const semPermissaoDeSaldo = editando && conta.saldoInicial === null;
 
+  // Mudar o saldo inicial de conta existente pede o motivo: o banco recusa sem
+  // ele, e recusa sempre em conta com mês conciliado fechado.
+  const saldoMudou =
+    editando &&
+    !semPermissaoDeSaldo &&
+    saldoInicialMudou(
+      { saldoInicial: conta.saldoInicial, saldoInicialData: conta.saldoInicialData },
+      {
+        saldoInicial: saldoDigitado(form.watch("saldoInicial")),
+        saldoInicialData: form.watch("saldoInicialData").trim() || null,
+      },
+    );
+
   async function aoEnviar(valores: ContaFormInput) {
-    const saldoInicial =
-      valores.saldoInicial.trim() === ""
-        ? 0
-        : Number(valores.saldoInicial.replace(",", "."));
+    const saldoInicial = saldoDigitado(valores.saldoInicial);
+    if (saldoMudou && valores.motivoSaldoInicial.trim() === "") {
+      form.setError("motivoSaldoInicial", { message: "Informe o motivo da mudança do saldo inicial" });
+      return;
+    }
 
     const dados = {
       nome: valores.nome,
@@ -116,6 +138,7 @@ export function ContasFormDrawer({
           ? null
           : valores.saldoInicialData.trim(),
       ativo: valores.ativo,
+      motivoSaldoInicial: saldoMudou ? valores.motivoSaldoInicial : undefined,
     };
 
     const resultado = editando
@@ -314,6 +337,22 @@ export function ContasFormDrawer({
             </CampoFormulario>
           </LinhaCampos>
         )}
+
+        {saldoMudou ? (
+          <CampoFormulario
+            id="conta-motivo-saldo-inicial"
+            rotulo="Motivo da mudança do saldo inicial"
+            ajuda="Fica registrado com seu nome. Conta com mês conciliado fechado não aceita a mudança: reabra os meses na Conciliação."
+            erro={form.formState.errors.motivoSaldoInicial?.message}
+          >
+            <Textarea
+              id="conta-motivo-saldo-inicial"
+              rows={2}
+              disabled={salvando}
+              {...form.register("motivoSaldoInicial")}
+            />
+          </CampoFormulario>
+        ) : null}
 
         <SelectAtivo
           value={form.watch("ativo")}

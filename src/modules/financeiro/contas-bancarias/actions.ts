@@ -132,10 +132,28 @@ export async function editarConta(
     { p_conta: idValido.data },
   );
 
+  // O saldo inicial nunca vai no update direto: só pela RPC, que leva o motivo
+  // e que o banco recusa em conta com mês conciliado fechado. Sem mudança a RPC
+  // não grava nada e não pede motivo.
   const registro = paraRegistro(validado.data);
-  if (erroPermissao || podeVerSaldo !== true) {
-    delete (registro as Partial<typeof registro>).saldo_inicial;
-    delete (registro as Partial<typeof registro>).saldo_inicial_data;
+  delete (registro as Partial<typeof registro>).saldo_inicial;
+  delete (registro as Partial<typeof registro>).saldo_inicial_data;
+
+  if (!erroPermissao && podeVerSaldo === true) {
+    const { error: erroSaldo } = await supabase.rpc("fn_alterar_saldo_inicial", {
+      p_conta: idValido.data,
+      // Centavo exato: 0,1 + 0,2 em ponto flutuante não pode chegar ao banco.
+      p_saldo: Math.round(validado.data.saldoInicial * 100) / 100,
+      p_data: validado.data.saldoInicialData,
+      p_motivo: validado.data.motivoSaldoInicial ?? "",
+    });
+    if (erroSaldo) {
+      return erroAcao(
+        "financeiro.contas-bancarias.editarConta.saldoInicial",
+        erroSaldo,
+        erroSaldo.message || "Não foi possível salvar o saldo inicial",
+      );
+    }
   }
 
   const { error } = await supabase
@@ -256,6 +274,7 @@ export async function salvarSaldoInicialSubconta(
   const { error } = await supabase.rpc("fn_salvar_saldo_inicial_subconta", {
     p_subconta: v.subcontaId,
     p_data: v.data,
+    p_motivo: v.motivo,
     // Centavo exato: 0,1 + 0,2 em ponto flutuante não pode chegar ao banco.
     p_saldos: v.saldos.map((s) => ({
       aplicacaoId: s.aplicacaoId,
