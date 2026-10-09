@@ -1213,6 +1213,31 @@ export async function adicionarAncora(
   return { ok: true };
 }
 
+/**
+ * Apaga uma âncora de saldo. O banco recusa quando o mês dela (ou o mês que
+ * ela abre, se for do último dia) está fechado.
+ */
+export async function excluirAncora(ancoraId: string): Promise<ResultadoAcao> {
+  try {
+    await exigirPermissao(RECURSO, "editar");
+  } catch {
+    return { erro: "Sem permissão para conciliar" };
+  }
+  if (!idSchema.safeParse(ancoraId).success) return { erro: "Âncora inválida" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_conciliacao_excluir_ancora", { p_id: ancoraId });
+  if (error) {
+    return erroAcao(
+      "financeiro.conciliacao.excluirAncora",
+      error,
+      mensagem(error, "Não foi possível excluir a âncora"),
+    );
+  }
+  revalidatePath(ROTA, "layout");
+  return { ok: true };
+}
+
 const debitoParaDevolucaoSchema = z.object({
   id: z.string(),
   dataMovimento: z.string(),

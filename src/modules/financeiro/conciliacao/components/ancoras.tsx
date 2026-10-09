@@ -2,9 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Anchor, LoaderCircle, Plus } from "lucide-react";
+import { Anchor, LoaderCircle, Plus, Trash2 } from "lucide-react";
 
-import { CampoFormulario, Combobox, EmptyState, MoneyText } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  Combobox,
+  ConfirmDialog,
+  EmptyState,
+  MoneyText,
+} from "@/components/canonicos";
 import { InputMoeda } from "@/components/canonicos/input-numerico";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
@@ -18,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatarData } from "@/lib/formatadores";
-import { adicionarAncora } from "@/modules/financeiro/conciliacao/actions";
+import { adicionarAncora, excluirAncora } from "@/modules/financeiro/conciliacao/actions";
 import type {
   AncoraSaldo,
   ContaBancariaOpcao,
@@ -49,6 +55,7 @@ export function Ancoras({ ancoras, contas, podeEditar }: AncorasProps) {
   const [saldo, setSaldo] = React.useState("");
   const [observacao, setObservacao] = React.useState("");
   const [enviando, setEnviando] = React.useState(false);
+  const [excluirAlvo, setExcluirAlvo] = React.useState<AncoraSaldo | null>(null);
 
   const nomeConta = new Map(contas.map((c) => [c.id, c.nome]));
   const porConta = new Map<string, AncoraSaldo[]>();
@@ -69,6 +76,18 @@ export function Ancoras({ ancoras, contas, podeEditar }: AncorasProps) {
     }
     toast.success("Âncora gravada");
     setAberto(false);
+    router.refresh();
+  }
+
+  async function confirmarExcluir() {
+    if (!excluirAlvo) return;
+    const resposta = await excluirAncora(excluirAlvo.id);
+    if ("erro" in resposta) {
+      toast.error(resposta.erro);
+      return false;
+    }
+    toast.success("Âncora excluída");
+    setExcluirAlvo(null);
     router.refresh();
   }
 
@@ -108,7 +127,21 @@ export function Ancoras({ ancoras, contas, podeEditar }: AncorasProps) {
                       {ROTULO_FONTE[a.fonte]}
                       {a.observacao ? ` · ${a.observacao}` : ""}
                     </span>
-                    <MoneyText valor={a.saldo} />
+                    <span className="flex items-center gap-1">
+                      <MoneyText valor={a.saldo} />
+                      {podeEditar ? (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label={`Excluir âncora de ${formatarData(a.data)}`}
+                          title="Excluir âncora"
+                          onClick={() => setExcluirAlvo(a)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      ) : null}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -116,6 +149,20 @@ export function Ancoras({ ancoras, contas, podeEditar }: AncorasProps) {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        aberto={excluirAlvo !== null}
+        onAbertoChange={(v) => !v && setExcluirAlvo(null)}
+        titulo="Excluir âncora"
+        descricao={
+          excluirAlvo
+            ? `${nomeConta.get(excluirAlvo.contaId) ?? "Conta"}, ${formatarData(excluirAlvo.data)}: o saldo do banco deixa de partir dessa âncora. Um mês fechado não deixa excluir.`
+            : ""
+        }
+        textoConfirmar="Excluir âncora"
+        variante="destrutivo"
+        onConfirmar={confirmarExcluir}
+      />
 
       <Dialog open={aberto} onOpenChange={(v) => !enviando && setAberto(v)}>
         <DialogContent className="sm:max-w-md">
