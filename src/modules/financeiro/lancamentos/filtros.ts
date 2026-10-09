@@ -78,6 +78,8 @@ export interface ValoresFiltrosLancamentos {
    */
   fornecedores: string[];
   categorias: string[];
+  /** "1" quando os lançamentos SEM categoria estão incluídos. */
+  semCategoria: string;
   centros: string[];
   /** Raízes escolhidas "sem etapa" (`centro_raiz=`). */
   centrosSemEtapa: string[];
@@ -279,6 +281,9 @@ export function lerFiltrosLancamentos(
   // valendo, então todo link antigo desta tela continua abrindo o mesmo conjunto.
   const fornecedorIds = lerUuidsDaUrl(params.fornecedor);
   const categoriaIds = lerUuidsDaUrl(params.categoria);
+  // "Sem categoria" é escolha do filtro, como o "sem forma" abaixo: é quem falta
+  // classificar, e `in` nunca casa nulo.
+  const semCategoria = params.sem_categoria === "1" ? true : undefined;
   const centroCustoIds = lerUuidsDaUrl(params.centro);
   // O "sem etapa" do filtro de centro: cada id vale só pelo rateio gravado
   // nele, sem as etapas. Ver `centrosDaListagem` em `_shared/centro-custo`.
@@ -412,6 +417,7 @@ export function lerFiltrosLancamentos(
       mesCompetencia: undefined,
       fornecedorIds,
       categoriaIds,
+      semCategoria,
       centroCustoIds,
       centroSemEtapaIds,
       contaBancariaId,
@@ -458,6 +464,7 @@ export function lerFiltrosLancamentos(
       origem: origem ?? "",
       fornecedores: fornecedorIds,
       categorias: categoriaIds,
+      semCategoria: semCategoria ? "1" : "",
       centros: centroCustoIds,
       centrosSemEtapa: centroSemEtapaIds,
       formas: formaPagamentoIds,

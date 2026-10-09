@@ -12,6 +12,7 @@ import {
   filtrosSemFaceta,
   raizesPresentes,
   revisoesDaLinha,
+  SEM_CATEGORIA,
   type LinhaFacetaLancamentos,
 } from "./facetas";
 
@@ -73,6 +74,20 @@ describe("facetas da listagem de lançamentos", () => {
       new Set(facetas.categoria),
     );
     expect(opcoes.map((o) => o.valor)).toEqual(["c1", "c2"]);
+  });
+
+  it("lançamento sem categoria oferece a opção \"(sem categoria)\"", () => {
+    const { categoria } = facetasDaListagem(BASE, false, HOJE);
+    expect(categoria.chave(linha({ categoria_id: null }))).toBe(SEM_CATEGORIA);
+    expect(categoria.chave(linha({ categoria_id: "c1" }))).toBe("c1");
+  });
+
+  it("\"sem categoria\" ativa a faceta e sai junto ao soltá-la", () => {
+    const filtros: FiltrosLancamentos = { ...BASE, semCategoria: true };
+    expect(facetasDaListagem(filtros, false, HOJE).categoria.ativo).toBe(true);
+    const solto = filtrosSemFaceta(filtros, "categoria", []);
+    expect(solto.semCategoria).toBeUndefined();
+    expect(solto.categoriaIds).toBeUndefined();
   });
 
   it("status 'A pagar' é a situação do dinheiro, não o status literal", () => {
