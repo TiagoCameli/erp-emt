@@ -25,6 +25,9 @@ function parcela(troca: Partial<ParcelaAReceber> = {}): ParcelaAReceber {
     dataVencimento: "2026-08-30",
     valor: 1_250_000.5,
     status: "pendente",
+    categoriaId: null,
+    mesCompetencia: null,
+    centroCustoIds: [],
     ...troca,
   };
 }
