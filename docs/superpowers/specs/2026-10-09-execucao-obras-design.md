@@ -1,6 +1,6 @@
 # Execução de Obras: desenho
 
-**Data:** 09/10/2026 · **Status:** rascunho para revisão do Tiago · **Código:** nenhum até este spec e o plano da Fase 1 serem aprovados.
+**Data:** 09/10/2026 · **Status:** aprovado pelo Tiago em 09/10/2026 ("pode seguir"), com as recomendações da seção 14 · **Código:** nenhum até este spec e o plano da Fase 1 serem aprovados.
 
 Pedido: `vault/projects/erp-emt/prompt-cronograma-obras.md` (itens 1 a 15). Este documento segue o mesmo padrão da Medição de Contratos (`2026-09-25-medicao-contratos-design.md`): decisões numeradas, modelo de dados, regras no banco, telas, provas, fases e perguntas em aberto. O que está marcado **[proposta]** é regra que eu escrevi para fechar o desenho e que você precisa confirmar ou corrigir na revisão; não é decisão sua.
 
@@ -317,6 +317,10 @@ Cada opção diz o que implica. A recomendação vem primeiro.
 | Q9 | **Estoque físico sem valor** (seção 4) está certo? | **(a) Sim, só quantidade**: não conflita com "custo de obra = lançamentos" (29/07). (b) Quer valor/custo por consumo: aí é preciso rever a decisão de 29/07 antes, porque compra e consumo contariam duas vezes. | F5 |
 | Q10 | **Nome no menu e prefixo**: "Execução" / `ex_`? | **(a) "Execução", rota `/execucao`, prefixo `ex_`.** (b) "Obras em Execução" (rótulo longo na sidebar). (c) "Planejamento". Só rótulo; o prefixo fica `ex_` em qualquer caso. | F1 |
 | Q11 | **Obra piloto** da F1. | Sugiro a **Obra 012 (Escola de Mâncio Lima)** para edificação e um trecho do **Lote 10** para rodovia, montados por você na tela (sem carga da planilha antiga, como pedido). | F1 |
+
+(emenda 09/10/2026, decisão do Tiago): "pode seguir" aceita a opção (a) de Q1 a Q11. Q1 lista por obra; Q2 engenheiro propõe, Tiago aprova; Q3 só quem tem `execucao.anotacoes/ver`; Q4 nome, função, empresa, contato, CPF opcional, vínculo posterior com colaborador; Q5 saldo negativo com alerta; Q6 link sem login, só leitura, até domingo + 2 dias, sem fotos por padrão; Q8 OCs aprovado, recebido e pago; Q9 estoque só de quantidade; Q10 "Execução", `/execucao`, `ex_`; Q11 Obra 012 e trecho do Lote 10. **Q7 é suposição, não resposta**: eu não tinha recomendado nenhuma opção, então a F1 segue com (a), produtividade por dia e todo dia com horas > 0 contando 1 dia útil (sábado de 5 h inclusive). Trocar depois do merge da F1 muda todas as datas; o Tiago pode trocar antes.
+
+(emenda 09/10/2026): a F1 foi dividida em **F1a** (banco base, acesso, pastas, cronogramas, locais, calendário e feriados, motor CPM, grade editável, guia para agentes) e **F1b** (importação Excel e modelos × locais), um PR cada. Na F1a, reordenar e recuar na grade é por botão e atalho; arrastar com o mouse (@dnd-kit) entra na F1b. `ex_atividade_recursos` sai da F1 e entra na F3, com o histograma, que é quem a usa. Na Q1 (a), "você entra na lista de todas" vira regra: ao nascer a pasta, entram na lista quem criou e todos os usuários ativos do perfil Admin.
 
 ## 15. Fora do escopo
 
