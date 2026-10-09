@@ -13,8 +13,10 @@ import {
   DataTable,
   EmptyState,
   FiltroBusca,
+  FiltroMes,
   FiltroPeriodo,
   FiltroSelect,
+  FiltroSelectMulti,
   FiltroValor,
   GradeKpis,
   KPICard,
@@ -33,8 +35,24 @@ import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   ROTULO_BANCO,
   STATUS_PARCELA,
+  STATUS_PARCELA_ABERTA,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
+import {
+  escreverListaNaUrl,
+  MAX_ITENS_FILTRO,
+} from "@/modules/financeiro/_shared/listas-na-url";
+import { subarvoreDeCentros } from "@/modules/_shared/centro-custo/selecao";
+import {
+  centrosEfetivos,
+  etapasValidas,
+  opcoesDeEtapa,
+  opcoesDeRaiz,
+  rotuloDasEtapas,
+  separarRaizesEEtapas,
+  temEtapasParaEscolher,
+} from "@/modules/_shared/centro-custo/filtro";
+import { raizesPresentes } from "@/modules/financeiro/lancamentos/facetas";
 import { DetalheParcelaDrawer } from "@/modules/financeiro/pagamentos/components/detalhe-parcela-drawer";
 import { LancamentoFormDrawer } from "@/modules/financeiro/lancamentos/components/lancamento-form-drawer";
 import type {
@@ -61,9 +79,12 @@ import {
   contagemRecebimentos,
   somarParaResumoAReceber,
 } from "@/modules/financeiro/recebimentos/resumo";
+import {
+  facetarFilaAReceber,
+  type ValoresFiltrosAReceber,
+} from "@/modules/financeiro/recebimentos/fila-a-receber";
 import { DarComoRecebidoDialog } from "./dar-como-recebido-dialog";
 import {
-  filtrarFacetado,
   restringirOpcoes,
   selecao as selecaoUnica,
   type FacetasPresentes,
@@ -74,23 +95,24 @@ const TAMANHO_PAGINA = 25;
 /** Largura máxima do seletor de nome comprido (cliente, conta bancária). */
 const LARGURA_NOME = "max-w-[15rem]";
 
-/** Valores dos filtros da aba "A receber", como vivem na URL. */
-export interface ValoresFiltrosAReceber {
-  busca: string;
-  cliente: string;
-  conta: string;
-  valorDe: string;
-  valorAte: string;
-  vencDe: string;
-  vencAte: string;
-}
+export type { ValoresFiltrosAReceber };
 
-/** Valores dos filtros da aba "Recebidos", como vivem na URL (prefixo h_). */
-export interface ValoresFiltrosRecebidos extends ValoresFiltrosAReceber {
-  categoria: string;
+/**
+ * Valores dos filtros da aba "Recebidos", como vivem na URL (prefixo h_). Os
+ * mesmos da outra aba, menos o status (parcela recebida é sempre "pago"), mais
+ * o período de recebimento.
+ */
+export interface ValoresFiltrosRecebidos
+  extends Omit<ValoresFiltrosAReceber, "status"> {
   recDe: string;
   recAte: string;
 }
+
+/** Status que a fila "A receber" pode ter: os em aberto. */
+const OPCOES_STATUS: OpcaoFiltro[] = STATUS_PARCELA_ABERTA.map((status) => ({
+  valor: status,
+  rotulo: STATUS_PARCELA[status].rotulo,
+}));
 
 /**
  * A coluna de centro de custo, igual nas duas abas de Recebimentos.
@@ -171,24 +193,6 @@ export interface RecebimentosClienteProps {
   centrosCusto: CentroCustoOpcao[];
   formasPagamento: FormaPagamentoOpcao[];
   condicoesPagamento: CondicaoPagamentoOpcao[];
-}
-
-/**
- * Data (YYYY-MM-DD, comparável como texto) dentro do período. Ponta vazia é sem
- * limite naquele lado. Parcela sem a data fica fora de qualquer período: ela não
- * tem data para comparar, e tratá-la como "dentro" mostraria linha que o filtro
- * não pediu.
- */
-function dentroDoPeriodo(
-  data: string | null,
-  de: string,
-  ate: string,
-): boolean {
-  if (de === "" && ate === "") return true;
-  if (!data) return false;
-  if (de !== "" && data < de) return false;
-  if (ate !== "" && data > ate) return false;
-  return true;
 }
 
 /** Número do lançamento + parcela para exibição (ex: LAN-2026-0001 / 2). */
@@ -343,6 +347,119 @@ export function RecebimentosCliente({
   );
 
   /**
+   * O primeiro degrau da escada de centro de custo: só as RAÍZES. O filtro
+   * expande a subárvore, então escolher a obra alcança as etapas dela. Quem quer
+   * a etapa sozinha usa o segundo campo, que aparece ao lado. Mesma regra de
+   * Pagamentos e Lançamentos (`_shared/centro-custo/filtro.ts`).
+   */
+  const opcoesCentro = React.useMemo<OpcaoFiltro[]>(
+    () => opcoesDeRaiz(centrosCusto),
+    [centrosCusto],
+  );
+
+  /**
+   * A escada de uma aba. Cada aba tem a sua chave na URL (`centro` e
+   * `h_centro`), com a lista EFETIVA: a raiz, ou as etapas dela quando alguma
+   * foi escolhida. Mesmo formato de Pagamentos, então o link é o mesmo.
+   */
+  function escadaDeCentro(chave: string, efetivos: string[]) {
+    const { raizes, etapas } = separarRaizesEEtapas(centrosCusto, efetivos);
+    const nomes = rotuloDasEtapas(centrosCusto, raizes);
+    const gravar = (novasRaizes: string[], novasEtapas: string[]) =>
+      setMuitos({
+        [chave]: escreverListaNaUrl(
+          centrosEfetivos(centrosCusto, novasRaizes, novasEtapas),
+        ),
+        pagina: "1",
+      });
+    return { raizes, etapas, nomes, gravar };
+  }
+
+  const escadaAReceber = escadaDeCentro("centro", valoresAReceber.centroIds);
+  const escadaRecebidos = escadaDeCentro(
+    "h_centro",
+    valoresRecebidos.centroIds,
+  );
+
+  /**
+   * Os dois campos do centro de custo (raiz e, quando a raiz tem, etapa), que
+   * gravam na MESMA chave da URL. `restringir` aplica a faceta da aba.
+   */
+  function filtrosDeCentro(
+    prefixo: string,
+    chave: string,
+    escada: ReturnType<typeof escadaDeCentro>,
+    restringir: (
+      degrau: "raiz" | "etapa",
+      base: OpcaoFiltro[],
+      escolhidos: string[],
+    ) => OpcaoFiltro[],
+  ): FiltroConfiguravel[] {
+    const campo = (config: {
+      id: string;
+      rotulo: string;
+      valores: string[];
+      opcoes: OpcaoFiltro[];
+      todosRotulo: string;
+      oculto: boolean;
+      onValores: (ids: string[]) => void;
+      onLimpar: () => void;
+    }): FiltroConfiguravel => ({
+      id: config.id,
+      rotulo: config.rotulo,
+      ocultoPorPadrao: config.oculto,
+      temValor: config.valores.length > 0,
+      onLimpar: config.onLimpar,
+      elemento: (
+        <FiltroSelectMulti
+          valores={config.valores}
+          onValoresChange={config.onValores}
+          opcoes={config.opcoes}
+          placeholder={config.rotulo}
+          todosRotulo={config.todosRotulo}
+          maximo={MAX_ITENS_FILTRO}
+          className={LARGURA_NOME}
+        />
+      ),
+    });
+
+    return [
+      campo({
+        id: `${prefixo}centro`,
+        rotulo: "Centro de custo",
+        valores: escada.raizes,
+        opcoes: restringir("raiz", opcoesCentro, escada.raizes),
+        todosRotulo: "Todos os centros",
+        oculto: true,
+        onValores: (ids) =>
+          escada.gravar(ids, etapasValidas(centrosCusto, ids, escada.etapas)),
+        onLimpar: () => setMuitos({ [chave]: null, pagina: "1" }),
+      }),
+      // O segundo degrau só existe quando a raiz escolhida tem etapas, e aparece
+      // sem passar pelo menu: escolher a obra e ter de caçar o campo da etapa
+      // seria esconder a pergunta seguinte.
+      ...(temEtapasParaEscolher(centrosCusto, escada.raizes)
+        ? [
+            campo({
+              id: `${prefixo}etapa`,
+              rotulo: escada.nomes.rotulo,
+              valores: escada.etapas,
+              opcoes: restringir(
+                "etapa",
+                opcoesDeEtapa(centrosCusto, escada.raizes),
+                escada.etapas,
+              ),
+              todosRotulo: escada.nomes.todos,
+              oculto: false,
+              onValores: (ids) => escada.gravar(escada.raizes, ids),
+              onLimpar: () => escada.gravar(escada.raizes, []),
+            }),
+          ]
+        : []),
+    ];
+  }
+
+  /**
    * Seletor de valor único preso a um parâmetro da URL. Trocar o filtro zera a
    * página: filtrar e cair numa página vazia parece lista sem resultado.
    */
@@ -417,6 +534,25 @@ export function RecebimentosCliente({
     };
   }
 
+  /** Mês de competência (yyyy-MM) numa chave da URL. */
+  function mesReferencia(id: string, chave: string, valor: string) {
+    return {
+      id,
+      rotulo: "Mês de competência",
+      ocultoPorPadrao: true,
+      temValor: valor !== "",
+      onLimpar: () => setMuitos({ [chave]: null, pagina: "1" }),
+      elemento: (
+        <FiltroMes
+          valor={valor}
+          onValorChange={(novo) =>
+            setMuitos({ [chave]: novo === "" ? null : novo, pagina: "1" })
+          }
+        />
+      ),
+    } satisfies FiltroConfiguravel;
+  }
+
   /** Faixa de valor (de/até) da aba, presa às chaves de URL dela. */
   function faixaValor(
     id: string,
@@ -447,46 +583,31 @@ export function RecebimentosCliente({
   );
   const faixaAReceber = useFaixaUrl("valor_de", "valor_ate");
 
-  // Facetado: quem paga e conta só oferecem o que existe na fila filtrada pelos
-  // outros (ver `_shared/filtros-facetados`). Busca, valor e vencimento entram
-  // livres.
+  // Facetado: cada seletor só oferece o que existe na fila filtrada pelos
+  // outros (ver `fila-a-receber.ts`). Busca, valor, vencimento e mês entram
+  // livres. A subárvore do centro é resolvida uma vez por render, e a de cada
+  // opção fica guardada para a faceta não refazer a mesma conta por linha.
   const { linhas: aReceberFiltradas, opcoes: opcoesAReceber } = React.useMemo(() => {
-    const termo = buscaAReceber.trim().toLowerCase();
-    const valorDe =
-      valoresAReceber.valorDe === "" ? null : Number(valoresAReceber.valorDe);
-    const valorAte =
-      valoresAReceber.valorAte === "" ? null : Number(valoresAReceber.valorAte);
-
-    return filtrarFacetado(
+    const subarvore =
+      valoresAReceber.centroIds.length === 0
+        ? null
+        : subarvoreDeCentros(centrosCusto, valoresAReceber.centroIds);
+    const subarvores = new Map<string, ReadonlySet<string>>();
+    const subarvoreDe = (id: string) => {
+      let dentro = subarvores.get(id);
+      if (!dentro) {
+        dentro = subarvoreDeCentros(centrosCusto, [id]);
+        subarvores.set(id, dentro);
+      }
+      return dentro;
+    };
+    return facetarFilaAReceber(
       aReceber,
-      {
-        cliente: {
-          selecionados: selecaoUnica(valoresAReceber.cliente),
-          chave: (parcela) => parcela.clienteId,
-        },
-        conta: {
-          selecionados: selecaoUnica(valoresAReceber.conta),
-          chave: (parcela) => parcela.contaBancariaId,
-        },
-      },
-      [
-        (parcela) =>
-          termo === "" ||
-          `${parcela.lancamentoNumero ?? ""} ${parcela.numeroDocumento ?? ""} ${parcela.descricao} ${parcela.clienteNome}`
-            .toLowerCase()
-            .includes(termo),
-        (parcela) => {
-          if (valorDe !== null && parcela.valor < valorDe) return false;
-          if (valorAte !== null && parcela.valor > valorAte) return false;
-          return dentroDoPeriodo(
-            parcela.dataVencimento,
-            valoresAReceber.vencDe,
-            valoresAReceber.vencAte,
-          );
-        },
-      ],
+      { ...valoresAReceber, busca: buscaAReceber },
+      subarvore,
+      subarvoreDe,
     );
-  }, [aReceber, buscaAReceber, valoresAReceber]);
+  }, [aReceber, buscaAReceber, valoresAReceber, centrosCusto]);
 
   /**
    * O que os cards somam: a seleção quando existe, senão a lista filtrada.
@@ -541,6 +662,27 @@ export function RecebimentosCliente({
       todosRotulo: "Todas as contas",
       largura: LARGURA_NOME,
     }),
+    ...filtrosDeCentro("", "centro", escadaAReceber, (_degrau, base) =>
+      opcoesAReceber("centro", base),
+    ),
+    selecao({
+      id: "categoria",
+      chave: "categoria",
+      rotulo: "Categoria",
+      valor: valoresAReceber.categoria,
+      opcoes: opcoesAReceber("categoria", opcoesCategoria),
+      todosRotulo: "Todas as categorias",
+      largura: LARGURA_NOME,
+    }),
+    selecao({
+      id: "status",
+      chave: "status",
+      rotulo: "Status",
+      valor: valoresAReceber.status,
+      opcoes: opcoesAReceber("status", OPCOES_STATUS),
+      todosRotulo: "Todos os status",
+    }),
+    mesReferencia("mes", "mes", valoresAReceber.mes),
     faixaValor("valor", faixaAReceber),
     periodo({
       id: "vencimento",
@@ -698,6 +840,21 @@ export function RecebimentosCliente({
     );
   }
 
+  // O centro chega com o id CRU do rateio: para o campo das raízes ele sobe até
+  // a raiz; para o das etapas, a etapa já é o próprio id cru.
+  function facetarCentroRecebidos(
+    degrau: "raiz" | "etapa",
+    base: OpcaoFiltro[],
+    escolhidos: string[],
+  ): OpcaoFiltro[] {
+    if (!facetasRecebidos) return base;
+    const presentes =
+      degrau === "raiz"
+        ? raizesPresentes(centrosCusto, facetasRecebidos.centro)
+        : new Set(facetasRecebidos.centro);
+    return restringirOpcoes(base, presentes, escolhidos);
+  }
+
   const [linhasRecebidas, setLinhasRecebidas] = React.useState(recebidas);
   const [totalRegistros, setTotalRegistros] = React.useState(totalRecebidas);
   const [paginacao, setPaginacao] = React.useState<PaginationState>({
@@ -787,6 +944,13 @@ export function RecebimentosCliente({
       todosRotulo: "Todas as categorias",
       largura: LARGURA_NOME,
     }),
+    ...filtrosDeCentro(
+      "h_",
+      "h_centro",
+      escadaRecebidos,
+      facetarCentroRecebidos,
+    ),
+    mesReferencia("h_mes", "h_mes", valoresRecebidos.mes),
     faixaValor("h_valor", faixaRecebidos),
     periodo({
       id: "h_vencimento",

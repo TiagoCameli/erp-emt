@@ -67,6 +67,10 @@ const FILTROS_VAZIOS = {
   busca: "",
   cliente: "",
   conta: "",
+  categoria: "",
+  centroIds: [],
+  mes: "",
+  status: "",
   valorDe: "",
   valorAte: "",
   vencDe: "",
@@ -94,7 +98,6 @@ function renderizar(
       valoresAReceber={FILTROS_VAZIOS}
       valoresRecebidos={{
         ...FILTROS_VAZIOS,
-        categoria: "",
         recDe: "",
         recAte: "",
       }}

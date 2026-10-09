@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
 import {
   facetasNoServidor,
   type FacetasPresentes,
@@ -59,6 +60,15 @@ export interface ParcelaAReceber {
    */
   centroCustoRotulo: string | null;
   centroCustoNomes?: string;
+  /** Categoria de receita, para o filtro comparar id e não nome. */
+  categoriaId: string | null;
+  /** Primeiro dia do mês de competência (yyyy-MM-01), ou null. */
+  mesCompetencia: string | null;
+  /**
+   * TODOS os centros do rateio, para o filtro de centro casar quando a receita
+   * é dividida. Mesma regra da fila de Pagamentos.
+   */
+  centroCustoIds: string[];
 }
 
 /** Parcela já recebida, para a aba "Recebidos". */
@@ -98,6 +108,14 @@ export interface FiltrosRecebidas {
   clienteId?: string;
   contaBancariaId?: string;
   categoriaId?: string;
+  /**
+   * Centros de custo efetivos (raízes ou etapas). A consulta expande a
+   * SUBÁRVORE de cada um antes de filtrar, com a MESMA função de Lançamentos e
+   * Pagamentos (`subarvoreDosCentros`): escolher a obra traz as etapas dela.
+   */
+  centroCustoIds?: string[];
+  /** yyyy-MM-01, primeiro dia do mês de competência do lançamento. */
+  mesCompetencia?: string;
   /** Faixa de valor da parcela, em reais (comparação gte/lte no banco). */
   valorDe?: number;
   valorAte?: number;
@@ -149,9 +167,16 @@ interface LinhaAReceber {
     descricao: string | null;
     numero_documento: string | null;
     cliente_id: string | null;
+    categoria_id: string | null;
+    mes_competencia: string | null;
     categorias_financeiras: { nome: string } | null;
     clientes: { nome: string; nome_fantasia: string | null } | null;
-    lancamento_rateios: { centros_custo: { nome: string } | null }[] | null;
+    lancamento_rateios:
+      | {
+          centro_custo_id: string | null;
+          centros_custo: { nome: string } | null;
+        }[]
+      | null;
   } | null;
 }
 
@@ -168,9 +193,10 @@ const SELECT_A_RECEBER = `id, numero_parcela, valor, status, data_vencimento,
    contas_bancarias(nome, banco),
    lancamentos!inner(
      numero, descricao, numero_documento, cliente_id, tipo, status,
+     categoria_id, mes_competencia,
      categorias_financeiras(nome),
      clientes(nome, nome_fantasia),
-     lancamento_rateios(centros_custo(nome))
+     lancamento_rateios(centro_custo_id, centros_custo(nome))
    )`;
 
 const SELECT_RECEBIDA = `id, numero_parcela, valor, status, data_vencimento,
@@ -179,9 +205,10 @@ const SELECT_RECEBIDA = `id, numero_parcela, valor, status, data_vencimento,
    contas_bancarias(nome, banco),
    lancamentos!inner(
      numero, descricao, numero_documento, cliente_id, tipo, status, categoria_id,
+     mes_competencia,
      categorias_financeiras(nome),
      clientes(nome, nome_fantasia),
-     lancamento_rateios(centros_custo(nome))
+     lancamento_rateios(centro_custo_id, centros_custo(nome))
    )`;
 
 /** O rateio do embed no formato que `rotuloCentroCusto` espera. */
@@ -273,6 +300,13 @@ export async function listarParcelasAReceber(): Promise<ParcelaAReceber[]> {
     clienteId: parcela.lancamentos?.cliente_id ?? null,
     contaBancariaId: parcela.conta_bancaria_id,
     status: comoStatusParcela(parcela.status),
+    categoriaId: parcela.lancamentos?.categoria_id ?? null,
+    mesCompetencia: parcela.lancamentos?.mes_competencia ?? null,
+    // TODOS os centros do rateio, não o primeiro: receita dividida entre duas
+    // obras tem de aparecer filtrando por qualquer uma delas.
+    centroCustoIds: (parcela.lancamentos?.lancamento_rateios ?? [])
+      .map((rateio) => rateio.centro_custo_id)
+      .filter((id): id is string => id !== null),
   }));
 }
 
@@ -310,22 +344,39 @@ interface ConsultaFiltravelRecebidas<T> {
   gte: (coluna: string, valor: string | number) => T;
   lte: (coluna: string, valor: string | number) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+  in: (coluna: string, valores: readonly string[]) => T;
+  not: (coluna: string, operador: string, valor: null) => T;
 }
 
 /**
  * Aplica os filtros da aba "Recebidos". Serve a lista e as facetas
  * (`facetasRecebidas`), que precisam do MESMO recorte.
  *
- * Síncrona, com os ids de cliente da busca já resolvidos: o builder é
- * "thenable", e uma função async o dispararia no return (ver
- * `aplicarFiltrosPagas`).
+ * Síncrona, com os ids de cliente da busca e a subárvore do centro já
+ * resolvidos: o builder é "thenable", e uma função async o dispararia no return
+ * (ver `aplicarFiltrosPagas`). `subarvore` null é "sem filtro de centro".
  */
 function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
   consultaInicial: T,
   filtros: FiltrosRecebidas,
   idsClientes: string[],
+  subarvore: readonly string[] | null,
 ): T {
   let consulta = consultaInicial;
+  if (subarvore !== null) {
+    // O par de Pagamentos (`aplicarCentroDaSubarvore`): o centro mora no rateio
+    // do LANÇAMENTO, dois níveis abaixo da parcela, e filtrar embed não-inner
+    // sem o `not is null` só esvazia o embed e deixa a parcela vir.
+    consulta = consulta
+      .in("lancamentos.lancamento_rateios.centro_custo_id", subarvore)
+      .not("lancamentos.lancamento_rateios", "is", null);
+  }
+  if (filtros.mesCompetencia) {
+    consulta = consulta.eq(
+      "lancamentos.mes_competencia",
+      filtros.mesCompetencia,
+    );
+  }
   if (filtros.busca?.trim()) {
     const padrao = padraoBusca(filtros.busca);
     const termos = [
@@ -373,14 +424,31 @@ function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
 }
 
 /** Os filtros de seleção da aba "Recebidos", no id da barra. */
-export type FacetaRecebidas = "cliente" | "conta" | "categoria";
+export type FacetaRecebidas = "cliente" | "conta" | "categoria" | "centro";
+
+interface LancamentoDaFaceta {
+  cliente_id: string | null;
+  categoria_id: string | null;
+  lancamento_rateios: { centro_custo_id: string | null }[] | null;
+}
 
 interface LinhaFacetaRecebidas {
   conta_bancaria_id: string | null;
-  lancamentos:
-    | { cliente_id: string | null; categoria_id: string | null }
-    | { cliente_id: string | null; categoria_id: string | null }[]
-    | null;
+  lancamentos: LancamentoDaFaceta | LancamentoDaFaceta[] | null;
+}
+
+/**
+ * A subárvore do filtro de centro, ou null quando não há filtro.
+ *
+ * Lista vazia (centro que não existe mais) é diferente de null: a resposta certa
+ * é lista vazia, não a lista inteira.
+ */
+async function subarvoreDoFiltro(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  centroCustoIds: readonly string[] | undefined,
+): Promise<string[] | null> {
+  if (!centroCustoIds || centroCustoIds.length === 0) return null;
+  return subarvoreDosCentros(supabase, [...centroCustoIds]);
 }
 
 /** Qual parâmetro cada faceta solta quando calcula as próprias opções. */
@@ -388,12 +456,15 @@ const PARAMETRO_DA_FACETA: Record<FacetaRecebidas, keyof FiltrosRecebidas> = {
   cliente: "clienteId",
   conta: "contaBancariaId",
   categoria: "categoriaId",
+  centro: "centroCustoIds",
 };
 
 /**
  * O que existe no histórico de recebidos filtrado, por filtro de seleção (ver
  * `_shared/filtros-facetados`). A aba é paginada no banco, então só o servidor
- * sabe quais pagadores, contas e categorias sobram depois dos outros filtros.
+ * sabe quais pagadores, contas, categorias e centros sobram depois dos outros
+ * filtros. O centro volta com o id CRU do rateio (etapa ou equipamento): a tela
+ * sobe até a raiz para o primeiro campo e usa o cru para o de etapa.
  * Só as colunas das chaves, sem paginação: recebimento é a menor fatia das
  * parcelas.
  */
@@ -404,6 +475,7 @@ export async function facetasRecebidas(
   const idsClientes = filtros.busca?.trim()
     ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
     : [];
+  const subarvore = await subarvoreDoFiltro(supabase, filtros.centroCustoIds);
   const doLancamento = (linha: LinhaFacetaRecebidas) =>
     linha.lancamentos === null
       ? []
@@ -425,24 +497,40 @@ export async function facetasRecebidas(
         ativo: !!filtros.categoriaId,
         chave: (linha) => doLancamento(linha).map((l) => l.categoria_id),
       },
+      centro: {
+        ativo: subarvore !== null,
+        chave: (linha) =>
+          doLancamento(linha).flatMap((l) =>
+            (l.lancamento_rateios ?? []).map((r) => r.centro_custo_id),
+          ),
+      },
     },
     async (exceto) => {
       const recorte =
         exceto === null
           ? filtros
           : { ...filtros, [PARAMETRO_DA_FACETA[exceto]]: undefined };
+      const subarvoreDoRecorte = exceto === "centro" ? null : subarvore;
+      if (subarvoreDoRecorte !== null && subarvoreDoRecorte.length === 0) {
+        return [];
+      }
       const { linhas, erro } = await todasAsLinhas<LinhaFacetaRecebidas>(
         (de, ate) =>
           aplicarFiltrosRecebidas(
             supabase
               .from("lancamento_parcelas")
               .select(
-                "conta_bancaria_id, lancamentos!inner(cliente_id, categoria_id)",
+                `conta_bancaria_id,
+                 lancamentos!inner(
+                   cliente_id, categoria_id,
+                   lancamento_rateios(centro_custo_id)
+                 )`,
               )
               .eq("status", "pago")
               .eq("lancamentos.tipo", "a_receber"),
             recorte,
             idsClientes,
+            subarvoreDoRecorte,
           )
             .order("id", { ascending: true })
             .range(de, ate)
@@ -477,6 +565,11 @@ export async function listarParcelasRecebidas({
   const idsClientes = filtros.busca?.trim()
     ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
     : [];
+  const subarvore = await subarvoreDoFiltro(supabase, filtros.centroCustoIds);
+  // Centro que não existe mais: lista vazia, não a lista inteira.
+  if (subarvore !== null && subarvore.length === 0) {
+    return { itens: [], total: 0 };
+  }
   const consulta = aplicarFiltrosRecebidas(
     supabase
       .from("lancamento_parcelas")
@@ -485,6 +578,7 @@ export async function listarParcelasRecebidas({
       .eq("lancamentos.tipo", "a_receber"),
     filtros,
     idsClientes,
+    subarvore,
   );
 
   const { data, error, count } = await consulta

@@ -10,6 +10,8 @@ import {
   listarFormasPagamento,
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
+import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
+import { lerUuidsDaUrl } from "@/modules/financeiro/_shared/listas-na-url";
 import { listarContasBancarias } from "@/modules/financeiro/pagamentos/queries";
 import { RecebimentosCliente } from "@/modules/financeiro/recebimentos/components/recebimentos-cliente";
 import {
@@ -85,6 +87,21 @@ function faixaValor(
   return { de, ate };
 }
 
+const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Mês de competência da URL (yyyy-MM), ou "". */
+function parametroMes(valor: Parametro): string {
+  return typeof valor === "string" && MES.test(valor) ? valor : "";
+}
+
+/** Status de parcela em aberto vindo da URL. Lista fechada: o resto é lixo. */
+function parametroStatus(valor: Parametro): string {
+  return typeof valor === "string" &&
+    (STATUS_PARCELA_ABERTA as string[]).includes(valor)
+    ? valor
+    : "";
+}
+
 /** Texto do filtro para a tela, só quando o parâmetro passou na validação. */
 function texto(valor: string | number | undefined): string {
   return valor === undefined ? "" : String(valor);
@@ -157,6 +174,10 @@ export default async function PaginaRecebimentos({
     busca: typeof params.busca === "string" ? params.busca : "",
     cliente: parametroUuid(params.cliente) ?? "",
     conta: parametroUuid(params.conta) ?? "",
+    categoria: parametroUuid(params.categoria) ?? "",
+    centroIds: lerUuidsDaUrl(params.centro),
+    mes: parametroMes(params.mes),
+    status: parametroStatus(params.status),
     valorDe: texto(valorAReceber.de),
     valorAte: texto(valorAReceber.ate),
     vencDe: texto(vencAReceber.de),
@@ -166,11 +187,16 @@ export default async function PaginaRecebimentos({
   const valorRecebidos = faixaValor(params.h_valor_de, params.h_valor_ate);
   const vencRecebidos = periodo(params.h_venc_de, params.h_venc_ate);
   const recRecebidos = periodo(params.h_rec_de, params.h_rec_ate);
+  const mesRecebidos = parametroMes(params.h_mes);
+  const centrosRecebidos = lerUuidsDaUrl(params.h_centro);
   const filtrosRecebidas = {
     busca: parametroBusca(params.h_busca),
     clienteId: parametroUuid(params.h_cliente),
     contaBancariaId: parametroUuid(params.h_conta),
     categoriaId: parametroUuid(params.h_categoria),
+    centroCustoIds: centrosRecebidos.length > 0 ? centrosRecebidos : undefined,
+    // A tela fala yyyy-MM; a coluna guarda o primeiro dia do mês.
+    mesCompetencia: mesRecebidos === "" ? undefined : `${mesRecebidos}-01`,
     valorDe: valorRecebidos.de,
     valorAte: valorRecebidos.ate,
     vencimentoDe: vencRecebidos.de,
@@ -239,6 +265,8 @@ export default async function PaginaRecebimentos({
         cliente: filtrosRecebidas.clienteId ?? "",
         conta: filtrosRecebidas.contaBancariaId ?? "",
         categoria: filtrosRecebidas.categoriaId ?? "",
+        centroIds: centrosRecebidos,
+        mes: mesRecebidos,
         valorDe: texto(filtrosRecebidas.valorDe),
         valorAte: texto(filtrosRecebidas.valorAte),
         vencDe: texto(filtrosRecebidas.vencimentoDe),
