@@ -2758,6 +2758,7 @@ export type Database = {
           extrato_id: string;
           fitid: string | null;
           id: string;
+          lancado_na_conciliacao: boolean;
           memo: string | null;
           parcela_id: string | null;
           tipo: string;
@@ -2780,6 +2781,7 @@ export type Database = {
           extrato_id: string;
           fitid?: string | null;
           id?: string;
+          lancado_na_conciliacao?: boolean;
           memo?: string | null;
           parcela_id?: string | null;
           tipo: string;
@@ -2802,6 +2804,7 @@ export type Database = {
           extrato_id?: string;
           fitid?: string | null;
           id?: string;
+          lancado_na_conciliacao?: boolean;
           memo?: string | null;
           parcela_id?: string | null;
           tipo?: string;
