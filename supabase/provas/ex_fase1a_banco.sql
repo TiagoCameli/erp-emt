@@ -15,7 +15,8 @@ begin
   select count(*) into v_colab0 from public.colaboradores;
 
   -- 1. Estrutura: as tabelas existem com RLS ligada, sem grant de escrita, auditadas
-  --    Esperado: 1a = 12, 1b = 0, 1c = 12
+  --    Esperado: 1a = 12, 1b = 0, 1c = 11
+  --    (1c = 11: ex_atividade_datas é cache derivado do CPM e não é auditado; as entradas dele são)
   select count(*) into v_n from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r' and c.relname like 'ex\_%' and c.relrowsecurity;
   r := r || jsonb_build_object('1a_tabelas_com_rls', v_n);
