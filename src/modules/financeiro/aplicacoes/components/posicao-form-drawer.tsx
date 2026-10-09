@@ -78,7 +78,7 @@ export interface PosicaoFormDrawerProps {
 }
 
 /**
- * "Atualizar posição": o saldo LÍQUIDO que está no extrato, com o PDF.
+ * "Atualizar posição": o saldo LÍQUIDO que está no extrato. O PDF é opcional.
  *
  * O ponto da tela é a prévia: o rendimento que a posição vai gerar aparece
  * ANTES de salvar, calculado pelo banco com a mesma conta que grava
@@ -146,12 +146,7 @@ export function PosicaoFormDrawer({
   const simulando = chave !== null && (previa === null || previa.chave !== chave);
 
   async function aoEnviar(valores: PosicaoFormInput) {
-    // O PDF do extrato é o que prova o número (pedido do Tiago). Na criação ele
-    // é obrigatório; na edição já existe um, ou a pessoa sobe outro na lista.
-    if (!editando && arquivos.length === 0) {
-      toast.error("Anexe o PDF do extrato da posição");
-      return;
-    }
+    // O PDF do extrato é opcional (Tiago, 09/10/2026): anexa quando tiver.
     const resultado = await salvarPosicao({
       aplicacaoId: valores.aplicacaoId,
       data: valores.data,
@@ -363,7 +358,7 @@ export function PosicaoFormDrawer({
               ocupado={salvando}
               aceitar="application/pdf,image/*"
               convite="Arraste o PDF do extrato ou clique para escolher"
-              legenda="Obrigatório. Sobe junto quando você gravar"
+              legenda="Opcional. Sobe junto quando você gravar"
             />
           )}
         </form>
