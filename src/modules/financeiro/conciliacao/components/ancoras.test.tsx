@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { excluirAncora } from "@/modules/financeiro/conciliacao/actions";
-import type { AncoraSaldo } from "@/modules/financeiro/conciliacao/queries";
+import type { AncoraSaldo, ContaBancariaOpcao } from "@/modules/financeiro/conciliacao/queries";
 
 import { Ancoras } from "./ancoras";
 
@@ -20,7 +20,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const conta = { id: "11111111-1111-4111-8111-111111111111", nome: "BANCO DO BRASIL 102.124-9" };
+const conta: ContaBancariaOpcao = {
+  id: "11111111-1111-4111-8111-111111111111",
+  nome: "BANCO DO BRASIL 102.124-9",
+  banco: "bb",
+  bancoRotulo: "Banco do Brasil",
+  ativo: true,
+  numero: "102.124-9",
+  tipo: "corrente",
+  contaPaiId: null,
+};
 const ancora: AncoraSaldo = {
   id: "22222222-2222-4222-8222-222222222222",
   contaId: conta.id,
