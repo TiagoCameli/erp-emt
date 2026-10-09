@@ -848,12 +848,7 @@ export async function aceitarSugestoes(
  * Fecha o mês da conta (Bloco F). O banco recalcula tudo e recusa se faltar
  * movimento no app, sobrar no app ou o saldo não bater.
  */
-export async function fecharMes(
-  contaId: string,
-  mes: string,
-  /** Saldo da subconta no extrato de investimentos no último dia (Bloco K). */
-  saldoSubconta: number | null = null,
-): Promise<ResultadoAcao> {
+export async function fecharMes(contaId: string, mes: string): Promise<ResultadoAcao> {
   try {
     await exigirPermissao(RECURSO, "editar");
   } catch {
@@ -862,32 +857,6 @@ export async function fecharMes(
   if (!idSchema.safeParse(contaId).success) return { erro: "Conta inválida" };
   const periodo = periodoDoMes(mes);
   if (!periodo) return { erro: "Mês inválido" };
-
-  if (saldoSubconta !== null) {
-    if (!Number.isFinite(saldoSubconta)) return { erro: "Saldo da subconta inválido" };
-    const supabaseSub = await createClient();
-    const { data: sub } = await supabaseSub
-      .from("contas_bancarias")
-      .select("id")
-      .eq("conta_pai_id", contaId)
-      .maybeSingle();
-    if (sub) {
-      const { error: erroAncora } = await supabaseSub.rpc("fn_conciliacao_registrar_ancora", {
-        p_conta_id: sub.id,
-        p_data: periodo.fim,
-        p_saldo: saldoSubconta,
-        p_fonte: "extrato_pdf",
-        p_observacao: "Informado no fechamento do mês",
-      });
-      if (erroAncora) {
-        return erroAcao(
-          "financeiro.conciliacao.fecharMes.subconta",
-          erroAncora,
-          mensagem(erroAncora, "Não foi possível gravar o saldo da subconta"),
-        );
-      }
-    }
-  }
 
   if (mes < INICIO_DA_CONCILIACAO) {
     return { erro: "A conciliação é exigida a partir de 09/2026: meses anteriores não fecham" };

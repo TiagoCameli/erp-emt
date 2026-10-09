@@ -441,8 +441,7 @@ export function statusDoMes(
   if (visoes.faltamNoApp.length > 0 || visoes.foraDoBanco.length > 0)
     return "aberto";
   if (!saldo || saldo.bate === null) return "sem_saldo";
-  // Subconta com saldo do extrato e diferente do app também falta bater.
-  if (saldo.subconta?.bate === false) return "falta_saldo";
+  // A subconta aparece no painel, mas não trava o mês (Tiago, 09/10/2026).
   return saldo.bate ? "conciliado" : "falta_saldo";
 }
 
