@@ -9491,6 +9491,19 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_conciliacao_desvios: {
+        Args: { p_conta_id: string };
+        Returns: {
+          diferenca: number;
+          mes: string;
+          saldo_agora: number;
+          saldo_fechamento: number;
+        }[];
+      };
+      fn_alterar_saldo_inicial: {
+        Args: { p_conta: string; p_data: string | null; p_motivo: string; p_saldo: number };
+        Returns: undefined;
+      };
       fn_alterar_mes_competencia: {
         Args: { p_entidade: string; p_id: string; p_mes: string };
         Returns: undefined;
@@ -11326,7 +11339,7 @@ export type Database = {
         }[];
       };
       fn_salvar_saldo_inicial_subconta: {
-        Args: { p_data: string; p_saldos: Json; p_subconta: string };
+        Args: { p_data: string; p_motivo: string; p_saldos: Json; p_subconta: string };
         Returns: undefined;
       };
       fn_criar_etapa_de_investimento: {
