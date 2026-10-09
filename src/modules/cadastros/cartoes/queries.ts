@@ -7,6 +7,9 @@ export interface CartaoLista {
   id: string;
   nome: string;
   ultimosDigitos: string;
+  /** A conta bancária do cartão: a fatura dele é paga por ela. */
+  contaBancariaId: string;
+  contaNome: string;
   bandeira: string | null;
   banco: string | null;
   diaFechamento: number | null;
@@ -34,7 +37,7 @@ export async function listarCartoes(): Promise<CartaoLista[]> {
   const { data, error } = await supabase
     .from("cartoes_credito")
     .select(
-      "id, nome, ultimos_digitos, bandeira, banco, dia_fechamento, dia_vencimento, ativo",
+      "id, nome, ultimos_digitos, conta_bancaria_id, bandeira, banco, dia_fechamento, dia_vencimento, ativo, conta:contas_bancarias(nome)",
     )
     .order("nome");
 
@@ -66,6 +69,8 @@ export async function listarCartoes(): Promise<CartaoLista[]> {
     id: cartao.id,
     nome: cartao.nome,
     ultimosDigitos: cartao.ultimos_digitos,
+    contaBancariaId: cartao.conta_bancaria_id,
+    contaNome: cartao.conta?.nome ?? "",
     bandeira: cartao.bandeira,
     banco: cartao.banco,
     diaFechamento: cartao.dia_fechamento,
@@ -101,4 +106,30 @@ export async function listarCartoesAtivos(): Promise<CartaoOpcao[]> {
     nome: cartao.nome,
     ultimosDigitos: cartao.ultimos_digitos,
   }));
+}
+
+/** Conta que pode ter cartão, para o seletor do cadastro. */
+export interface ContaDoCartaoOpcao {
+  id: string;
+  nome: string;
+}
+
+/**
+ * Contas que podem ter cartão: corrente ou poupança, ativas. Subconta de
+ * investimentos e caixinha não têm cartão (o banco recusa, por trigger).
+ * Só o cadastro, que todo usuário lê: nenhuma coluna de saldo.
+ */
+export async function listarContasParaCartao(): Promise<ContaDoCartaoOpcao[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("contas_bancarias")
+    .select("id, nome")
+    .in("tipo", ["corrente", "poupanca"])
+    .is("conta_pai_id", null)
+    .eq("ativo", true)
+    .order("nome");
+  if (error) {
+    throw new Error("Não foi possível carregar as contas bancárias");
+  }
+  return data ?? [];
 }

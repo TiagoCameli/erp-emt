@@ -144,7 +144,7 @@ export interface ConciliacaoClienteProps {
   /** Regras por histórico (Bloco H): a tela mostra qual vale para cada movimento. */
   regras: RegraConciliacao[];
   /** Cartões ativos: o débito da fatura casa com as compras de um deles. */
-  cartoes: { id: string; nome: string }[];
+  cartoes: { id: string; nome: string; contaBancariaId: string }[];
   /** Por etapa de Investimentos, a conta corrente onde a aplicação está. */
   contaPorEtapa: Record<string, string>;
   permissoes: PermissoesConciliacao;
@@ -245,6 +245,12 @@ function ConciliacaoConta({
   podeFechar,
 }: ConciliacaoClienteProps & { podeFechar: boolean }) {
   const router = useRouter();
+  // A fatura só se casa com débito da conta do cartão: os de outra conta nem
+  // aparecem (o banco também recusa).
+  const cartoesDaConta = React.useMemo(
+    () => cartoes.filter((cartao) => cartao.contaBancariaId === conta.id),
+    [cartoes, conta.id],
+  );
   const visoes = React.useMemo(
     () => montarVisoes(painel, periodo),
     [painel, periodo],
@@ -729,7 +735,7 @@ function ConciliacaoConta({
           onCasar={setCasarAlvoId}
           onEstorno={setEstornoAlvoId}
           onDevolucao={permissoes.lancar ? setDevolucaoAlvoId : undefined}
-          onFatura={cartoes.length > 0 ? setFaturaAlvoId : undefined}
+          onFatura={cartoesDaConta.length > 0 ? setFaturaAlvoId : undefined}
           onAplicarRegras={aplicarRegras}
           grupoPorMovimento={grupoPorMovimento}
           grupos={grupos}
@@ -826,7 +832,7 @@ function ConciliacaoConta({
         key={`fatura-${faturaAlvoId ?? ""}`}
         transacao={faturaAlvo}
         onFechar={() => setFaturaAlvoId(null)}
-        cartoes={cartoes}
+        cartoes={cartoesDaConta}
         categorias={opcoes.categorias}
         centros={opcoes.centros}
       />

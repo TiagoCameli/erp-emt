@@ -7,7 +7,6 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
-  cartaoDoTextoRapido,
   cartaoSchema,
   type CartaoInput,
 } from "@/modules/cadastros/cartoes/schemas";
@@ -43,18 +42,21 @@ function argumentos(id: string | null, dados: CartaoInput) {
     p_dia_fechamento: diaParaBanco(dados.diaFechamento) as unknown as number,
     p_dia_vencimento: diaParaBanco(dados.diaVencimento) as unknown as number,
     p_ativo: dados.ativo,
+    p_conta_bancaria_id: dados.contaBancariaId,
   };
 }
 
 /**
- * As rotas revalidadas: o cadastro em si, e as duas telas onde o cartão é
- * escolhido. Sem elas, o cartão criado agora não aparece no combo da OC até o
+ * As rotas revalidadas: o cadastro em si, e as três telas onde o cartão é
+ * escolhido (OC, lançamento e a fatura na conciliação, que lista os cartões da
+ * conta do extrato). Sem elas, o cartão criado agora não aparece no combo da OC até o
  * próximo hard refresh — que foi como o fornecedor novo sumia antes de 26/08.
  */
 function revalidarTudo(): void {
   revalidatePath(ROTA);
   revalidatePath("/compras/ordens");
   revalidatePath("/financeiro/lancamentos");
+  revalidatePath("/financeiro/conciliacao");
 }
 
 /**
@@ -136,40 +138,4 @@ export async function editarCartao(
 
   revalidarTudo();
   return { ok: true };
-}
-
-/**
- * Cadastro rápido a partir da OC ou do lançamento, a partir do texto digitado no
- * combo.
- *
- * O mínimo para não abandonar a compra no meio. Bandeira, banco e os dias ficam
- * para depois, em Cadastros: são dados de conferência de fatura, e ninguém os
- * tem à mão lançando uma compra. Mesmo caminho do fornecedor rápido, criado em
- * 27/08/2026 pela mesma razão.
- *
- * O texto precisa trazer os quatro dígitos, porque é o que identifica o cartão e
- * não há de onde inferir: "Cartão obra 7712" vira nome "Cartão obra 7712" com
- * final 7712, e "7712" sozinho vira "Cartão 7712". Sem quatro dígitos no texto,
- * a criação é recusada com a instrução — melhor do que nascer um cartão que não
- * identifica nada.
- */
-export async function criarCartaoRapido(
-  texto: string,
-): Promise<ResultadoCriacao> {
-  const cartao = cartaoDoTextoRapido(texto);
-  if (!cartao) {
-    return {
-      erro: "Inclua os quatro últimos dígitos no nome. Exemplo: Cartão obra 4829",
-    };
-  }
-
-  return criarCartao({
-    nome: cartao.nome,
-    ultimosDigitos: cartao.ultimosDigitos,
-    bandeira: "",
-    banco: "",
-    diaFechamento: "",
-    diaVencimento: "",
-    ativo: true,
-  });
 }

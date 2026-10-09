@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { idSchemaCom } from "@/lib/id";
+
 /**
  * Os quatro últimos dígitos, e só eles.
  *
@@ -36,8 +38,8 @@ const diaSchema = z
  * Schema do cartão de crédito.
  *
  * O apelido é o que a pessoa lê na hora de escolher na OC; os dígitos são o que
- * casa com a fatura. Bandeira, banco e os dois dias são opcionais: servem para
- * conferência depois e ninguém tem essa informação à mão no meio de uma compra.
+ * casa com a fatura; a conta é por onde a fatura é paga. Bandeira, banco e os
+ * dois dias são opcionais: servem para conferência depois.
  */
 export const cartaoSchema = z.object({
   nome: z
@@ -46,6 +48,11 @@ export const cartaoSchema = z.object({
     .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" })
     .max(80, { error: "O nome pode ter no máximo 80 caracteres" }),
   ultimosDigitos: digitosSchema,
+  /**
+   * A conta bancária do cartão: a fatura dele é paga por ela (pedido do Tiago
+   * em 08/10/2026). Uma conta tem vários cartões; um cartão, uma conta só.
+   */
+  contaBancariaId: idSchemaCom("Escolha a conta bancária do cartão"),
   bandeira: z.string().trim().max(40, { error: "Máximo de 40 caracteres" }),
   banco: z.string().trim().max(80, { error: "Máximo de 80 caracteres" }),
   diaFechamento: diaSchema,
@@ -77,31 +84,4 @@ export function rotuloDoCartao(cartao: {
   ultimosDigitos: string;
 }): string {
   return `${cartao.nome} (${cartao.ultimosDigitos})`;
-}
-
-/**
- * O cartão que o texto digitado no combo descreve, para o cadastro rápido feito
- * de dentro da OC ou do lançamento.
- *
- * O texto PRECISA trazer os quatro dígitos: é o que identifica o cartão, e não
- * há de onde inferir. "Cartão obra 7712" vira nome "Cartão obra 7712" com final
- * 7712; "7712" sozinho vira "Cartão 7712". Sem quatro dígitos devolve null, e a
- * action recusa com a instrução — melhor do que nascer um cartão que não
- * identifica nada.
- *
- * Mora aqui e não na action porque é regra, não efeito: assim tem teste.
- */
-export function cartaoDoTextoRapido(
-  texto: string,
-): { nome: string; ultimosDigitos: string } | null {
-  const limpo = texto.trim();
-  // O ÚLTIMO grupo de 4+ dígitos: "Cartão 2 final 4829" tem que dar 4829, não 2.
-  const grupos = limpo.match(/\d{4,}/g);
-  const ultimosDigitos = grupos?.[grupos.length - 1]?.slice(-4) ?? "";
-  if (ultimosDigitos.length !== 4) return null;
-
-  return {
-    nome: /^\d+$/.test(limpo) ? `Cartão ${ultimosDigitos}` : limpo,
-    ultimosDigitos,
-  };
 }

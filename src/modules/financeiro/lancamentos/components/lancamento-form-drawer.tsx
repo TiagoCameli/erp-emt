@@ -48,7 +48,6 @@ import { cn } from "@/lib/utils";
 import { criarClienteRapido } from "@/modules/_shared/cliente/actions";
 import { criarCondicaoPagamento } from "@/modules/_shared/condicao-pagamento/actions";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
-import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
@@ -567,16 +566,6 @@ export function LancamentoFormDrawer({
     }
     return mapa;
   }, [lancamento]);
-  /** Cadastro rápido do cartão sem sair do lançamento. */
-  async function cadastrarCartao(texto: string): Promise<string | null> {
-    const r = await criarCartaoRapido(texto);
-    if ("erro" in r) {
-      toast.error(r.erro);
-      return null;
-    }
-    toast.success("Cartão criado");
-    return r.id;
-  }
   /**
    * A tabela de formas ganha a coluna "Cartao" só quando alguma linha é cartão
    * de crédito. Uma quarta coluna em branco na maioria dos lançamentos seria
@@ -1716,10 +1705,10 @@ export function LancamentoFormDrawer({
                           })
                         }
                         opcoes={opcoesCartao}
+                        vazioTexto="Nenhum cartão. Cadastre em Cadastros > Cartões de crédito, com a conta dele"
                         rotuloDoValor={rotuloCartaoDoLancamento.get(
                           form.watch("formas.0.cartaoId") ?? "",
                         )}
-                        onCriar={cadastrarCartao}
                         placeholder="Selecione o cartão"
                         disabled={salvando}
                         id="lan-cartao"
@@ -1819,10 +1808,10 @@ export function LancamentoFormDrawer({
                           })
                         }
                         opcoes={opcoesCartao}
+                        vazioTexto="Nenhum cartão. Cadastre em Cadastros > Cartões de crédito, com a conta dele"
                         rotuloDoValor={rotuloCartaoDoLancamento.get(
                           cartaoEscolhido,
                         )}
-                        onCriar={cadastrarCartao}
                         placeholder="Selecione"
                         disabled={salvando}
                         ariaLabel="Cartão de crédito"

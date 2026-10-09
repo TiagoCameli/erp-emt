@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  cartaoDoTextoRapido,
   cartaoSchema,
   rotuloDoCartao,
 } from "@/modules/cadastros/cartoes/schemas";
@@ -10,6 +9,7 @@ import {
 const VALIDO = {
   nome: "Cartão obra",
   ultimosDigitos: "4829",
+  contaBancariaId: "9a3c1d7e-5b2f-4e8a-9c6d-1f2e3a4b5c6d",
   bandeira: "Visa",
   banco: "Banco do Brasil",
   diaFechamento: "25",
@@ -31,6 +31,12 @@ describe("cartaoSchema", () => {
   it("aceita o cartão completo", () => {
     const r = parse({});
     expect(r.success).toBe(true);
+  });
+
+  it("recusa cartão sem conta bancária: a fatura é paga por uma conta", () => {
+    expect(mensagens(parse({ contaBancariaId: "" }))).toContain(
+      "Escolha a conta bancária do cartão",
+    );
   });
 
   it("aceita sem bandeira, banco e dias: são conferência de fatura, não cadastro", () => {
@@ -129,52 +135,5 @@ describe("rotuloDoCartao", () => {
     expect(
       rotuloDoCartao({ nome: "Cartão obra", ultimosDigitos: "7712" }),
     ).toBe("Cartão obra (7712)");
-  });
-});
-
-/**
- * O cadastro rápido feito de dentro da OC: a pessoa digita no combo e o cartão
- * nasce do texto. O que se prova aqui é que ele nunca nasce sem identificar o
- * cartão, e que o final extraído é o certo.
- */
-describe("cartaoDoTextoRapido", () => {
-  it("tira o final do texto e usa o texto como nome", () => {
-    expect(cartaoDoTextoRapido("Cartão obra 7712")).toEqual({
-      nome: "Cartão obra 7712",
-      ultimosDigitos: "7712",
-    });
-  });
-
-  it("só os dígitos vira 'Cartão 4829'", () => {
-    expect(cartaoDoTextoRapido("4829")).toEqual({
-      nome: "Cartão 4829",
-      ultimosDigitos: "4829",
-    });
-  });
-
-  it("pega o ÚLTIMO grupo de dígitos, não o primeiro", () => {
-    // "Cartão 2 final 4829" tem que dar 4829. Pegar o primeiro grupo daria um
-    // cartão chamado "final 2", que não existe.
-    expect(cartaoDoTextoRapido("Cartão 2 final 4829")?.ultimosDigitos).toBe(
-      "4829",
-    );
-  });
-
-  it("de um grupo longo pega os quatro últimos", () => {
-    expect(cartaoDoTextoRapido("Cartão 4111111111114829")?.ultimosDigitos).toBe(
-      "4829",
-    );
-  });
-
-  it("recusa texto sem quatro dígitos", () => {
-    expect(cartaoDoTextoRapido("Cartão obra")).toBeNull();
-    expect(cartaoDoTextoRapido("Cartão 482")).toBeNull();
-    expect(cartaoDoTextoRapido("")).toBeNull();
-  });
-
-  it("CONTROLE: dígitos separados não contam como um final", () => {
-    // "48 29" não é um cartão terminado em 4829: são dois números soltos. Aceitar
-    // isso criaria um cartão com final inventado a partir de ruído.
-    expect(cartaoDoTextoRapido("Cartão 48 29")).toBeNull();
   });
 });

@@ -22,7 +22,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { CartaoLista } from "@/modules/cadastros/cartoes/queries";
+import type {
+  CartaoLista,
+  ContaDoCartaoOpcao,
+} from "@/modules/cadastros/cartoes/queries";
 import { CartaoFormDrawer } from "./cartao-form-drawer";
 
 type FiltroStatus = "ativos" | "inativos" | "todos";
@@ -45,6 +48,8 @@ function dia(valor: number | null): string {
 
 export interface CartoesTabelaProps {
   cartoes: CartaoLista[];
+  /** Contas que podem ter cartão, para o formulário. */
+  contas: ContaDoCartaoOpcao[];
   podeCriar: boolean;
   podeEditar: boolean;
 }
@@ -58,6 +63,7 @@ export interface CartoesTabelaProps {
  */
 export function CartoesTabela({
   cartoes,
+  contas,
   podeCriar,
   podeEditar,
 }: CartoesTabelaProps) {
@@ -131,6 +137,12 @@ export function CartoesTabela({
         cell: ({ row }) => (
           <span className="tabular-nums">{row.original.ultimosDigitos}</span>
         ),
+      },
+      {
+        accessorKey: "contaNome",
+        header: "Conta bancária",
+        size: 240,
+        cell: ({ row }) => row.original.contaNome,
       },
       {
         accessorKey: "bandeira",
@@ -307,6 +319,7 @@ export function CartoesTabela({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           cartao={emEdicao}
+          contas={contas}
         />
       ) : null}
     </>

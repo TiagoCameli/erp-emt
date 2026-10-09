@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { CartoesTabela } from "@/modules/cadastros/cartoes/components/cartoes-tabela";
-import { listarCartoes } from "@/modules/cadastros/cartoes/queries";
+import {
+  listarCartoes,
+  listarContasParaCartao,
+} from "@/modules/cadastros/cartoes/queries";
 
 export default async function PaginaCartoes() {
   const usuario = await getUsuarioLogado();
@@ -11,7 +14,10 @@ export default async function PaginaCartoes() {
     notFound();
   }
 
-  const cartoes = await listarCartoes();
+  const [cartoes, contas] = await Promise.all([
+    listarCartoes(),
+    listarContasParaCartao(),
+  ]);
 
   const podeCriar = temPermissao(usuario, "cadastros.cartoes", "criar");
   const podeEditar = temPermissao(usuario, "cadastros.cartoes", "editar");
@@ -25,6 +31,7 @@ export default async function PaginaCartoes() {
       />
       <CartoesTabela
         cartoes={cartoes}
+        contas={contas}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
       />
