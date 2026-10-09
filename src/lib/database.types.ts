@@ -726,6 +726,7 @@ export type Database = {
           ativo: boolean;
           banco: string | null;
           bandeira: string | null;
+          conta_bancaria_id: string;
           created_at: string;
           created_by: string | null;
           dia_fechamento: number | null;
@@ -739,6 +740,7 @@ export type Database = {
           ativo?: boolean;
           banco?: string | null;
           bandeira?: string | null;
+          conta_bancaria_id: string;
           created_at?: string;
           created_by?: string | null;
           dia_fechamento?: number | null;
@@ -752,6 +754,7 @@ export type Database = {
           ativo?: boolean;
           banco?: string | null;
           bandeira?: string | null;
+          conta_bancaria_id?: string;
           created_at?: string;
           created_by?: string | null;
           dia_fechamento?: number | null;
@@ -762,6 +765,13 @@ export type Database = {
           updated_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "cartoes_credito_conta_bancaria_id_fkey";
+            columns: ["conta_bancaria_id"];
+            isOneToOne: false;
+            referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "cartoes_credito_created_by_fkey";
             columns: ["created_by"];
@@ -11203,6 +11213,7 @@ export type Database = {
           p_ativo: boolean;
           p_banco: string;
           p_bandeira: string;
+          p_conta_bancaria_id?: string;
           p_dia_fechamento: number;
           p_dia_vencimento: number;
           p_id: string;

@@ -7,6 +7,7 @@ import { LoaderCircle } from "lucide-react";
 import {
   CampoFormulario,
   classesFormulario,
+  Combobox,
   FormDrawer,
   LinhaCampos,
   SelectAtivo,
@@ -16,7 +17,10 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { criarCartao, editarCartao } from "@/modules/cadastros/cartoes/actions";
-import type { CartaoLista } from "@/modules/cadastros/cartoes/queries";
+import type {
+  CartaoLista,
+  ContaDoCartaoOpcao,
+} from "@/modules/cadastros/cartoes/queries";
 import {
   cartaoSchema,
   type CartaoFormInput,
@@ -27,6 +31,7 @@ const ID_FORM = "form-cartao-credito";
 const PADRAO: CartaoFormInput = {
   nome: "",
   ultimosDigitos: "",
+  contaBancariaId: "",
   bandeira: "",
   banco: "",
   diaFechamento: "",
@@ -46,6 +51,7 @@ function valoresIniciais(
   return {
     nome: cartao.nome,
     ultimosDigitos: cartao.ultimosDigitos,
+    contaBancariaId: cartao.contaBancariaId,
     bandeira: cartao.bandeira ?? "",
     banco: cartao.banco ?? "",
     diaFechamento: diaParaCampo(cartao.diaFechamento),
@@ -59,21 +65,24 @@ export interface CartaoFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Cartão em edição. Ausente abre o drawer em modo de criação. */
   cartao?: CartaoLista | null;
+  /** Contas que podem ter cartão (corrente ou poupança, ativas). */
+  contas: ContaDoCartaoOpcao[];
 }
 
 /**
  * Drawer de criação e edição de cartão de crédito.
  *
- * Dois campos importam: o apelido, que é por onde a pessoa escolhe na compra, e
- * os quatro últimos dígitos, que é por onde a compra casa com a fatura. O resto
- * (bandeira, banco, fechamento e vencimento) é conferência posterior e nasce
- * vazio de propósito — obrigar tudo isso na criação faria o cadastro rápido da
- * OC ser impossível.
+ * Três campos importam: o apelido, que é por onde a pessoa escolhe na compra;
+ * os quatro últimos dígitos, que é por onde a compra casa com a fatura; e a
+ * conta bancária, por onde a fatura é paga (uma conta tem vários cartões, um
+ * cartão tem uma conta só). O resto (bandeira, banco, fechamento e vencimento)
+ * é conferência posterior e pode nascer vazio.
  */
 export function CartaoFormDrawer({
   aberto,
   onAbertoChange,
   cartao,
+  contas,
 }: CartaoFormDrawerProps) {
   const editando = Boolean(cartao);
 
@@ -178,6 +187,33 @@ export function CartaoFormDrawer({
             />
           </CampoFormulario>
         </LinhaCampos>
+
+        <CampoFormulario
+          id="cartao-conta"
+          rotulo="Conta bancária"
+          obrigatorio
+          ajuda={
+            cartao && cartao.contaBancariaId
+              ? "A fatura deste cartão é paga por esta conta. Depois da primeira fatura conciliada, a conta não muda mais."
+              : "A fatura deste cartão é paga por esta conta. Uma conta pode ter vários cartões."
+          }
+          erro={form.formState.errors.contaBancariaId?.message}
+        >
+          <Combobox
+            id="cartao-conta"
+            valor={form.watch("contaBancariaId") ?? ""}
+            onValorChange={(valor) =>
+              form.setValue("contaBancariaId", valor, {
+                shouldValidate: true,
+                shouldDirty: true,
+              })
+            }
+            opcoes={contas.map((conta) => ({ valor: conta.id, rotulo: conta.nome }))}
+            rotuloDoValor={cartao?.contaNome}
+            placeholder="Escolha a conta"
+            disabled={salvando}
+          />
+        </CampoFormulario>
 
         <LinhaCampos>
           <CampoFormulario

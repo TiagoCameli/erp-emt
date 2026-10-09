@@ -54,7 +54,6 @@ import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { CAMINHO_DO_PAGAMENTO } from "@/modules/_shared/forma-pagamento";
 import { criarFornecedorRapido } from "@/modules/_shared/fornecedor/actions";
 import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
-import { criarCartaoRapido } from "@/modules/cadastros/cartoes/actions";
 import type { CartaoOpcao } from "@/modules/cadastros/cartoes/queries";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import {
@@ -880,16 +879,6 @@ export function OrdemFormDrawer({
       ]
     : COLUNAS_FORMA_OC;
 
-  /** Cadastro rápido do cartão sem sair da compra. Mesmo caminho do fornecedor. */
-  async function cadastrarCartao(texto: string): Promise<string | null> {
-    const r = await criarCartaoRapido(texto);
-    if ("erro" in r) {
-      toast.error(r.erro);
-      return null;
-    }
-    toast.success("Cartão criado");
-    return r.id;
-  }
   // Cotação de origem só entra por "Gerar OC" (prefill) ou vem da OC em
   // edição; nunca é escolhida à mão. Mostramos apenas como leitura.
   const origemNumero =
@@ -1210,10 +1199,10 @@ export function OrdemFormDrawer({
                     })
                   }
                   opcoes={opcoesCartao}
+                  vazioTexto="Nenhum cartão. Cadastre em Cadastros > Cartões de crédito, com a conta dele"
                   rotuloDoValor={rotuloCartaoDaOrdem.get(
                     formasObservadas[0]?.cartaoId ?? "",
                   )}
-                  onCriar={cadastrarCartao}
                   placeholder="Selecione o cartão"
                   disabled={salvando}
                   id="oc-cartao"
@@ -1535,8 +1524,8 @@ export function OrdemFormDrawer({
                         })
                       }
                       opcoes={opcoesCartao}
+                      vazioTexto="Nenhum cartão. Cadastre em Cadastros > Cartões de crédito, com a conta dele"
                       rotuloDoValor={rotuloCartaoDaOrdem.get(cartaoEscolhido)}
-                      onCriar={cadastrarCartao}
                       placeholder="Selecione"
                       disabled={salvando}
                       ariaLabel="Cartão de crédito"

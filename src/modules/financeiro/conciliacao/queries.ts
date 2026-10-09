@@ -180,18 +180,25 @@ export async function contarPendentesPorConta(): Promise<
   return contagem;
 }
 
-/** Cartões de crédito ativos, para casar a fatura na conciliação. */
-export async function listarCartoes(): Promise<{ id: string; nome: string }[]> {
+/**
+ * Cartões de crédito ativos, para casar a fatura na conciliação. Cada um traz a
+ * conta dele: a fatura só se casa com débito dessa conta (o banco recusa as
+ * outras), então a tela oferece só os cartões da conta do extrato.
+ */
+export async function listarCartoes(): Promise<
+  { id: string; nome: string; contaBancariaId: string }[]
+> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("cartoes_credito")
-    .select("id, nome, ultimos_digitos")
+    .select("id, nome, ultimos_digitos, conta_bancaria_id")
     .eq("ativo", true)
     .order("nome");
   if (error) throw new Error("Não foi possível carregar os cartões");
   return (data ?? []).map((c) => ({
     id: c.id,
     nome: c.ultimos_digitos ? `${c.nome} (final ${c.ultimos_digitos})` : c.nome,
+    contaBancariaId: c.conta_bancaria_id,
   }));
 }
 
