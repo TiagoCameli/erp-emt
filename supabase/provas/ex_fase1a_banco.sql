@@ -1,4 +1,9 @@
--- Prova da Fase 1a da Execução de Obras. Migrations 20261012100000 a 20261012160000.
+-- Prova da Fase 1a da Execução de Obras. Migrations aplicadas (versões reais): 20261009204034 estrutura, 20261009204320 indices_fk,
+-- 20261009204521 calendario, 20261009204556 calendario_somar_negativo, 20261009230306 cpm, 20261009230323 cpm_recalcular,
+-- 20261009230815 cpm_cache_sem_auditoria, 20261009234901 cpm_marco_e_trava, 20261009235413 rpcs_obra, 20261009235905 rpcs_obra_reforco,
+-- 20261010001008 rpcs_atividades_lote, 20261010001100 rpcs_atividades_excluir_renumerar, 20261010174523 views, 20261010183241 permissoes.
+-- Resultado final em 10/10/2026, banco vivo: todos os casos como o esperado; 7_backfill {"admins": 4, "linhas": 36};
+-- 1a/1b/1c = 12/0/11; 4g_linhas 3000, 4g_desempenho_ms 734 (medições anteriores 265 ms: varia com a carga do banco); 9_outros_modulos_intactos true.
 -- NÃO GRAVA: termina em raise exception com as medições, e o bloco de aborto garante o rollback.
 -- Rodar inteira pelo MCP execute_sql. Cada caso vira uma chave em r; "recusou: ..." é o esperado
 -- nos casos de trava; "PASSOU (errado)" é falha. Os números esperados estão ao lado de cada caso.

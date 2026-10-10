@@ -5233,3 +5233,18 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 
 **Relato do Tiago:** o OFX de 09/2026 da Caixa (conta 578367973-5) não trazia todos os movimentos, sobretudo os de documento 000000. **Causa:** a chave do movimento era o FITID, e a Caixa repete o FITID em movimentos diferentes: "000000" em sete (IOF, resgate automático, prestação e amortização do SIEMP, juros, empréstimo, aplicação), "374751" nos cinco consórcios de 15/09, "081108" no PIX de 08/09 e na tarifa dele. Dos 23 movimentos, 11 foram descartados como repetidos. **Decisão:** o FITID só identifica o movimento quando é único no arquivo e não é só zeros; fora disso o movimento entra sem FITID, pela chave de data, valor, histórico e posição (`numerarRepetidos`), como já era com quem não tem FITID.
 - Os 3 movimentos repetidos que já estavam no banco (IOF de 01/09, um consórcio de 15/09, PIX de 08/09) tiveram a chave trocada para a nova, sem mexer na conciliação, e o OFX foi reimportado: entraram só os que faltavam.
+
+## 2026-10-10 - Execução de Obras, Fase 1a
+
+**Entregue:** banco do módulo (12 tabelas `ex_`, views `ex_v_*`, RPCs `fn_ex_*`), motor CPM, calendário e feriados, pastas por obra, cronogramas e a grade editável. Guia para agentes em `docs/modulos/execucao-guia-para-agentes.md`. Prova: `supabase/provas/ex_fase1a_banco.sql` no banco vivo.
+- **Nome e acesso:** prefixo `ex_`, menu "Execução". Acesso por lista da obra; a pasta nasce com quem criou e todos os Admins ativos. Backfill de permissões: 4 Admins, 36 linhas. Estoque físico sem valor (seção 4 do spec) fica para a F5.
+- **Feriados:** o Tiago edita no app (`fn_ex_feriado_salvar`/`excluir`, recalcula todos os cronogramas); a carga 2026 a 2030 é ponto de partida. Para trabalhar num feriado num cronograma só, exceção por calendário.
+- **CPM só no banco**, em dias úteis do calendário, ES inclusivo e EF exclusivo. Marco aparece no fim do dia útil anterior ao ES (um marco ligado por II+0 cai no dia útil antes de a predecessora começar); marco com âncora de data usa count(dias úteis < data) + 1. Ninguém calcula data fora do banco.
+- **Q7 é suposição:** produtividade por dia, sábado de 5 h conta 1 dia útil. Trocar depois do merge muda todas as datas.
+- **`fn_ex_somar_dias_uteis` com n < 0** anda para trás de forma simétrica ao n > 0.
+- **Cache `ex_atividade_datas` não é auditado:** é derivado e recalculado a cada gravação; auditar gravaria milhares de linhas por edição. Medido: 3.000 atividades recalculam em 265 ms a 734 ms. As demais 11 tabelas seguem auditadas.
+- **Lote de atividades:** linha existente mantém os campos ausentes; `versao` viaja como o `updated_at` cru, sem reformatar.
+- **`GradeEdicao` é um canônico novo:** a grade colável e recuável não existia entre os canônicos (Tab sai da grade nas bordas, `copiar` opcional), e a EAP precisa de teclado, colagem do Excel e recuo.
+- **Gantt desenhado por nós (F2):** sem motor de agenda de biblioteca, para o CPM continuar sendo só o do banco.
+- **Policy `unidades_medida_select` estendida:** mantém cadastros, manutenção, combustível e frete e acrescenta a Execução (`fn_ve_execucao`).
+- **Aplicação das migrations:** pelo MCP; quando deu "Invalid or expired requestState", por `supabase db query --linked -f` com registro manual em `schema_migrations`. Trabalho na branch `execucao-f1a`.

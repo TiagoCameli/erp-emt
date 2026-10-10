@@ -300,6 +300,8 @@ Ajuste em relação ao pedido: o **motor CPM (banco) sobe para a F1**, porque a 
 6. **F6**: pessoas, terceiros, equipes, alocação, anotações, produtividade, equipamentos.
 7. **F7**: relatórios PDF/Excel, link do encarregado, sininho e alertas, portfólio, guia para agentes completo.
 
+(emenda 10/10/2026): **Fase 1a entregue em 10/10/2026** (PR no merge). Entrou: banco, acesso por lista, pastas, cronogramas, locais, calendário e feriados editáveis, motor CPM, grade editável e guia para agentes. Ficou para a **F1b**: importação Excel genérica, modelos de sequência × locais e arrastar linhas com o mouse. Q7 segue como suposição (a).
+
 ## 14. Perguntas em aberto
 
 Cada opção diz o que implica. A recomendação vem primeiro.

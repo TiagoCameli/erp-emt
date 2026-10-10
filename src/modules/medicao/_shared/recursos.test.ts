@@ -3,10 +3,11 @@ import { describe, expect, it } from "vitest";
 import { MODULOS, recursosDoModulo } from "@/config/recursos";
 
 describe("catálogo da Medição de Contratos", () => {
-  it("o módulo existe entre Manutenção e Administração", () => {
+  it("o módulo existe depois de Manutenção, e a Execução vem logo em seguida, antes de Administração", () => {
     const ids = MODULOS.map((m) => m.id);
     expect(ids.indexOf("medicao")).toBe(ids.indexOf("manutencao") + 1);
-    expect(ids.indexOf("administracao")).toBe(ids.indexOf("medicao") + 1);
+    expect(ids.indexOf("execucao")).toBe(ids.indexOf("medicao") + 1);
+    expect(ids.indexOf("administracao")).toBe(ids.indexOf("execucao") + 1);
   });
 
   it("as abas do módulo seguem a ordem do menu, com as ações do backfill", () => {
