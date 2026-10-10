@@ -58,12 +58,45 @@ describe("GradeCronograma", () => {
     expect(await screen.findByText("Estacas raiz")).toBeTruthy();
   });
 
-  it("texto que não se interpreta vira aviso e nada é enviado", () => {
+  it("texto que não se interpreta vira aviso e nada é enviado", async () => {
     montar();
     fireEvent.click(screen.getByText("Estacas"));
     fireEvent.keyDown(screen.getByRole("grid"), { key: "Delete" });
-    expect(toastErro).toHaveBeenCalledWith("Linha 1: Informe o nome");
+    await waitFor(() => expect(toastErro).toHaveBeenCalledWith("Linha 1: Informe o nome"));
     expect(salvarLinhas).not.toHaveBeenCalled();
+  });
+
+  it("duas edições seguidas na mesma linha: a segunda sai depois da primeira, com a versão que ela devolveu", async () => {
+    const V1 = "2026-10-10T13:00:01.000001+00:00";
+    const V2 = "2026-10-10T13:00:02.000002+00:00";
+    let soltarPrimeira: (r: unknown) => void = () => {};
+    salvarLinhas
+      .mockReset()
+      .mockImplementationOnce(() => new Promise((r) => { soltarPrimeira = r; }))
+      .mockResolvedValueOnce({ ok: true, atividades: [a({ nome: "Estacas raiz", quantidade: "12", versao: V2 })] });
+    montar();
+    const grade = screen.getByRole("grid");
+    // Nome, Tab, e a Qtd da mesma linha antes de o banco responder à primeira.
+    fireEvent.click(screen.getByText("Estacas"));
+    fireEvent.keyDown(grade, { key: "E" });
+    const nome = screen.getByRole("textbox", { name: "Nome, linha 1" });
+    fireEvent.change(nome, { target: { value: "Estacas raiz" } });
+    fireEvent.keyDown(nome, { key: "Tab" });
+    fireEvent.keyDown(grade, { key: "Tab" });
+    fireEvent.keyDown(grade, { key: "Tab" });
+    fireEvent.keyDown(grade, { key: "1" });
+    const qtd = screen.getByRole("textbox", { name: "Qtd, linha 1" });
+    fireEvent.change(qtd, { target: { value: "12" } });
+    fireEvent.keyDown(qtd, { key: "Tab" });
+
+    await waitFor(() => expect(salvarLinhas).toHaveBeenCalledTimes(1));
+    expect(salvarLinhas).toHaveBeenNthCalledWith(1, CRONO, [{ id: "x", versao: VERSAO, nome: "Estacas raiz" }]);
+    soltarPrimeira({ ok: true, atividades: [a({ nome: "Estacas raiz", versao: V1 })] });
+
+    await waitFor(() => expect(salvarLinhas).toHaveBeenCalledTimes(2));
+    expect(salvarLinhas.mock.calls[1][1]).toEqual([expect.objectContaining({ id: "x", versao: V1, quantidade: expect.anything() })]);
+    expect(await screen.findByText("Estacas raiz")).toBeTruthy();
+    expect(toastErro).not.toHaveBeenCalled();
   });
 
   it("erro do banco vai para o aviso, intacto", async () => {

@@ -38,6 +38,20 @@ describe("GradeEdicao", () => {
     expect(onEditar).toHaveBeenCalledWith([{ idLinha: "b", idColuna: "nome", texto: "Estacas raiz" }]);
   });
 
+  it("F2 e Enter, Tab ou clique fora sem mudar nada não emite mudança", () => {
+    const { onEditar, grade } = montar();
+    fireEvent.click(screen.getByText("Estacas"));
+    fireEvent.keyDown(grade, { key: "F2" });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Nome, linha 2" }), { key: "Enter" });
+    fireEvent.click(screen.getByText("Estacas"));
+    fireEvent.keyDown(grade, { key: "F2" });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Nome, linha 2" }), { key: "Tab" });
+    fireEvent.click(screen.getByText("Estacas"));
+    fireEvent.keyDown(grade, { key: "F2" });
+    fireEvent.blur(screen.getByRole("textbox", { name: "Nome, linha 2" }));
+    expect(onEditar).not.toHaveBeenCalled();
+  });
+
   it("coluna só leitura não abre editor", () => {
     montar();
     fireEvent.click(screen.getAllByText("02/03/2026")[0]);

@@ -107,7 +107,12 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
     if (vazia || !coluna) return;
     // Lista de opções: só grava valor que é opção (Delete numa coluna assim não apaga nada).
     if (coluna.editar?.opcoes && !coluna.editar.opcoes.some((o) => o.valor === texto)) return;
-    const ids = alvos(ativa.linha, coluna);
+    // Enter, Tab ou clique fora sem mudar nada não emite: a linha cujo texto já é esse fica de fora.
+    const porId = new Map(linhas.map((l) => [idDaLinha(l), l]));
+    const ids = alvos(ativa.linha, coluna).filter((id) => {
+      const linha = porId.get(id);
+      return !linha || coluna.editar?.texto(linha) !== texto;
+    });
     if (ids.length) onEditar(ids.map((idLinha) => ({ idLinha, idColuna: coluna.id, texto })));
   };
 

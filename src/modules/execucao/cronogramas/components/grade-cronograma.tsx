@@ -172,47 +172,85 @@ export function GradeCronograma({ cronogramaId, atividades: iniciais, servicos, 
   const [salvando, iniciar] = React.useTransition();
   const [excluindo, setExcluindo] = React.useState<string[] | null>(null);
 
+  // Toda escrita da grade entra numa fila, uma de cada vez, e cada uma monta o lote na hora em que
+  // sai, a partir da última resposta do banco (`atuais`), não do que estava na tela quando se digitou.
+  // O lote confere a versão de cada linha: duas edições seguidas na mesma linha, com a segunda montada
+  // antes de a primeira voltar, iriam com a versão velha e o banco recusaria a segunda.
+  const atuais = React.useRef(atividades);
+  const fila = React.useRef<Promise<unknown>>(Promise.resolve());
+  React.useEffect(() => {
+    atuais.current = iniciais;
+  }, [iniciais]);
+
   const linhas = React.useMemo(() => emOrdem(atividades), [atividades]);
   const porId = React.useMemo(() => new Map(atividades.map((a) => [a.id, a])), [atividades]);
   const colunas = React.useMemo(() => colunasDaGrade(servicos, unidades), [servicos, unidades]);
-  const ctx: ContextoEdicao = React.useMemo(
-    () => ({ servicos, unidades, locais, codigoDaLinha: (n: number) => linhas[n - 1]?.codigo }),
-    [servicos, unidades, locais, linhas],
-  );
   const somenteLeitura = !podeEditar && !podeCriar;
+
+  /** Estado mais recente vindo do banco, para montar o lote dentro da fila. */
+  function estadoAtual() {
+    const lista = atuais.current;
+    const ordem = emOrdem(lista);
+    const ctx: ContextoEdicao = { servicos, unidades, locais, codigoDaLinha: (n: number) => ordem[n - 1]?.codigo };
+    return { lista, linhas: ordem, porId: new Map(lista.map((a) => [a.id, a])), ctx };
+  }
+
+  function naFila<T>(passo: () => Promise<T>): Promise<T> {
+    const resultado = fila.current.then(passo);
+    fila.current = resultado.catch(() => undefined);
+    return resultado;
+  }
+
+  /** Chama o banco e já guarda a resposta em `atuais`, antes de o próximo passo da fila montar o seu lote. */
+  async function chamar(acao: () => Promise<ResultadoGrade>): Promise<ResultadoGrade> {
+    const resposta = await acao();
+    if (!("erro" in resposta)) atuais.current = resposta.atividades;
+    return resposta;
+  }
 
   function aplicar(resposta: ResultadoGrade): boolean {
     if ("erro" in resposta) {
       toast.error(resposta.erro);
       return false;
     }
+    atuais.current = resposta.atividades;
     setAtividades(resposta.atividades);
     const ids = new Set(resposta.atividades.map((a) => a.id));
     setSelecionadas((atual) => new Set([...atual].filter((id) => ids.has(id))));
     return true;
   }
 
-  function executar(acao: () => Promise<ResultadoGrade>) {
+  /** `acao` roda dentro da fila; devolve null quando não há o que mandar (lote vazio ou texto que não se interpreta). */
+  function executar(acao: () => Promise<ResultadoGrade> | null) {
     iniciar(async () => {
-      const resposta = await acao();
+      const resposta = await naFila(async () => {
+        const chamada = acao();
+        return chamada ? chamar(() => chamada) : null;
+      });
+      if (!resposta) return;
       iniciar(() => {
         aplicar(resposta);
       });
     });
   }
 
-  function enviar(lote: LinhaLote[]) {
-    if (lote.length === 0) return;
-    executar(() => salvarLinhas(cronogramaId, lote));
+  /** Monta o lote dentro da fila; `null` do montador = nada a mandar. */
+  function enviar(montar: (estado: ReturnType<typeof estadoAtual>) => LinhaLote[] | null) {
+    executar(() => {
+      const lote = montar(estadoAtual());
+      return lote && lote.length > 0 ? salvarLinhas(cronogramaId, lote) : null;
+    });
   }
 
   function aoEditar(mudancas: MudancaCelula[]) {
-    const r = montarLote(mudancas, porId, ctx);
-    if (!r.ok) {
-      toast.error(r.erro);
-      return;
-    }
-    enviar(r.linhas);
+    enviar(({ porId: atual, ctx }) => {
+      const r = montarLote(mudancas, atual, ctx);
+      if (!r.ok) {
+        toast.error(r.erro);
+        return null;
+      }
+      return r.linhas;
+    });
   }
 
   function aoColarAlem(bloco: string[][], idColunaInicial: string) {
@@ -220,19 +258,24 @@ export function GradeCronograma({ cronogramaId, atividades: iniciais, servicos, 
       toast.error("Sem permissão para criar atividade");
       return;
     }
-    const r = linhasNovasDoBloco(bloco, idColunaInicial, atividades, ctx);
-    if (!r.ok) {
-      toast.error(r.erro);
-      return;
-    }
-    enviar(r.linhas);
+    enviar(({ lista, ctx }) => {
+      const r = linhasNovasDoBloco(bloco, idColunaInicial, lista, ctx);
+      if (!r.ok) {
+        toast.error(r.erro);
+        return null;
+      }
+      return r.linhas;
+    });
   }
 
-  const mover = (operacao: (linhas: Linha[], id: string) => Mudanca[], id: string) => enviar(mudancasParaLote(operacao(linhas, id), porId));
+  const mover = (operacao: (linhas: Linha[], id: string) => Mudanca[], id: string) =>
+    enviar((atual) => mudancasParaLote(operacao(atual.linhas, id), atual.porId));
 
   function novaLinha(idReferencia: string | null) {
-    const p = proximaLinha(linhas, idReferencia);
-    enviar([{ codigo: p.codigo, pai_codigo: p.pai_codigo, ordem: p.ordem, nome: "Nova atividade" }, ...mudancasParaLote(p.mudancas, porId)]);
+    enviar((atual) => {
+      const p = proximaLinha(atual.linhas, idReferencia);
+      return [{ codigo: p.codigo, pai_codigo: p.pai_codigo, ordem: p.ordem, nome: "Nova atividade" }, ...mudancasParaLote(p.mudancas, atual.porId)];
+    });
   }
 
   // A linha das ações da barra: a única marcada.
@@ -313,7 +356,8 @@ export function GradeCronograma({ cronogramaId, atividades: iniciais, servicos, 
         minMotivo={3}
         onConfirmar={async (motivo) => {
           if (!excluindo) return;
-          const ok = aplicar(await excluirAtividades(cronogramaId, excluindo, motivo ?? ""));
+          const ids = excluindo;
+          const ok = aplicar(await naFila(() => chamar(() => excluirAtividades(cronogramaId, ids, motivo ?? ""))));
           if (!ok) return false;
           setExcluindo(null);
         }}
