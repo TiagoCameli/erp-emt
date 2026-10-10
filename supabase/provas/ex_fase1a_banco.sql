@@ -1,9 +1,12 @@
 -- Prova da Fase 1a da Execução de Obras. Migrations aplicadas (versões reais): 20261009204034 estrutura, 20261009204320 indices_fk,
 -- 20261009204521 calendario, 20261009204556 calendario_somar_negativo, 20261009230306 cpm, 20261009230323 cpm_recalcular,
 -- 20261009230815 cpm_cache_sem_auditoria, 20261009234901 cpm_marco_e_trava, 20261009235413 rpcs_obra, 20261009235905 rpcs_obra_reforco,
--- 20261010001008 rpcs_atividades_lote, 20261010001100 rpcs_atividades_excluir_renumerar, 20261010174523 views, 20261010183241 permissoes.
+-- 20261010001008 rpcs_atividades_lote, 20261010001100 rpcs_atividades_excluir_renumerar, 20261010174523 views, 20261010183241 permissoes,
+-- 20261010184924 cronograma_excluido_some, 20261010184950 calendario_salvar_parcial.
 -- Resultado final em 10/10/2026, banco vivo: todos os casos como o esperado; 7_backfill {"admins": 4, "linhas": 36};
 -- 1a/1b/1c = 12/0/11; 4g_linhas 3000, 4g_desempenho_ms 734 (medições anteriores 265 ms: varia com a carga do banco); 9_outros_modulos_intactos true.
+-- Revisão final (mesmo dia): 3n {"sab": 4.00, "semana": [8.00, 8.00, 8.00, 8.00, 9.00], "feriados": ["nacional"], "municipio": "Rio Branco"};
+-- 6e_atividades_do_excluido 0, 6e_local_excluido true; demais casos iguais; 4g_desempenho_ms 692.
 -- NÃO GRAVA: termina em raise exception com as medições, e o bloco de aborto garante o rollback.
 -- Rodar inteira pelo MCP execute_sql. Cada caso vira uma chave em r; "recusou: ..." é o esperado
 -- nos casos de trava; "PASSOU (errado)" é falha. Os números esperados estão ao lado de cada caso.
@@ -14,7 +17,7 @@ declare
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_obra uuid; v_obra2 uuid; v_cron uuid; v_cal uuid; v_n bigint; v_txt text; v_j jsonb; r jsonb := '{}'::jsonb;
   v_lista bigint; v_admins bigint;
-  v_ids jsonb; v_11 uuid; v_12 uuid; v_r1 uuid;
+  v_ids jsonb; v_11 uuid; v_12 uuid; v_r1 uuid; v_l6e uuid;
   v_obras0 bigint; v_cc0 bigint; v_colab0 bigint;
 begin
   select count(*) into v_obras0 from public.obras;
@@ -163,6 +166,18 @@ begin
     r := r || jsonb_build_object('3m_status_nulo', v_txt);
   end;
 
+  -- 3n. Edição parcial do calendário: num modelo de rascunho, mandar só {"horas_sab": 4} muda o sábado e
+  --     mantém o resto. Esperado: {"sab": 4, "semana": [8, 8, 8, 8, 9], "feriados": ["nacional"], "municipio": "Rio Branco"}
+  declare v_cal3n uuid;
+  begin
+    v_cal3n := public.fn_ex_calendario_salvar(jsonb_build_object('nome', 'Prova 3n', 'horas_seg', 8, 'horas_ter', 8, 'horas_qua', 8,
+      'horas_qui', 8, 'horas_sex', 9, 'feriados_abrangencia', jsonb_build_array('nacional'), 'municipio', 'Rio Branco'));
+    perform public.fn_ex_calendario_salvar('{"horas_sab": 4}'::jsonb, v_cal3n);
+    r := r || jsonb_build_object('3n_edicao_parcial', (select jsonb_build_object('sab', horas_sab,
+      'semana', jsonb_build_array(horas_seg, horas_ter, horas_qua, horas_qui, horas_sex),
+      'feriados', to_jsonb(feriados_abrangencia), 'municipio', municipio) from public.ex_calendarios where id = v_cal3n));
+  end;
+
   -- 3h. Local em ciclo: B filho de A, depois A filho de B. Esperado: "recusou: ..."
   declare v_la uuid; v_lb uuid;
   begin
@@ -255,14 +270,27 @@ begin
   r := r || jsonb_build_object('5j_sem_permissao', v_txt);
   reset role;
 
-  -- 6. Views. Esperado: 6a true; 6b {"linhas": 2, "com_versao": 2}; 6c false; 6d true
+  -- 6. Views. Esperado: 6a true; 6b {"linhas": 2, "com_versao": 2}; 6c false; 6d true; 6e 0 e true
   perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
   set local role authenticated;
   r := r || jsonb_build_object('6a_pasta_existe', exists (select 1 from public.ex_v_pastas where obra_id = v_obra2 and n_cronogramas = 1));
+  -- Preparo do 6e: um local usado só por uma atividade deste cronograma.
+  v_l6e := public.fn_ex_local_salvar(v_obra2, jsonb_build_object('tipo', 'bloco', 'codigo', 'P6E', 'nome', 'Prova 6e'));
+  reset role;
+  insert into public.ex_atividade_locais (atividade_id, local_id, obra_id)
+    select a.id, v_l6e, a.obra_id from public.ex_atividades a where a.cronograma_id = v_cron and a.excluido_em is null order by a.ordem limit 1;
+  set local role authenticated;
   r := r || jsonb_build_object('6b_atividades', (select jsonb_build_object('linhas', count(*), 'com_versao', count(versao))
     from public.ex_v_atividades where cronograma_id = v_cron));
   perform public.fn_ex_cronograma_excluir(v_cron, 'Prova: a pasta some');
   r := r || jsonb_build_object('6c_pasta_some', exists (select 1 from public.ex_v_pastas where obra_id = v_obra2));
+  -- 6e. As atividades do cronograma excluído somem da view e não prendem o local que só elas usam.
+  --     Esperado: {"atividades": 0, "local_excluido": true}
+  r := r || jsonb_build_object('6e_atividades_do_excluido', (select count(*) from public.ex_v_atividades where cronograma_id = v_cron));
+  begin
+    perform public.fn_ex_local_excluir(v_l6e, 'Prova: só atividades de cronograma excluído');
+    r := r || jsonb_build_object('6e_local_excluido', (select excluido_em is not null from public.ex_locais where id = v_l6e));
+  exception when others then r := r || jsonb_build_object('6e_local_excluido', 'recusou (errado): ' || sqlerrm); end;
   reset role;
   insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'execucao.cronogramas', 'ver');
   perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);

@@ -87,6 +87,8 @@ Regras do lote (`fn_ex_atividades_salvar_lote`):
 
 Demais RPCs: `fn_ex_cronograma_salvar(dados, id)`, `fn_ex_cronograma_status(id, status)`, `fn_ex_cronograma_excluir(id, motivo)`, `fn_ex_cronograma_recalcular(id)`, `fn_ex_local_salvar(obra, dados, id)`, `fn_ex_local_excluir(id, motivo)`, `fn_ex_servico_salvar(dados, id)`, `fn_ex_calendario_salvar(dados, id)`, `fn_ex_calendario_excecao_salvar(cal, data, horas, tipo, descricao)`, `fn_ex_calendario_excecao_excluir(cal, data)`, `fn_ex_feriado_salvar(dados, id)`, `fn_ex_feriado_excluir(id)`, `fn_ex_obra_configurar(obra, dados)`, `fn_ex_acesso_definir(obra, usuario, tem)`, `fn_ex_eap_renumerar(cronograma)`, `fn_ex_dias_uteis(cal, de, ate)`, `fn_ex_somar_dias_uteis(cal, data, n)`. Internas, não chame: `fn_ex_cpm_calcular`, `fn_ex_cpm_recalcular`, `fn_ex_recalcular_*`, `fn_ex_exigir*`.
 
+`fn_ex_calendario_salvar` na edição (com `id`) mantém os campos que não vieram, como o lote: mandar só `{"horas_sab": 4}` muda o sábado e deixa o resto da semana, os feriados, o município, o período chuvoso e as observações como estavam. Na criação (sem `id`), o que falta vale o padrão (horas 0, feriados nacional + AC). Mande `null` ou `""` para apagar um campo de texto.
+
 ## 6. Consultas prontas
 
 ```sql
@@ -117,6 +119,8 @@ select * from public.ex_v_pastas;
 ```
 
 Colunas de `ex_v_atividades`: `id, cronograma_id, obra_id, pai_id, pai_codigo, tipo, codigo, nome, ordem, servico_*, quantidade, unidade_sigla, produtividade, modo_duracao, duracao_dias, peso_manual, valor_orcado, restricao_data, restricao_data_em, responsavel_id, observacao, inicio_real, fim_real, inicio_cedo, fim_cedo, inicio_tarde, fim_tarde, folga_total, folga_livre, critica, predecessoras (jsonb), locais (jsonb), versao`.
+
+`ex_v_atividades` esconde as atividades de cronograma excluído (`fn_ex_cronograma_excluir`): elas continuam na tabela, mas não aparecem na view e não contam na trava de `fn_ex_local_excluir`.
 
 ## 7. Erros comuns (P0001)
 
