@@ -87,6 +87,7 @@ import {
 } from "@/modules/financeiro/relatorios/components/creditos-tabela";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
+import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
 import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
 import { FiltrosInvestimentosBarra } from "@/modules/financeiro/relatorios/components/filtros-investimentos-barra";
 import {
@@ -111,6 +112,7 @@ import {
   custoReceita,
   creditos,
   investimentos,
+  sociosLigadas,
   emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
@@ -769,6 +771,29 @@ async function ConteudoCreditos({
       </div>
     </>
   );
+}
+
+/**
+ * Sócios e ligadas: o ano corrente e o acumulado desde o primeiro lançamento.
+ * Sem filtro de período de propósito: o acumulado do mútuo é o que a empresa
+ * ligada deve hoje, e é a pergunta que a tela responde.
+ */
+async function ConteudoSociosLigadas() {
+  const ano = Number(mesCorrente().slice(0, 4));
+  const [doAno, acumulado] = await Promise.all([
+    sociosLigadas(`${ano}-01-01`, `${ano + 1}-01-01`),
+    sociosLigadas("1900-01-01", "2100-01-01"),
+  ]);
+  if (acumulado.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Nenhum centro de sócio ou de empresa ligada"
+        descricao="Os centros de tipo Sócio e Empresa ligada aparecem aqui, em Cadastros > Centros de custo."
+      />
+    );
+  }
+  return <SociosLigadasTabela ano={ano} doAno={doAno} acumulado={acumulado} />;
 }
 
 async function ConteudoInvestimentos({
@@ -1594,6 +1619,15 @@ export default async function RelatoriosPage({
             situacao={filtrosCreditos.situacao}
             podeVerLancamentos={podeVerLancamentos}
           />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "socios-ligadas" ? (
+        <SecaoRelatorio
+          titulo="Sócios e ligadas"
+          descricao="O que foi para os sócios (James e Tiago) e para as empresas ligadas (Amazônia, Juruá FM). Distribuição a sócio e mútuo ficam fora do resultado e do custo das obras; aqui está quanto saiu, quanto voltou e o saldo."
+        >
+          <ConteudoSociosLigadas />
         </SecaoRelatorio>
       ) : null}
 

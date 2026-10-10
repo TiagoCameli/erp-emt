@@ -10856,6 +10856,18 @@ export type Database = {
           valor: number;
         }[];
       };
+      fn_rel_socios_ligadas: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: {
+          ativo: boolean;
+          centro: string;
+          centro_id: string;
+          devolvido: number;
+          enviado: number;
+          saldo: number;
+          tipo: string;
+        }[];
+      };
       fn_rel_custo_centro_custo: {
         Args: {
           p_categorias?: string[];

@@ -48,6 +48,7 @@ import {
   type LancamentoCategoria,
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
+import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
 // componentes continuem importando tudo de queries.ts, como antes da extração.
@@ -1450,4 +1451,27 @@ export async function investimentos(
     }));
 
   return montarInvestimentos(movimentos, subcontas, periodo);
+}
+
+
+// =====================================================================
+// Sócios e ligadas (PR 2 do controle total, D3/D4)
+// =====================================================================
+
+/** Enviado, devolvido e saldo por centro de sócio e de empresa ligada. Fim exclusivo. */
+export async function sociosLigadas(inicio: string, fim: string): Promise<SocioLigadaLinha[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_socios_ligadas", { p_inicio: inicio, p_fim: fim });
+  if (error) {
+    throw new Error("Não foi possível carregar o relatório de sócios e ligadas");
+  }
+  return (data ?? []).map((l) => ({
+    centroId: l.centro_id,
+    centro: l.centro,
+    tipo: l.tipo === "socio" ? "socio" : "empresa_ligada",
+    ativo: l.ativo,
+    enviado: Number(l.enviado),
+    devolvido: Number(l.devolvido),
+    saldo: Number(l.saldo),
+  }));
 }
