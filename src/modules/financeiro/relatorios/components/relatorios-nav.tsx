@@ -6,6 +6,7 @@ import {
   Banknote,
   Building2,
   CalendarClock,
+  HandCoins,
   Landmark,
   LineChart,
   PiggyBank,
@@ -49,6 +50,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     "custo-receita": { rotulo: "Custo x receita", icone: Scale3d },
     "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
     "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
+    "socios-ligadas": { rotulo: "Sócios e ligadas", icone: HandCoins },
   };
 
 interface RelatoriosNavProps {

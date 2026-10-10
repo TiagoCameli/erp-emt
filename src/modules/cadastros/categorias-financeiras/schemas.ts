@@ -34,6 +34,9 @@ export const NATUREZAS_CATEGORIA_FINANCEIRA = [
   "operacional",
   "financeira",
   "movimentacao",
+  "investimento",
+  "distribuicao",
+  "mutuo",
 ] as const;
 
 export type NaturezaCategoriaFinanceira =
@@ -47,6 +50,9 @@ export const ROTULO_NATUREZA_CATEGORIA_FINANCEIRA: Record<
   operacional: "Operacional",
   financeira: "Financeira",
   movimentacao: "Movimentação",
+  investimento: "Investimento",
+  distribuicao: "Distribuição a sócio",
+  mutuo: "Mútuo com empresa ligada",
 };
 
 /**
@@ -62,6 +68,12 @@ export const AJUDA_NATUREZA_CATEGORIA_FINANCEIRA: Record<
   financeira: "Entra no resultado, fora da obra: juros, tarifa, IOF.",
   movimentacao:
     "Fica fora do resultado: principal de aplicação, resgate, empréstimo.",
+  investimento:
+    "Fica fora do resultado: máquina, equipamento, terreno, consórcio a contemplar.",
+  distribuicao:
+    "Fica fora do resultado: retirada de sócio e despesa pessoal da família paga pela EMT.",
+  mutuo:
+    "Fica fora do resultado: dinheiro enviado a empresa ligada (a receber) e o que ela devolveu.",
 };
 
 /** Schema do formulário de categoria financeira. */

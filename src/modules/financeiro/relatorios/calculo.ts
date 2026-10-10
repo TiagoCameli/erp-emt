@@ -250,8 +250,19 @@ export interface DrePorNatureza {
    */
   investimento: BlocoDre;
   /**
-   * Operacional mais financeiro. Movimentação e investimento NÃO entram, de
-   * propósito.
+   * Retirada de sócio (James e Tiago): não há pró-labore formal, então todo
+   * envio a sócio e despesa pessoal da família é distribuição (D3, 09/10/2026).
+   * Abaixo do resultado.
+   */
+  distribuicao: BlocoDre;
+  /**
+   * Mútuo com empresa ligada (Amazônia, Juruá FM): o que a EMT paga por elas é
+   * empréstimo a receber, e o que volta abate (D4). Fora do resultado.
+   */
+  mutuo: BlocoDre;
+  /**
+   * Operacional mais financeiro. Movimentação, investimento, distribuição e
+   * mútuo NÃO entram, de propósito.
    */
   resultado: number;
 }
@@ -297,12 +308,14 @@ function montarBloco(
   };
 }
 
-/** As quatro naturezas, na ordem em que aparecem no relatório. */
+/** As seis naturezas, na ordem em que aparecem no relatório. */
 export const NATUREZAS = [
   "operacional",
   "financeira",
   "movimentacao",
   "investimento",
+  "distribuicao",
+  "mutuo",
 ] as const;
 
 export type Natureza = (typeof NATUREZAS)[number];
@@ -350,6 +363,8 @@ export function agruparDrePorNatureza(
     financeira: { receitas: [], despesas: [], retencao: new Map() },
     movimentacao: { receitas: [], despesas: [], retencao: new Map() },
     investimento: { receitas: [], despesas: [], retencao: new Map() },
+    distribuicao: { receitas: [], despesas: [], retencao: new Map() },
+    mutuo: { receitas: [], despesas: [], retencao: new Map() },
   };
 
   for (const linha of linhas) {
@@ -383,12 +398,16 @@ export function agruparDrePorNatureza(
   const financeiro = bloco("financeira");
   const movimentacao = bloco("movimentacao");
   const investimento = bloco("investimento");
+  const distribuicao = bloco("distribuicao");
+  const mutuo = bloco("mutuo");
 
   return {
     operacional,
     financeiro,
     movimentacao,
     investimento,
+    distribuicao,
+    mutuo,
     resultado: operacional.resultado + financeiro.resultado,
   };
 }

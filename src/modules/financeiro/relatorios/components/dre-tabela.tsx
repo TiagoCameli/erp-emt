@@ -216,6 +216,8 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
   const temFinanceiro = blocoTemLinha(dre.financeiro);
   const temInvestimento = blocoTemLinha(dre.investimento);
   const temMovimentacao = blocoTemLinha(dre.movimentacao);
+  const temDistribuicao = blocoTemLinha(dre.distribuicao);
+  const temMutuo = blocoTemLinha(dre.mutuo);
   const comum = { periodo, podeVerLancamentos };
 
   /** Retenção só vira linha fora do operacional quando existe. */
@@ -372,6 +374,70 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
                   rotuloTotal="Total de saídas"
                   tipo="a_pagar"
                   natureza="movimentacao"
+                  {...comum}
+                />
+              </>
+            ) : null}
+
+            {temDistribuicao ? (
+              <>
+                <AvisoForaDoResultado>
+                  Abaixo, distribuições a sócios: o que foi para James e Tiago
+                  e as despesas pessoais da família pagas pela EMT. É retirada,{" "}
+                  <strong className="font-medium text-foreground">
+                    não é custo
+                  </strong>{" "}
+                  e fica fora do resultado do período acima.
+                </AvisoForaDoResultado>
+                <SecaoDre
+                  titulo="Distribuições a sócios"
+                  linhas={dre.distribuicao.despesas}
+                  total={dre.distribuicao.totalDespesas}
+                  rotuloTotal="Total distribuído"
+                  tipo="a_pagar"
+                  natureza="distribuicao"
+                  {...comum}
+                />
+                {dre.distribuicao.receitas.length > 0 ? (
+                  <SecaoDre
+                    titulo="Devolvido por sócios"
+                    linhas={dre.distribuicao.receitas}
+                    total={dre.distribuicao.totalReceitas}
+                    rotuloTotal="Total devolvido"
+                    tipo="a_receber"
+                    natureza="distribuicao"
+                    {...comum}
+                  />
+                ) : null}
+              </>
+            ) : null}
+
+            {temMutuo ? (
+              <>
+                <AvisoForaDoResultado>
+                  Abaixo, mútuo com empresas ligadas (Amazônia, Juruá FM): o
+                  que a EMT pagou por elas é{" "}
+                  <strong className="font-medium text-foreground">
+                    empréstimo a receber
+                  </strong>
+                  , e o que voltou abate. Fora do resultado.
+                </AvisoForaDoResultado>
+                <SecaoDre
+                  titulo="Mútuo concedido"
+                  linhas={dre.mutuo.despesas}
+                  total={dre.mutuo.totalDespesas}
+                  rotuloTotal="Total enviado"
+                  tipo="a_pagar"
+                  natureza="mutuo"
+                  {...comum}
+                />
+                <SecaoDre
+                  titulo="Mútuo devolvido"
+                  linhas={dre.mutuo.receitas}
+                  total={dre.mutuo.totalReceitas}
+                  rotuloTotal="Total devolvido"
+                  tipo="a_receber"
+                  natureza="mutuo"
                   {...comum}
                 />
               </>

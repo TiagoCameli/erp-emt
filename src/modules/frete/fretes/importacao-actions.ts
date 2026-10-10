@@ -22,6 +22,7 @@ import {
   listarTransportadorasFrete,
 } from "@/modules/frete/fretes/queries";
 import { dadosDaRpc, freteSchema, type FreteInput } from "@/modules/frete/fretes/schemas";
+import { ehLugarDeTrabalho } from "@/modules/combustivel/abastecimentos/opcoes";
 
 /**
  * Importar fretes do Excel (o "Importar do Excel" do FreteForm da origem). Arquivo
@@ -51,7 +52,7 @@ async function carregarCadastros(): Promise<CadastrosImportacao> {
     listarInsumosAtivos(),
     listarCentrosCusto(),
   ]);
-  const raizes = centros.filter((c) => c.paiId === null && c.tipo === "obra");
+  const raizes = centros.filter((c) => c.paiId === null && ehLugarDeTrabalho(c.tipo));
   const obras = indicePorNome([
     ...raizes.map((c) => ({ id: c.id, nome: c.nome })),
     ...raizes.filter((c) => c.codigo).map((c) => ({ id: c.id, nome: `${c.codigo} ${c.nome}` })),

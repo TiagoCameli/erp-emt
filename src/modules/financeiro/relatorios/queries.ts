@@ -48,6 +48,7 @@ import {
   type LancamentoCategoria,
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
+import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
 // componentes continuem importando tudo de queries.ts, como antes da extração.
@@ -215,9 +216,13 @@ export interface DreGerencial {
    * fora da soma dele, como a movimentação.
    */
   investimento: BlocoDre;
+  /** Retirada de sócio (D3, 09/10/2026): abaixo do resultado. */
+  distribuicao: BlocoDre;
+  /** Mútuo com empresa ligada (D4, 09/10/2026): fora do resultado. */
+  mutuo: BlocoDre;
   /**
-   * Operacional mais financeiro. Movimentação e investimento não entram, de
-   * propósito.
+   * Operacional mais financeiro. Movimentação, investimento, distribuição e
+   * mútuo não entram, de propósito.
    */
   resultado: number;
 }
@@ -276,12 +281,9 @@ export async function dreGerencial({
     throw new Error("Não foi possível carregar o DRE gerencial");
   }
 
-  // A separação em quatro blocos é lógica pura e mora em calculo.ts, com teste.
+  // A separação em blocos é lógica pura e mora em calculo.ts, com teste.
   // Aqui só a chamada: esta função é a que fala com o banco.
-  const { operacional, financeiro, movimentacao, investimento, resultado } =
-    agruparDrePorNatureza(data ?? []);
-
-  return { operacional, financeiro, movimentacao, investimento, resultado };
+  return agruparDrePorNatureza(data ?? []);
 }
 
 
@@ -1449,4 +1451,27 @@ export async function investimentos(
     }));
 
   return montarInvestimentos(movimentos, subcontas, periodo);
+}
+
+
+// =====================================================================
+// Sócios e ligadas (PR 2 do controle total, D3/D4)
+// =====================================================================
+
+/** Enviado, devolvido e saldo por centro de sócio e de empresa ligada. Fim exclusivo. */
+export async function sociosLigadas(inicio: string, fim: string): Promise<SocioLigadaLinha[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_socios_ligadas", { p_inicio: inicio, p_fim: fim });
+  if (error) {
+    throw new Error("Não foi possível carregar o relatório de sócios e ligadas");
+  }
+  return (data ?? []).map((l) => ({
+    centroId: l.centro_id,
+    centro: l.centro,
+    tipo: l.tipo,
+    ativo: l.ativo,
+    enviado: Number(l.enviado),
+    devolvido: Number(l.devolvido),
+    saldo: Number(l.saldo),
+  }));
 }

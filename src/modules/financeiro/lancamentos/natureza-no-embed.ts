@@ -44,7 +44,16 @@ export const NATUREZAS_CATEGORIA = [
   "financeira",
   "movimentacao",
   "investimento",
+  "distribuicao",
+  "mutuo",
 ] as const;
+
+/**
+ * Fora do resultado como a movimentação: retirada de sócio (D3) e mútuo com
+ * empresa ligada (D4). `sem_movimentacao=1` tira os três; não há parâmetro
+ * próprio porque nenhuma tela quer custo com retirada de sócio dentro.
+ */
+const SAEM_COM_A_MOVIMENTACAO: readonly NaturezaCategoria[] = ["movimentacao", "distribuicao", "mutuo"];
 
 export type NaturezaCategoria = (typeof NATUREZAS_CATEGORIA)[number];
 
@@ -75,7 +84,7 @@ export function naturezasAceitas(
   }
   return (escolhidas ?? NATUREZAS_CATEGORIA).filter(
     (natureza) =>
-      !(pedido.semMovimentacao && natureza === "movimentacao") &&
+      !(pedido.semMovimentacao && SAEM_COM_A_MOVIMENTACAO.includes(natureza)) &&
       !(pedido.semInvestimento && natureza === "investimento"),
   );
 }
