@@ -22,6 +22,11 @@ describe("acaoDaTecla", () => {
     expect(acaoDaTecla(tecla("Enter"), dentro)).toEqual({ tipo: "confirmar", depois: { linha: 2, coluna: 1 } });
     expect(acaoDaTecla(tecla("Enter", { shiftKey: true }), dentro)).toEqual({ tipo: "confirmar", depois: { linha: 0, coluna: 1 } });
   });
+  it("Tab na última célula e Shift+Tab na primeira não prendem o foco (WCAG 2.1.2)", () => {
+    expect(acaoDaTecla(tecla("Tab"), { ...fora, posicao: { linha: 2, coluna: 2 } })).toEqual({ tipo: "nada" });
+    expect(acaoDaTecla(tecla("Tab", { shiftKey: true }), { ...fora, posicao: { linha: 0, coluna: 0 } })).toEqual({ tipo: "nada" });
+    expect(acaoDaTecla(tecla("Tab"), { ...dentro, posicao: { linha: 2, coluna: 2 } })).toEqual({ tipo: "nada" });
+  });
   it("Tab dentro da edição confirma e anda", () => {
     expect(acaoDaTecla(tecla("Tab"), dentro)).toEqual({ tipo: "confirmar", depois: { linha: 1, coluna: 2 } });
   });

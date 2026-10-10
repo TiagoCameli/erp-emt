@@ -23,6 +23,8 @@ export interface ColunaGrade<T> {
   /** Ausente = só leitura. `opcoes` vira lista no editor. */
   editar?: { texto: (linha: T) => string; opcoes?: { valor: string; rotulo: string }[]; podeEditar?: (linha: T) => boolean };
   recuo?: (linha: T) => number;
+  /** Texto do Ctrl+C. Sem ele: texto de edição (rótulo da opção, quando há `opcoes`), ou `exibir` só se der texto ou número. */
+  copiar?: (linha: T) => string;
 }
 export type MudancaCelula = { idLinha: string; idColuna: string; texto: string };
 export interface GradeEdicaoProps<T> {
@@ -48,7 +50,13 @@ const RECUO_POR_NIVEL = 16;
 export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
   const { linhas, colunas, idDaLinha, onEditar, onColarAlem, onAtalho, selecionadas, onSelecionadasChange,
     classeDaLinha, somenteLeitura = false, alturaLinha = 32, alturaInicial = 600, rotulo } = props;
-  const [ativa, setAtiva] = React.useState<PosicaoCelula>({ linha: 0, coluna: 0 });
+  const [ativaGuardada, setAtiva] = React.useState<PosicaoCelula>({ linha: 0, coluna: 0 });
+  // Se linhas ou colunas encolherem, a célula ativa volta para dentro da grade (nunca aponta para nada).
+  const ativa: PosicaoCelula = {
+    linha: Math.max(0, Math.min(ativaGuardada.linha, linhas.length - 1)),
+    coluna: Math.max(0, Math.min(ativaGuardada.coluna, colunas.length - 1)),
+  };
+  const vazia = linhas.length === 0 || colunas.length === 0;
   const [edicao, setEdicaoEstado] = React.useState<{ texto: string } | null>(null);
   const [ancora, setAncora] = React.useState<number | null>(null);
   const rolagem = React.useRef<HTMLDivElement>(null);
@@ -69,6 +77,10 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
     estimateSize: () => alturaLinha,
     overscan: 12,
     initialRect: { width: 1200, height: alturaInicial },
+    // O cabeçalho fixo mora dentro da área rolável: as linhas começam uma altura abaixo do topo, e a
+    // rolagem até uma linha precisa descontar o cabeçalho que a cobre.
+    scrollMargin: alturaLinha,
+    scrollPaddingStart: alturaLinha,
     // Medida zero (jsdom, ou a grade numa aba ainda oculta) zeraria a faixa visível e nenhuma linha
     // apareceria. Nesse caso vale a altura inicial, que é a mesma que a área rolável recebe no estilo.
     observeElementRect: (instancia, cb) =>
@@ -81,18 +93,26 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
     return !somenteLeitura && !!c?.editar && !!l && (c.editar.podeEditar?.(l) ?? true);
   };
 
-  const alvos = (linha: number): string[] => {
-    const id = idDaLinha(linhas[linha]);
-    return selecionadas.size > 1 && selecionadas.has(id) ? linhas.map(idDaLinha).filter((x) => selecionadas.has(x)) : [id];
+  // Linhas que recebem a edição: a ativa, ou todas as selecionadas quando ela está entre elas; sempre
+  // filtradas pelo podeEditar de cada uma (mesma regra da colagem).
+  const alvos = (linha: number, coluna: ColunaGrade<T>): string[] => {
+    const atual = linhas[linha];
+    const grupo = selecionadas.size > 1 && selecionadas.has(idDaLinha(atual)) ? linhas.filter((l) => selecionadas.has(idDaLinha(l))) : [atual];
+    return grupo.filter((l) => coluna.editar?.podeEditar?.(l) ?? true).map(idDaLinha);
   };
 
   const confirmar = (texto: string) => {
-    const coluna = colunas[ativa.coluna];
-    onEditar(alvos(ativa.linha).map((idLinha) => ({ idLinha, idColuna: coluna.id, texto })));
     setEdicao(null);
+    const coluna = colunas[ativa.coluna];
+    if (vazia || !coluna) return;
+    // Lista de opções: só grava valor que é opção (Delete numa coluna assim não apaga nada).
+    if (coluna.editar?.opcoes && !coluna.editar.opcoes.some((o) => o.valor === texto)) return;
+    const ids = alvos(ativa.linha, coluna);
+    if (ids.length) onEditar(ids.map((idLinha) => ({ idLinha, idColuna: coluna.id, texto })));
   };
 
   const aoTeclar = (e: React.KeyboardEvent) => {
+    if (vazia) return;
     const acao = acaoDaTecla(e, { posicao: ativa, editando: edicao !== null, nLinhas: linhas.length, nColunas: colunas.length });
     switch (acao.tipo) {
       case "nada": return;
@@ -101,10 +121,16 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
       case "editar":
         if (!editavel(ativa.linha, ativa.coluna)) return;
         e.preventDefault();
-        setEdicao({ texto: acao.manterTexto ? colunas[ativa.coluna].editar!.texto(linhas[ativa.linha]) : (acao.textoInicial ?? "") });
+        {
+          const editar = colunas[ativa.coluna].editar!;
+          // Lista de opções começa no valor atual: a tecla digitada não é um valor possível.
+          const manter = acao.manterTexto || !!editar.opcoes;
+          setEdicao({ texto: manter ? editar.texto(linhas[ativa.linha]) : (acao.textoInicial ?? "") });
+        }
         return;
       case "confirmar":
-        e.preventDefault(); confirmar(edicao?.texto ?? ""); setAtiva(acao.depois); grade.current?.focus(); return;
+        e.preventDefault(); confirmar(edicao?.texto ?? ""); setAtiva(acao.depois); virtual.scrollToIndex(acao.depois.linha);
+        grade.current?.focus(); return;
       case "cancelar":
         e.preventDefault(); setEdicao(null); grade.current?.focus(); return;
       case "limpar":
@@ -137,10 +163,18 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
   };
 
   const aoCopiar = (e: React.ClipboardEvent) => {
-    if (edicao !== null) return;
+    if (edicao !== null || vazia) return;
     e.preventDefault();
     const ids = selecionadas.size ? linhas.filter((l) => selecionadas.has(idDaLinha(l))) : [linhas[ativa.linha]];
-    const textoDa = (l: T, c: ColunaGrade<T>) => (c.editar ? c.editar.texto(l) : String(c.exibir(l) ?? ""));
+    const textoDa = (l: T, c: ColunaGrade<T>): string => {
+      if (c.copiar) return c.copiar(l);
+      if (c.editar) {
+        const texto = c.editar.texto(l);
+        return c.editar.opcoes?.find((o) => o.valor === texto)?.rotulo ?? texto;
+      }
+      const exibido = c.exibir(l);
+      return typeof exibido === "string" || typeof exibido === "number" ? String(exibido) : "";
+    };
     const texto = selecionadas.size
       ? ids.map((l) => colunas.map((c) => textoDa(l, c)).join("\t")).join("\n")
       : textoDa(linhas[ativa.linha], colunas[ativa.coluna]);
@@ -222,7 +256,12 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
       aria-colcount={colunas.length + 1}
       aria-readonly={somenteLeitura || undefined}
       tabIndex={0}
-      onKeyDown={aoTeclar}
+      onKeyDown={(e) => {
+        // Tecla vinda de outro elemento (a caixa de seleção da linha) não é da grade: Espaço ali marca a
+        // caixa, não começa a editar. O campo de edição chama aoTeclar direto.
+        if (e.target !== e.currentTarget) return;
+        aoTeclar(e);
+      }}
       onPaste={aoColar}
       onCopy={aoCopiar}
       className="foco-anel-dentro rounded-md border border-border bg-background text-sm"
@@ -273,7 +312,7 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
                     selecionada && "bg-muted",
                     classeDaLinha?.(linha),
                   )}
-                  style={{ height: alturaLinha, transform: `translateY(${item.start}px)` }}
+                  style={{ height: alturaLinha, transform: `translateY(${item.start - virtual.options.scrollMargin}px)` }}
                 >
                   <div
                     role="rowheader"

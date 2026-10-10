@@ -18,12 +18,13 @@ type Estado = { posicao: PosicaoCelula; editando: boolean; nLinhas: number; nCol
 
 const limitar = (n: number, max: number) => Math.max(0, Math.min(n, max - 1));
 
-function andarTab(p: PosicaoCelula, voltar: boolean, nLinhas: number, nColunas: number): PosicaoCelula {
+/** Próxima célula no Tab, ou null na última (Shift+Tab: na primeira): aí o foco sai da grade. */
+function andarTab(p: PosicaoCelula, voltar: boolean, nLinhas: number, nColunas: number): PosicaoCelula | null {
   let { linha, coluna } = p;
   coluna += voltar ? -1 : 1;
   if (coluna >= nColunas) { coluna = 0; linha += 1; }
   if (coluna < 0) { coluna = nColunas - 1; linha -= 1; }
-  if (linha < 0 || linha >= nLinhas) return p;
+  if (linha < 0 || linha >= nLinhas) return null;
   return { linha, coluna };
 }
 
@@ -41,7 +42,11 @@ export function acaoDaTecla(e: Evento, s: Estado): AcaoTeclado {
   if (s.editando) {
     if (e.key === "Escape") return { tipo: "cancelar" };
     if (e.key === "Enter") return { tipo: "confirmar", depois: { linha: limitar(linha + (e.shiftKey ? -1 : 1), s.nLinhas), coluna } };
-    if (e.key === "Tab") return { tipo: "confirmar", depois: andarTab(s.posicao, e.shiftKey, s.nLinhas, s.nColunas) };
+    if (e.key === "Tab") {
+      // Na borda o Tab não é da grade (WCAG 2.1.2): o foco sai e o onBlur do campo confirma.
+      const depois = andarTab(s.posicao, e.shiftKey, s.nLinhas, s.nColunas);
+      return depois ? { tipo: "confirmar", depois } : { tipo: "nada" };
+    }
     return { tipo: "nada" };
   }
 
@@ -50,7 +55,10 @@ export function acaoDaTecla(e: Evento, s: Estado): AcaoTeclado {
     case "ArrowUp": return { tipo: "mover", para: { linha: limitar(linha - 1, s.nLinhas), coluna } };
     case "ArrowRight": return { tipo: "mover", para: { linha, coluna: limitar(coluna + 1, s.nColunas) } };
     case "ArrowLeft": return { tipo: "mover", para: { linha, coluna: limitar(coluna - 1, s.nColunas) } };
-    case "Tab": return { tipo: "mover", para: andarTab(s.posicao, e.shiftKey, s.nLinhas, s.nColunas) };
+    case "Tab": {
+      const para = andarTab(s.posicao, e.shiftKey, s.nLinhas, s.nColunas);
+      return para ? { tipo: "mover", para } : { tipo: "nada" };
+    }
     case "Enter":
     case "F2": return { tipo: "editar", manterTexto: true };
     case "Delete":
