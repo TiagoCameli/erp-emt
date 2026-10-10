@@ -1468,7 +1468,7 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
   return (data ?? []).map((l) => ({
     centroId: l.centro_id,
     centro: l.centro,
-    tipo: l.tipo === "socio" ? "socio" : "empresa_ligada",
+    tipo: l.tipo,
     ativo: l.ativo,
     enviado: Number(l.enviado),
     devolvido: Number(l.devolvido),

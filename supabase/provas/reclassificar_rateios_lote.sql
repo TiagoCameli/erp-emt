@@ -30,6 +30,12 @@ begin
   if (select count(*) from public.rateio_eventos where lancamento_id = v_lanc) <> v_ev + 1 then
     raise exception 'FALHOU 3: evento nao gravado';
   end if;
+  -- Lancamento de rateio unico: o cabecalho acompanha a categoria (a lista de
+  -- lancamentos filtra pela categoria do cabecalho, e o clique do DRE abriria
+  -- vazio se so o rateio mudasse).
+  if (select categoria_id from public.lancamentos where id = v_lanc) <> v_distrib then
+    raise exception 'FALHOU 3b: cabecalho nao acompanhou a categoria do rateio';
+  end if;
 
   -- 2. Categoria de receita num lancamento a pagar: recusa.
   begin
@@ -60,6 +66,12 @@ begin
     if v_msg like 'FALHOU%' then raise exception '%', v_msg; end if;
     perform set_config('request.jwt.claims', '{"sub":"c66fca9f-5428-4fb9-855f-dcff548764df","role":"authenticated"}', true);
     select count(*) into v_ev from public.competencia_eventos where entidade_id = v_lanc and tipo = 'excecao';
+    -- Item que nao muda nada nao registra excecao.
+    perform public.fn_reclassificar_rateios_lote(
+      jsonb_build_array(jsonb_build_object('rateioId', v_r_fechado)), 'prova');
+    if (select count(*) from public.competencia_eventos where entidade_id = v_lanc and tipo = 'excecao') <> v_ev then
+      raise exception 'FALHOU 5a: item sem mudanca registrou excecao';
+    end if;
     perform public.fn_reclassificar_rateios_lote(
       jsonb_build_array(jsonb_build_object('rateioId', v_r_fechado, 'categoriaId', v_distrib)), 'prova');
     if (select count(*) from public.competencia_eventos where entidade_id = v_lanc and tipo = 'excecao') <> v_ev + 1 then

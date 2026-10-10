@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  ROTULO_TIPO_SOCIO_LIGADA,
+  rotuloTipoSocioLigada,
   type SocioLigadaLinha,
 } from "@/modules/financeiro/relatorios/socios-ligadas";
 
@@ -56,7 +56,7 @@ export function SociosLigadasTabela({ ano, doAno, acumulado }: SociosLigadasTabe
                   {l.ativo ? null : <span className="text-muted-foreground"> (inativo)</span>}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-detalhe text-muted-foreground">
-                  {ROTULO_TIPO_SOCIO_LIGADA[l.tipo]}
+                  {rotuloTipoSocioLigada(l.tipo)}
                 </TableCell>
                 <TableCell className="px-3 py-2 text-right"><MoneyText valor={a?.enviado ?? 0} /></TableCell>
                 <TableCell className="px-3 py-2 text-right"><MoneyText valor={a?.devolvido ?? 0} /></TableCell>

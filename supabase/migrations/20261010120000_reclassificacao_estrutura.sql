@@ -37,6 +37,10 @@ select v.nome, v.tipo, v.natureza
 
 -- O centro da pessoa fisica do James vira o centro do socio: mesmo id, entao os
 -- rateios que ja estao nele ficam onde estao.
+-- A obra ligada a ele muda de nome antes: editar a obra renomeia o centro
+-- (trg_obra_renomeia_centro_custo), e o nome antigo voltaria calado.
+update public.obras set nome = 'Sócio James Castro Cameli'
+ where id = '5f5b4791-260d-44bb-a837-1aca5f5006bc';
 update public.centros_custo
    set nome = 'Sócio James Castro Cameli', tipo = 'socio'
  where id = 'e892aee6-fab2-4931-9582-640ce7be3967';

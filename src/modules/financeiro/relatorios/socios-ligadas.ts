@@ -9,14 +9,22 @@
 export interface SocioLigadaLinha {
   centroId: string;
   centro: string;
-  tipo: "socio" | "empresa_ligada";
+  /**
+   * Tipo do centro raiz. Sócio e empresa ligada sempre aparecem; outro tipo
+   * (uma obra) só aparece quando tem rateio de distribuição ou mútuo.
+   */
+  tipo: string;
   ativo: boolean;
   enviado: number;
   devolvido: number;
   saldo: number;
 }
 
-export const ROTULO_TIPO_SOCIO_LIGADA: Record<SocioLigadaLinha["tipo"], string> = {
+export const ROTULO_TIPO_SOCIO_LIGADA: Record<string, string> = {
   socio: "Sócio",
   empresa_ligada: "Empresa ligada",
 };
+
+export function rotuloTipoSocioLigada(tipo: string): string {
+  return ROTULO_TIPO_SOCIO_LIGADA[tipo] ?? "Outro centro (rateio de sócio ou mútuo)";
+}

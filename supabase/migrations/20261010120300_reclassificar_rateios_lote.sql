@@ -5,8 +5,10 @@
 -- fn_definir_rateio_lancamento (permissao, tipo de lancamento, aplicacao,
 -- cancelado, competencia aberta, motivo, centro ativo) e mais duas do lote:
 -- a categoria tem que ser do tipo do lancamento (despesa/receita) e o centro
--- novo nao pode repetir outro rateio do mesmo lancamento. Um rateio_eventos por
--- lancamento, com antes/depois. Tudo ou nada: um item recusado desfaz o lote.
+-- novo nao pode repetir outro rateio do mesmo lancamento. Um rateio_eventos e
+-- uma checagem de competencia por lancamento que mudou; quando os rateios ficam
+-- todos na mesma categoria, o cabecalho acompanha. Tudo ou nada: um item
+-- recusado desfaz o lote.
 
 create or replace function public.fn_reclassificar_rateios_lote(p_itens jsonb, p_motivo text)
  returns integer
@@ -51,7 +53,6 @@ begin
     if not public.fn_pode_lancar_tipo(v_l.tipo, 'editar') then
       raise exception 'Lancamento %: sem permissao para editar lancamentos deste tipo', v_l.numero;
     end if;
-    perform public.fn_exigir_competencia_aberta(v_l.mes_competencia, 'lancamento', v_l.id);
 
     v_cat := coalesce(nullif(v_item->>'categoriaId', '')::uuid, v_r.categoria_id);
     v_centro := coalesce(nullif(v_item->>'centroCustoId', '')::uuid, v_r.centro_custo_id);
@@ -80,6 +81,9 @@ begin
     end if;
 
     if not (v_l.id = any(v_lancs)) then
+      -- Uma checagem (e, para quem pode reabrir, uma excecao) por lancamento, e
+      -- so quando algo muda de fato.
+      perform public.fn_exigir_competencia_aberta(v_l.mes_competencia, 'lancamento', v_l.id);
       select coalesce(jsonb_agg(jsonb_build_object('centro_custo_id', centro_custo_id, 'categoria_id', categoria_id, 'valor', valor)
              order by valor desc, centro_custo_id), '[]'::jsonb)
         into v_antes from public.lancamento_rateios where lancamento_id = v_l.id;
@@ -92,6 +96,16 @@ begin
   end loop;
 
   foreach v_lanc in array v_lancs loop
+    -- Rateios todos na mesma categoria: o cabecalho acompanha. A lista de
+    -- lancamentos filtra pela categoria do cabecalho, e o clique no DRE abriria
+    -- vazio se so o rateio mudasse. Com categorias diferentes, o cabecalho fica.
+    update public.lancamentos l
+       set categoria_id = x.cat
+      from (select min(categoria_id::text)::uuid as cat
+              from public.lancamento_rateios where lancamento_id = v_lanc
+            having count(distinct categoria_id) = 1 and count(*) = count(categoria_id)) x
+     where l.id = v_lanc and l.categoria_id is distinct from x.cat;
+
     insert into public.rateio_eventos (lancamento_id, motivo, antes, depois, created_by)
     select v_lanc, btrim(p_motivo), v_antes_por_lanc->(v_lanc::text),
            coalesce(jsonb_agg(jsonb_build_object('centro_custo_id', centro_custo_id, 'categoria_id', categoria_id, 'valor', valor)

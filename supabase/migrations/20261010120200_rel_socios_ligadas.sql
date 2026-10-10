@@ -1,10 +1,13 @@
 -- Relatorio "Socios e ligadas" (PR 2 do controle total, 10/10/2026; D3, D4).
 --
--- Por centro raiz de tipo socio ou empresa_ligada (com a subarvore): quanto foi
--- enviado (rateios a pagar), quanto voltou (rateios a receber) e o saldo. Para
--- socio, o enviado e a distribuicao do periodo; para empresa ligada, o saldo e
--- o mutuo em aberto no periodo. Competencia (mes_competencia), cancelado fora.
--- Todo centro aparece, inclusive sem movimento e inativo, para nao sumir.
+-- Mede pela NATUREZA da categoria (do rateio, caindo na do lancamento; D4), do
+-- mesmo jeito que o DRE: enviado = rateios a pagar de natureza distribuicao ou
+-- mutuo; devolvido = a receber dessas naturezas; saldo = enviado - devolvido.
+-- Agrupa pelo centro raiz. Assim o total do relatorio e o dos blocos de
+-- distribuicao e mutuo do DRE sao o mesmo numero; medir pelo centro faria a
+-- folha do caseiro (operacional, centro Casa James) contar aqui e nao la.
+-- Todo centro de socio e de empresa ligada aparece, mesmo sem movimento e
+-- inativo; centro de outro tipo aparece so se tiver rateio dessas naturezas.
 
 create or replace function public.fn_rel_socios_ligadas(p_inicio date, p_fim date)
  returns table(centro_id uuid, centro text, tipo text, ativo boolean, enviado numeric, devolvido numeric, saldo numeric)
@@ -22,8 +25,7 @@ begin
 
   return query
     with recursive arvore as (
-      select c.id, c.id as raiz_id from public.centros_custo c
-       where c.nivel = 1 and c.tipo in ('socio', 'empresa_ligada')
+      select c.id, c.id as raiz_id from public.centros_custo c where c.nivel = 1
       union all
       select f.id, a.raiz_id from public.centros_custo f join arvore a on f.pai_id = a.id
     ),
@@ -34,7 +36,9 @@ begin
         from public.lancamento_rateios r
         join public.lancamentos l on l.id = r.lancamento_id
         join arvore a on a.id = r.centro_custo_id
+        join public.categorias_financeiras cat on cat.id = coalesce(r.categoria_id, l.categoria_id)
        where l.status <> 'cancelado'
+         and cat.natureza in ('distribuicao', 'mutuo')
          and l.mes_competencia >= date_trunc('month', p_inicio)::date
          and l.mes_competencia < p_fim
        group by a.raiz_id
@@ -44,8 +48,8 @@ begin
            round(coalesce(m.env, 0) - coalesce(m.dev, 0), 2)
       from public.centros_custo c
       left join mov m on m.raiz_id = c.id
-     where c.nivel = 1 and c.tipo in ('socio', 'empresa_ligada')
-     order by c.tipo desc, c.nome;
+     where c.nivel = 1 and (c.tipo in ('socio', 'empresa_ligada') or m.raiz_id is not null)
+     order by (c.tipo in ('socio', 'empresa_ligada')) desc, c.tipo desc, c.nome;
 end;
 $function$;
 

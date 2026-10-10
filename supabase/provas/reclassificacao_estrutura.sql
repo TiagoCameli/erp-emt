@@ -37,6 +37,12 @@ begin
     raise exception 'FALHOU 4: id do James PF nao e o centro do socio';
   end if;
 
+  -- A obra ligada ao centro do socio tambem muda de nome: editar a obra
+  -- renomeia o centro (trg_obra_renomeia_centro_custo), e o nome velho voltaria.
+  if (select nome from public.obras where id = '5f5b4791-260d-44bb-a837-1aca5f5006bc') <> 'Sócio James Castro Cameli' then
+    raise exception 'FALHOU 5: obra do centro do socio com o nome antigo';
+  end if;
+
   raise exception 'PROVA OK';
 end
 $prova$;

@@ -11,6 +11,7 @@ import { precoUnitarioMaterial, tipoDoFrete } from "@/modules/frete/fretes/schem
 import type { FreteLinha, InsumoOpcaoFrete, Opcao, OpcoesFrete } from "@/modules/frete/fretes/tipos";
 import { nomesUsuariosFrete } from "@/modules/frete/_shared/usuarios";
 import { paraNumeroDoBanco } from "@/modules/manutencao/servicos/formato";
+import { ehLugarDeTrabalho } from "@/modules/combustivel/abastecimentos/opcoes";
 
 /** Leituras da aba Fretes (`frete.fretes`). A RLS (fn_ve_frete) cobre a leitura. */
 
@@ -183,7 +184,7 @@ export async function listarInsumosAtivos(): Promise<InsumoOpcaoFrete[]> {
 export async function listarObras(): Promise<Opcao[]> {
   const centros = await listarCentrosCusto();
   return centros
-    .filter((c) => c.paiId === null && c.tipo === "obra")
+    .filter((c) => c.paiId === null && ehLugarDeTrabalho(c.tipo))
     .map((c) => ({ id: c.id, nome: c.codigo ? `${c.codigo} ${c.nome}` : c.nome }));
 }
 

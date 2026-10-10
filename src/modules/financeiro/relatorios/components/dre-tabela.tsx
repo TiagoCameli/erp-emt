@@ -398,6 +398,17 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
                   natureza="distribuicao"
                   {...comum}
                 />
+                {dre.distribuicao.receitas.length > 0 ? (
+                  <SecaoDre
+                    titulo="Devolvido por sócios"
+                    linhas={dre.distribuicao.receitas}
+                    total={dre.distribuicao.totalReceitas}
+                    rotuloTotal="Total devolvido"
+                    tipo="a_receber"
+                    natureza="distribuicao"
+                    {...comum}
+                  />
+                ) : null}
               </>
             ) : null}
 
