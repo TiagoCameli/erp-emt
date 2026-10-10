@@ -58,7 +58,9 @@ for extra in sys.argv[3:]:
         if not h or not str(h[0] or "").startswith("Rateio"): continue
         col = next((i for i, x in enumerate(h) if x and str(x).startswith("Aprovar")), None)
         col_o = next((i for i, x in enumerate(h) if x and str(x).startswith("Se outra")), None)
+        revisada_inteira = aba == "Em nome do Tiago"  # o Tiago revisou a aba: sem comentario = fica como esta
         for r in ws_e.iter_rows(min_row=2, values_only=True):
+            if revisada_inteira: nao_ids.add(r[0]); continue
             # Decidida (sim, nao ou outra) sai da planilha: sim/outra ja foram aplicadas, nao fica como esta.
             marcada = col is not None and str(r[col] or "").strip() != ""
             outra = col_o is not None and str(r[col_o] or "").strip() != ""
@@ -82,7 +84,7 @@ por = defaultdict(lambda: [0, 0.0])
 for p in pend: por[p["regra"]][0] += 1; por[p["regra"]][1] += float(p["valor"])
 for regra, (q, v) in sorted(por.items()): rs.append([regra, q, round(v, 2), OBS.get(regra, "Despesas financeiras: proposta por palavra-chave, confira a coluna Confiança")])
 rs.append(["TOTAL", len(pend), round(sum(float(p["valor"]) for p in pend), 2), ""])
-rs.append([]); rs.append(["Já aplicado em 10/10/2026: parte 1 (443 'sim'), parte 2 (13 'outra'), parte 3 (Amazônia 463, Colorado, Areacre, apólice), parte 4 (61 da planilha de pendentes). Os 'não' ficam como estão e saem da planilha."])
+rs.append([]); rs.append(["Já aplicado em 10/10/2026: parte 1 (443 'sim'), parte 2 (13 'outra'), parte 3 (Amazônia 463, Colorado, Areacre, apólice), parte 4 (61 da planilha de pendentes), parte 5 (67 da v2, inclusive 23 de Em nome do Tiago). Os 'não' ficam como estão e saem da planilha."])
 ws = wb.create_sheet("Pendentes")
 cab = ["Rateio (id) — não apagar", "Lançamento", "Tipo", "Competência", "Valor", "Descrição", "Fornecedor", "Categoria atual",
        "Centro atual", "Categoria proposta", "Centro proposto", "Regra", "Confiança", "Observação", "Aprovar (sim/não/outra)", "Se outra: categoria / centro certos"]
@@ -103,23 +105,24 @@ ids_pend = {p["rateio_id"] for p in pend}
 tiago = [t for t in rodar(AQUI / "em-nome-do-tiago.sql")
          if t["grupo"] == "terceiro" and t["natureza"] not in ("distribuicao", "mutuo")
          and t["rateio_id"] not in ids_pend and t["rateio_id"] not in nao_ids]
-wt = wb.create_sheet("Em nome do Tiago")
-cab_t = ["Rateio (id) — não apagar", "Lançamento", "Competência", "Valor", "Descrição", "Fornecedor", "Categoria atual",
-         "Centro atual", "Sugestão", "Observação", "Aprovar (sim/não/outra)", "Se outra: categoria / centro certos"]
-wt.append(cab_t)
-for t in tiago:
-    d = (t["descricao"] or "").upper()
-    if "RETIRADA" in d: sug, obs = "Distribuição a sócio / Sócio Tiago de Melo Cameli", "Retirada sua: é distribuição"
-    elif re.search(r"ABASTEC|LAVAGEM|HILUX|MOTORISTA", d): sug, obs = "Deixar como está", "Carro/motorista em uso na obra: custo da obra, salvo uso pessoal"
-    elif "PASSAGENS" in d: sug, obs = "Decidir", "Viagem a trabalho (fica) ou pessoal (distribuição)?"
-    elif "ESCRITURA" in d: sug, obs = "Decidir", "Escritura e inventário da fazenda, pago a James, hoje como empréstimo em Aquisição de Imóveis"
-    else: sug, obs = "Decidir", "A observação do lançamento cita Tiago; descrição genérica"
-    wt.append([t["rateio_id"], t["numero"], t["comp"], float(t["valor"]), t["descricao"], t["fornecedor"], t["categoria"], t["centro"], sug, obs, "", ""])
-for i in range(1, len(cab_t) + 1): wt.column_dimensions[get_column_letter(i)].width = 18
-wt.column_dimensions["E"].width = 55; wt.column_dimensions["J"].width = 60
-wt.freeze_panes = "B2"; wt.auto_filter.ref = wt.dimensions
-for c in wt[1]: c.font = Font(bold=True)
-rs.append(["Em nome do Tiago (aba própria)", len(tiago), round(sum(float(t["valor"]) for t in tiago), 2), "Pagos a terceiros citando Tiago (combustível da Hilux, passagens, retiradas)"])
+wt = wb.create_sheet("Em nome do Tiago") if tiago else None
+if tiago:
+  cab_t = ["Rateio (id) — não apagar", "Lançamento", "Competência", "Valor", "Descrição", "Fornecedor", "Categoria atual",
+           "Centro atual", "Sugestão", "Observação", "Aprovar (sim/não/outra)", "Se outra: categoria / centro certos"]
+  wt.append(cab_t)
+  for t in tiago:
+      d = (t["descricao"] or "").upper()
+      if "RETIRADA" in d: sug, obs = "Distribuição a sócio / Sócio Tiago de Melo Cameli", "Retirada sua: é distribuição"
+      elif re.search(r"ABASTEC|LAVAGEM|HILUX|MOTORISTA", d): sug, obs = "Deixar como está", "Carro/motorista em uso na obra: custo da obra, salvo uso pessoal"
+      elif "PASSAGENS" in d: sug, obs = "Decidir", "Viagem a trabalho (fica) ou pessoal (distribuição)?"
+      elif "ESCRITURA" in d: sug, obs = "Decidir", "Escritura e inventário da fazenda, pago a James, hoje como empréstimo em Aquisição de Imóveis"
+      else: sug, obs = "Decidir", "A observação do lançamento cita Tiago; descrição genérica"
+      wt.append([t["rateio_id"], t["numero"], t["comp"], float(t["valor"]), t["descricao"], t["fornecedor"], t["categoria"], t["centro"], sug, obs, "", ""])
+  for i in range(1, len(cab_t) + 1): wt.column_dimensions[get_column_letter(i)].width = 18
+  wt.column_dimensions["E"].width = 55; wt.column_dimensions["J"].width = 60
+  wt.freeze_panes = "B2"; wt.auto_filter.ref = wt.dimensions
+  for c in wt[1]: c.font = Font(bold=True)
+if tiago: rs.append(["Em nome do Tiago (aba própria)", len(tiago), round(sum(float(t["valor"]) for t in tiago), 2), "Pagos a terceiros citando Tiago (combustível da Hilux, passagens, retiradas)"])
 wb.save(sys.argv[2])
 print(len(pend), "pendentes ->", sys.argv[2])
 for regra, (q, v) in sorted(por.items()): print(f"  {regra}: {q}, R$ {v:,.2f}")
