@@ -35,7 +35,10 @@ regra as (
       when b.categoria_atual = 'Pro Labore' and b.tipo = 'a_pagar' then 'e_pro_labore_sem_socio'
       -- (c) bem comprado como despesa
       when b.tipo = 'a_pagar' and b.texto ~ 'CONS[OÓ]RCIO' and coalesce(b.natureza_atual, 'operacional') = 'operacional' then 'c_consorcio'
-      when b.tipo = 'a_pagar' and b.texto ~ '(PACCAR|HILUX|ROLL[ -]?ON|CARRETA|CAVALO MEC)' and b.categoria_atual = 'Outras despesas' then 'c_equipamento'
+      -- Bem pelo nome; "carreta"/"cavalo" so a partir de R$ 100 mil (abaixo disso e
+      -- alimentacao de motorista, pneu, remendo: custo da operacao das carretas).
+      when b.tipo = 'a_pagar' and b.categoria_atual = 'Outras despesas'
+           and (b.texto ~ '(PACCAR|HILUX|ROLL[ -]?ON)' or (b.texto ~ '(CARRETA|CAVALO MEC)' and b.valor >= 100000)) then 'c_equipamento'
       when b.tipo = 'a_pagar' and b.texto ~ 'TERRENO' and b.categoria_atual = 'Outras despesas' then 'c_terreno'
       -- (d) centro de aquisicao com categoria de custo
       when b.raiz_tipo = 'imobilizado' and coalesce(b.natureza_atual, 'operacional') = 'operacional' and b.tipo = 'a_pagar'
@@ -66,7 +69,11 @@ select x.rateio_id, x.numero, x.tipo, to_char(x.mes_competencia, 'YYYY-MM') as c
          else x.raiz_nome end as centro_proposto,
        x.regra,
        case when x.regra like 'e_%' or x.regra = 'd_imobilizado_gasto'
-              or (x.regra in ('a_centro_socio','a_despesa_pessoal') and x.tipo = 'a_receber') then 'sim' else 'nao' end as decidir
+              or (x.regra in ('a_centro_socio','a_despesa_pessoal') and x.tipo = 'a_receber')
+              -- O que entra da empresa ligada e devolucao do mutuo (Tiago, 10/10/2026);
+              -- emprestimo e investimento ja tem natureza propria e pedem olho.
+              or (x.regra = 'b_empresa_ligada' and x.natureza_atual in ('movimentacao', 'investimento'))
+            then 'sim' else 'nao' end as decidir
   from regra x
  where x.regra is not null
  order by x.regra, x.mes_competencia, x.numero;
