@@ -30,6 +30,12 @@ begin
    where c.relname like 'ex\_%' and t.tgname like 'trg_audit_%';
   r := r || jsonb_build_object('1c_tabelas_auditadas', v_n);
 
+  -- 7. Backfill: lido antes de qualquer caso inserir permissões na transação. Até a Task 14 aplicar a
+  --    migration, o esperado é {"admins": 0, "linhas": 0}; depois, {"admins": 4, "linhas": 36}.
+  select jsonb_build_object('admins', count(distinct usuario_id), 'linhas', count(*)) into v_j
+  from public.usuario_permissoes where recurso like 'execucao.%';
+  r := r || jsonb_build_object('7_backfill', v_j);
+
   -- 2. Calendário. Padrão EMT: seg a sex 9 h, sáb 5 h, dom 0; feriados nacionais e do AC.
   --    2a Páscoa 2026 a 2030: 2026-04-05, 2027-03-28, 2028-04-16, 2029-04-01, 2030-04-21
   --    2b dias úteis de 01/04/2026 a 07/04/2026: 04-01, 04-02, 04-04 (sáb), 04-06, 04-07
