@@ -12,6 +12,9 @@ export const TIPOS_CENTRO = [
   "manutencao",
   "financeiro",
   "investimento",
+  "socio",
+  "empresa_ligada",
+  "imobilizado",
 ] as const;
 
 export type TipoCentro = (typeof TIPOS_CENTRO)[number];
@@ -33,6 +36,12 @@ export const ROTULO_TIPO_CENTRO: Record<TipoCentro, string> = {
    * gastar, é mudar o dinheiro de bolso (pedido do Tiago em 24/09/2026).
    */
   investimento: "Investimento",
+  /** Retirada de sócio e despesa pessoal da família: fora do custo (D3). */
+  socio: "Sócio",
+  /** Amazônia, Juruá FM: mútuo, fora do custo da EMT (D4). */
+  empresa_ligada: "Empresa ligada",
+  /** Compra de equipamento e imóvel: patrimônio, fora do custo (D5). */
+  imobilizado: "Imobilizado",
 };
 
 const nomeSchema = z

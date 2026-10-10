@@ -214,6 +214,12 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
       natureza: "movimentacao",
       bloco: dados.movimentacao,
     },
+    {
+      rotulo: "Distribuição a sócios",
+      natureza: "distribuicao",
+      bloco: dados.distribuicao,
+    },
+    { rotulo: "Mútuo", natureza: "mutuo", bloco: dados.mutuo },
   ];
 
   for (const { rotulo, natureza, bloco } of blocos) {
@@ -249,7 +255,7 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
     // rótulo diz isso, porque a alternativa é alguém subtrair as duas colunas e
     // achar um resultado que a tela nunca mostrou.
     rotuloTotal:
-      "Total dos quatro blocos (investimentos e movimentação NÃO são resultado)",
+      "Total dos blocos (investimentos, movimentação, distribuição e mútuo NÃO são resultado)",
   });
 }
 

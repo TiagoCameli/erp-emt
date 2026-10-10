@@ -106,6 +106,8 @@ describe("aba do DRE", () => {
     financeiro: bloco("Tarifa Bancária", 1521.75),
     investimento: bloco("Aquisição de Equipamento", 250000),
     movimentacao: bloco("Pagamento de Empréstimo", 37300),
+    distribuicao: bloco("Distribuição a sócio", 1585000),
+    mutuo: bloco("Mútuo concedido a empresa ligada", 120000),
     resultado: -686029.69,
   };
 
@@ -130,7 +132,7 @@ describe("aba do DRE", () => {
     // Os três blocos entram, inclusive a movimentação — ela é dinheiro que
     // passou na conta, e sumir com ela criaria a pergunta "por que o extrato
     // tem movimento que o sistema não tem".
-    const blocos = [1, 2, 3, 4, 5].map(
+    const blocos = [1, 2, 3, 4, 5, 6, 7].map(
       (i) => planilha.getRow(LINHA_HEADER + i).getCell(1).value,
     );
     expect(blocos).toEqual([
@@ -139,13 +141,17 @@ describe("aba do DRE", () => {
       "Financeiro",
       "Investimentos",
       "Movimentação",
+      "Distribuição a sócios",
+      "Mútuo",
     ]);
   });
 
-  it("o rótulo do total avisa que investimentos e movimentação não são resultado", async () => {
+  it("o rótulo do total avisa o que não é resultado, inclusive distribuição e mútuo", async () => {
     const { planilha } = await ler(abaDre(dados, "agosto de 2026"));
-    const totais = planilha.getRow(LINHA_HEADER + 6);
-    expect(String(totais.getCell(1).value)).toContain("NÃO são resultado");
+    const totais = String(planilha.getRow(LINHA_HEADER + 8).getCell(1).value);
+    expect(totais).toContain("NÃO são resultado");
+    expect(totais).toContain("distribuição");
+    expect(totais).toContain("mútuo");
   });
 
   it("o recorte vai escrito no cabeçalho do arquivo", async () => {

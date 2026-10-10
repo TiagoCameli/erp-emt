@@ -29,13 +29,32 @@ function linha(
 }
 
 describe("agruparDrePorNatureza", () => {
-  it("as naturezas são quatro, na ordem do relatório", () => {
+  it("as naturezas são seis, na ordem do relatório", () => {
     expect(NATUREZAS).toEqual([
       "operacional",
       "financeira",
       "movimentacao",
       "investimento",
+      "distribuicao",
+      "mutuo",
     ]);
+  });
+
+  it("distribuição a sócio e mútuo têm bloco próprio e ficam fora do resultado", () => {
+    const dre = agruparDrePorNatureza([
+      linha("a_receber", "operacional", "Contrato", "100000.00"),
+      linha("a_pagar", "operacional", "Combustível", "30000.00"),
+      linha("a_pagar", "distribuicao", "Distribuição a sócio", "1585000.00"),
+      linha("a_pagar", "mutuo", "Mútuo concedido a empresa ligada", "1270000.00"),
+      linha("a_receber", "mutuo", "Devolução de mútuo", "1050000.00"),
+    ]);
+
+    expect(dre.resultado).toBe(70000);
+    expect(dre.operacional.totalDespesas).toBe(30000);
+    expect(dre.distribuicao.totalDespesas).toBe(1585000);
+    expect(dre.mutuo.totalDespesas).toBe(1270000);
+    expect(dre.mutuo.totalReceitas).toBe(1050000);
+    expect(cartoesDoDre(dre).resultadoDoPeriodo).toBe(70000);
   });
 
   it("separa os quatro blocos e mantém cada linha no seu", () => {

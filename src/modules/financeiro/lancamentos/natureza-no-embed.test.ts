@@ -58,6 +58,12 @@ describe("naturezasAceitas", () => {
     ).toEqual(["operacional", "financeira"]);
   });
 
+  it("sem_movimentacao também tira distribuição a sócio e mútuo (fora do resultado)", () => {
+    expect(
+      naturezasAceitas({ naturezas: ["distribuicao", "mutuo", "operacional"], semMovimentacao: true }),
+    ).toEqual(["operacional"]);
+  });
+
   it("com Incluir investimentos, só a movimentação sai", () => {
     expect(naturezasAceitas({ semMovimentacao: true })).toEqual([
       "operacional",

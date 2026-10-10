@@ -215,9 +215,13 @@ export interface DreGerencial {
    * fora da soma dele, como a movimentação.
    */
   investimento: BlocoDre;
+  /** Retirada de sócio (D3, 09/10/2026): abaixo do resultado. */
+  distribuicao: BlocoDre;
+  /** Mútuo com empresa ligada (D4, 09/10/2026): fora do resultado. */
+  mutuo: BlocoDre;
   /**
-   * Operacional mais financeiro. Movimentação e investimento não entram, de
-   * propósito.
+   * Operacional mais financeiro. Movimentação, investimento, distribuição e
+   * mútuo não entram, de propósito.
    */
   resultado: number;
 }
@@ -276,12 +280,9 @@ export async function dreGerencial({
     throw new Error("Não foi possível carregar o DRE gerencial");
   }
 
-  // A separação em quatro blocos é lógica pura e mora em calculo.ts, com teste.
+  // A separação em blocos é lógica pura e mora em calculo.ts, com teste.
   // Aqui só a chamada: esta função é a que fala com o banco.
-  const { operacional, financeiro, movimentacao, investimento, resultado } =
-    agruparDrePorNatureza(data ?? []);
-
-  return { operacional, financeiro, movimentacao, investimento, resultado };
+  return agruparDrePorNatureza(data ?? []);
 }
 
 
