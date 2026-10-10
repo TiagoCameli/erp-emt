@@ -21,10 +21,13 @@ import { describe, expect, it } from "vitest";
  *    Bancária, que é despesa paga e rateada. Decisão do Tiago: "as tarifas
  *    bancarias devem ser do escritorio central mesmo".
  *
- * A regra que ficou, e que este teste tranca (quatro naturezas desde
- * 03/10/2026: operacional, financeira, movimentacao e investimento):
- *   custo   (todas)    : natureza <> 'movimentacao'
+ * A regra que ficou, e que este teste tranca (seis naturezas desde
+ * 10/10/2026: operacional, financeira, movimentacao, investimento,
+ * distribuicao e mutuo):
+ *   custo   (todas)    : natureza not in ('movimentacao','distribuicao','mutuo')
  *                        e natureza <> 'investimento', salvo p_incluir_investimento
+ *   centro  (todas)    : raiz fora de financeiro, investimento, socio,
+ *                        empresa_ligada e imobilizado (PR 2 do controle total)
  *   receita (só a 7ª)  : natureza  = 'operacional'
  *   natureza medida em : coalesce(r.categoria_id, l.categoria_id) (D4)
  *
@@ -67,7 +70,12 @@ const LEEM_ITENS_OC = [
 /** A única que também conta receita, e por isso corta diferente nos dois lados. */
 const A_QUE_TEM_RECEITA = "fn_rel_custo_receita";
 
-const CORTE_DO_CUSTO = /coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*<>\s*'movimentacao'/;
+const CORTE_DO_CUSTO =
+  /coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*not in\s*\(\s*'movimentacao',\s*'distribuicao',\s*'mutuo'\s*\)/;
+
+/** Retirada de sócio, empresa ligada e imobilizado não são custo de obra. */
+const CORTE_DO_CENTRO =
+  /not in\s*\(\s*'financeiro',\s*'investimento',\s*'socio',\s*'empresa_ligada',\s*'imobilizado'\s*\)/;
 /** CAPEX fora, salvo pedido explícito da tela ("Incluir investimentos"). */
 const CORTE_DO_INVESTIMENTO =
   /\(\s*coalesce\(\s*p_incluir_investimento,\s*false\s*\)\s*or\s+coalesce\(\s*c\w*\.natureza,\s*'operacional'\s*\)\s*<>\s*'investimento'\s*\)/;
@@ -182,6 +190,14 @@ describe("investimento (CAPEX) fora do custo, com volta pelo parâmetro", () => 
   it.each(TODAS)("%s também corta `movimentacao`", (nomeDaFuncao) => {
     const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
     expect(CORTE_DO_CUSTO.test(corpo)).toBe(true);
+  });
+
+  it.each(TODAS)("%s tira sócio, empresa ligada e imobilizado do custo", (nomeDaFuncao) => {
+    const corpo = corpoDaUltimaDefinicao(nomeDaFuncao) ?? "";
+    expect(
+      CORTE_DO_CENTRO.test(corpo),
+      "sem o corte, a retirada do sócio e o dinheiro da Amazônia voltam a ser custo de obra (D3/D4)",
+    ).toBe(true);
   });
 
   it.each(TODAS)("%s mede a natureza pela categoria do RATEIO", (nomeDaFuncao) => {
