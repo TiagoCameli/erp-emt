@@ -32,6 +32,8 @@ export * from "./linha-campos";
 export * from "./secao-detalhe";
 export * from "./secao-formulario";
 export * from "./tabela-itens";
+export { GradeEdicao, type ColunaGrade, type MudancaCelula, type GradeEdicaoProps } from "./grade-edicao";
+export type { AtalhoGrade } from "./grade-edicao-teclado";
 export * from "./confirm-dialog";
 export * from "./approval-bar";
 export * from "./acao-sem-silencio";

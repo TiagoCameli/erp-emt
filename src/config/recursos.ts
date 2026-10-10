@@ -34,7 +34,7 @@ export interface RecursoDef {
 /**
  * Módulos na ordem de exibição da sidebar. Frete, Combustível e Manutenção ficam
  * entre RH e Administração (pedido do Tiago em 24/09/2026). Medição de Contratos
- * fica depois da Manutenção (25/09/2026).
+ * fica depois da Manutenção (25/09/2026). Execução de Obras fica depois da Medição (09/10/2026).
  */
 export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
@@ -46,6 +46,7 @@ export const MODULOS = [
   { id: "combustivel", nome: "Combustível", rota: "/combustivel" },
   { id: "manutencao", nome: "Manutenção", rota: "/manutencao" },
   { id: "medicao", nome: "Medição", rota: "/medicao" },
+  { id: "execucao", nome: "Execução", rota: "/execucao" },
   { id: "administracao", nome: "Administração", rota: "/administracao" },
 ] as const;
 
@@ -638,6 +639,28 @@ export const RECURSOS = [
     modulo: "medicao",
     rota: "/medicao/alertas",
     acoes: ["ver"],
+  },
+  // Execução de Obras (spec 2026-10-09). Cada aba nova entra na fase dela, com o seu backfill.
+  {
+    id: "execucao.obras",
+    nome: "Obras",
+    modulo: "execucao",
+    rota: "/execucao/obras",
+    acoes: ["ver"],
+  },
+  {
+    id: "execucao.cronogramas",
+    nome: "Cronogramas",
+    modulo: "execucao",
+    rota: "/execucao/cronogramas",
+    acoes: CRUD,
+  },
+  {
+    id: "execucao.modelos",
+    nome: "Modelos",
+    modulo: "execucao",
+    rota: "/execucao/modelos",
+    acoes: CRUD,
   },
   // Administração
   {
