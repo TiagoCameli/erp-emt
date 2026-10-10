@@ -9,6 +9,7 @@ declare
   v_zero constant uuid := 'f155865b-1d4b-4b25-bf3d-54d8de9176b0';
   v_obra uuid; v_obra2 uuid; v_cron uuid; v_cal uuid; v_n bigint; v_txt text; v_j jsonb; r jsonb := '{}'::jsonb;
   v_lista bigint; v_admins bigint;
+  v_ids jsonb; v_11 uuid; v_12 uuid; v_r1 uuid;
   v_obras0 bigint; v_cc0 bigint; v_colab0 bigint;
 begin
   select count(*) into v_obras0 from public.obras;
@@ -172,6 +173,76 @@ begin
   r := r || jsonb_build_object('3i_criar_fora_da_lista', v_txt);
   reset role;
   delete from public.usuario_permissoes where usuario_id = v_zero and recurso like 'execucao.%';
+
+  -- 5. Lote de atividades no cronograma FUND da obra 2 (calendário Padrão EMT: sáb 5 h conta, dom não).
+  --    Dias úteis desde 02/03/2026: 0=02, 1=03, 2=04, 3=05, 4=06, 5=07 (sáb), 6=09, 7=10, 8=11, 9=12, 10=13.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  -- 5a. 1.1 por produtividade 100 / 30 = 4 dias (02/03 a 05/03); 1.2 com 5 dias, 1.1 TI+2: 09/03 a 13/03.
+  v_ids := public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(
+    jsonb_build_object('codigo', '1', 'nome', 'Fundação', 'tipo', 'resumo'),
+    jsonb_build_object('codigo', '1.1', 'nome', 'Estacas', 'pai_codigo', '1', 'modo_duracao', 'por_produtividade',
+                       'quantidade', 100, 'produtividade', 30),
+    jsonb_build_object('codigo', '1.2', 'nome', 'Blocos', 'pai_codigo', '1', 'duracao_dias', 5,
+                       'predecessoras', jsonb_build_array(jsonb_build_object('codigo', '1.1', 'tipo', 'TI', 'atraso', 2)))));
+  v_r1 := (v_ids -> 'ids' ->> '1')::uuid; v_11 := (v_ids -> 'ids' ->> '1.1')::uuid; v_12 := (v_ids -> 'ids' ->> '1.2')::uuid;
+  r := r || jsonb_build_object('5a_lote', (select jsonb_object_agg(a.codigo, jsonb_build_array(d.inicio_cedo, d.fim_cedo, a.duracao_dias))
+    from public.ex_atividades a join public.ex_atividade_datas d on d.atividade_id = a.id where a.cronograma_id = v_cron));
+
+  -- 5b. Ciclo: 1.1 passa a depender de 1.2. Recusa e nada muda (continua 1 vínculo).
+  begin perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('id', v_11,
+      'predecessoras', jsonb_build_array(jsonb_build_object('codigo', '1.2')))));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5b_ciclo', v_txt, '5b_vinculos', (select count(*) from public.ex_dependencias where cronograma_id = v_cron));
+
+  -- 5c. Código repetido no mesmo lote.
+  begin perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(
+      jsonb_build_object('codigo', 'X', 'nome', 'Um'), jsonb_build_object('codigo', 'X', 'nome', 'Dois')));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5c_codigo_repetido', v_txt);
+
+  -- 5d. Linha com filhas deixando de ser resumo.
+  begin perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('id', v_r1, 'tipo', 'atividade')));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5d_filhas_sem_resumo', v_txt);
+
+  -- 5e. Linha só com código e nome: duração 1.
+  perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('codigo', '2', 'nome', 'Limpeza')));
+  r := r || jsonb_build_object('5e_duracao_padrao', (select duracao_dias from public.ex_atividades where cronograma_id = v_cron and codigo = '2' and excluido_em is null));
+
+  -- 5f. Versão desatualizada (outra aba gravou antes).
+  begin perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('id', v_12,
+      'versao', '2000-01-01T00:00:00Z', 'nome', 'Outro nome')));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5f_versao', v_txt);
+
+  -- 5g. Mudança parcial: só o nome. Duração, pai e vínculo ficam.
+  perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('id', v_12, 'nome', 'Blocos de coroamento')));
+  r := r || jsonb_build_object('5g_parcial', (select jsonb_build_object('nome', a.nome, 'duracao', a.duracao_dias, 'pai', p.codigo,
+      'vinculos', (select count(*) from public.ex_dependencias where sucessora_id = a.id))
+    from public.ex_atividades a join public.ex_atividades p on p.id = a.pai_id where a.id = v_12));
+
+  -- 5h. Excluir o resumo leva as filhas e os vínculos; o cache fica só com a linha 2.
+  v_n := public.fn_ex_atividades_excluir(v_cron, array[v_r1], 'Prova');  -- em comando próprio: o snapshot do comando não enxerga o que a função grava
+  r := r || jsonb_build_object('5h_excluidas', v_n,
+    '5h_vivas', (select jsonb_agg(codigo order by codigo) from public.ex_atividades where cronograma_id = v_cron and excluido_em is null),
+    '5h_datas', (select count(*) from public.ex_atividade_datas where cronograma_id = v_cron),
+    '5h_vinculos', (select count(*) from public.ex_dependencias where cronograma_id = v_cron));
+
+  -- 5i. Linha nova "X" com ordem 0 e renumerar: X vira 1, Limpeza continua 2.
+  perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('codigo', 'X', 'nome', 'Nova', 'ordem', 0)));
+  perform public.fn_ex_eap_renumerar(v_cron);
+  r := r || jsonb_build_object('5i_renumerar', (select jsonb_agg(jsonb_build_array(codigo, nome) order by ordem)
+    from public.ex_atividades where cronograma_id = v_cron and excluido_em is null));
+  reset role;
+
+  -- 5j. Zero sem permissão nenhuma.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform public.fn_ex_atividades_salvar_lote(v_cron, jsonb_build_array(jsonb_build_object('codigo', 'Z', 'nome', 'Z')));
+    v_txt := 'PASSOU (errado)'; exception when others then v_txt := 'recusou: ' || sqlerrm; end;
+  r := r || jsonb_build_object('5j_sem_permissao', v_txt);
+  reset role;
 
   -- 4. CPM (tabela feita à mão no plano, Task 3)
   declare v_c4 uuid; v_cal4 uuid; v_a uuid; v_b uuid; v_cc uuid; v_d uuid; v_e uuid; v_f uuid; v_m uuid; v_res uuid; v_t0 timestamptz;
