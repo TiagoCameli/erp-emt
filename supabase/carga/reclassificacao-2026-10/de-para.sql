@@ -70,9 +70,9 @@ select x.rateio_id, x.numero, x.tipo, to_char(x.mes_competencia, 'YYYY-MM') as c
        x.regra,
        case when x.regra like 'e_%' or x.regra = 'd_imobilizado_gasto'
               or (x.regra in ('a_centro_socio','a_despesa_pessoal') and x.tipo = 'a_receber')
-              -- O que entrou da empresa ligada pode ser receita de servico, nao
-              -- devolucao; e emprestimo/investimento ja tem natureza propria.
-              or (x.regra = 'b_empresa_ligada' and (x.tipo = 'a_receber' or x.natureza_atual in ('movimentacao', 'investimento')))
+              -- O que entra da empresa ligada e devolucao do mutuo (Tiago, 10/10/2026);
+              -- emprestimo e investimento ja tem natureza propria e pedem olho.
+              or (x.regra = 'b_empresa_ligada' and x.natureza_atual in ('movimentacao', 'investimento'))
             then 'sim' else 'nao' end as decidir
   from regra x
  where x.regra is not null
