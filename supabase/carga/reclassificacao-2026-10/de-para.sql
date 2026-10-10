@@ -45,7 +45,7 @@ regra as (
            and b.texto ~ '(FRETE|DOCUMENT|EMPLAC|LICENC|IPVA|DETRAN|TRANSPORTE)' then 'd_imobilizado_gasto'
       when b.raiz_tipo = 'imobilizado' and coalesce(b.natureza_atual, 'operacional') = 'operacional' and b.tipo = 'a_pagar' then 'd_imobilizado'
       -- (e) generico que pede olho humano
-      when b.texto ~ 'PECU[AÁ]RIA' then 'e_pecuaria'
+      when b.texto ~ 'PECU[AÁ]RIA' and coalesce(b.natureza_atual, 'operacional') = 'operacional' then 'e_pecuaria'
       when b.categoria_atual = 'Despesas financeiras' then 'e_despesas_financeiras'
     end as regra
     from base b
