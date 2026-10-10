@@ -244,6 +244,22 @@ begin
   r := r || jsonb_build_object('5j_sem_permissao', v_txt);
   reset role;
 
+  -- 6. Views. Esperado: 6a true; 6b {"linhas": 2, "com_versao": 2}; 6c false; 6d true
+  perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('6a_pasta_existe', exists (select 1 from public.ex_v_pastas where obra_id = v_obra2 and n_cronogramas = 1));
+  r := r || jsonb_build_object('6b_atividades', (select jsonb_build_object('linhas', count(*), 'com_versao', count(versao))
+    from public.ex_v_atividades where cronograma_id = v_cron));
+  perform public.fn_ex_cronograma_excluir(v_cron, 'Prova: a pasta some');
+  r := r || jsonb_build_object('6c_pasta_some', exists (select 1 from public.ex_v_pastas where obra_id = v_obra2));
+  reset role;
+  insert into public.usuario_permissoes (usuario_id, recurso, acao) values (v_zero, 'execucao.cronogramas', 'ver');
+  perform set_config('request.jwt.claims', json_build_object('sub', v_zero, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  r := r || jsonb_build_object('6d_unidades_visiveis', (select count(*) > 0 from public.unidades_medida));
+  reset role;
+  delete from public.usuario_permissoes where usuario_id = v_zero and recurso like 'execucao.%';
+
   -- 4. CPM (tabela feita à mão no plano, Task 3)
   declare v_c4 uuid; v_cal4 uuid; v_a uuid; v_b uuid; v_cc uuid; v_d uuid; v_e uuid; v_f uuid; v_m uuid; v_res uuid; v_t0 timestamptz;
   begin
