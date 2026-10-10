@@ -20,6 +20,7 @@ import {
   Fuel,
   Truck,
   Ruler,
+  HardHat,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -54,6 +55,7 @@ export const MAPA_ICONES: Record<string, LucideIcon> = {
   combustivel: Fuel,
   manutencao: Wrench,
   medicao: Ruler,
+  execucao: HardHat,
   rh: Users,
 };
 
