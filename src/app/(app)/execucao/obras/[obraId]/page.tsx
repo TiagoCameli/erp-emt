@@ -7,7 +7,8 @@ import { AcessoObra } from "@/modules/execucao/obras/components/acesso-obra";
 import { ConfigurarObraDrawer } from "@/modules/execucao/obras/components/configurar-obra-drawer";
 import { CronogramasDaObra } from "@/modules/execucao/obras/components/cronogramas-da-obra";
 import { LocaisTabela } from "@/modules/execucao/obras/components/locais-tabela";
-import { calendariosModelo, cronogramasDaObra, locaisDaObra, pastaDaObra, usuariosDaObra } from "@/modules/execucao/obras/queries";
+import { listarCronogramas } from "@/modules/execucao/cronogramas/queries";
+import { calendariosModelo, locaisDaObra, pastaDaObra, usuariosDaObra } from "@/modules/execucao/obras/queries";
 import { ROTULO_TIPO_OBRA } from "@/modules/execucao/_shared/rotulos";
 
 export default async function PaginaObra({ params }: { params: Promise<{ obraId: string }> }) {
@@ -25,7 +26,7 @@ export default async function PaginaObra({ params }: { params: Promise<{ obraId:
   const [obra, locais, cronogramas, usuarios, calendarios] = await Promise.all([
     pastaDaObra(obraId),
     locaisDaObra(obraId),
-    cronogramasDaObra(obraId),
+    listarCronogramas({ obraId }),
     podeEditar ? usuariosDaObra(obraId) : Promise.resolve([]),
     podeEditar ? calendariosModelo() : Promise.resolve([]),
   ]);

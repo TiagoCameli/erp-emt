@@ -16,6 +16,13 @@ export const ROTULO_STATUS_CRONOGRAMA: Record<StatusCronograma, string> = {
   concluido: "Concluído",
   arquivado: "Arquivado",
 };
+/** Situação do cronograma no StatusBadge (cores da máquina de status padrão). */
+export const SELO_STATUS_CRONOGRAMA: Record<StatusCronograma, string> = {
+  rascunho: "rascunho",
+  ativo: "aprovado",
+  concluido: "executado",
+  arquivado: "cancelado",
+};
 
 export const TIPOS_LOCAL = ["bloco", "pavimento", "ambiente", "peca", "segmento", "outro"] as const;
 export type TipoLocal = (typeof TIPOS_LOCAL)[number];

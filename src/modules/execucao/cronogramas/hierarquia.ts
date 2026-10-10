@@ -68,14 +68,20 @@ function trocar(linhas: readonly LinhaArvore[], id: string, delta: -1 | 1): Muda
 export const moverAcima = (linhas: readonly LinhaArvore[], id: string) => trocar(linhas, id, -1);
 export const moverAbaixo = (linhas: readonly LinhaArvore[], id: string) => trocar(linhas, id, 1);
 
-/** Código livre seguinte entre as irmãs: prefixo do pai + (maior último número + 1). */
+/**
+ * Código livre seguinte entre as irmãs: prefixo do pai + (maior último número + 1), pulando o que já é
+ * código de qualquer linha do cronograma (recuar e avançar não renumeram, então "3" pode morar dentro de "2").
+ */
 function proximoCodigo(linhas: readonly LinhaArvore[], pai: LinhaArvore | null): string {
   const prefixo = pai ? `${pai.codigo}.` : "";
   const numeros = linhas
     .filter((l) => (pai ? l.paiId === pai.id : l.paiId === null))
     .map((l) => Number(l.codigo.slice(prefixo.length)))
     .filter((n) => Number.isInteger(n));
-  return `${prefixo}${(numeros.length ? Math.max(...numeros) : 0) + 1}`;
+  const usados = new Set(linhas.map((l) => l.codigo));
+  let n = (numeros.length ? Math.max(...numeros) : 0) + 1;
+  while (usados.has(`${prefixo}${n}`)) n += 1;
+  return `${prefixo}${n}`;
 }
 
 export function proximaLinha(

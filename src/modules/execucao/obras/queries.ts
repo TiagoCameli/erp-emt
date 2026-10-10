@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
-import type { StatusCronograma, TipoLocal, TipoObra } from "@/modules/execucao/_shared/rotulos";
+import type { TipoLocal, TipoObra } from "@/modules/execucao/_shared/rotulos";
 
 /** Leitura de pastas, obra e locais. A RLS já filtra pela lista da obra. */
 
@@ -123,32 +123,4 @@ export async function calendariosModelo(): Promise<{ id: string; nome: string; p
     .from("ex_calendarios").select("id, nome, padrao_empresa").eq("modelo", true).is("excluido_em", null).order("nome");
   if (error) throw new Error(`Não foi possível ler os calendários: ${error.message}`);
   return (data ?? []).map((c) => ({ id: c.id, nome: c.nome, padrao: c.padrao_empresa }));
-}
-
-export interface CronogramaDaObra {
-  id: string;
-  codigo: string;
-  nome: string;
-  status: StatusCronograma;
-  inicioPrevisto: string | null;
-  terminoPrevisto: string | null;
-  nAtividades: number;
-  nCriticas: number;
-}
-
-/** Cronogramas da obra, direto da view. A Task 13 move isto para cronogramas/queries.ts. */
-export async function cronogramasDaObra(obraId: string): Promise<CronogramaDaObra[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase.from("ex_v_cronogramas").select("*").eq("obra_id", obraId).order("codigo");
-  if (error) throw new Error(`Não foi possível ler os cronogramas: ${error.message}`);
-  return (data ?? []).map((c) => ({
-    id: c.id!,
-    codigo: c.codigo ?? "",
-    nome: c.nome ?? "",
-    status: c.status as StatusCronograma,
-    inicioPrevisto: c.inicio_previsto,
-    terminoPrevisto: c.termino_previsto,
-    nAtividades: Number(c.n_atividades ?? 0),
-    nCriticas: Number(c.n_criticas ?? 0),
-  }));
 }

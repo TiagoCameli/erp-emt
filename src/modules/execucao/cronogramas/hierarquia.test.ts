@@ -74,6 +74,12 @@ describe("proximaLinha", () => {
   it("sem referência: no fim da raiz", () => {
     expect(proximaLinha(base, null)).toEqual({ codigo: "4", pai_codigo: "", ordem: 4, mudancas: [] });
   });
+  it("pula código já usado por qualquer linha: depois de recuar 3 para dentro de 2, a nova raiz não repete 3", () => {
+    const depois: LinhaArvore[] = base.map((l) =>
+      l.id === "a2" ? { ...l, tipo: "resumo" } : l.id === "a3" ? { ...l, paiId: "a2", ordem: 1 } : l,
+    );
+    expect(proximaLinha(depois, null)).toEqual({ codigo: "4", pai_codigo: "", ordem: 3, mudancas: [] });
+  });
   it("cronograma vazio", () => {
     expect(proximaLinha([], null)).toEqual({ codigo: "1", pai_codigo: "", ordem: 1, mudancas: [] });
   });
