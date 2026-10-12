@@ -18,6 +18,17 @@ vi.mock("@/modules/medicao/lancamentos/actions", () => ({
   conferirColagem: (...args: unknown[]) => conferirColagem(...args),
   gravarColagem: (...args: unknown[]) => gravarColagem(...args),
 }));
+// A prévia é um DataTable ajustável: a preferência da tabela iria ao banco.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/medicao/lancamentos",
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock("@/components/canonicos/toast", () => ({
   toast: {
     error: (...a: unknown[]) => toastErro(...a),
@@ -27,6 +38,7 @@ vi.mock("@/components/canonicos/toast", () => ({
   },
 }));
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { ColarLancamentos } from "@/modules/medicao/lancamentos/components/colar-lancamentos";
 import type { ServicoParaLancar } from "@/modules/medicao/lancamentos/tipos";
 
@@ -60,7 +72,10 @@ beforeEach(() => {
   toastErro.mockReset();
   toastSucesso.mockReset();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 describe("ColarLancamentos", () => {
   it("cola 3 linhas, confere no banco e mostra o erro de uma delas (Gravar desabilitado)", async () => {

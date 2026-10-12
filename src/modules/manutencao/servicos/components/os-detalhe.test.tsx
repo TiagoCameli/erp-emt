@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
+
 import type { StatusOs } from "@/modules/manutencao/_shared/rotulos";
 import { OsDetalheView } from "@/modules/manutencao/servicos/components/os-detalhe";
 import type { LinhasOs, OsDetalhe } from "@/modules/manutencao/servicos/queries";
@@ -39,7 +41,17 @@ vi.mock("@/modules/_shared/anexos/enviar-do-navegador", () => ({
   enviarAnexoDoNavegador: vi.fn(async () => ({ ok: true })),
 }));
 
-afterEach(cleanup);
+// As tabelas do detalhe são DataTable com idTabela: a preferência salva é do servidor.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 function os(status: StatusOs, troca: Partial<OsDetalhe> = {}): OsDetalhe {
   return {

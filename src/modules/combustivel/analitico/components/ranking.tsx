@@ -2,12 +2,18 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import {
+  TabelaRankingCliente,
+  type ColunaRankingCliente,
+  type LinhaRankingCliente,
+} from "@/modules/combustivel/analitico/components/ranking-tabela";
 import { formatarPct } from "@/modules/combustivel/analitico/formato";
 
 /**
  * As peças do ranking das abas analíticas da origem (ConsumidoresRankingTable,
  * ObrasRankingTable, FornecedoresRankingTable): a tabela, a barra de "% do total" e a
- * mini tendência. Sem estado: renderizam no servidor.
+ * mini tendência. Sem estado: renderizam no servidor (a tabela em si é a DataTable,
+ * em `ranking-tabela.tsx`).
  */
 
 /** Sparkline da origem em SVG puro. Uma série só, na cor primária do tema (a marca). */
@@ -76,10 +82,27 @@ export interface TabelaRankingProps<T> {
   colunas: readonly ColunaRanking<T>[];
 }
 
-const CELULA = "px-3 py-2";
-const CABECALHO = "px-3 py-2 font-medium whitespace-nowrap";
+/**
+ * Id da tabela pela página: cada ranking tem as suas colunas, e o id é o que separa a
+ * largura e a ordem salvas de um e de outro ("Equipamento", "Placa", "Obra",
+ * "Fornecedor" viram `combustivel.ranking.equipamento` e assim por diante).
+ */
+export function idTabelaRanking(cabecalhoNome: string): string {
+  const slug = cabecalhoNome
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `combustivel.ranking.${slug}`;
+}
 
-/** A tabela de ranking da origem: posição, nome, as métricas, % do total e tendência. */
+/**
+ * A tabela de ranking da origem: posição, nome, as métricas, % do total e tendência.
+ *
+ * Roda no servidor: as funções das páginas (nome, link, célula de cada métrica) são
+ * chamadas aqui, e só o resultado já renderizado vai para a DataTable no cliente.
+ */
 export function TabelaRanking<T>({
   titulo,
   subtitulo,
@@ -92,68 +115,42 @@ export function TabelaRanking<T>({
   destacar,
   colunas,
 }: TabelaRankingProps<T>) {
+  const linhasCliente: LinhaRankingCliente[] = linhas.map((linha, indice) => {
+    const link = href?.(linha) ?? null;
+    return {
+      chave: chave(linha),
+      posicao: indice + 1,
+      nome: link ? (
+        <Link href={link} className="hover:underline">
+          {nome(linha)}
+        </Link>
+      ) : (
+        nome(linha)
+      ),
+      detalhe: meta?.(linha) ?? null,
+      hachurada: destacar?.(linha) ?? false,
+      celulas: colunas.map((coluna) => coluna.celula(linha)),
+    };
+  });
+  const colunasCliente: ColunaRankingCliente[] = colunas.map(({ cabecalho, alinhar, className }) => ({
+    cabecalho,
+    alinhar,
+    className,
+  }));
+
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card">
       <header className="border-b border-border px-4 py-3">
         <h3 className="text-corpo font-semibold">{titulo}</h3>
         <p className="text-detalhe text-muted-foreground">{subtitulo}</p>
       </header>
-      <div className="overflow-x-auto">
-        <table className="w-full text-detalhe">
-          <thead className="bg-surface">
-            <tr className="border-b border-border text-legenda uppercase tracking-wide text-muted-foreground">
-              <th className={`${CABECALHO} w-10 text-right`}>#</th>
-              <th className={`${CABECALHO} text-left`}>{cabecalhoNome}</th>
-              {colunas.map((coluna) => (
-                <th
-                  key={coluna.cabecalho}
-                  className={cn(CABECALHO, coluna.alinhar === "esquerda" ? "text-left" : "text-right", coluna.className)}
-                >
-                  {coluna.cabecalho}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map((linha, indice) => {
-              const link = href?.(linha) ?? null;
-              const detalhe = meta?.(linha) ?? null;
-              const hachurada = destacar?.(linha) ?? false;
-              return (
-                <tr
-                  key={chave(linha)}
-                  className={cn(
-                    "border-b border-border last:border-0 hover:bg-surface",
-                    hachurada &&
-                      "bg-[repeating-linear-gradient(45deg,var(--color-muted),var(--color-muted)_4px,transparent_4px,transparent_8px)]",
-                  )}
-                >
-                  <td className={`${CELULA} text-right tabular-nums text-muted-foreground`}>{indice + 1}</td>
-                  <td className={`${CELULA} max-w-72`}>
-                    <div className={cn("truncate font-medium", hachurada && "text-status-pendente")}>
-                      {link ? (
-                        <Link href={link} className="hover:underline">
-                          {nome(linha)}
-                        </Link>
-                      ) : (
-                        nome(linha)
-                      )}
-                    </div>
-                    {detalhe ? <div className="truncate text-legenda text-muted-foreground">{detalhe}</div> : null}
-                  </td>
-                  {colunas.map((coluna) => (
-                    <td
-                      key={coluna.cabecalho}
-                      className={cn(CELULA, coluna.alinhar === "esquerda" ? "text-left" : "text-right tabular-nums", coluna.className)}
-                    >
-                      {coluna.celula(linha)}
-                    </td>
-                  ))}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="p-3">
+        <TabelaRankingCliente
+          idTabela={idTabelaRanking(cabecalhoNome)}
+          cabecalhoNome={cabecalhoNome}
+          colunas={colunasCliente}
+          linhas={linhasCliente}
+        />
       </div>
     </section>
   );

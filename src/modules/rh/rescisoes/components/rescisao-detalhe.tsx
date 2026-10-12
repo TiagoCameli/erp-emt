@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   CampoFormulario,
   Combobox,
   ConfirmDialog,
+  DataTable,
   GradeKpis,
   InputMoeda,
   ItemGrade,
@@ -64,6 +66,46 @@ export interface RescisaoDetalheProps {
 /** Número do banco no formato que o InputMoeda edita. */
 function paraCampo(valor: number): string {
   return String(valor).replace(".", ",");
+}
+
+/** Linha da tabela de verbas: título da seção, "nenhuma verba" ou a verba. */
+type LinhaVerba =
+  | { tipo: "secao"; id: string; titulo: string }
+  | { tipo: "vazia"; id: string }
+  | { tipo: "verba"; id: string; item: ItemRescisao };
+
+function linhasDaSecao(
+  chave: string,
+  titulo: string,
+  itens: ItemRescisao[],
+): LinhaVerba[] {
+  return [
+    { tipo: "secao", id: `secao:${chave}`, titulo },
+    ...(itens.length === 0
+      ? [{ tipo: "vazia" as const, id: `vazia:${chave}` }]
+      : itens.map((item) => ({ tipo: "verba" as const, id: item.id, item }))),
+  ];
+}
+
+function linhaInteiraVerba(linha: LinhaVerba): React.ReactNode {
+  if (linha.tipo === "secao") {
+    return (
+      <span className="text-[12px] font-semibold uppercase">{linha.titulo}</span>
+    );
+  }
+  if (linha.tipo === "vazia") {
+    return (
+      <span className="text-muted-foreground text-[13px]">
+        Nenhuma verba nesta seção.
+      </span>
+    );
+  }
+  return null;
+}
+
+function classeDaLinhaVerba(linha: LinhaVerba): string | undefined {
+  if (linha.tipo === "secao") return "bg-surface/60 hover:bg-surface/60";
+  return undefined;
 }
 
 export function RescisaoDetalhe({
@@ -137,37 +179,82 @@ export function RescisaoDetalhe({
     semDerrubarSucesso("aprovacao.detalhe", () => router.refresh());
   }
 
-  function linhasDaSecao(itens: ItemRescisao[]) {
-    if (itens.length === 0) {
-      return (
-        <tr>
-          <td
-            colSpan={podeMexer ? 4 : 3}
-            className="text-muted-foreground px-3 py-3 text-[13px]"
-          >
-            Nenhuma verba nesta seção.
-          </td>
-        </tr>
-      );
-    }
-    return itens.map((item) => (
-      <tr key={item.id} className="border-border border-t">
-        <td className="px-3 py-2">
-          <span className="font-medium">{item.descricao}</span>
-          {item.editadoManualmente ? (
-            <span className="text-muted-foreground ml-2 text-[11px] uppercase">
-              editado
+  const linhasVerbas = React.useMemo<LinhaVerba[]>(
+    () => [
+      ...linhasDaSecao(
+        "proventos",
+        "Proventos",
+        rescisao.itens.filter((item) => item.natureza === "provento"),
+      ),
+      ...linhasDaSecao(
+        "descontos",
+        "Descontos",
+        rescisao.itens.filter((item) => item.natureza === "desconto"),
+      ),
+    ],
+    [rescisao.itens],
+  );
+
+  /** Seções com ordem própria (proventos, depois descontos): nada ordena. */
+  const colunasVerbas = React.useMemo<ColumnDef<LinhaVerba, unknown>[]>(() => {
+    const colunas: ColumnDef<LinhaVerba, unknown>[] = [
+      {
+        id: "verba",
+        header: "Verba",
+        size: 320,
+        enableSorting: false,
+        meta: { celular: "titulo", fixa: true },
+        cell: ({ row }) => {
+          if (row.original.tipo !== "verba") return null;
+          const item = row.original.item;
+          return (
+            <>
+              <span className="font-medium">{item.descricao}</span>
+              {item.editadoManualmente ? (
+                <span className="text-muted-foreground ml-2 text-[11px] uppercase">
+                  editado
+                </span>
+              ) : null}
+            </>
+          );
+        },
+      },
+      {
+        id: "referencia",
+        header: "Referência",
+        size: 180,
+        enableSorting: false,
+        cell: ({ row }) =>
+          row.original.tipo === "verba" ? (
+            <span className="text-muted-foreground text-[13px]">
+              {row.original.item.referencia ?? "—"}
             </span>
-          ) : null}
-        </td>
-        <td className="text-muted-foreground px-3 py-2 text-[13px]">
-          {item.referencia ?? "—"}
-        </td>
-        <td className="px-3 py-2 text-right">
-          <MoneyText valor={item.valor} />
-        </td>
-        {podeMexer ? (
-          <td className="px-3 py-2 text-right whitespace-nowrap">
+          ) : null,
+      },
+      {
+        id: "valor",
+        header: "Valor",
+        size: 150,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) =>
+          row.original.tipo === "verba" ? (
+            <MoneyText valor={row.original.item.valor} />
+          ) : null,
+      },
+    ];
+    if (!podeMexer) return colunas;
+    colunas.push({
+      id: "acoes",
+      header: "",
+      size: 200,
+      enableSorting: false,
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações", naoTruncar: true },
+      cell: ({ row }) => {
+        if (row.original.tipo !== "verba") return null;
+        const item = row.original.item;
+        return (
+          <div className="flex justify-end whitespace-nowrap">
             <Button
               type="button"
               variant="ghost"
@@ -191,11 +278,12 @@ export function RescisaoDetalhe({
                 Remover
               </Button>
             ) : null}
-          </td>
-        ) : null}
-      </tr>
-    ));
-  }
+          </div>
+        );
+      },
+    });
+    return colunas;
+  }, [podeMexer]);
 
   return (
     <div className="space-y-4">
@@ -314,49 +402,24 @@ export function RescisaoDetalhe({
           pessoa; com altura escolhida ela rola por dentro. */}
       <GradeKpis id="rh.rescisoes.detalhe.tabelas" titulo="Tabelas" vao="amplo">
         <ItemGrade titulo="Verbas" larguraPadrao={12}>
-          <div className="border-border overflow-hidden rounded-lg border">
-            <table className="w-full text-sm">
-              <thead className="bg-surface text-muted-foreground text-left text-[12px] uppercase">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Verba</th>
-                  <th className="px-3 py-2 font-medium">Referência</th>
-                  <th className="px-3 py-2 text-right font-medium">Valor</th>
-                  {podeMexer ? <th className="px-3 py-2" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="bg-surface/60">
-                  <td
-                    colSpan={podeMexer ? 4 : 3}
-                    className="px-3 py-1.5 text-[12px] font-semibold uppercase"
-                  >
-                    Proventos
-                  </td>
-                </tr>
-                {linhasDaSecao(proventos)}
-                <tr className="bg-surface/60 border-border border-t">
-                  <td
-                    colSpan={podeMexer ? 4 : 3}
-                    className="px-3 py-1.5 text-[12px] font-semibold uppercase"
-                  >
-                    Descontos
-                  </td>
-                </tr>
-                {linhasDaSecao(descontos)}
-              </tbody>
-              <tfoot className="border-border bg-surface border-t-2">
-                <tr>
-                  <td colSpan={2} className="px-3 py-2 font-semibold">
-                    Líquido a pagar
-                  </td>
-                  <td className="px-3 py-2 text-right font-semibold">
-                    <MoneyText valor={rescisao.valorLiquido} />
-                  </td>
-                  {podeMexer ? <td /> : null}
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+          <DataTable
+            idTabela="rh.rescisoes.detalhe.verbas"
+            columns={colunasVerbas}
+            data={linhasVerbas}
+            idDaLinha={(linha) => linha.id}
+            semPaginacao
+            linhaInteira={linhaInteiraVerba}
+            classeDaLinha={classeDaLinhaVerba}
+            rodape={{
+              verba: <span className="font-semibold">Líquido a pagar</span>,
+              valor: (
+                <MoneyText
+                  valor={rescisao.valorLiquido}
+                  className="font-semibold"
+                />
+              ),
+            }}
+          />
         </ItemGrade>
       </GradeKpis>
 

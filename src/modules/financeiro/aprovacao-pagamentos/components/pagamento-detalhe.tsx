@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Check,
   ChevronDown,
@@ -18,6 +19,7 @@ import {
   BotaoEspelho,
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   MoneyText,
   PageHeader,
   StatusBadge,
@@ -60,6 +62,47 @@ import type { ContaBancariaOpcao } from "@/modules/financeiro/pagamentos/queries
 import { AprovarDialog } from "./aprovar-dialog";
 
 const ROTA_FILA = "/financeiro/aprovacao-pagamentos";
+
+/** Itens da OC de origem: lista plana, pode ordenar. */
+const COLUNAS_ITENS_OC: ColumnDef<OrdemItem, unknown>[] = [
+  {
+    accessorKey: "insumoNome",
+    header: "Insumo",
+    size: 260,
+    meta: { celular: "titulo" },
+  },
+  {
+    accessorKey: "centroCustoNome",
+    header: "Centro de custo",
+    size: 200,
+  },
+  {
+    accessorKey: "quantidade",
+    header: "Quantidade",
+    size: 130,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => (
+      <span className="tabular-nums">
+        {formatarQuantidade(row.original.quantidade)}
+        {row.original.unidade ? ` ${row.original.unidade}` : ""}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "precoUnitario",
+    header: "Preço unitário",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={row.original.precoUnitario} />,
+  },
+  {
+    accessorKey: "subtotal",
+    header: "Subtotal",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <MoneyText valor={row.original.subtotal} />,
+  },
+];
 
 export interface PagamentoDetalheViewProps {
   lancamento: LancamentoDetalhe;
@@ -174,6 +217,71 @@ export function PagamentoDetalheView({
    */
   const [detalhesAbertos, setDetalhesAbertos] = React.useState(false);
   const recolhido = detalhesAbertos ? undefined : "max-lg:hidden";
+
+  // Parcelas na ordem do cronograma: a ordem é a informação, nenhuma coluna
+  // ordena.
+  const colunasParcelas = React.useMemo<
+    ColumnDef<ParcelaLancamento, unknown>[]
+  >(
+    () => [
+      {
+        id: "numeroParcela",
+        header: "#",
+        size: 90,
+        enableSorting: false,
+        meta: { rotulo: "Parcela", atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.numeroParcela}
+            {/* Marca qual das 57 parcelas é a desta tela: sem
+                isso a tabela vira uma lista onde a pessoa perde
+                de vista o que ela está aprovando. */}
+            {row.original.id === parcela.id ? (
+              <span className="ml-1.5 text-legenda text-primary">esta</span>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "dataVencimento",
+        header: "Vencimento",
+        size: 120,
+        enableSorting: false,
+        meta: { atomico: true, celular: "titulo" },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.dataVencimento
+              ? formatarData(row.original.dataVencimento)
+              : "-"}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        size: 140,
+        enableSorting: false,
+        meta: { naoTruncar: true, celular: "destaque" },
+        cell: ({ row }) => {
+          const info = STATUS_PARCELA[row.original.status];
+          return info ? (
+            <StatusBadge status={info.badge} rotulo={info.rotulo} />
+          ) : (
+            row.original.status
+          );
+        },
+      },
+      {
+        id: "valor",
+        header: "Valor",
+        size: 150,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+      },
+    ],
+    [parcela.id],
+  );
 
   /**
    * Selo do lançamento pela DÍVIDA, não pela etapa: esta tela existe justamente
@@ -479,78 +587,16 @@ export function PagamentoDetalheView({
             </Secao>
 
             <Secao titulo={`Parcelas (${lancamento.parcelas.length})`}>
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-detalhe">
-                  <thead className="bg-surface">
-                    {/*
-                    Todo cabeçalho centralizado, igual ao DataTable canônico. O
-                    valor da célula continua à direita (vírgula embaixo de
-                    vírgula); rótulo não tem vírgula para alinhar. Estas tabelas
-                    são à mão porque são leitura pura dentro de uma seção, sem
-                    filtro, ordenação nem preferência de coluna: o DataTable aqui
-                    seria peso sem função. Mas a régua do cabeçalho é a mesma.
-                  */}
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-1.5 text-center font-medium">#</th>
-                      <th className="px-3 py-1.5 text-center font-medium">
-                        Vencimento
-                      </th>
-                      <th className="px-3 py-1.5 text-center font-medium">
-                        Status
-                      </th>
-                      <th className="px-3 py-1.5 text-center font-medium">
-                        Valor
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lancamento.parcelas.map((linha) => {
-                      const info = STATUS_PARCELA[linha.status];
-                      const ehEsta = linha.id === parcela.id;
-                      return (
-                        <tr
-                          key={linha.id}
-                          className={
-                            ehEsta
-                              ? "border-b border-border bg-primary/5 last:border-0"
-                              : "border-b border-border last:border-0"
-                          }
-                        >
-                          <td className="px-3 py-1.5 text-center tabular-nums">
-                            {linha.numeroParcela}
-                            {/* Marca qual das 57 parcelas é a desta tela: sem
-                              isso a tabela vira uma lista onde a pessoa perde
-                              de vista o que ela está aprovando. */}
-                            {ehEsta ? (
-                              <span className="ml-1.5 text-legenda text-primary">
-                                esta
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="px-3 py-1.5 text-center tabular-nums">
-                            {linha.dataVencimento
-                              ? formatarData(linha.dataVencimento)
-                              : "-"}
-                          </td>
-                          <td className="px-3 py-1.5 text-center">
-                            {info ? (
-                              <StatusBadge
-                                status={info.badge}
-                                rotulo={info.rotulo}
-                              />
-                            ) : (
-                              linha.status
-                            )}
-                          </td>
-                          <td className="px-3 py-1.5 text-right">
-                            <MoneyText valor={linha.valor} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                idTabela="financeiro.aprovacao-pagamentos.detalhe.parcelas"
+                columns={colunasParcelas}
+                data={lancamento.parcelas}
+                idDaLinha={(linha) => linha.id}
+                semPaginacao
+                classeDaLinha={(linha) =>
+                  linha.id === parcela.id ? "bg-primary/5" : undefined
+                }
+              />
             </Secao>
 
             <Secao titulo="Rateio por centro de custo">
@@ -580,52 +626,13 @@ export function PagamentoDetalheView({
 
             {itensOrigem.length > 0 ? (
               <Secao titulo="Itens da ordem de compra">
-                <div className="overflow-x-auto rounded-md border border-border">
-                  <table className="w-full text-detalhe">
-                    <thead className="bg-surface">
-                      <tr className="border-b border-border text-legenda text-muted-foreground">
-                        <th className="px-3 py-1.5 text-center font-medium">
-                          Insumo
-                        </th>
-                        <th className="px-3 py-1.5 text-center font-medium">
-                          Centro de custo
-                        </th>
-                        <th className="px-3 py-1.5 text-center font-medium">
-                          Quantidade
-                        </th>
-                        <th className="px-3 py-1.5 text-center font-medium">
-                          Preço unitário
-                        </th>
-                        <th className="px-3 py-1.5 text-center font-medium">
-                          Subtotal
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {itensOrigem.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="border-b border-border last:border-0"
-                        >
-                          <td className="px-3 py-1.5">{item.insumoNome}</td>
-                          <td className="px-3 py-1.5 text-center">
-                            {item.centroCustoNome}
-                          </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums">
-                            {formatarQuantidade(item.quantidade)}
-                            {item.unidade ? ` ${item.unidade}` : ""}
-                          </td>
-                          <td className="px-3 py-1.5 text-right">
-                            <MoneyText valor={item.precoUnitario} />
-                          </td>
-                          <td className="px-3 py-1.5 text-right">
-                            <MoneyText valor={item.subtotal} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  idTabela="financeiro.aprovacao-pagamentos.detalhe.itens-oc"
+                  columns={COLUNAS_ITENS_OC}
+                  data={itensOrigem}
+                  idDaLinha={(item) => item.id}
+                  semPaginacao
+                />
               </Secao>
             ) : null}
           </div>

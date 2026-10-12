@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { OrdemDetalheView } from "@/modules/compras/ordens/components/ordem-detalhe";
 import type { OrdemDetalhe, OrdemItem } from "@/modules/compras/ordens/queries";
 
@@ -31,6 +32,13 @@ vi.mock("@/modules/compras/ordens/actions", () => ({
 }));
 vi.mock("@/components/canonicos/anexos", () => ({
   Anexos: () => null,
+}));
+// As tabelas de itens, formas e parcelas são DataTable com idTabela, que lê e
+// grava a preferência do usuário por Server Action.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
 }));
 
 const ID_ORDEM = "11111111-1111-4111-8111-111111111111";
@@ -124,7 +132,10 @@ function renderizar(detalhe: OrdemDetalhe) {
   );
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 describe("aviso de item sem categoria de custo", () => {
   it("não aparece quando todos os itens estão classificados", () => {

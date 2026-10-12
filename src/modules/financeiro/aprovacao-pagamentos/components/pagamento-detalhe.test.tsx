@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { PagamentoDetalheView } from "@/modules/financeiro/aprovacao-pagamentos/components/pagamento-detalhe";
 import type {
   LancamentoDetalhe,
@@ -26,7 +27,18 @@ vi.mock("@/modules/_shared/anexos/actions", () => ({
   registrarAnexo: vi.fn(),
 }));
 
-afterEach(() => cleanup());
+// As tabelas de parcelas e de itens da OC são DataTable com `idTabela`, que lê e
+// grava a preferência do usuário por Server Action.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 const ID_PARCELA = "11111111-1111-4111-8111-111111111111";
 const ID_OUTRA = "22222222-2222-4222-8222-222222222222";
@@ -183,11 +195,16 @@ describe("PagamentoDetalheView mostra o pagamento inteiro", () => {
       />,
     );
 
-    // Estas tabelas são à mão (leitura pura, sem filtro nem ordenação), então não
-    // herdam nada do DataTable: a régua do cabeçalho tinha que ser repetida aqui,
-    // e "Valor" nasceu à direita. O valor da célula segue à direita, o rótulo não.
+    // Quando estas tabelas eram à mão, a régua do cabeçalho era repetida aqui e
+    // "Valor" nasceu à direita. Agora são o DataTable, e a prova continua: o
+    // valor da célula segue à direita, o rótulo não. O nome acessível do
+    // cabeçalho ganhou a alça "Largura da coluna X", daí o `^` no lugar do
+    // nome exato; exigir a alça logo depois do rótulo impede "Valor" de casar
+    // com outro cabeçalho que só comece por ele.
     for (const rotulo of ["#", "Vencimento", "Status", "Valor"]) {
-      const cabecalho = screen.getByRole("columnheader", { name: rotulo });
+      const cabecalho = screen.getByRole("columnheader", {
+        name: new RegExp(`^${rotulo}\\s?Largura da coluna`),
+      });
       expect(cabecalho).toHaveClass("text-center");
       expect(cabecalho).not.toHaveClass("text-right");
     }

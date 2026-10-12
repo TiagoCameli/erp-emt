@@ -1,7 +1,11 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 
-import { MoneyText } from "@/components/canonicos";
+import { DataTable, MoneyText } from "@/components/canonicos";
 import type { Modo } from "@/modules/combustivel/anomalias/base";
 import { linkDaSaida } from "@/modules/combustivel/anomalias/links";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
@@ -28,8 +32,6 @@ function precoPorLitro(saida: SaidaRecente): string {
   return `R$ ${valor.toLocaleString("pt-BR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
 }
 
-const TH = "px-3 py-2.5 font-semibold";
-
 function Operador({ nome }: { nome: string | null }) {
   if (!nome) return <span className="text-legenda italic text-muted-foreground">Sem operador</span>;
   return (
@@ -40,6 +42,119 @@ function Operador({ nome }: { nome: string | null }) {
       <span className="text-legenda text-foreground">{nome}</span>
     </span>
   );
+}
+
+/** Combustível com a cor dele e a obra embaixo, como a origem. */
+function Combustivel({ saida }: { saida: SaidaRecente }) {
+  return (
+    <div>
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+        style={{ background: `color-mix(in srgb, ${saida.corCombustivel} 14%, transparent)`, color: saida.corCombustivel }}
+      >
+        <span className="size-1.5 rounded-full" style={{ background: saida.corCombustivel }} />
+        {saida.combustivel}
+      </span>
+      {saida.obra ? <div className="mt-0.5 text-[10px] text-muted-foreground">{saida.obra}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * As colunas pelo modo. A ordem é a do calculo (mais recente primeiro), mas a lista é
+ * plana: ordenar por litros ou total não quebra nada.
+ */
+function colunasDoModo(proprios: boolean): ColumnDef<SaidaRecente, unknown>[] {
+  const dataHora: ColumnDef<SaidaRecente, unknown> = {
+    accessorKey: "data",
+    header: "Data/hora",
+    meta: { atomico: true },
+    cell: ({ row }) => (
+      <Link
+        href={linkDaSaida(row.original.id)}
+        className="text-legenda text-muted-foreground hover:text-foreground hover:underline"
+      >
+        {dataHoraDeParede(row.original.data)}
+      </Link>
+    ),
+  };
+  const operador: ColumnDef<SaidaRecente, unknown> = {
+    accessorKey: "operador",
+    header: proprios ? "Operador" : "Motorista",
+    meta: { naoTruncar: true },
+    cell: ({ row }) => <Operador nome={row.original.operador} />,
+  };
+  const consumidor: ColumnDef<SaidaRecente, unknown>[] = proprios
+    ? [
+        {
+          accessorKey: "consumidor",
+          header: "Equipamento",
+          meta: { celular: "titulo" },
+          cell: ({ row }) => (
+            <div>
+              <div className="font-medium text-foreground">{row.original.consumidor ?? "Equipamento não encontrado"}</div>
+              {row.original.codigo ? (
+                <div className="font-mono text-[10px] text-muted-foreground">{row.original.codigo}</div>
+              ) : null}
+            </div>
+          ),
+        },
+        operador,
+      ]
+    : [
+        {
+          accessorKey: "consumidor",
+          header: "Placa",
+          meta: { atomico: true, celular: "titulo" },
+          cell: ({ row }) =>
+            row.original.consumidor ? (
+              <span className="font-mono font-semibold text-foreground">{row.original.consumidor}</span>
+            ) : (
+              <span className="italic text-muted-foreground">Sem placa</span>
+            ),
+        },
+        operador,
+        {
+          accessorKey: "transportadora",
+          header: "Transportadora",
+          cell: ({ row }) => (
+            <span className="text-legenda text-muted-foreground">
+              {row.original.transportadora ?? <span className="italic">Sem transportadora</span>}
+            </span>
+          ),
+        },
+      ];
+  return [
+    dataHora,
+    ...consumidor,
+    {
+      accessorKey: "combustivel",
+      header: "Combustível",
+      meta: { naoTruncar: true },
+      cell: ({ row }) => <Combustivel saida={row.original} />,
+    },
+    {
+      accessorKey: "litros",
+      header: "Litros",
+      meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+      cell: ({ row }) => <span className="tabular-nums">{formatarLitros(row.original.litros)}</span>,
+    },
+    {
+      id: "precoPorLitro",
+      accessorFn: (s) => (s.litros > 0 ? s.valorTotal / s.litros : undefined),
+      header: "R$/L",
+      meta: { alinharDireita: true, atomico: true },
+      cell: ({ row }) => (
+        <span className="text-legenda tabular-nums text-muted-foreground">{precoPorLitro(row.original)}</span>
+      ),
+    },
+    {
+      accessorKey: "valorTotal",
+      header: "Total",
+      meta: { alinharDireita: true, atomico: true, celular: "valor" },
+      cell: ({ row }) => <MoneyText valor={row.original.valorTotal} className="font-semibold" />,
+    },
+  ];
 }
 
 /**
@@ -58,9 +173,10 @@ export function UltimosAbastecimentos({
   total: number;
   hrefVerTodos: string;
 }) {
+  const proprios = modo === "proprios";
+  const colunas = React.useMemo(() => colunasDoModo(proprios), [proprios]);
   if (saidas.length === 0) return null;
   const todasVisiveis = saidas.length === total;
-  const proprios = modo === "proprios";
 
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card">
@@ -79,80 +195,14 @@ export function UltimosAbastecimentos({
           </Link>
         ) : null}
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-detalhe">
-          <thead className="bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className={`${TH} whitespace-nowrap pl-4 text-left`}>Data/hora</th>
-              {proprios ? (
-                <>
-                  <th className={`${TH} text-left`}>Equipamento</th>
-                  <th className={`${TH} text-left`}>Operador</th>
-                </>
-              ) : (
-                <>
-                  <th className={`${TH} text-left`}>Placa</th>
-                  <th className={`${TH} text-left`}>Motorista</th>
-                  <th className={`${TH} text-left`}>Transportadora</th>
-                </>
-              )}
-              <th className={`${TH} text-left`}>Combustível</th>
-              <th className={`${TH} whitespace-nowrap text-right`}>Litros</th>
-              <th className={`${TH} whitespace-nowrap text-right`}>R$/L</th>
-              <th className={`${TH} whitespace-nowrap pr-4 text-right`}>Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {saidas.map((s) => (
-              <tr key={s.id} className="transition-colors hover:bg-muted/40">
-                <td className="whitespace-nowrap px-3 py-2.5 pl-4 text-legenda text-muted-foreground">
-                  <Link href={linkDaSaida(s.id)} className="hover:text-foreground hover:underline">
-                    {dataHoraDeParede(s.data)}
-                  </Link>
-                </td>
-                {proprios ? (
-                  <>
-                    <td className="px-3 py-2.5">
-                      <div className="font-medium text-foreground">{s.consumidor ?? "Equipamento não encontrado"}</div>
-                      {s.codigo ? <div className="font-mono text-[10px] text-muted-foreground">{s.codigo}</div> : null}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <Operador nome={s.operador} />
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-3 py-2.5 font-mono font-semibold text-foreground">
-                      {s.consumidor ?? <span className="font-sans font-normal italic text-muted-foreground">Sem placa</span>}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <Operador nome={s.operador} />
-                    </td>
-                    <td className="px-3 py-2.5 text-legenda text-muted-foreground">
-                      {s.transportadora ?? <span className="italic">Sem transportadora</span>}
-                    </td>
-                  </>
-                )}
-                <td className="px-3 py-2.5">
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                    style={{ background: `color-mix(in srgb, ${s.corCombustivel} 14%, transparent)`, color: s.corCombustivel }}
-                  >
-                    <span className="size-1.5 rounded-full" style={{ background: s.corCombustivel }} />
-                    {s.combustivel}
-                  </span>
-                  {s.obra ? <div className="mt-0.5 text-[10px] text-muted-foreground">{s.obra}</div> : null}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{formatarLitros(s.litros)}</td>
-                <td className="px-3 py-2.5 text-right text-legenda tabular-nums text-muted-foreground">{precoPorLitro(s)}</td>
-                <td className="px-3 py-2.5 pr-4 text-right font-semibold">
-                  <MoneyText valor={s.valorTotal} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Um id por modo: as colunas mudam (Equipamento/Operador ou Placa/Motorista/Transportadora). */}
+      <DataTable
+        idTabela={proprios ? "combustivel.painel.ultimos-abastecimentos.proprios" : "combustivel.painel.ultimos-abastecimentos.carretas"}
+        columns={colunas}
+        data={saidas}
+        idDaLinha={(s) => s.id}
+        semPaginacao
+      />
     </section>
   );
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { FileSpreadsheet, TriangleAlert, X } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
   BlocoFiltros,
+  DataTable,
   FiltroPeriodo,
   FiltroSelect,
   GradeKpis,
@@ -44,12 +46,6 @@ import {
 import type { SerieCarreta } from "./graficos-impl";
 import { RotasCarretas } from "./rotas-carretas";
 
-const TH = "px-3 py-2 font-medium";
-const TD = "px-3 py-1.5";
-const LINHA = "border-b border-border last:border-b-0";
-const RODAPE = "border-t-2 border-border bg-surface font-semibold";
-const SECAO = "border-t border-border bg-surface/60 text-legenda uppercase tracking-wide text-muted-foreground";
-
 function numero(valor: number, casas = 0): string {
   return valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 }
@@ -61,14 +57,6 @@ function porcento(valor: number | null): string {
 function Dinheiro({ valor, destacarSinal = false }: { valor: number | null; destacarSinal?: boolean }) {
   if (valor === null) return <span className="text-muted-foreground">Sem base</span>;
   return <MoneyText valor={valor} className={destacarSinal && valor < 0 ? "text-status-rejeitado" : undefined} />;
-}
-
-function Tabela({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="overflow-x-auto rounded-md border border-border bg-card">
-      <table className="w-full text-detalhe">{children}</table>
-    </div>
-  );
 }
 
 /**
@@ -199,152 +187,235 @@ const BLOCOS: Bloco[] = [
   },
 ];
 
+/** Linha do relatório: o título do bloco (linha inteira) ou uma métrica. */
+type LinhaRelatorio = { tipo: "secao"; titulo: string } | { tipo: "metrica"; metrica: Metrica };
+
+const LINHAS_RELATORIO: LinhaRelatorio[] = BLOCOS.flatMap((bloco) => [
+  { tipo: "secao" as const, titulo: bloco.titulo },
+  ...bloco.metricas.map((metrica) => ({ tipo: "metrica" as const, metrica })),
+]);
+
 function RelatorioPorCarreta({ painel }: { painel: PainelCarretas }) {
-  const colunas = painel.desempenhos.length > 1 ? [...painel.desempenhos, painel.total] : painel.desempenhos;
-  return (
-    <Tabela>
-      <thead>
-        <tr className="border-b border-border text-legenda text-muted-foreground">
-          <th className={cn(TH, "text-left")}>Indicador</th>
-          {colunas.map((d) => (
-            <th key={d.chave} className={cn(TH, "text-right whitespace-nowrap", d.chave === "total" && "text-foreground")}>
-              {d.chave === "total" ? "Total" : (d.placa ?? d.nome)}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {BLOCOS.map((bloco) => (
-          <React.Fragment key={bloco.titulo}>
-            <tr className={SECAO}>
-              <td className={cn(TD, "py-1")} colSpan={colunas.length + 1}>
-                {bloco.titulo}
-              </td>
-            </tr>
-            {bloco.metricas.map((m) => (
-              <tr key={m.rotulo} className={cn(LINHA, m.destaque && "font-semibold")}>
-                <td className={cn(TD, "whitespace-nowrap")}>{m.rotulo}</td>
-                {colunas.map((d) => (
-                  <td key={d.chave} className={cn(TD, "text-right tabular-nums whitespace-nowrap", d.chave === "total" && "bg-surface/60")}>
-                    {m.valor(d)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </React.Fragment>
-        ))}
-      </tbody>
-    </Tabela>
+  const desempenhos = React.useMemo(
+    () => (painel.desempenhos.length > 1 ? [...painel.desempenhos, painel.total] : painel.desempenhos),
+    [painel.desempenhos, painel.total],
   );
+  // Métricas nas linhas e carretas nas colunas, numa ordem que é a do relatório:
+  // nenhuma coluna ordena (misturaria métrica de um bloco com a de outro).
+  const colunas = React.useMemo<ColumnDef<LinhaRelatorio, unknown>[]>(
+    () => [
+      {
+        id: "indicador",
+        header: "Indicador",
+        size: 260,
+        enableSorting: false,
+        meta: { celular: "titulo", fixa: true },
+        cell: ({ row }) => {
+          const r = row.original;
+          if (r.tipo !== "metrica") return null;
+          return <span className={cn("block text-left", r.metrica.destaque && "font-semibold")}>{r.metrica.rotulo}</span>;
+        },
+      },
+      ...desempenhos.map<ColumnDef<LinhaRelatorio, unknown>>((d) => {
+        const ehTotal = d.chave === "total";
+        const rotulo = ehTotal ? "Total" : (d.placa ?? d.nome);
+        return {
+          id: ehTotal ? "total" : `carreta:${d.chave}`,
+          header: () => <span className={cn(ehTotal && "text-foreground")}>{rotulo}</span>,
+          size: 150,
+          enableSorting: false,
+          meta: { alinharDireita: true, atomico: true, rotulo },
+          cell: ({ row }) => {
+            const r = row.original;
+            if (r.tipo !== "metrica") return null;
+            return <span className={cn("tabular-nums", r.metrica.destaque && "font-semibold")}>{r.metrica.valor(d)}</span>;
+          },
+        };
+      }),
+    ],
+    [desempenhos],
+  );
+  return (
+    <DataTable
+      idTabela="frete.carretas-emt.relatorio"
+      columns={colunas}
+      data={LINHAS_RELATORIO}
+      semPaginacao
+      linhaInteira={(r) =>
+        r.tipo === "secao" ? (
+          <span className="block text-left text-legenda uppercase tracking-wide text-muted-foreground">{r.titulo}</span>
+        ) : null
+      }
+      classeDaLinha={(r) => (r.tipo === "secao" ? "bg-surface/60 hover:bg-surface/60" : undefined)}
+    />
+  );
+}
+
+/** Coluna de dinheiro das tabelas do painel, alinhada à direita. */
+function colunaDinheiro<T>(
+  id: string,
+  header: string,
+  valor: (registro: T) => number | null,
+  opcoes: { destacarSinal?: boolean; ordenar?: boolean; celular?: "valor" | "destaque" } = {},
+): ColumnDef<T, unknown> {
+  return {
+    id,
+    header,
+    accessorFn: (registro) => valor(registro) ?? -Infinity,
+    size: 150,
+    enableSorting: opcoes.ordenar ?? false,
+    meta: { alinharDireita: true, atomico: true, celular: opcoes.celular },
+    cell: ({ row }) => <Dinheiro valor={valor(row.original)} destacarSinal={opcoes.destacarSinal} />,
+  };
 }
 
 function TabelaMensal({ painel }: { painel: PainelCarretas }) {
   const t = painel.total;
+  // Mês a mês é cronológico (o acumulado só faz sentido nessa ordem): não ordena.
+  const colunas = React.useMemo<ColumnDef<LinhaMensal, unknown>[]>(
+    () => [
+      {
+        id: "mes",
+        header: "Mês",
+        size: 120,
+        enableSorting: false,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => <span className="font-medium">{row.original.rotulo}</span>,
+      },
+      {
+        id: "viagens",
+        header: "Viagens",
+        size: 100,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <span className="tabular-nums">{numero(row.original.viagens)}</span>,
+      },
+      {
+        id: "toneladas",
+        header: "Toneladas",
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <span className="tabular-nums">{numero(row.original.toneladas, 2)}</span>,
+      },
+      colunaDinheiro<LinhaMensal>("producao", "Produção", (m) => m.producao),
+      colunaDinheiro<LinhaMensal>("custoOperacional", "Custo operacional", (m) => m.custoOperacional),
+      colunaDinheiro<LinhaMensal>("resultadoOperacional", "Resultado operacional", (m) => m.resultadoOperacional, { destacarSinal: true }),
+      colunaDinheiro<LinhaMensal>("aquisicaoParcelas", "Aquisição e parcelas", (m) => m.parcelas + m.investimento),
+      colunaDinheiro<LinhaMensal>("resultadoFinal", "Resultado final", (m) => m.resultadoFinal, { destacarSinal: true, celular: "valor" }),
+      colunaDinheiro<LinhaMensal>("acumulado", "Acumulado", (m) => m.resultadoAcumulado, { destacarSinal: true }),
+    ],
+    [],
+  );
   return (
-    <Tabela>
-      <thead>
-        <tr className="border-b border-border text-legenda text-muted-foreground">
-          {["Mês", "Viagens", "Toneladas", "Produção", "Custo operacional", "Resultado operacional", "Aquisição e parcelas", "Resultado final", "Acumulado"].map(
-            (rotulo, i) => (
-              <th key={rotulo} className={cn(TH, i === 0 ? "text-left" : "text-right", "whitespace-nowrap")}>
-                {rotulo}
-              </th>
-            ),
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {painel.meses.map((m) => (
-          <tr key={m.mes} className={LINHA}>
-            <td className={cn(TD, "font-medium")}>{m.rotulo}</td>
-            <td className={cn(TD, "text-right tabular-nums")}>{numero(m.viagens)}</td>
-            <td className={cn(TD, "text-right tabular-nums")}>{numero(m.toneladas, 2)}</td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.producao} /></td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.custoOperacional} /></td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.resultadoOperacional} destacarSinal /></td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.parcelas + m.investimento} /></td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.resultadoFinal} destacarSinal /></td>
-            <td className={cn(TD, "text-right")}><Dinheiro valor={m.resultadoAcumulado} destacarSinal /></td>
-          </tr>
-        ))}
-        <tr className={RODAPE}>
-          <td className={TD}>Total</td>
-          <td className={cn(TD, "text-right tabular-nums")}>{numero(t.viagens)}</td>
-          <td className={cn(TD, "text-right tabular-nums")}>{numero(t.toneladas, 2)}</td>
-          <td className={cn(TD, "text-right")}><Dinheiro valor={t.producao} /></td>
-          <td className={cn(TD, "text-right")}><Dinheiro valor={t.custoOperacional} /></td>
-          <td className={cn(TD, "text-right")}><Dinheiro valor={t.resultadoOperacional} destacarSinal /></td>
-          <td className={cn(TD, "text-right")}><Dinheiro valor={t.parcelas + t.investimento} /></td>
-          <td className={cn(TD, "text-right")}><Dinheiro valor={t.resultadoFinal} destacarSinal /></td>
-          <td className={TD} />
-        </tr>
-      </tbody>
-    </Tabela>
+    <DataTable
+      idTabela="frete.carretas-emt.mensal"
+      columns={colunas}
+      data={painel.meses}
+      idDaLinha={(m) => m.mes}
+      semPaginacao
+      rodape={{
+        mes: <span className="font-semibold">Total</span>,
+        viagens: <span className="font-semibold tabular-nums">{numero(t.viagens)}</span>,
+        toneladas: <span className="font-semibold tabular-nums">{numero(t.toneladas, 2)}</span>,
+        producao: <span className="font-semibold"><Dinheiro valor={t.producao} /></span>,
+        custoOperacional: <span className="font-semibold"><Dinheiro valor={t.custoOperacional} /></span>,
+        resultadoOperacional: <span className="font-semibold"><Dinheiro valor={t.resultadoOperacional} destacarSinal /></span>,
+        aquisicaoParcelas: <span className="font-semibold"><Dinheiro valor={t.parcelas + t.investimento} /></span>,
+        resultadoFinal: <span className="font-semibold"><Dinheiro valor={t.resultadoFinal} destacarSinal /></span>,
+      }}
+    />
   );
 }
+
+type LinhaContrato = PainelCarretas["contratos"][number];
+
+const COLUNAS_CONTRATOS: ColumnDef<LinhaContrato, unknown>[] = [
+  {
+    id: "lancamento",
+    header: "Lançamento",
+    accessorFn: (k) => k.numero,
+    size: 140,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => <span className="font-mono">{row.original.numero}</span>,
+  },
+  { id: "credor", header: "Credor", accessorFn: (k) => k.credor, size: 200 },
+  {
+    id: "carretas",
+    header: "Carretas",
+    accessorFn: (k) => (k.placas.length > 0 ? k.placas.join(", ") : "Frota"),
+    size: 160,
+    cell: ({ row }) => (
+      <span className="font-mono">{row.original.placas.length > 0 ? row.original.placas.join(", ") : "Frota"}</span>
+    ),
+  },
+  colunaDinheiro<LinhaContrato>("contratado", "Contratado", (k) => k.contratado, { ordenar: true }),
+  colunaDinheiro<LinhaContrato>("pago", "Pago", (k) => k.pago, { ordenar: true }),
+  colunaDinheiro<LinhaContrato>("saldo", "Saldo devedor", (k) => k.saldo, { ordenar: true, celular: "valor" }),
+  {
+    id: "parcelasPagas",
+    header: "Parcelas pagas",
+    accessorFn: (k) => k.parcelasPagas,
+    size: 130,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <span className="tabular-nums">{`${row.original.parcelasPagas} de ${row.original.parcelasTotal}`}</span>,
+  },
+  colunaDinheiro<LinhaContrato>("proximaParcela", "Próxima parcela", (k) => k.proximaParcela, { ordenar: true }),
+];
 
 function TabelaContratos({ painel }: { painel: PainelCarretas }) {
   if (painel.contratos.length === 0) return <p className="py-2 text-detalhe text-muted-foreground">Nenhum financiamento nas carretas escolhidas</p>;
   return (
-    <Tabela>
-      <thead>
-        <tr className="border-b border-border text-legenda text-muted-foreground">
-          {["Lançamento", "Credor", "Carretas", "Contratado", "Pago", "Saldo devedor", "Parcelas pagas", "Próxima parcela"].map((rotulo, i) => (
-            <th key={rotulo} className={cn(TH, i < 3 ? "text-left" : "text-right", "whitespace-nowrap")}>
-              {rotulo}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {painel.contratos.map((k) => (
-          <tr key={k.lancamentoId} className={LINHA}>
-            <td className={cn(TD, "font-mono")}>{k.numero}</td>
-            <td className={TD}>{k.credor}</td>
-            <td className={cn(TD, "font-mono")}>{k.placas.length > 0 ? k.placas.join(", ") : "Frota"}</td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.contratado} /></td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.pago} /></td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.saldo} /></td>
-            <td className={cn(TD, "text-right tabular-nums")}>{`${k.parcelasPagas} de ${k.parcelasTotal}`}</td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.proximaParcela} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </Tabela>
+    <DataTable
+      idTabela="frete.carretas-emt.financiamentos"
+      columns={COLUNAS_CONTRATOS}
+      data={painel.contratos}
+      idDaLinha={(k) => k.lancamentoId}
+      semPaginacao
+    />
   );
 }
 
+type LinhaCategoria = PainelCarretas["categorias"][number];
+
 function TabelaCategorias({ painel }: { painel: PainelCarretas }) {
-  if (painel.categorias.length === 0) return <p className="py-2 text-detalhe text-muted-foreground">Nenhum gasto lançado no período</p>;
   const total = painel.categorias.reduce((s, k) => s + Math.round(k.valor * 100), 0) / 100;
+  const colunas = React.useMemo<ColumnDef<LinhaCategoria, unknown>[]>(
+    () => [
+      { id: "categoria", header: "Categoria", accessorFn: (k) => k.categoria, size: 240, meta: { celular: "titulo" } },
+      {
+        id: "grupo",
+        header: "Grupo",
+        accessorFn: (k) => ROTULO_GRUPO[k.grupo],
+        size: 160,
+        cell: ({ row }) => <span className="text-muted-foreground">{ROTULO_GRUPO[row.original.grupo]}</span>,
+      },
+      colunaDinheiro<LinhaCategoria>("valor", "Lançado", (k) => k.valor, { ordenar: true, celular: "valor" }),
+      colunaDinheiro<LinhaCategoria>("pago", "Pago", (k) => k.pago, { ordenar: true }),
+      {
+        id: "percentual",
+        header: "% do gasto",
+        accessorFn: (k) => k.valor,
+        size: 120,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <span className="tabular-nums">{porcento(total > 0 ? row.original.valor / total : null)}</span>,
+      },
+    ],
+    [total],
+  );
+  if (painel.categorias.length === 0) return <p className="py-2 text-detalhe text-muted-foreground">Nenhum gasto lançado no período</p>;
   return (
-    <Tabela>
-      <thead>
-        <tr className="border-b border-border text-legenda text-muted-foreground">
-          {["Categoria", "Grupo", "Lançado", "Pago", "% do gasto"].map((rotulo, i) => (
-            <th key={rotulo} className={cn(TH, i < 2 ? "text-left" : "text-right")}>
-              {rotulo}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {painel.categorias.map((k) => (
-          <tr key={k.categoria} className={LINHA}>
-            <td className={TD}>{k.categoria}</td>
-            <td className={cn(TD, "text-muted-foreground")}>{ROTULO_GRUPO[k.grupo]}</td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.valor} /></td>
-            <td className={cn(TD, "text-right")}><MoneyText valor={k.pago} /></td>
-            <td className={cn(TD, "text-right tabular-nums")}>{porcento(total > 0 ? k.valor / total : null)}</td>
-          </tr>
-        ))}
-        <tr className={RODAPE}>
-          <td className={TD} colSpan={2}>Total lançado no Financeiro</td>
-          <td className={cn(TD, "text-right")}><MoneyText valor={total} /></td>
-          <td className={TD} colSpan={2} />
-        </tr>
-      </tbody>
-    </Tabela>
+    <DataTable
+      idTabela="frete.carretas-emt.categorias"
+      columns={colunas}
+      data={painel.categorias}
+      idDaLinha={(k) => k.categoria}
+      semPaginacao
+      rodape={{
+        categoria: <span className="font-semibold">Total lançado no Financeiro</span>,
+        valor: <MoneyText valor={total} className="font-semibold" />,
+      }}
+    />
   );
 }
 

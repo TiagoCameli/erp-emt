@@ -85,6 +85,8 @@ export function ImportarCadastro({
         Importar planilha
       </Button>
       <ImportDialog
+        // Um ajuste de colunas por cadastro: a rota do modelo já nomeia o cadastro.
+        idTabela={`${modeloHref.replace(/^\/|\/modelo$/g, "").replaceAll("/", ".")}.importacao`}
         aberto={aberto}
         onAbertoChange={setAberto}
         titulo={titulo}

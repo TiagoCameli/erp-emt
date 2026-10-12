@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ClipboardPaste, Plus, Trash2 } from "lucide-react";
 
-import { InputMoeda, MoneyText } from "@/components/canonicos";
+import { DataTable, InputMoeda, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +16,13 @@ export interface LinhaEditavel {
   vencimento: string;
   valores: [string, string, string];
 }
+
+/** A linha na tabela: a posição (que numera a parcela) e as ações sobre ela. */
+type LinhaTabela = LinhaEditavel & {
+  indice: number;
+  mudar: (parcial: Partial<LinhaEditavel>) => void;
+  tirar: () => void;
+};
 
 /** Linha lida, com os valores em número, na ordem das colunas. */
 export interface LinhaLida {
@@ -65,9 +73,105 @@ export function CronogramaEditor({ colunas, linhas, onLinhasChange, alvo, disabl
   const somas = [0, 1, 2].map((i) => somarCentavos(lidas.map((l) => l.valores[i])));
   const diferenca = alvo ? somarCentavos([alvo.valor, -somas[0]]) : 0;
 
-  function mudar(indice: number, parcial: Partial<LinhaEditavel>) {
-    onLinhasChange(linhas.map((l, i) => (i === indice ? { ...l, ...parcial } : l)));
-  }
+  // Cada linha leva as próprias ações, montadas com as linhas desta
+  // renderização. Assim as colunas não dependem de `linhas` e não são recriadas
+  // a cada tecla: coluna nova trocaria a função da célula, o React remontaria o
+  // campo e o foco sairia no meio da digitação.
+  const dados = React.useMemo<LinhaTabela[]>(
+    () =>
+      linhas.map((l, i) => ({
+        ...l,
+        indice: i,
+        mudar: (parcial: Partial<LinhaEditavel>) =>
+          onLinhasChange(linhas.map((outra, j) => (j === i ? { ...outra, ...parcial } : outra))),
+        tirar: () => onLinhasChange(linhas.filter((_, j) => j !== i)),
+      })),
+    [linhas, onLinhasChange],
+  );
+
+  const [rotulo0, rotulo1, rotulo2] = colunas;
+  // Sem ordenação: a ordem é a das parcelas. A linha não tem id próprio (é
+  // digitada), então a posição identifica a linha, como antes.
+  const colunasTabela = React.useMemo<ColumnDef<LinhaTabela, unknown>[]>(() => {
+    const rotulos = [rotulo0, rotulo1, rotulo2] as const;
+
+    const valores: ColumnDef<LinhaTabela, unknown>[] = [0, 1, 2].map((c) => ({
+      id: `valor${c}`,
+      header: rotulos[c],
+      size: 150,
+      enableSorting: false,
+      // O campo monta o próprio layout; o corte de uma linha cortaria o anel de foco.
+      meta: { alinharDireita: true, naoTruncar: true, rotulo: rotulos[c] },
+      cell: ({ row }) => {
+        const l = row.original;
+        return (
+          <InputMoeda
+            ariaLabel={`${rotulos[c]} da parcela ${l.indice + 1}`}
+            valor={l.valores[c]}
+            onValorChange={(v) => {
+              const novos = [...l.valores] as LinhaEditavel["valores"];
+              novos[c] = v;
+              l.mudar({ valores: novos });
+            }}
+            disabled={disabled}
+            className="h-8 text-right"
+          />
+        );
+      },
+    }));
+
+    return [
+      {
+        id: "numero",
+        header: "Nº",
+        size: 60,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "Nº", celular: "titulo" },
+        cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.indice + 1}</span>,
+      },
+      {
+        id: "vencimento",
+        header: "Vencimento",
+        size: 160,
+        enableSorting: false,
+        meta: { naoTruncar: true, rotulo: "Vencimento" },
+        cell: ({ row }) => (
+          <Input
+            type="date"
+            aria-label={`Vencimento da parcela ${row.original.indice + 1}`}
+            value={row.original.vencimento}
+            onChange={(e) => row.original.mudar({ vencimento: e.target.value })}
+            disabled={disabled}
+            className="h-8"
+          />
+        ),
+      },
+      ...valores,
+      ...(disabled
+        ? []
+        : [
+            {
+              id: "remover",
+              header: "",
+              size: 48,
+              enableSorting: false,
+              meta: { fixa: true, naoTruncar: true, rotulo: "Tirar parcela" },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-7"
+                  aria-label={`Tirar a parcela ${row.original.indice + 1}`}
+                  onClick={row.original.tirar}
+                >
+                  <Trash2 />
+                </Button>
+              ),
+            } satisfies ColumnDef<LinhaTabela, unknown>,
+          ]),
+    ];
+  }, [rotulo0, rotulo1, rotulo2, disabled]);
 
   function aplicarColagem() {
     const { linhas: novas, erros } = lerCronogramaColado(textoColado);
@@ -133,89 +237,19 @@ export function CronogramaEditor({ colunas, linhas, onLinhasChange, alvo, disabl
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-detalhe">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th className="h-9 w-10 px-2 text-right font-medium">Nº</th>
-              <th className="h-9 px-2 text-left font-medium">Vencimento</th>
-              {colunas.map((c) => (
-                <th key={c} className="h-9 px-2 text-right font-medium">
-                  {c}
-                </th>
-              ))}
-              <th className="w-10" />
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">
-                  Nenhuma parcela. Cole do banco ou adicione uma a uma.
-                </td>
-              </tr>
-            ) : (
-              linhas.map((l, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">{i + 1}</td>
-                  <td className="px-2 py-1">
-                    <Input
-                      type="date"
-                      aria-label={`Vencimento da parcela ${i + 1}`}
-                      value={l.vencimento}
-                      onChange={(e) => mudar(i, { vencimento: e.target.value })}
-                      disabled={disabled}
-                      className="h-8"
-                    />
-                  </td>
-                  {[0, 1, 2].map((c) => (
-                    <td key={c} className="px-2 py-1">
-                      <InputMoeda
-                        ariaLabel={`${colunas[c]} da parcela ${i + 1}`}
-                        valor={l.valores[c]}
-                        onValorChange={(v) => {
-                          const valores = [...l.valores] as LinhaEditavel["valores"];
-                          valores[c] = v;
-                          mudar(i, { valores });
-                        }}
-                        disabled={disabled}
-                        className="h-8 text-right"
-                      />
-                    </td>
-                  ))}
-                  <td className="px-1 py-1">
-                    {disabled ? null : (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="size-7"
-                        aria-label={`Tirar a parcela ${i + 1}`}
-                        onClick={() => onLinhasChange(linhas.filter((_, j) => j !== i))}
-                      >
-                        <Trash2 />
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-border bg-surface">
-              <td colSpan={2} className="px-2 py-2 font-semibold">
-                {lidas.length} parcela(s)
-              </td>
-              {somas.map((s, i) => (
-                <td key={i} className="px-2 py-2 text-right">
-                  <MoneyText valor={s} className="font-semibold" />
-                </td>
-              ))}
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+      <DataTable
+        idTabela="financeiro.dividas.cronograma.edicao"
+        columns={colunasTabela}
+        data={dados}
+        semPaginacao
+        emptyState="Nenhuma parcela. Cole do banco ou adicione uma a uma."
+        rodape={{
+          vencimento: <span className="font-semibold">{lidas.length} parcela(s)</span>,
+          valor0: <MoneyText valor={somas[0]} className="font-semibold" />,
+          valor1: <MoneyText valor={somas[1]} className="font-semibold" />,
+          valor2: <MoneyText valor={somas[2]} className="font-semibold" />,
+        }}
+      />
 
       {alvo ? (
         <p

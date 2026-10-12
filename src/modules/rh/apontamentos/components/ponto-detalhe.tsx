@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import { CheckCircle2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
@@ -9,6 +10,7 @@ import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import {
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   GradeKpis,
   PageHeader,
   StatusBadge,
@@ -110,6 +112,122 @@ export function PontoDetalheView({
   const temApontamentos = ponto.apontamentos.length > 0;
   const podeAprovarAgora = podeAprovar && aberto;
   const podeReabrirAgora = podeAprovar && !aberto;
+
+  /** Lista plana do dia: ordena por coluna. */
+  const colunas = React.useMemo<ColumnDef<PontoApontamento, unknown>[]>(() => {
+    const base: ColumnDef<PontoApontamento, unknown>[] = [
+      {
+        id: "colaborador",
+        header: "Colaborador",
+        accessorFn: (linha) => linha.colaboradorNome,
+        size: 260,
+        meta: { celular: "titulo", fixa: true },
+        cell: ({ row }) => {
+          const linha = row.original;
+          return (
+            <>
+              {linha.colaboradorNome}
+              {linha.colaboradorFuncao ? (
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({linha.colaboradorFuncao})
+                </span>
+              ) : null}
+            </>
+          );
+        },
+      },
+      {
+        id: "horasNormais",
+        header: "Horas normais",
+        accessorFn: (linha) => linha.horasNormais,
+        size: 130,
+        meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarQuantidade(row.original.horasNormais)}
+          </span>
+        ),
+      },
+      {
+        id: "horasExtras",
+        header: "Horas extras",
+        accessorFn: (linha) => linha.horasExtras,
+        size: 130,
+        meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarQuantidade(row.original.horasExtras)}
+          </span>
+        ),
+      },
+      {
+        id: "tipo",
+        header: "Tipo",
+        accessorFn: (linha) => ROTULO_TIPO_APONTAMENTO[linha.tipo],
+        size: 130,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => (
+          <StatusBadge
+            status="rascunho"
+            rotulo={ROTULO_TIPO_APONTAMENTO[row.original.tipo]}
+          />
+        ),
+      },
+      {
+        id: "observacao",
+        header: "Observação",
+        accessorFn: (linha) => linha.observacao ?? "",
+        size: 240,
+        cell: ({ row }) =>
+          row.original.observacao ? (
+            <span className="text-muted-foreground">
+              {row.original.observacao}
+            </span>
+          ) : (
+            <CelulaVazia />
+          ),
+      },
+    ];
+    if (!aceitaLancamentos) return base;
+    base.push({
+      id: "acoes",
+      header: "",
+      size: 90,
+      enableSorting: false,
+      meta: { alinharDireita: true, fixa: true, rotulo: "Ações", naoTruncar: true },
+      cell: ({ row }) => {
+        const linha = row.original;
+        return (
+          <div className="flex justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Editar apontamento"
+              className="text-muted-foreground"
+              onClick={() => abrirEdicao(linha)}
+            >
+              <Pencil />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Remover apontamento"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => aoRemover(linha.id)}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        );
+      },
+    });
+    return base;
+    // abrirEdicao e aoRemover só leem ponto.id e os setters, estáveis.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aceitaLancamentos]);
 
   function abrirNovo() {
     setEmEdicao(undefined);
@@ -264,153 +382,16 @@ export function PontoDetalheView({
               Nenhum colaborador apontado neste dia.
             </p>
           ) : (
-            <>
-              {/* Mobile: cartões por colaborador. */}
-              <ul className="flex flex-col gap-2 sm:hidden">
-                {ponto.apontamentos.map((linha) => (
-                  <li
-                    key={linha.id}
-                    className="rounded-md border border-border p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-medium">{linha.colaboradorNome}</p>
-                        {linha.colaboradorFuncao ? (
-                          <p className="text-legenda text-muted-foreground">
-                            {linha.colaboradorFuncao}
-                          </p>
-                        ) : null}
-                      </div>
-                      <StatusBadge
-                        status="rascunho"
-                        rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
-                      />
-                    </div>
-                    <div className="mt-2 flex items-center gap-4 text-detalhe tabular-nums">
-                      <span>
-                        <span className="text-muted-foreground">Normais </span>
-                        {formatarQuantidade(linha.horasNormais)} h
-                      </span>
-                      <span>
-                        <span className="text-muted-foreground">Extras </span>
-                        {formatarQuantidade(linha.horasExtras)} h
-                      </span>
-                    </div>
-                    {linha.observacao ? (
-                      <p className="mt-1 text-legenda text-muted-foreground">
-                        {linha.observacao}
-                      </p>
-                    ) : null}
-                    {aceitaLancamentos ? (
-                      <div className="mt-2 flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Editar apontamento"
-                          className="text-muted-foreground"
-                          onClick={() => abrirEdicao(linha)}
-                        >
-                          <Pencil />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Remover apontamento"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => aoRemover(linha.id)}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-
-              {/* Desktop: tabela. */}
-              <div className="hidden overflow-x-auto rounded-md border border-border sm:block">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    {/* Centralizado é o padrão de tabela do app (ver DataTable);
-                        só dinheiro, quantidade, total, percentual e horas vão à
-                        direita. */}
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-center font-medium">
-                        Colaborador
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Horas normais
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Horas extras
-                      </th>
-                      <th className="px-3 py-2 text-center font-medium">Tipo</th>
-                      {aceitaLancamentos ? (
-                        <th className="px-3 py-2 text-right font-medium" />
-                      ) : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ponto.apontamentos.map((linha) => (
-                      <tr
-                        key={linha.id}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-2 text-center">
-                          {linha.colaboradorNome}
-                          {linha.colaboradorFuncao ? (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              ({linha.colaboradorFuncao})
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatarQuantidade(linha.horasNormais)}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {formatarQuantidade(linha.horasExtras)}
-                        </td>
-                        <td className="px-3 py-2 text-center">
-                          <StatusBadge
-                            status="rascunho"
-                            rotulo={ROTULO_TIPO_APONTAMENTO[linha.tipo]}
-                          />
-                        </td>
-                        {aceitaLancamentos ? (
-                          <td className="px-3 py-2 text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Editar apontamento"
-                                className="text-muted-foreground"
-                                onClick={() => abrirEdicao(linha)}
-                              >
-                                <Pencil />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label="Remover apontamento"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={() => aoRemover(linha.id)}
-                              >
-                                <Trash2 />
-                              </Button>
-                            </div>
-                          </td>
-                        ) : null}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            // Abaixo do md o DataTable vira um card por colaborador (tela de
+            // campo): nome e função no título, o tipo embaixo, as horas e a
+            // observação em seguida, e editar/remover no canto.
+            <DataTable
+              idTabela="rh.apontamentos.detalhe.apontamentos"
+              columns={colunas}
+              data={ponto.apontamentos}
+              idDaLinha={(linha) => linha.id}
+              semPaginacao
+            />
           )}
         </Secao>
       </GradeKpis>

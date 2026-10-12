@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   CalendarClock,
   ExternalLink,
@@ -20,6 +21,7 @@ import {
   CelulaVazia,
   Combobox,
   ConfirmDialog,
+  DataTable,
   EmptyState,
   MoneyText,
   PageHeader,
@@ -59,6 +61,8 @@ import type {
   FormaPagamentoOpcao,
   FornecedorOpcao,
   LancamentoDetalhe,
+  ParcelaLancamento,
+  RateioLancamento,
 } from "@/modules/financeiro/lancamentos/queries";
 
 /** Card de seção do detalhe (mesmo tratamento visual do detalhe da OC). */
@@ -169,6 +173,34 @@ export interface LancamentoDetalheViewProps {
  * diferente de 'manual' (ex: vindos de uma OC) ou com alguma parcela já
  * aprovada ou paga: aprovado se edita desaprovando primeiro.
  */
+/** Rateio por centro: lista plana, pode ordenar. */
+const COLUNAS_RATEIO: ColumnDef<RateioLancamento, unknown>[] = [
+  {
+    id: "centroCusto",
+    accessorFn: (rateio) => rateio.centroCustoNome,
+    header: "Centro de custo",
+    size: 320,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => (
+      <>
+        {row.original.centroCustoCodigo ? (
+          <span className="codigo-doc mr-1.5">
+            {row.original.centroCustoCodigo}
+          </span>
+        ) : null}
+        {row.original.centroCustoNome}
+      </>
+    ),
+  },
+  {
+    accessorKey: "valor",
+    header: "Valor",
+    size: 150,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+  },
+];
+
 /**
  * As retenções na ordem da nota fiscal, com o rótulo que o papel usa. Lista
  * própria e não `CAMPOS_RETENCAO` porque aqui as chaves são as do
@@ -233,20 +265,172 @@ export function LancamentoDetalheView({
   }
 
   // Caminho de volta da revisão: quem corrigiu devolve a parcela para a fila.
-  async function aoReenviar(parcelaId: string) {
-    setReenviando(parcelaId);
-    try {
-      const resultado = await reenviarParcela(parcelaId);
-      if ("erro" in resultado) {
-        toast.error(resultado.erro);
-        return;
+  const aoReenviar = React.useCallback(
+    async (parcelaId: string) => {
+      setReenviando(parcelaId);
+      try {
+        const resultado = await reenviarParcela(parcelaId);
+        if ("erro" in resultado) {
+          toast.error(resultado.erro);
+          return;
+        }
+        toast.success("Parcela reenviada para aprovação");
+        router.refresh();
+      } finally {
+        setReenviando(null);
       }
-      toast.success("Parcela reenviada para aprovação");
-      router.refresh();
-    } finally {
-      setReenviando(null);
-    }
-  }
+    },
+    [router],
+  );
+
+  // Parcelas na ordem do cronograma: a ordem é a informação, nenhuma coluna
+  // ordena. Centralizado é o padrão de tabela do app; só dinheiro vai à direita.
+  const colunasParcelas = React.useMemo<
+    ColumnDef<ParcelaLancamento, unknown>[]
+  >(
+    () => [
+      {
+        id: "numeroParcela",
+        header: "#",
+        size: 60,
+        enableSorting: false,
+        meta: { rotulo: "Parcela", atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">{row.original.numeroParcela}</span>
+        ),
+      },
+      {
+        id: "dataVencimento",
+        header: "Vencimento",
+        size: 120,
+        enableSorting: false,
+        meta: { atomico: true, celular: "titulo" },
+        cell: ({ row }) =>
+          row.original.dataVencimento ? (
+            <span className="tabular-nums">
+              {formatarData(row.original.dataVencimento)}
+            </span>
+          ) : (
+            <CelulaVazia />
+          ),
+      },
+      {
+        id: "dataProgramada",
+        header: "Data programada",
+        size: 150,
+        enableSorting: false,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => {
+          const parcela = row.original;
+          return parcela.dataProgramada ? (
+            <span className="flex flex-col">
+              <span className="tabular-nums">
+                {formatarData(parcela.dataProgramada)}
+              </span>
+              {parcela.dataProgramadaOrigem ? (
+                <span className="text-legenda text-muted-foreground">
+                  {ROTULO_ORIGEM_DATA[parcela.dataProgramadaOrigem]}
+                </span>
+              ) : null}
+            </span>
+          ) : (
+            <CelulaVazia />
+          );
+        },
+      },
+      {
+        id: "conta",
+        header: "Conta",
+        size: 200,
+        enableSorting: false,
+        cell: ({ row }) => row.original.contaBancariaNome ?? <CelulaVazia />,
+      },
+      {
+        id: "dataPagamento",
+        header: "Pagamento",
+        size: 120,
+        enableSorting: false,
+        meta: { atomico: true },
+        cell: ({ row }) =>
+          row.original.dataPagamento ? (
+            <span className="tabular-nums">
+              {formatarData(row.original.dataPagamento)}
+            </span>
+          ) : (
+            <CelulaVazia />
+          ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        size: 140,
+        enableSorting: false,
+        meta: { naoTruncar: true, celular: "destaque" },
+        cell: ({ row }) => {
+          const infoParcela = STATUS_PARCELA[row.original.status];
+          return (
+            <StatusBadge
+              status={infoParcela.badge}
+              rotulo={infoParcela.rotulo}
+            />
+          );
+        },
+      },
+      {
+        id: "valor",
+        header: "Valor",
+        size: 170,
+        enableSorting: false,
+        meta: { alinharDireita: true, naoTruncar: true, celular: "valor" },
+        cell: ({ row }) => {
+          const parcela = row.original;
+          return (
+            <>
+              <MoneyText valor={parcela.valor} />
+              {/* Os ajustes só aparecem quando existem: linha
+                  extra em toda parcela viraria ruído numa coluna
+                  de dinheiro. Mostra a conta feita porque é o
+                  líquido que saiu da conta bancária — e é por isso
+                  que juros e despesas entram junto com o desconto:
+                  enquanto só o desconto aparecia aqui, uma parcela
+                  paga com multa era exibida pelo valor devido, sem
+                  nenhuma pista de que saiu mais dinheiro. */}
+              <ComposicaoDoLiquido
+                desconto={parcela.desconto}
+                juros={parcela.juros}
+                outrasDespesas={parcela.outrasDespesas}
+                valorLiquido={parcela.valorLiquido}
+              />
+            </>
+          );
+        },
+      },
+      {
+        id: "acao",
+        header: "",
+        size: 200,
+        enableSorting: false,
+        meta: { rotulo: "Reenviar", alinharDireita: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const parcela = row.original;
+          return parcela.status === "em_revisao" && podeEditar ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={reenviando === parcela.id}
+              onClick={() => void aoReenviar(parcela.id)}
+            >
+              {reenviando === parcela.id
+                ? "Reenviando..."
+                : "Reenviar para aprovação"}
+            </Button>
+          ) : null;
+        },
+      },
+    ],
+    [podeEditar, reenviando, aoReenviar],
+  );
   const [confirmarExcluir, setConfirmarExcluir] = React.useState(false);
   const [dialogMes, setDialogMes] = React.useState(false);
 
@@ -686,142 +870,19 @@ export function LancamentoDetalheView({
                   : ""}
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    {/* Centralizado é o padrão de tabela do app (ver
-                        DataTable); só dinheiro, quantidade, total, percentual e
-                        horas vão à direita. */}
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-center font-medium">#</th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Vencimento
-                      </th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Data programada
-                      </th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Conta
-                      </th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Pagamento
-                      </th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Status
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Valor
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lancamento.parcelas.map((parcela) => {
-                      const infoParcela = STATUS_PARCELA[parcela.status];
-                      return (
-                        <tr
-                          key={parcela.id}
-                          className="border-b border-border last:border-0"
-                        >
-                          <td className="px-3 py-2 text-center tabular-nums">
-                            {parcela.numeroParcela}
-                          </td>
-                          <td className="px-3 py-2 text-center tabular-nums">
-                            {parcela.dataVencimento ? (
-                              formatarData(parcela.dataVencimento)
-                            ) : (
-                              <CelulaVazia />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {parcela.dataProgramada ? (
-                              <span className="flex flex-col">
-                                <span className="tabular-nums">
-                                  {formatarData(parcela.dataProgramada)}
-                                </span>
-                                {parcela.dataProgramadaOrigem ? (
-                                  <span className="text-legenda text-muted-foreground">
-                                    {
-                                      ROTULO_ORIGEM_DATA[
-                                        parcela.dataProgramadaOrigem
-                                      ]
-                                    }
-                                  </span>
-                                ) : null}
-                              </span>
-                            ) : (
-                              <CelulaVazia />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            {parcela.contaBancariaNome ?? <CelulaVazia />}
-                          </td>
-                          <td className="px-3 py-2 text-center tabular-nums">
-                            {parcela.dataPagamento ? (
-                              formatarData(parcela.dataPagamento)
-                            ) : (
-                              <CelulaVazia />
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <StatusBadge
-                              status={infoParcela.badge}
-                              rotulo={infoParcela.rotulo}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            <MoneyText valor={parcela.valor} />
-                            {/* Os ajustes só aparecem quando existem: linha
-                                extra em toda parcela viraria ruído numa coluna
-                                de dinheiro. Mostra a conta feita porque é o
-                                líquido que saiu da conta bancária — e é por isso
-                                que juros e despesas entram junto com o desconto:
-                                enquanto só o desconto aparecia aqui, uma parcela
-                                paga com multa era exibida pelo valor devido, sem
-                                nenhuma pista de que saiu mais dinheiro. */}
-                            <ComposicaoDoLiquido
-                              desconto={parcela.desconto}
-                              juros={parcela.juros}
-                              outrasDespesas={parcela.outrasDespesas}
-                              valorLiquido={parcela.valorLiquido}
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            {parcela.status === "em_revisao" && podeEditar ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={reenviando === parcela.id}
-                                onClick={() => void aoReenviar(parcela.id)}
-                              >
-                                {reenviando === parcela.id
-                                  ? "Reenviando..."
-                                  : "Reenviar para aprovação"}
-                              </Button>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold">
-                      {/* colSpan 6: são 8 colunas (#, vencimento, programada,
-                          conta, pagamento, status, valor, ação). Com 5 o total
-                          caía embaixo de "Status", uma coluna à esquerda do
-                          dinheiro que ele soma. */}
-                      <td className="px-3 py-2 text-center" colSpan={6}>
-                        Total
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={lancamento.valor} />
-                      </td>
-                      <td className="px-3 py-2" />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable
+                idTabela="financeiro.lancamentos.detalhe.parcelas"
+                columns={colunasParcelas}
+                data={lancamento.parcelas}
+                idDaLinha={(parcela) => parcela.id}
+                semPaginacao
+                rodape={{
+                  numeroParcela: <span className="font-semibold">Total</span>,
+                  valor: (
+                    <MoneyText valor={lancamento.valor} className="font-semibold" />
+                  ),
+                }}
+              />
             )}
           </Secao>
 
@@ -857,50 +918,17 @@ export function LancamentoDetalheView({
             }
           >
             {lancamento.rateios.length > 0 ? (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-center font-medium">
-                        Centro de custo
-                      </th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Valor
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lancamento.rateios.map((rateio) => (
-                      <tr
-                        key={rateio.id}
-                        className="border-b border-border last:border-0"
-                      >
-                        <td className="px-3 py-2 text-center">
-                          {rateio.centroCustoCodigo ? (
-                            <span className="codigo-doc mr-1.5">
-                              {rateio.centroCustoCodigo}
-                            </span>
-                          ) : null}
-                          {rateio.centroCustoNome}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <MoneyText valor={rateio.valor} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold">
-                      <td className="px-3 py-2 text-center">
-                        Total do rateio
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={somaRateios} />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable
+                idTabela="financeiro.lancamentos.detalhe.rateio"
+                columns={COLUNAS_RATEIO}
+                data={lancamento.rateios}
+                idDaLinha={(rateio) => rateio.id}
+                semPaginacao
+                rodape={{
+                  centroCusto: <span className="font-semibold">Total do rateio</span>,
+                  valor: <MoneyText valor={somaRateios} className="font-semibold" />,
+                }}
+              />
             ) : (
               <p className="text-detalhe text-muted-foreground">
                 Sem rateio. O custo não foi distribuído por centro de custo.

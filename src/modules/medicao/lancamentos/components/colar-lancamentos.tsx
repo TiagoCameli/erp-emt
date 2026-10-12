@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { LoaderCircle } from "lucide-react";
 
+import { DataTable } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/canonicos/toast";
 import { formatarData } from "@/lib/formatadores";
@@ -134,10 +135,6 @@ export function ColarLancamentos({ aberto, onAbertoChange, contratoId, tipoLocal
     }
   }
 
-  function mudarMotivo(linha: number, motivo: string) {
-    setLinhas((atual) => (atual ?? []).map((p) => (p.linha === linha ? { ...p, motivoExcesso: motivo } : p)));
-  }
-
   function aplicarMotivoATodas() {
     setLinhas((atual) => (atual ?? []).map((p) => (p.excessoBanco ? { ...p, motivoExcesso: motivoParaTodas } : p)));
   }
@@ -176,10 +173,79 @@ export function ColarLancamentos({ aberto, onAbertoChange, contratoId, tipoLocal
     }
   }
 
-  function rotuloItem(itemId: string): string {
-    const servico = servicos.find((s) => s.itemId === itemId);
-    return servico ? `${servico.codigo} · ${servico.descricao}` : itemId;
-  }
+  // A prévia segue a ordem das linhas coladas: nenhuma coluna ordena, para a
+  // linha 3 do Excel continuar sendo a terceira aqui. Memorizadas porque a célula
+  // do motivo tem campo: coluna recriada a cada tecla remontaria o campo e
+  // tiraria o foco de quem digita.
+  const colunas = React.useMemo<ColumnDef<LinhaPrevia, unknown>[]>(() => {
+    const traco = <span className="text-muted-foreground">-</span>;
+    const rotuloDoItem = (itemId: string) => {
+      const servico = servicos.find((s) => s.itemId === itemId);
+      return servico ? `${servico.codigo} · ${servico.descricao}` : itemId;
+    };
+    const mudarMotivoDaLinha = (linha: number, motivo: string) =>
+      setLinhas((atual) => (atual ?? []).map((p) => (p.linha === linha ? { ...p, motivoExcesso: motivo } : p)));
+    return [
+      {
+        id: "linha",
+        header: "Linha",
+        size: 70,
+        enableSorting: false,
+        meta: { atomico: true, celular: "destaque" },
+        cell: ({ row }) => <span className="tabular-nums">{row.original.linha}</span>,
+      },
+      {
+        id: "data",
+        header: "Data",
+        size: 110,
+        enableSorting: false,
+        meta: { atomico: true },
+        cell: ({ row }) => (row.original.colada ? <span className="tabular-nums">{formatarData(row.original.colada.data)}</span> : traco),
+      },
+      {
+        id: "item",
+        header: "Item",
+        size: 224,
+        enableSorting: false,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => (row.original.colada ? rotuloDoItem(row.original.colada.itemId) : traco),
+      },
+      {
+        id: "quantidade",
+        header: "Quantidade",
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) =>
+          row.original.colada ? <span className="tabular-nums">{numeroExibicao(row.original.colada.quantidade)}</span> : traco,
+      },
+      {
+        id: "erro",
+        header: "Erro",
+        size: 260,
+        enableSorting: false,
+        // O campo do motivo monta o próprio layout; o corte de uma linha cortaria o anel de foco.
+        meta: { naoTruncar: true },
+        cell: ({ row }) => {
+          const p = row.original;
+          return (
+            <div className="text-left text-destructive">
+              {p.erroLocal ?? p.erroBanco ?? ""}
+              {p.excessoBanco ? (
+                <Input
+                  aria-label={`Motivo do excesso da linha ${p.linha}`}
+                  value={p.motivoExcesso}
+                  onChange={(e) => mudarMotivoDaLinha(p.linha, e.target.value)}
+                  disabled={gravando}
+                  className="mt-1"
+                />
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ];
+  }, [gravando, servicos]);
 
   return (
     <Dialog open={aberto} onOpenChange={handleAbertoChange}>
@@ -213,43 +279,13 @@ export function ColarLancamentos({ aberto, onAbertoChange, contratoId, tipoLocal
                 </Button>
               </div>
             ) : null}
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-center">Linha</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Quantidade</TableHead>
-                  <TableHead>Erro</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {linhas.map((p) => (
-                  <TableRow key={p.linha} data-linha={p.linha}>
-                    <TableCell className="text-center tabular-nums">{p.linha}</TableCell>
-                    <TableCell className="tabular-nums">{p.colada ? formatarData(p.colada.data) : <span className="text-muted-foreground">-</span>}</TableCell>
-                    <TableCell className="max-w-56 truncate">
-                      {p.colada ? rotuloItem(p.colada.itemId) : <span className="text-muted-foreground">-</span>}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.colada ? numeroExibicao(p.colada.quantidade) : <span className="text-muted-foreground">-</span>}
-                    </TableCell>
-                    <TableCell className="text-destructive">
-                      {p.erroLocal ?? p.erroBanco ?? ""}
-                      {p.excessoBanco ? (
-                        <Input
-                          aria-label={`Motivo do excesso da linha ${p.linha}`}
-                          value={p.motivoExcesso}
-                          onChange={(e) => mudarMotivo(p.linha, e.target.value)}
-                          disabled={gravando}
-                          className="mt-1"
-                        />
-                      ) : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <DataTable
+              idTabela="medicao.lancamentos.colar.previa"
+              columns={colunas}
+              data={linhas}
+              idDaLinha={(p) => String(p.linha)}
+              semPaginacao
+            />
           </div>
         )}
 

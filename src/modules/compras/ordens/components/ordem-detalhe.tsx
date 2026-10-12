@@ -3,6 +3,7 @@
 import { SecaoDetalhe } from "@/components/canonicos";
 import * as React from "react";
 import Link from "next/link";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import {
   Ban,
@@ -22,6 +23,7 @@ import {
   BotaoEspelho,
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   MoneyText,
   PageHeader,
   StatusBadge,
@@ -65,6 +67,9 @@ import type {
   InsumoOpcao,
   LancamentoVinculado,
   OrdemDetalhe,
+  OrdemForma,
+  OrdemItem,
+  OrdemParcela,
   ParcelaCondicaoOpcao,
 } from "@/modules/compras/ordens/queries";
 import { seloDoLancamento } from "@/modules/financeiro/_shared/selo-lancamento";
@@ -150,6 +155,200 @@ export interface OrdemDetalheViewProps {
  * itens, anexos e trilha. As ações de status passam pelas Server Actions,
  * que por sua vez chamam as RPCs e repassam o erro do banco ao toast.
  */
+/**
+ * Linha da tabela de itens: um item da ordem ou uma das linhas de ajuste que
+ * explicam a diferença entre a soma dos itens e o total.
+ */
+type LinhaItemOC =
+  | { tipo: "item"; id: string; item: OrdemItem }
+  | { tipo: "ajuste"; id: string; rotulo: string; valor: React.ReactNode };
+
+/**
+ * Itens da OC. As linhas de ajuste vêm depois dos itens e têm que ficar lá,
+ * então nenhuma coluna ordena (ordenar misturaria o "Frete" com os insumos).
+ * Centralizado é o padrão de tabela do app; só dinheiro e quantidade vão à
+ * direita.
+ */
+const COLUNAS_ITENS_OC: ColumnDef<LinhaItemOC, unknown>[] = [
+  {
+    id: "insumo",
+    header: "Insumo",
+    size: 260,
+    enableSorting: false,
+    meta: { naoTruncar: true, celular: "titulo" },
+    cell: ({ row }) => {
+      const linha = row.original;
+      if (linha.tipo === "ajuste") {
+        return <span className="text-muted-foreground">{linha.rotulo}</span>;
+      }
+      const { item } = linha;
+      return (
+        <span>
+          {item.insumoNome}
+          {item.unidade ? (
+            <span className="text-muted-foreground"> ({item.unidade})</span>
+          ) : null}
+          {item.semCategoriaCusto ? (
+            <span className="ml-1.5 whitespace-nowrap rounded-md bg-status-pendente/10 px-1.5 py-0.5 text-legenda font-medium text-status-pendente">
+              Sem categoria de custo
+            </span>
+          ) : null}
+        </span>
+      );
+    },
+  },
+  {
+    // A categoria de cada item, lida do cadastro do insumo. Aqui é leitura:
+    // quem troca é o formulário, porque trocar muda o cadastro e isso precisa
+    // de aviso.
+    id: "categoriaCusto",
+    header: "Categoria do custo",
+    size: 180,
+    enableSorting: false,
+    cell: ({ row }) =>
+      row.original.tipo === "item"
+        ? (row.original.item.categoriaCustoNome ?? <CelulaVazia />)
+        : null,
+  },
+  {
+    id: "centroCusto",
+    header: "Centro de custo",
+    size: 180,
+    enableSorting: false,
+    cell: ({ row }) =>
+      row.original.tipo === "item" ? row.original.item.centroCustoNome : null,
+  },
+  {
+    id: "quantidade",
+    header: "Qtd.",
+    size: 100,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) =>
+      row.original.tipo === "item" ? (
+        <span className="tabular-nums">
+          {formatarQuantidade(row.original.item.quantidade)}
+        </span>
+      ) : null,
+  },
+  {
+    id: "preco",
+    header: "Preço",
+    size: 130,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) =>
+      row.original.tipo === "item" ? (
+        <MoneyText valor={row.original.item.precoUnitario} />
+      ) : null,
+  },
+  {
+    id: "subtotal",
+    header: "Subtotal",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => {
+      const linha = row.original;
+      if (linha.tipo === "ajuste") {
+        return <span className="text-muted-foreground">{linha.valor}</span>;
+      }
+      return <MoneyText valor={linha.item.subtotal} />;
+    },
+  },
+];
+
+const COLUNAS_FORMAS_OC: ColumnDef<OrdemForma, unknown>[] = [
+  {
+    id: "forma",
+    accessorFn: (forma) => forma.formaPagamentoNome,
+    header: "Forma",
+    size: 240,
+    meta: { naoTruncar: true, celular: "titulo" },
+    cell: ({ row }) => (
+      <div className="text-left">
+        {row.original.formaPagamentoNome}
+        {/* O cartão sai na mesma célula, abaixo do nome da forma: é atributo
+            dela, não uma segunda coluna que ficaria vazia em toda ordem que
+            não é no crédito. */}
+        {row.original.cartaoRotulo ? (
+          <span className="block text-legenda text-muted-foreground">
+            {row.original.cartaoRotulo}
+          </span>
+        ) : null}
+      </div>
+    ),
+  },
+  {
+    id: "valor",
+    accessorFn: (forma) => forma.valor,
+    header: "Valor",
+    size: 150,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+  },
+];
+
+/**
+ * Parcelas da OC, na ordem do cronograma (a ordem é a informação, não ordena).
+ * A coluna Forma só existe quando a ordem divide o pagamento em mais de uma
+ * forma; com uma só, ela já está no cabeçalho da ordem.
+ */
+function colunasParcelasOC(
+  formas: OrdemForma[],
+): ColumnDef<OrdemParcela, unknown>[] {
+  return [
+    {
+      id: "numero",
+      header: "Nº",
+      size: 70,
+      enableSorting: false,
+      meta: { atomico: true },
+      cell: ({ row }) => (
+        <span className="tabular-nums">{row.original.numeroParcela}</span>
+      ),
+    },
+    {
+      id: "vencimento",
+      header: "Vencimento",
+      size: 160,
+      enableSorting: false,
+      meta: { atomico: true, celular: "titulo" },
+      cell: ({ row }) => (
+        <span className="tabular-nums">
+          {formatarData(row.original.dataVencimento)}
+        </span>
+      ),
+    },
+    ...(formas.length > 1
+      ? [
+          {
+            id: "forma",
+            header: "Forma",
+            size: 200,
+            enableSorting: false,
+            cell: ({ row }) => (
+              <div className="text-left">
+                {formas.find(
+                  (forma) =>
+                    forma.formaPagamentoId === row.original.formaPagamentoId,
+                )?.formaPagamentoNome ?? "-"}
+              </div>
+            ),
+          } satisfies ColumnDef<OrdemParcela, unknown>,
+        ]
+      : []),
+    {
+      id: "valor",
+      header: "Valor",
+      size: 150,
+      enableSorting: false,
+      meta: { alinharDireita: true, atomico: true, celular: "valor" },
+      cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+    },
+  ];
+}
+
 export function OrdemDetalheView({
   ordem,
   trilha,
@@ -180,6 +379,40 @@ export function OrdemDetalheView({
   const info = infoStatusOC(ordem.status);
   // Só é diferente de `ordem.valorTotal` quando a ordem tem ajuste de rodapé.
   const somaDosItens = totalOrdemCompra(ordem.itens);
+  /*
+    Quando a ordem tem ajuste de rodapé, a soma dos itens NÃO é o total, e
+    mostrar só o total deixa uma diferença sem explicação na tela: na ordem 2592
+    do Mais Controle os itens somam R$ 103.835,95 e o total é R$ 100.000,00. As
+    linhas de "Soma dos itens" e de cada ajuste, depois dos itens, mostram por
+    quê; o Total fica no rodapé da tabela.
+  */
+  const linhasItens: LinhaItemOC[] = [
+    ...ordem.itens.map((item) => ({ tipo: "item" as const, id: item.id, item })),
+    ...(temAjuste(ordem.ajustes)
+      ? [
+          {
+            tipo: "ajuste" as const,
+            id: "ajuste:soma-itens",
+            rotulo: "Soma dos itens",
+            valor: <MoneyText valor={somaDosItens} />,
+          },
+          ...LINHAS_DE_AJUSTE.filter(({ chave }) => ordem.ajustes[chave] !== 0).map(
+            ({ chave, rotulo, sinal }) => ({
+              tipo: "ajuste" as const,
+              id: `ajuste:${chave}`,
+              rotulo,
+              valor: (
+                <span className="tabular-nums">
+                  {sinal === "-" ? "− " : "+ "}
+                  {formatarBRL(ordem.ajustes[chave])}
+                </span>
+              ),
+            }),
+          ),
+        ]
+      : []),
+  ];
+  const colunasParcelas = colunasParcelasOC(ordem.formas);
   const editavel =
     podeEditar &&
     (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
@@ -560,112 +793,19 @@ export function OrdemDetalheView({
           </SecaoDetalhe>
 
           <SecaoDetalhe card titulo="Itens">
-            <div className="overflow-hidden rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  {/* Centralizado é o padrão de tabela do app (ver DataTable);
-                      só dinheiro, quantidade, total, percentual e horas vão à
-                      direita. */}
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">Insumo</th>
-                    <th className="px-3 py-2 text-center font-medium">
-                      Categoria do custo
-                    </th>
-                    <th className="px-3 py-2 text-center font-medium">
-                      Centro de custo
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Qtd.</th>
-                    <th className="px-3 py-2 text-right font-medium">Preço</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Subtotal
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordem.itens.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2 text-center">
-                        {item.insumoNome}
-                        {item.unidade ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            ({item.unidade})
-                          </span>
-                        ) : null}
-                        {item.semCategoriaCusto ? (
-                          <span className="ml-1.5 whitespace-nowrap rounded-md bg-status-pendente/10 px-1.5 py-0.5 text-legenda font-medium text-status-pendente">
-                            Sem categoria de custo
-                          </span>
-                        ) : null}
-                      </td>
-                      {/* A categoria de cada item, lida do cadastro do insumo.
-                          Aqui é leitura: quem troca é o formulário, porque
-                          trocar muda o cadastro e isso precisa de aviso. */}
-                      <td className="px-3 py-2 text-center">
-                        {item.categoriaCustoNome ?? <CelulaVazia />}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {item.centroCustoNome}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarQuantidade(item.quantidade)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={item.precoUnitario} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={item.subtotal} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  {/*
-                    Quando a ordem tem ajuste de rodapé, a soma dos itens NÃO é o
-                    total, e mostrar só o total deixa uma diferença sem
-                    explicação na tela: na ordem 2592 do Mais Controle os itens
-                    somam R$ 103.835,95 e o total é R$ 100.000,00. As linhas
-                    abaixo mostram por quê.
-                  */}
-                  {temAjuste(ordem.ajustes) ? (
-                    <>
-                      <tr className="text-muted-foreground">
-                        <td className="px-3 py-2 text-center" colSpan={5}>
-                          Soma dos itens
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <MoneyText valor={somaDosItens} />
-                        </td>
-                      </tr>
-                      {LINHAS_DE_AJUSTE.map(({ chave, rotulo, sinal }) =>
-                        ordem.ajustes[chave] === 0 ? null : (
-                          <tr key={chave} className="text-muted-foreground">
-                            <td className="px-3 py-2 text-center" colSpan={5}>
-                              {rotulo}
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums">
-                              {sinal === "-" ? "− " : "+ "}
-                              {formatarBRL(ordem.ajustes[chave])}
-                            </td>
-                          </tr>
-                        ),
-                      )}
-                    </>
-                  ) : null}
-                  <tr className="font-semibold">
-                    <td className="px-3 py-2 text-center" colSpan={5}>
-                      Total
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText valor={ordem.valorTotal} />
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            <DataTable
+              idTabela="compras.ordens.detalhe.itens"
+              columns={COLUNAS_ITENS_OC}
+              data={linhasItens}
+              idDaLinha={(linha) => linha.id}
+              semPaginacao
+              rodape={{
+                insumo: <span className="font-semibold">Total</span>,
+                subtotal: (
+                  <MoneyText valor={ordem.valorTotal} className="font-semibold" />
+                ),
+              }}
+            />
           </SecaoDetalhe>
 
           {/* A divisao por forma aparece so quando existe divisao. Com uma
@@ -673,54 +813,25 @@ export function OrdemDetalheView({
               acrescentaria um card que nao diz nada de novo. */}
           {ordem.formas.length > 1 ? (
             <SecaoDetalhe card titulo="Formas de pagamento">
-              <div className="overflow-hidden rounded-md border border-border bg-card">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-left font-medium">Forma</th>
-                      <th className="px-3 py-2 text-right font-medium">
-                        Valor
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ordem.formas.map((forma) => (
-                      <tr
-                        key={forma.id}
-                        className="border-b border-border last:border-b-0"
-                      >
-                        <td className="px-3 py-2">
-                          {forma.formaPagamentoNome}
-                          {/* O cartão sai na mesma célula, abaixo do nome da
-                              forma: é atributo dela, não uma segunda coluna que
-                              ficaria vazia em toda ordem que não é no crédito. */}
-                          {forma.cartaoRotulo ? (
-                            <span className="block text-legenda text-muted-foreground">
-                              {forma.cartaoRotulo}
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <MoneyText valor={forma.valor} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-surface font-semibold">
-                      <td className="px-3 py-2">Soma das formas</td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText
-                          valor={ordem.formas.reduce(
-                            (soma, forma) => soma + forma.valor,
-                            0,
-                          )}
-                        />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable
+                idTabela="compras.ordens.detalhe.formas"
+                columns={COLUNAS_FORMAS_OC}
+                data={ordem.formas}
+                idDaLinha={(forma) => forma.id}
+                semPaginacao
+                rodape={{
+                  forma: <span className="font-semibold">Soma das formas</span>,
+                  valor: (
+                    <MoneyText
+                      valor={ordem.formas.reduce(
+                        (soma, forma) => soma + forma.valor,
+                        0,
+                      )}
+                      className="font-semibold"
+                    />
+                  ),
+                }}
+              />
             </SecaoDetalhe>
           ) : null}
 
@@ -731,71 +842,27 @@ export function OrdemDetalheView({
                 nasce sem parcelas e elas são definidas em Financeiro.
               </p>
             ) : (
-              <div className="overflow-hidden rounded-md border border-border bg-card">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="px-3 py-2 text-center font-medium">Nº</th>
-                      <th className="px-3 py-2 text-center font-medium">
-                        Vencimento
-                      </th>
-                      {ordem.formas.length > 1 ? (
-                        <th className="px-3 py-2 text-left font-medium">
-                          Forma
-                        </th>
-                      ) : null}
-                      <th className="px-3 py-2 text-right font-medium">
-                        Valor
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ordem.parcelas.map((parcela) => (
-                      <tr
-                        key={parcela.numeroParcela}
-                        className="border-b border-border last:border-b-0"
-                      >
-                        <td className="px-3 py-2 text-center tabular-nums">
-                          {parcela.numeroParcela}
-                        </td>
-                        <td className="px-3 py-2 text-center tabular-nums">
-                          {formatarData(parcela.dataVencimento)}
-                        </td>
-                        {ordem.formas.length > 1 ? (
-                          <td className="px-3 py-2">
-                            {ordem.formas.find(
-                              (forma) =>
-                                forma.formaPagamentoId ===
-                                parcela.formaPagamentoId,
-                            )?.formaPagamentoNome ?? "-"}
-                          </td>
-                        ) : null}
-                        <td className="px-3 py-2 text-right">
-                          <MoneyText valor={parcela.valor} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-surface font-semibold">
-                      <td
-                        className="px-3 py-2 text-center"
-                        colSpan={ordem.formas.length > 1 ? 3 : 2}
-                      >
-                        Soma das parcelas
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText
-                          valor={ordem.parcelas.reduce(
-                            (soma, parcela) => soma + parcela.valor,
-                            0,
-                          )}
-                        />
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <DataTable
+                idTabela="compras.ordens.detalhe.parcelas"
+                columns={colunasParcelas}
+                data={ordem.parcelas}
+                idDaLinha={(parcela) => String(parcela.numeroParcela)}
+                semPaginacao
+                rodape={{
+                  vencimento: (
+                    <span className="font-semibold">Soma das parcelas</span>
+                  ),
+                  valor: (
+                    <MoneyText
+                      valor={ordem.parcelas.reduce(
+                        (soma, parcela) => soma + parcela.valor,
+                        0,
+                      )}
+                      className="font-semibold"
+                    />
+                  ),
+                }}
+              />
             )}
           </SecaoDetalhe>
 

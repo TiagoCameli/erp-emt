@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2, TriangleAlert } from "lucide-react";
 
-import { CelulaVazia, ConfirmDialog, PageHeader, SecaoDetalhe } from "@/components/canonicos";
+import { CelulaVazia, ConfirmDialog, DataTable, PageHeader, SecaoDetalhe } from "@/components/canonicos";
 import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,12 @@ import {
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { AnexosCombustivel } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import { excluirAbastecimento } from "@/modules/combustivel/abastecimentos/actions";
-import type { AbastecimentoCompleto } from "@/modules/combustivel/abastecimentos/queries";
+import type {
+  AbastecimentoCompleto,
+  AlocacaoDetalhe,
+  CamadaPeps,
+  MovimentoConta,
+} from "@/modules/combustivel/abastecimentos/queries";
 import { formatarValorOperacional, somarValoresOperacionais } from "@/modules/manutencao/servicos/formato";
 import { AbastecimentoFormDrawer, type OpcoesAbastecimento } from "./abastecimento-form-drawer";
 
@@ -40,57 +46,102 @@ function Preco({ valor }: { valor: number | null }) {
   return <span className="tabular-nums">{formatarValorOperacional(valor)}</span>;
 }
 
-/** Tabela só de leitura, no padrão do detalhe da OS. */
-function Tabela<L extends { id: string }>({
-  colunas,
-  linhas,
-  vazio,
-  rodape,
-}: {
-  colunas: { rotulo: string; direita?: boolean; celula: (linha: L) => React.ReactNode }[];
-  linhas: L[];
-  vazio: string;
-  rodape?: React.ReactNode[];
-}) {
-  if (linhas.length === 0) return <p className="text-detalhe text-muted-foreground">{vazio}</p>;
-  return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-detalhe">
-        <thead>
-          <tr className="border-b border-border text-legenda text-muted-foreground">
-            {colunas.map((c) => (
-              <th key={c.rotulo} className={`px-3 py-2 font-medium ${c.direita ? "text-right" : "text-left"}`}>
-                {c.rotulo}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map((linha) => (
-            <tr key={linha.id} className="border-b border-border last:border-0">
-              {colunas.map((c) => (
-                <td key={c.rotulo} className={`px-3 py-2 ${c.direita ? "text-right tabular-nums" : "text-left"}`}>
-                  {c.celula(linha)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-        {rodape ? (
-          <tfoot>
-            <tr className="border-t border-border font-medium">
-              {rodape.map((celula, i) => (
-                <td key={i} className={`px-3 py-2 ${colunas[i]?.direita ? "text-right tabular-nums" : "text-left"}`}>
-                  {celula}
-                </td>
-              ))}
-            </tr>
-          </tfoot>
-        ) : null}
-      </table>
-    </div>
-  );
+/** Número da tabela: à direita, tabular, em uma linha. */
+function Numero({ children }: { children: React.ReactNode }) {
+  return <span className="tabular-nums">{children}</span>;
 }
+
+/** Total do rodapé: o peso vai na célula, que é quem sabe o que é número. */
+function Total({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium tabular-nums">{children}</span>;
+}
+
+/** As camadas na ordem em que o PEPS as consumiu: a ordem é a informação, não ordena. */
+const COLUNAS_CAMADAS: ColumnDef<CamadaPeps, unknown>[] = [
+  {
+    id: "fonte",
+    header: "Fonte",
+    enableSorting: false,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => (row.original.fonteTipo === "entrada" ? "Entrada" : "Transferência recebida"),
+  },
+  {
+    id: "dataFonte",
+    header: "Data da fonte",
+    enableSorting: false,
+    meta: { atomico: true },
+    cell: ({ row }) =>
+      row.original.fonteData ? formatarDataHoraRioBranco(row.original.fonteData) : <CelulaVazia />,
+  },
+  {
+    id: "notaFiscal",
+    header: "NF",
+    enableSorting: false,
+    meta: { atomico: true },
+    cell: ({ row }) =>
+      row.original.fonteNotaFiscal ? <span className="codigo-doc">{row.original.fonteNotaFiscal}</span> : <CelulaVazia />,
+  },
+  {
+    id: "litros",
+    header: "Litros",
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+    cell: ({ row }) => <Numero>{formatarLitros(row.original.litros)}</Numero>,
+  },
+  {
+    id: "preco",
+    header: "Preço por litro",
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.preco)}</Numero>,
+  },
+  {
+    id: "valor",
+    header: "Valor",
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.litros * row.original.preco)}</Numero>,
+  },
+];
+
+const COLUNAS_MOVIMENTOS: ColumnDef<MovimentoConta, unknown>[] = [
+  {
+    id: "movimento",
+    accessorFn: (m) => ROTULO_TIPO_MOVIMENTO[m.tipo] ?? m.tipo,
+    header: "Movimento",
+    meta: { celular: "titulo" },
+    cell: ({ row }) => ROTULO_TIPO_MOVIMENTO[row.original.tipo] ?? row.original.tipo,
+  },
+  { accessorKey: "transportadoraNome", header: "Fornecedor" },
+  {
+    accessorKey: "data",
+    header: "Data",
+    meta: { atomico: true },
+    cell: ({ row }) => formatarDataHoraRioBranco(row.original.data),
+  },
+  {
+    accessorKey: "valor",
+    header: "Valor",
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.valor)}</Numero>,
+  },
+];
+
+const COLUNAS_ALOCACOES: ColumnDef<AlocacaoDetalhe, unknown>[] = [
+  { accessorKey: "centroCustoNome", header: "Obra", meta: { celular: "titulo" } },
+  {
+    accessorKey: "percentual",
+    header: "Percentual",
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarPercentual(row.original.percentual, 4)}</Numero>,
+  },
+  {
+    accessorKey: "litros",
+    header: "Litros",
+    meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+    cell: ({ row }) => <Numero>{formatarLitros(row.original.litros)}</Numero>,
+  },
+];
 
 /**
  * O corpo do detalhe (dados, camadas do PEPS, conta corrente e alocações), sem cabeçalho
@@ -179,47 +230,55 @@ export function AbastecimentoDetalheConteudo({ abastecimento }: { abastecimento:
 
       {saida.origem === "tanque" && !saida.tanqueExterno ? (
         <SecaoDetalhe titulo="Camadas do PEPS">
-          <Tabela
-            linhas={camadas}
-            vazio="Nenhuma camada consumida"
-            colunas={[
-              { rotulo: "Fonte", celula: (c) => (c.fonteTipo === "entrada" ? "Entrada" : "Transferência recebida") },
-              { rotulo: "Data da fonte", celula: (c) => (c.fonteData ? formatarDataHoraRioBranco(c.fonteData) : <CelulaVazia />) },
-              { rotulo: "NF", celula: (c) => (c.fonteNotaFiscal ? <span className="codigo-doc">{c.fonteNotaFiscal}</span> : <CelulaVazia />) },
-              { rotulo: "Litros", direita: true, celula: (c) => formatarLitros(c.litros) },
-              { rotulo: "Preço por litro", direita: true, celula: (c) => formatarValorOperacional(c.preco) },
-              { rotulo: "Valor", direita: true, celula: (c) => formatarValorOperacional(c.litros * c.preco) },
-            ]}
-            rodape={["Total", "", "", formatarLitros(litrosCamadas), "", formatarValorOperacional(valorCamadas)]}
-          />
+          {camadas.length === 0 ? (
+            <p className="text-detalhe text-muted-foreground">Nenhuma camada consumida</p>
+          ) : (
+            <DataTable
+              idTabela="combustivel.abastecimentos.detalhe.camadas"
+              columns={COLUNAS_CAMADAS}
+              data={camadas}
+              idDaLinha={(c) => c.id}
+              semPaginacao
+              rodape={{
+                fonte: <Total>Total</Total>,
+                litros: <Total>{formatarLitros(litrosCamadas)}</Total>,
+                valor: <Total>{formatarValorOperacional(valorCamadas)}</Total>,
+              }}
+            />
+          )}
         </SecaoDetalhe>
       ) : null}
 
       {carreta ? (
         <SecaoDetalhe titulo="Conta corrente da transportadora">
-          <Tabela
-            linhas={movimentos}
-            vazio="Nenhum movimento: só abastecimento de carreta em tanque gera movimento"
-            colunas={[
-              { rotulo: "Movimento", celula: (m) => ROTULO_TIPO_MOVIMENTO[m.tipo] ?? m.tipo },
-              { rotulo: "Fornecedor", celula: (m) => m.transportadoraNome },
-              { rotulo: "Data", celula: (m) => formatarDataHoraRioBranco(m.data) },
-              { rotulo: "Valor", direita: true, celula: (m) => formatarValorOperacional(m.valor) },
-            ]}
-          />
+          {movimentos.length === 0 ? (
+            <p className="text-detalhe text-muted-foreground">
+              Nenhum movimento: só abastecimento de carreta em tanque gera movimento
+            </p>
+          ) : (
+            <DataTable
+              idTabela="combustivel.abastecimentos.detalhe.conta-corrente"
+              columns={COLUNAS_MOVIMENTOS}
+              data={movimentos}
+              idDaLinha={(m) => m.id}
+              semPaginacao
+            />
+          )}
         </SecaoDetalhe>
       ) : null}
 
       <SecaoDetalhe titulo="Alocações">
-        <Tabela
-          linhas={alocacoes}
-          vazio="Sem alocação de obra"
-          colunas={[
-            { rotulo: "Obra", celula: (a) => a.centroCustoNome },
-            { rotulo: "Percentual", direita: true, celula: (a) => formatarPercentual(a.percentual, 4) },
-            { rotulo: "Litros", direita: true, celula: (a) => formatarLitros(a.litros) },
-          ]}
-        />
+        {alocacoes.length === 0 ? (
+          <p className="text-detalhe text-muted-foreground">Sem alocação de obra</p>
+        ) : (
+          <DataTable
+            idTabela="combustivel.abastecimentos.detalhe.alocacoes"
+            columns={COLUNAS_ALOCACOES}
+            data={alocacoes}
+            idDaLinha={(a) => a.id}
+            semPaginacao
+          />
+        )}
       </SecaoDetalhe>
     </div>
   );

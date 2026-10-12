@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 
 import { corDoCombustivel, COR_PAINEL, ID_OUTROS_COMBUSTIVEIS } from "@/modules/combustivel/painel/cores";
 import type { SaidaRecente } from "@/modules/combustivel/painel/queries";
@@ -11,7 +13,17 @@ import { CartaoKpi, chipDaVariacao } from "./cartao-kpi";
 import { topPorMetrica } from "./graficos-impl";
 import { dataHoraDeParede, iniciais, UltimosAbastecimentos } from "./ultimos-abastecimentos";
 
-afterEach(cleanup);
+// Últimos abastecimentos é DataTable com idTabela: a preferência salva é do servidor.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 describe("chip de variação (KpiCard da origem)", () => {
   it("±5 pontos é ruído: cinza e estável", () => {

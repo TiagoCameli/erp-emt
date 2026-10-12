@@ -4,9 +4,10 @@ import * as React from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, CheckCheck, ExternalLink, MousePointerClick, TriangleAlert } from "lucide-react";
+import type { ColumnDef, SortingState } from "@tanstack/react-table";
+import { CheckCheck, ExternalLink, MousePointerClick, TriangleAlert } from "lucide-react";
 
-import { ConfirmDialog, MoneyText } from "@/components/canonicos";
+import { ConfirmDialog, DataTable, MoneyText } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,9 +39,6 @@ const CAMADAS = [
   { id: "mapa", rotulo: "Mapa" },
   { id: "satelite", rotulo: "Satélite" },
 ] as const;
-
-const TH = "px-3 py-2 font-medium";
-const TD = "px-3 py-2";
 
 const numero = (v: number | null, casas = 0) =>
   v === null ? null : v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -177,36 +175,22 @@ function CartaoDoMapa({ rota, n, total }: { rota: LinhaRota | null; n: number | 
   );
 }
 
-type Ordem = "producao" | "viagens" | "toneladas" | "porViagem" | "porTonelada" | "km" | "tempo";
+/** Valor que ordena a coluna; sem dado vai para o fim na ordem decrescente. */
+const semDado = (v: number | null) => v ?? -1;
 
-const COLUNAS: { id: Ordem | null; rotulo: string; direita: boolean; dica?: string }[] = [
-  { id: null, rotulo: "Rota", direita: false },
-  { id: "viagens", rotulo: "Viagens por mês", direita: false, dica: "Barrinhas: viagens em cada mês do período" },
-  { id: "toneladas", rotulo: "Toneladas", direita: true },
-  { id: "producao", rotulo: "Produção", direita: true },
-  { id: "porViagem", rotulo: "R$/viagem", direita: true },
-  { id: "porTonelada", rotulo: "R$/t", direita: true },
-  { id: "km", rotulo: "Km estrada / lançado", direita: true },
-  { id: "tempo", rotulo: "Tempo médio", direita: true },
-];
+/** Atributo que marca a linha da tabela com a chave da rota (ver `rotaDoEvento`). */
+const ATRIBUTO_ROTA = "data-rota";
 
-function valorDaOrdem(r: LinhaRota, ordem: Ordem): number {
-  switch (ordem) {
-    case "viagens":
-      return r.viagens;
-    case "toneladas":
-      return r.toneladas;
-    case "porViagem":
-      return r.producaoPorViagem ?? -1;
-    case "porTonelada":
-      return r.producaoPorTonelada ?? -1;
-    case "km":
-      return r.kmMapa ?? r.kmMedio ?? -1;
-    case "tempo":
-      return r.diasMedio ?? -1;
-    default:
-      return r.producao;
-  }
+/**
+ * A rota da linha onde o evento aconteceu. O DataTable não recebe handler de
+ * mouse por linha, então o realce no mapa escuta na caixa da tabela e acha a
+ * linha pela marca que a célula da rota carrega: assim o realce vale para a
+ * linha inteira, padding incluído, como era na tabela montada à mão.
+ */
+function rotaDoEvento(alvo: EventTarget | null): string | null {
+  if (!(alvo instanceof Element)) return null;
+  const linha = alvo.closest("tr");
+  return linha?.querySelector(`[${ATRIBUTO_ROTA}]`)?.getAttribute(ATRIBUTO_ROTA) ?? null;
 }
 
 function AlertasDasRotas({
@@ -299,19 +283,14 @@ export function RotasCarretas({
 }) {
   const [camada, setCamada] = React.useState<CamadaMapa>("mapa");
   const [destacada, setDestacada] = React.useState<string | null>(null);
-  const [ordem, setOrdem] = React.useState<{ por: Ordem; desc: boolean }>({ por: "producao", desc: true });
+  // Abre pela produção, maior primeiro, que é também a ordem do número da rota.
+  const [ordenacao, setOrdenacao] = React.useState<SortingState>([{ id: "producao", desc: true }]);
   const selecionada = rotaSelecionada || null;
   const alternar = (chave: string | null) => onSelecionarRota(chave === null || chave === selecionada ? null : chave);
 
   // O número da rota é a posição pela produção (como chega), e não muda com a ordenação.
   const numeroPorChave = React.useMemo(() => new Map(rotas.map((r, i) => [r.chave, i + 1])), [rotas]);
   const numeroDaRota = React.useCallback((chave: string) => numeroPorChave.get(chave) ?? null, [numeroPorChave]);
-
-  const ordenadas = React.useMemo(() => {
-    const lista = [...rotas];
-    lista.sort((a, b) => (valorDaOrdem(a, ordem.por) - valorDaOrdem(b, ordem.por)) * (ordem.desc ? -1 : 1));
-    return lista;
-  }, [rotas, ordem]);
 
   const totalProducao = rotas.reduce((s, r) => s + Math.round(r.producao * 100), 0) / 100;
   const totalViagens = rotas.reduce((s, r) => s + r.viagens, 0);
@@ -322,6 +301,138 @@ export function RotasCarretas({
   const principal = rotas[0];
 
   const emFoco = rotas.find((r) => r.chave === (destacada ?? selecionada)) ?? null;
+
+  const colunas = React.useMemo<ColumnDef<LinhaRota, unknown>[]>(
+    () => [
+      {
+        id: "rota",
+        header: "Rota",
+        size: 280,
+        enableSorting: false,
+        meta: { celular: "titulo", naoTruncar: true },
+        cell: ({ row }) => {
+          const r = row.original;
+          const ativa = selecionada === r.chave;
+          return (
+            <div
+              className="flex items-center gap-2 text-left"
+              data-rota={r.chave}
+              title={ativa ? "Clique para ver todas as rotas" : "Clique para filtrar a aba por esta rota"}
+            >
+              <NumeroDaRota rota={r} n={numeroDaRota(r.chave) ?? 0} />
+              <div className="min-w-0">
+                <p className={cn("whitespace-nowrap text-foreground", ativa ? "font-semibold" : "font-medium")}>
+                  {r.origem.nome} → {r.destino.nome}
+                  {r.temAlerta ? <TriangleAlert className="ml-1.5 inline size-3.5 text-status-pendente" aria-label="Rota com alerta" /> : null}
+                </p>
+                <p className="text-legenda text-muted-foreground">{r.tipos.map((t) => ROTULO_TIPO_FRETE[t as TipoFrete] ?? t).join(", ")}</p>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "viagens",
+        header: () => <span title="Barrinhas: viagens em cada mês do período">Viagens por mês</span>,
+        accessorFn: (r) => r.viagens,
+        size: 150,
+        meta: { rotulo: "Viagens por mês", naoTruncar: true },
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            <Minigrafico rota={row.original} />
+            <span className="tabular-nums text-foreground">{numero(row.original.viagens)}</span>
+          </div>
+        ),
+      },
+      {
+        id: "toneladas",
+        header: "Toneladas",
+        accessorFn: (r) => r.toneladas,
+        size: 110,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <span className="tabular-nums">{numero(row.original.toneladas, 1)}</span>,
+      },
+      {
+        id: "producao",
+        header: "Produção",
+        accessorFn: (r) => r.producao,
+        size: 180,
+        meta: { alinharDireita: true, naoTruncar: true, celular: "valor" },
+        cell: ({ row }) => {
+          const r = row.original;
+          const parte = totalProducao > 0 ? r.producao / totalProducao : 0;
+          return (
+            <>
+              <MoneyText valor={r.producao} />
+              <div className="mt-1 flex items-center justify-end gap-1.5">
+                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted" aria-hidden>
+                  <div className="h-full rounded-full" style={{ width: `${Math.max(2, parte * 100)}%`, background: corDaRota(r) }} />
+                </div>
+                <span className="w-10 text-legenda tabular-nums text-muted-foreground">{numero(parte * 100, 1)}%</span>
+              </div>
+            </>
+          );
+        },
+      },
+      {
+        id: "porViagem",
+        header: "R$/viagem",
+        accessorFn: (r) => semDado(r.producaoPorViagem),
+        size: 130,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (row.original.producaoPorViagem === null ? <Vazio /> : <MoneyText valor={row.original.producaoPorViagem} />),
+      },
+      {
+        id: "porTonelada",
+        header: "R$/t",
+        accessorFn: (r) => semDado(r.producaoPorTonelada),
+        size: 120,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (row.original.producaoPorTonelada === null ? <Vazio /> : <MoneyText valor={row.original.producaoPorTonelada} />),
+      },
+      {
+        id: "km",
+        header: "Km estrada / lançado",
+        accessorFn: (r) => r.kmMapa ?? r.kmMedio ?? -1,
+        size: 170,
+        meta: { alinharDireita: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const r = row.original;
+          return (
+            <span className="inline-flex flex-col items-end gap-0.5 whitespace-nowrap tabular-nums">
+              <span>
+                {r.kmMapa === null ? <Vazio texto="Sem traçado" /> : `${numero(r.kmMapa)} km`}
+                <span className="text-muted-foreground"> / </span>
+                {r.kmMedio === null ? <Vazio /> : `${numero(r.kmMedio)} km`}
+              </span>
+              <Desvio desvio={r.desvioKm} />
+            </span>
+          );
+        },
+      },
+      {
+        id: "tempo",
+        header: "Tempo médio",
+        accessorFn: (r) => semDado(r.diasMedio),
+        size: 170,
+        meta: { alinharDireita: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const r = row.original;
+          const tempo = textoTempo(r);
+          return (
+            <span className="inline-flex flex-col items-end whitespace-nowrap">
+              {tempo ? <span className="tabular-nums">{tempo}</span> : <Vazio texto="Sem chegada" />}
+              <span className="text-legenda text-muted-foreground">
+                {r.horasMapa !== null ? `~${numero(r.horasMapa, 1)} h de estrada` : ""}
+                {r.semChegada > 0 && tempo ? `${r.horasMapa !== null ? " · " : ""}${r.semChegada} sem chegada` : ""}
+              </span>
+            </span>
+          );
+        },
+      },
+    ],
+    [numeroDaRota, selecionada, totalProducao],
+  );
 
   if (rotas.length === 0) {
     return <p className="py-2 text-detalhe text-muted-foreground">Nenhum frete com origem e destino no recorte escolhido.</p>;
@@ -396,135 +507,38 @@ export function RotasCarretas({
         <AlertasDasRotas alertas={alertas} numeroDaRota={numeroDaRota} podeConferir={podeConferir} />
       ) : null}
 
-      <div className="overflow-x-auto rounded-md border border-border bg-card">
-        <table className="w-full text-detalhe">
-          <thead>
-            <tr className="border-b border-border text-legenda text-muted-foreground">
-              {COLUNAS.map((c) => {
-                const ativa = c.id !== null && ordem.por === c.id;
-                return (
-                  <th
-                    key={c.rotulo}
-                    scope="col"
-                    title={c.dica}
-                    aria-sort={ativa ? (ordem.desc ? "descending" : "ascending") : undefined}
-                    className={cn(TH, c.direita ? "text-right" : "text-left", "whitespace-nowrap")}
-                  >
-                    {c.id === null ? (
-                      c.rotulo
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setOrdem((o) => ({ por: c.id as Ordem, desc: o.por === c.id ? !o.desc : true }))}
-                        className={cn("inline-flex items-center gap-1 hover:text-foreground", ativa && "text-foreground")}
-                      >
-                        {c.rotulo}
-                        {ativa ? ordem.desc ? <ArrowDown className="size-3" /> : <ArrowUp className="size-3" /> : null}
-                      </button>
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {ordenadas.map((r) => {
-              const n = numeroDaRota(r.chave) ?? 0;
-              const parte = totalProducao > 0 ? r.producao / totalProducao : 0;
-              const ativa = selecionada === r.chave;
-              const acesa = destacada === r.chave;
-              const tempo = textoTempo(r);
-              return (
-                <tr
-                  key={r.chave}
-                  tabIndex={0}
-                  aria-selected={ativa}
-                  onClick={() => alternar(r.chave)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      alternar(r.chave);
-                    }
-                  }}
-                  onMouseEnter={() => setDestacada(r.chave)}
-                  onMouseLeave={() => setDestacada(null)}
-                  onFocus={() => setDestacada(r.chave)}
-                  onBlur={() => setDestacada(null)}
-                  title={ativa ? "Clique para ver todas as rotas" : "Clique para filtrar a aba por esta rota"}
-                  className={cn(
-                    "cursor-pointer border-b border-border transition-colors last:border-b-0 focus-visible:outline-none",
-                    ativa ? "bg-primary/10" : acesa ? "bg-surface" : "hover:bg-surface",
-                  )}
-                  style={{ boxShadow: ativa || acesa ? `inset 3px 0 0 ${corDaRota(r)}` : undefined }}
-                >
-                  <td className={cn(TD, "min-w-64")}>
-                    <div className="flex items-center gap-2">
-                      <NumeroDaRota rota={r} n={n} />
-                      <div className="min-w-0">
-                        <p className={cn("whitespace-nowrap text-foreground", ativa ? "font-semibold" : "font-medium")}>
-                          {r.origem.nome} → {r.destino.nome}
-                          {r.temAlerta ? (
-                            <TriangleAlert className="ml-1.5 inline size-3.5 text-status-pendente" aria-label="Rota com alerta" />
-                          ) : null}
-                        </p>
-                        <p className="text-legenda text-muted-foreground">{r.tipos.map((t) => ROTULO_TIPO_FRETE[t as TipoFrete] ?? t).join(", ")}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className={TD}>
-                    <div className="flex items-center gap-2">
-                      <Minigrafico rota={r} />
-                      <span className="tabular-nums text-foreground">{numero(r.viagens)}</span>
-                    </div>
-                  </td>
-                  <td className={cn(TD, "text-right tabular-nums")}>{numero(r.toneladas, 1)}</td>
-                  <td className={cn(TD, "min-w-44 text-right")}>
-                    <MoneyText valor={r.producao} />
-                    <div className="mt-1 flex items-center justify-end gap-1.5">
-                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted" aria-hidden>
-                        <div className="h-full rounded-full" style={{ width: `${Math.max(2, parte * 100)}%`, background: corDaRota(r) }} />
-                      </div>
-                      <span className="w-10 text-legenda tabular-nums text-muted-foreground">{numero(parte * 100, 1)}%</span>
-                    </div>
-                  </td>
-                  <td className={cn(TD, "text-right")}>{r.producaoPorViagem === null ? <Vazio /> : <MoneyText valor={r.producaoPorViagem} />}</td>
-                  <td className={cn(TD, "text-right")}>{r.producaoPorTonelada === null ? <Vazio /> : <MoneyText valor={r.producaoPorTonelada} />}</td>
-                  <td className={cn(TD, "text-right tabular-nums whitespace-nowrap")}>
-                    <span className="inline-flex flex-col items-end gap-0.5">
-                      <span>
-                        {r.kmMapa === null ? <Vazio texto="Sem traçado" /> : `${numero(r.kmMapa)} km`}
-                        <span className="text-muted-foreground"> / </span>
-                        {r.kmMedio === null ? <Vazio /> : `${numero(r.kmMedio)} km`}
-                      </span>
-                      <Desvio desvio={r.desvioKm} />
-                    </span>
-                  </td>
-                  <td className={cn(TD, "text-right whitespace-nowrap")}>
-                    <span className="inline-flex flex-col items-end">
-                      {tempo ? <span className="tabular-nums">{tempo}</span> : <Vazio texto="Sem chegada" />}
-                      <span className="text-legenda text-muted-foreground">
-                        {r.horasMapa !== null ? `~${numero(r.horasMapa, 1)} h de estrada` : ""}
-                        {r.semChegada > 0 && tempo ? `${r.horasMapa !== null ? " · " : ""}${r.semChegada} sem chegada` : ""}
-                      </span>
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-            <tr className="border-t-2 border-border bg-surface font-semibold">
-              <td className={TD}>Total</td>
-              <td className={cn(TD, "tabular-nums")}>{numero(totalViagens)} viagens</td>
-              <td className={cn(TD, "text-right tabular-nums")}>{numero(totalToneladas, 1)}</td>
-              <td className={cn(TD, "text-right")}>
-                <MoneyText valor={totalProducao} />
-              </td>
-              <td className={cn(TD, "text-right")}>{totalViagens > 0 ? <MoneyText valor={totalProducao / totalViagens} /> : null}</td>
-              <td className={cn(TD, "text-right")}>{totalToneladas > 0 ? <MoneyText valor={totalProducao / totalToneladas} /> : null}</td>
-              <td className={cn(TD, "text-right tabular-nums")}>{`${numero(kmRodados)} km rodados`}</td>
-              <td className={TD} />
-            </tr>
-          </tbody>
-        </table>
+      <div
+        onMouseOver={(e) => setDestacada(rotaDoEvento(e.target))}
+        onMouseLeave={() => setDestacada(null)}
+        onFocus={(e) => setDestacada(rotaDoEvento(e.target))}
+        onBlur={() => setDestacada(null)}
+      >
+        <DataTable
+          idTabela="frete.carretas-emt.rotas"
+          columns={colunas}
+          data={rotas}
+          idDaLinha={(r) => r.chave}
+          semPaginacao
+          sorting={ordenacao}
+          onSortingChange={setOrdenacao}
+          onRowClick={(r) => alternar(r.chave)}
+          classeDaLinha={(r) => {
+            const ativa = selecionada === r.chave;
+            const acesa = destacada === r.chave;
+            // A faixa à esquerda leva a cor da rota (material ou transferência).
+            const faixa = ehTransferencia(r) ? "shadow-[inset_3px_0_0_var(--viz-custo)]" : "shadow-[inset_3px_0_0_var(--viz-producao)]";
+            return cn("transition-colors", ativa ? "bg-primary/10 hover:bg-primary/10" : acesa ? "bg-surface hover:bg-surface" : "hover:bg-surface", (ativa || acesa) && faixa);
+          }}
+          rodape={{
+            rota: <span className="block text-left font-semibold">Total</span>,
+            viagens: <span className="block text-left font-semibold tabular-nums">{numero(totalViagens)} viagens</span>,
+            toneladas: <span className="font-semibold tabular-nums">{numero(totalToneladas, 1)}</span>,
+            producao: <MoneyText valor={totalProducao} className="font-semibold" />,
+            porViagem: totalViagens > 0 ? <MoneyText valor={totalProducao / totalViagens} className="font-semibold" /> : null,
+            porTonelada: totalToneladas > 0 ? <MoneyText valor={totalProducao / totalToneladas} className="font-semibold" /> : null,
+            km: <span className="font-semibold tabular-nums">{`${numero(kmRodados)} km rodados`}</span>,
+          }}
+        />
       </div>
       <p className="text-legenda text-muted-foreground">
         Clique numa coluna para ordenar; numa rota, para filtrar a aba. Tempo médio = dias entre a data de saída e a de chegada do

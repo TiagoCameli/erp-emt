@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import {
@@ -12,6 +11,7 @@ import {
 } from "@/components/canonicos";
 import { dataHojeISO } from "@/lib/formatadores";
 import { abasVisiveis, getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { MaioresCustosTabela } from "@/modules/manutencao/painel/components/maiores-custos-tabela";
 import { carregarPainel } from "@/modules/manutencao/painel/queries";
 
 /** Link para o caderno com o filtro que reproduz o número do cartão. */
@@ -100,46 +100,19 @@ export default async function PainelManutencao() {
                 className="border-none bg-transparent"
               />
             ) : (
-              <div className="overflow-x-auto rounded-md border border-border">
-                <table className="w-full text-detalhe">
-                  <thead>
-                    <tr className="border-b border-border text-legenda text-muted-foreground">
-                      <th className="w-10 px-3 py-2 text-center font-medium">#</th>
-                      <th className="px-3 py-2 text-center font-medium">Equipamento</th>
-                      <th className="px-3 py-2 text-right font-medium">OS concluídas</th>
-                      <th className="px-3 py-2 text-right font-medium">Custo no ano</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {painel.maioresCustos.map((linha, indice) => (
-                      <tr key={linha.equipamentoId} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2 text-center tabular-nums text-muted-foreground">{indice + 1}</td>
-                        <td className="px-3 py-2 text-center">
-                          {veCaderno ? (
-                            <Link
-                              className="font-medium hover:underline"
-                              href={linkCaderno({
-                                status: "concluida",
-                                equipamento: linha.equipamentoId,
-                                conclusaoDe: janelas.anoDe,
-                                conclusaoAte: janelas.anoAte,
-                              })}
-                            >
-                              {linha.equipamentoNome}
-                            </Link>
-                          ) : (
-                            <span className="font-medium">{linha.equipamentoNome}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{linha.quantidadeOs}</td>
-                        <td className="px-3 py-2 text-right">
-                          <MoneyText valor={linha.custo} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <MaioresCustosTabela
+                linhas={painel.maioresCustos.map((linha) => ({
+                  ...linha,
+                  href: veCaderno
+                    ? linkCaderno({
+                        status: "concluida",
+                        equipamento: linha.equipamentoId,
+                        conclusaoDe: janelas.anoDe,
+                        conclusaoAte: janelas.anoAte,
+                      })
+                    : null,
+                }))}
+              />
             )}
           </SecaoDetalhe>
         </ItemGrade>

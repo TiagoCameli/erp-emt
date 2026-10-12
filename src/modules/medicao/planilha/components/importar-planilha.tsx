@@ -21,7 +21,6 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { gravarImportacao, lerAbasDaVersao, previaDaImportacao, type Previa } from "@/modules/medicao/planilha/actions";
@@ -327,6 +326,39 @@ function PassoColunas({
     ).filter((c): c is [number, string] => c[0] !== null),
   );
 
+  // A aba como está no arquivo: uma coluna por letra, as linhas na ordem da
+  // planilha (não ordena) e a linha do cabeçalho escolhida em destaque.
+  const ehCabecalho = (l: AbaPrevia["linhas"][number]) => l.numero === mapa.linhaCabecalho;
+  const colunasArquivo: ColumnDef<AbaPrevia["linhas"][number], unknown>[] = [
+    {
+      id: "numero",
+      header: "#",
+      size: 56,
+      enableSorting: false,
+      meta: { alinharDireita: true, atomico: true, fixa: true, rotulo: "Número da linha" },
+      cell: ({ row }) => (
+        <span className={cn("tabular-nums text-muted-foreground", ehCabecalho(row.original) && "font-semibold")}>{row.original.numero}</span>
+      ),
+    },
+    ...Array.from({ length: totalColunas }, (_, i): ColumnDef<AbaPrevia["linhas"][number], unknown> => ({
+      id: `coluna-${i + 1}`,
+      header: () => (
+        <span className="whitespace-nowrap">
+          {letra(i + 1)}
+          {colunaMarcada.has(i + 1) ? <span className="ml-1 text-legenda text-muted-foreground">({colunaMarcada.get(i + 1)})</span> : null}
+        </span>
+      ),
+      size: 160,
+      enableSorting: false,
+      meta: { rotulo: letra(i + 1), atomico: true },
+      cell: ({ row }) => (
+        <span title={row.original.celulas[i]} className={cn(ehCabecalho(row.original) && "font-semibold")}>
+          {row.original.celulas[i]}
+        </span>
+      ),
+    })),
+  ];
+
   const campo = (chave: keyof Mapeamento["colunas"], rotulo: string, opcional = false) => (
     <CampoFormulario id={`coluna-${chave}`} rotulo={rotulo} obrigatorio={!opcional}>
       <Combobox
@@ -381,32 +413,17 @@ function PassoColunas({
         {campo("valor", "Valor previsto", true)}
       </div>
 
-      <div className="mt-4 max-h-96 overflow-auto rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12 text-right">#</TableHead>
-              {Array.from({ length: totalColunas }, (_, i) => (
-                <TableHead key={i} className="whitespace-nowrap">
-                  {letra(i + 1)}
-                  {colunaMarcada.has(i + 1) ? <span className="ml-1 text-legenda text-muted-foreground">({colunaMarcada.get(i + 1)})</span> : null}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {aba.linhas.map((l) => (
-              <TableRow key={l.numero} className={cn(l.numero === mapa.linhaCabecalho && "bg-surface font-semibold")}>
-                <TableCell className="text-right tabular-nums text-muted-foreground">{l.numero}</TableCell>
-                {Array.from({ length: totalColunas }, (_, i) => (
-                  <TableCell key={i} className="max-w-64 truncate" title={l.celulas[i]}>
-                    {l.celulas[i]}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <div className="mt-4">
+        <DataTable
+          idTabela="medicao.planilha.importar.arquivo"
+          columns={colunasArquivo}
+          data={aba.linhas}
+          idDaLinha={(l) => String(l.numero)}
+          semPaginacao
+          cabecalhoFixo
+          alturaMaxima="24rem"
+          classeDaLinha={(l) => (l.numero === mapa.linhaCabecalho ? "bg-surface hover:bg-surface" : undefined)}
+        />
       </div>
 
       <div className="mt-3">
@@ -592,6 +609,32 @@ function agruparAlertas(alertas: Alerta[]): { tipo: TipoAlerta; bloqueia: boolea
   return [...grupos.values()].sort((x, y) => Number(y.bloqueia) - Number(x.bloqueia));
 }
 
+type LinhaDiverge = NonNullable<Previa["diagnostico"]>["diverge"][number];
+
+/** Os três números de cada linha que não fecha, para comparar lado a lado. */
+const colunaDecimal = (id: "exato" | "arredondado" | "planilha", header: string): ColumnDef<LinhaDiverge, unknown> => ({
+  id,
+  header,
+  accessorFn: (l) => Number(l[id]),
+  size: 150,
+  meta: { alinharDireita: true, atomico: true },
+  cell: ({ row }) => <span className="tabular-nums">{decimalPtBr(row.original[id])}</span>,
+});
+
+const COLUNAS_DIVERGE: ColumnDef<LinhaDiverge, unknown>[] = [
+  {
+    id: "codigo",
+    header: "Código",
+    accessorFn: (l) => l.codigo,
+    size: 140,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => <span className="font-mono">{row.original.codigo}</span>,
+  },
+  colunaDecimal("exato", "Exato"),
+  colunaDecimal("arredondado", "Arredondado"),
+  { ...colunaDecimal("planilha", "Planilha"), meta: { alinharDireita: true, atomico: true, celular: "valor" } },
+];
+
 function DiagnosticoValor({ previa }: { previa: Previa }) {
   const d = previa.diagnostico;
   if (!d) {
@@ -613,28 +656,15 @@ function DiagnosticoValor({ previa }: { previa: Previa }) {
         <span className="tabular-nums">{d.diverge.length}</span> não fecham
       </p>
       {d.diverge.length > 0 ? (
-        <div className="max-h-72 overflow-auto rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead className="text-right">Exato</TableHead>
-                <TableHead className="text-right">Arredondado</TableHead>
-                <TableHead className="text-right">Planilha</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {d.diverge.map((l) => (
-                <TableRow key={l.ordem}>
-                  <TableCell className="font-mono">{l.codigo}</TableCell>
-                  <TableCell className="text-right tabular-nums">{decimalPtBr(l.exato)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{decimalPtBr(l.arredondado)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{decimalPtBr(l.planilha)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <DataTable
+          idTabela="medicao.planilha.importar.diagnostico"
+          columns={COLUNAS_DIVERGE}
+          data={d.diverge}
+          idDaLinha={(l) => String(l.ordem)}
+          semPaginacao
+          cabecalhoFixo
+          alturaMaxima="18rem"
+        />
       ) : null}
       <p className="text-detalhe text-muted-foreground">Isto não escolhe a regra do contrato. Leve para o Tiago decidir</p>
     </div>

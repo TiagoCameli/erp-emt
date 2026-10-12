@@ -2,11 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, CheckCheck, Pencil, Play, Plus, RotateCcw, Trash2, X } from "lucide-react";
 
 import {
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   MoneyText,
   PageHeader,
   SecaoDetalhe,
@@ -39,8 +41,11 @@ import type {
   EquipamentoOpcaoOs,
   FornecedorOpcaoOs,
   LinhasOs,
+  OleoOs,
   OsDetalhe,
+  PecaOs,
   SaldosParaOs,
+  TerceiroOs,
 } from "@/modules/manutencao/servicos/queries";
 import { acoesDaOs } from "@/modules/manutencao/servicos/regras";
 import type { TipoLinhaOs } from "@/modules/manutencao/servicos/schemas";
@@ -83,79 +88,159 @@ function Medicao({ valor, controlePor }: { valor: number | null; controlePor: st
   );
 }
 
-/** Tabela só de leitura de um bloco de linhas, com o total que veio do banco. */
+/** Número da tabela: à direita, tabular, em uma linha. */
+function Numero({ children }: { children: React.ReactNode }) {
+  return <span className="tabular-nums">{children}</span>;
+}
+
+/** Célula do rodapé: o peso vai na célula, que é quem sabe o que é número. */
+function Rodape({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium tabular-nums">{children}</span>;
+}
+
+/**
+ * Tabela só de leitura de um bloco de linhas, com o total que veio do banco.
+ * `idColunaRotulo` recebe o "Total do bloco" e `idColunaTotal` o valor.
+ */
 function TabelaLinhas<L extends { id: string }>({
+  idTabela,
   colunas,
   linhas,
   total,
+  idColunaRotulo,
+  idColunaTotal,
   vazio,
   onRemover,
 }: {
-  colunas: { rotulo: string; direita?: boolean; celula: (linha: L) => React.ReactNode }[];
+  idTabela: string;
+  colunas: ColumnDef<L, unknown>[];
   linhas: L[];
   total: number;
+  idColunaRotulo: string;
+  idColunaTotal: string;
   vazio: string;
   onRemover?: (linha: L) => void;
 }) {
+  const colunasComAcao = React.useMemo<ColumnDef<L, unknown>[]>(
+    () =>
+      onRemover
+        ? [
+            ...colunas,
+            {
+              id: "remover",
+              header: "",
+              size: 48,
+              enableSorting: false,
+              enableResizing: false,
+              // `rotulo: "Ações"` põe o botão no canto do card no celular.
+              meta: { fixa: true, naoTruncar: true, alinharDireita: true, rotulo: "Ações" },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Remover linha"
+                  onClick={() => onRemover(row.original)}
+                >
+                  <X />
+                </Button>
+              ),
+            },
+          ]
+        : colunas,
+    [colunas, onRemover],
+  );
+
   if (linhas.length === 0) {
     return <p className="text-detalhe text-muted-foreground">{vazio}</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-detalhe">
-        <thead>
-          <tr className="border-b border-border text-legenda text-muted-foreground">
-            {colunas.map((coluna) => (
-              <th
-                key={coluna.rotulo}
-                className={`px-3 py-2 font-medium ${coluna.direita ? "text-right" : "text-center"}`}
-              >
-                {coluna.rotulo}
-              </th>
-            ))}
-            {onRemover ? <th className="w-10 px-2 py-2" aria-label="Ações" /> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map((linha) => (
-            <tr key={linha.id} className="border-b border-border last:border-0">
-              {colunas.map((coluna) => (
-                <td
-                  key={coluna.rotulo}
-                  className={`px-3 py-2 ${coluna.direita ? "text-right tabular-nums" : "text-center"}`}
-                >
-                  {coluna.celula(linha)}
-                </td>
-              ))}
-              {onRemover ? (
-                <td className="px-2 py-1 text-right">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Remover linha"
-                    onClick={() => onRemover(linha)}
-                  >
-                    <X />
-                  </Button>
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-border font-medium">
-            <td className="px-3 py-2 text-right" colSpan={colunas.length - 1}>
-              Total do bloco
-            </td>
-            <td className="px-3 py-2 text-right tabular-nums">{formatarValorOperacional(total)}</td>
-            {onRemover ? <td /> : null}
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+    <DataTable
+      idTabela={idTabela}
+      columns={colunasComAcao}
+      data={linhas}
+      idDaLinha={(linha) => linha.id}
+      semPaginacao
+      rodape={{
+        [idColunaRotulo]: <Rodape>Total do bloco</Rodape>,
+        [idColunaTotal]: <Rodape>{formatarValorOperacional(total)}</Rodape>,
+      }}
+    />
   );
 }
+
+const COLUNAS_PECAS: ColumnDef<PecaOs, unknown>[] = [
+  { accessorKey: "insumoNome", header: "Peça", meta: { celular: "titulo" } },
+  { accessorKey: "depositoNome", header: "Depósito" },
+  {
+    accessorKey: "quantidade",
+    header: "Quantidade",
+    meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+    cell: ({ row }) => (
+      <Numero>
+        {formatarQuantidade(row.original.quantidade)}
+        {row.original.unidade ? ` ${row.original.unidade}` : ""}
+      </Numero>
+    ),
+  },
+  {
+    accessorKey: "custoUnitario",
+    header: "Custo unitário",
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.custoUnitario)}</Numero>,
+  },
+  {
+    accessorKey: "custoTotal",
+    header: "Total",
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.custoTotal)}</Numero>,
+  },
+];
+
+const COLUNAS_OLEOS: ColumnDef<OleoOs, unknown>[] = [
+  { accessorKey: "tipoOleoNome", header: "Tipo de óleo", meta: { celular: "titulo" } },
+  { accessorKey: "insumoNome", header: "Insumo" },
+  { accessorKey: "depositoNome", header: "Depósito" },
+  {
+    accessorKey: "quantidade",
+    header: "Quantidade",
+    meta: { alinharDireita: true, atomico: true, celular: "destaque" },
+    cell: ({ row }) => (
+      <Numero>
+        {formatarQuantidade(row.original.quantidade)} {row.original.unidade}
+      </Numero>
+    ),
+  },
+  {
+    accessorKey: "valorUnitario",
+    header: "Valor unitário",
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.valorUnitario)}</Numero>,
+  },
+  {
+    accessorKey: "valorTotal",
+    header: "Valor",
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.valorTotal)}</Numero>,
+  },
+];
+
+const COLUNAS_TERCEIROS: ColumnDef<TerceiroOs, unknown>[] = [
+  { accessorKey: "fornecedorNome", header: "Fornecedor" },
+  { accessorKey: "descricao", header: "Descrição", meta: { celular: "titulo" } },
+  {
+    accessorKey: "notaFiscal",
+    header: "Nota fiscal",
+    meta: { atomico: true },
+    cell: ({ row }) => row.original.notaFiscal ?? <CelulaVazia />,
+  },
+  {
+    accessorKey: "valor",
+    header: "Valor",
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Numero>{formatarValorOperacional(row.original.valor)}</Numero>,
+  },
+];
 
 export interface OsDetalheViewProps {
   os: OsDetalhe;
@@ -379,30 +464,18 @@ export function OsDetalheView({
             }
           >
             <TabelaLinhas
+              idTabela="manutencao.servicos.detalhe.pecas"
               linhas={linhas.pecas}
               total={os.custoPecas}
+              idColunaRotulo="insumoNome"
+              idColunaTotal="custoTotal"
               vazio="Nenhuma peça lançada"
               onRemover={
                 onRemover
                   ? (linha) => setRemovendo({ tipo: "peca", id: linha.id, descricao: linha.insumoNome })
                   : undefined
               }
-              colunas={[
-                { rotulo: "Peça", celula: (linha) => linha.insumoNome },
-                { rotulo: "Depósito", celula: (linha) => linha.depositoNome },
-                {
-                  rotulo: "Quantidade",
-                  direita: true,
-                  celula: (linha) =>
-                    `${formatarQuantidade(linha.quantidade)}${linha.unidade ? ` ${linha.unidade}` : ""}`,
-                },
-                {
-                  rotulo: "Custo unitário",
-                  direita: true,
-                  celula: (linha) => formatarValorOperacional(linha.custoUnitario),
-                },
-                { rotulo: "Total", direita: true, celula: (linha) => formatarValorOperacional(linha.custoTotal) },
-              ]}
+              colunas={COLUNAS_PECAS}
             />
           </SecaoDetalhe>
 
@@ -419,8 +492,11 @@ export function OsDetalheView({
             }
           >
             <TabelaLinhas
+              idTabela="manutencao.servicos.detalhe.oleos"
               linhas={linhas.oleos}
               total={os.custoOleos}
+              idColunaRotulo="tipoOleoNome"
+              idColunaTotal="valorTotal"
               vazio="Nenhum óleo lançado"
               onRemover={
                 onRemover
@@ -428,22 +504,7 @@ export function OsDetalheView({
                       setRemovendo({ tipo: "oleo", id: linha.id, descricao: `${linha.tipoOleoNome} (${linha.insumoNome})` })
                   : undefined
               }
-              colunas={[
-                { rotulo: "Tipo de óleo", celula: (linha) => linha.tipoOleoNome },
-                { rotulo: "Insumo", celula: (linha) => linha.insumoNome },
-                { rotulo: "Depósito", celula: (linha) => linha.depositoNome },
-                {
-                  rotulo: "Quantidade",
-                  direita: true,
-                  celula: (linha) => `${formatarQuantidade(linha.quantidade)} ${linha.unidade}`,
-                },
-                {
-                  rotulo: "Valor unitário",
-                  direita: true,
-                  celula: (linha) => formatarValorOperacional(linha.valorUnitario),
-                },
-                { rotulo: "Valor", direita: true, celula: (linha) => formatarValorOperacional(linha.valorTotal) },
-              ]}
+              colunas={COLUNAS_OLEOS}
             />
           </SecaoDetalhe>
 
@@ -460,20 +521,18 @@ export function OsDetalheView({
             }
           >
             <TabelaLinhas
+              idTabela="manutencao.servicos.detalhe.terceiros"
               linhas={linhas.terceiros}
               total={os.custoTerceiros}
+              idColunaRotulo="fornecedorNome"
+              idColunaTotal="valor"
               vazio="Nenhum serviço de terceiro lançado"
               onRemover={
                 onRemover
                   ? (linha) => setRemovendo({ tipo: "terceiro", id: linha.id, descricao: linha.descricao })
                   : undefined
               }
-              colunas={[
-                { rotulo: "Fornecedor", celula: (linha) => linha.fornecedorNome },
-                { rotulo: "Descrição", celula: (linha) => linha.descricao },
-                { rotulo: "Nota fiscal", celula: (linha) => linha.notaFiscal ?? <CelulaVazia /> },
-                { rotulo: "Valor", direita: true, celula: (linha) => formatarValorOperacional(linha.valor) },
-              ]}
+              colunas={COLUNAS_TERCEIROS}
             />
           </SecaoDetalhe>
 

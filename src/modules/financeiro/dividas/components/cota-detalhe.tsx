@@ -3,9 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Award, FileSpreadsheet, Pencil } from "lucide-react";
 
-import { CelulaVazia, GradeKpis, KPICard, MoneyText, PageHeader, SecaoDetalhe } from "@/components/canonicos";
+import { CelulaVazia, DataTable, GradeKpis, KPICard, MoneyText, PageHeader, SecaoDetalhe } from "@/components/canonicos";
 import { Anexos } from "@/components/canonicos/anexos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,7 @@ import { CotaFormDrawer, ENTIDADE_COTA } from "@/modules/financeiro/dividas/comp
 import { CronogramaDrawer } from "@/modules/financeiro/dividas/components/cronograma-drawer";
 import { linhaEditavel } from "@/modules/financeiro/dividas/components/cronograma-editor";
 import { SeloCota } from "@/modules/financeiro/dividas/components/selos";
-import type { DetalheCota } from "@/modules/financeiro/dividas/queries";
+import type { DetalheCota, LinhaConsorcio } from "@/modules/financeiro/dividas/queries";
 import type { ConsorcioRelatorio } from "@/modules/financeiro/dividas/relatorio";
 
 function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
@@ -31,7 +32,79 @@ function Dado({ rotulo, children }: { rotulo: string; children: React.ReactNode 
   );
 }
 
-const TH = "h-9 px-3 text-right font-medium";
+// Sem ordenação: o cronograma é a sequência das parcelas, na ordem de vencimento.
+const COLUNAS_CRONOGRAMA: ColumnDef<LinhaConsorcio, unknown>[] = [
+  {
+    id: "numero",
+    header: "Nº",
+    size: 80,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Nº", celular: "titulo" },
+    cell: ({ row }) => <span className="tabular-nums text-muted-foreground">{row.original.numero}</span>,
+  },
+  {
+    id: "vencimento",
+    header: "Vencimento",
+    size: 120,
+    enableSorting: false,
+    meta: { atomico: true, rotulo: "Vencimento", celular: "destaque" },
+    cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.vencimento)}</span>,
+  },
+  {
+    id: "fundoComum",
+    header: "Fundo comum",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Fundo comum" },
+    cell: ({ row }) => <MoneyText valor={row.original.fundoComum} />,
+  },
+  {
+    id: "taxaAdm",
+    header: "Taxa de adm.",
+    size: 130,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Taxa de adm." },
+    cell: ({ row }) => <MoneyText valor={row.original.taxaAdm} />,
+  },
+  {
+    id: "fundoReserva",
+    header: "Fundo de reserva",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Fundo de reserva" },
+    cell: ({ row }) => <MoneyText valor={row.original.fundoReserva} />,
+  },
+  {
+    id: "total",
+    header: "Total",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Total", celular: "valor" },
+    cell: ({ row }) => (
+      <MoneyText
+        valor={somarCentavos([row.original.fundoComum, row.original.taxaAdm, row.original.fundoReserva])}
+        className="font-medium"
+      />
+    ),
+  },
+];
+
+/** Situação no lançamento das parcelas: só existe quando a cota tem lançamento ligado. */
+const COLUNA_SITUACAO: ColumnDef<LinhaConsorcio, unknown> = {
+  id: "situacao",
+  header: "Situação",
+  size: 110,
+  enableSorting: false,
+  meta: { rotulo: "Situação", celular: "destaque" },
+  cell: ({ row }) =>
+    row.original.paga ? (
+      <span className="text-legenda text-status-aprovado">Paga</span>
+    ) : (
+      <span className="text-legenda text-muted-foreground">A pagar</span>
+    ),
+};
+
+const COLUNAS_CRONOGRAMA_COM_SITUACAO = [...COLUNAS_CRONOGRAMA, COLUNA_SITUACAO];
 
 export interface CotaDetalheProps {
   detalhe: DetalheCota;
@@ -189,50 +262,13 @@ export function CotaDetalhe({
           {cronograma.length === 0 ? (
             <p className="text-detalhe text-muted-foreground">Nenhuma parcela.</p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th className={TH}>Nº</th>
-                    <th className="h-9 px-3 text-center font-medium">Vencimento</th>
-                    <th className={TH}>Fundo comum</th>
-                    <th className={TH}>Taxa de adm.</th>
-                    <th className={TH}>Fundo de reserva</th>
-                    <th className={TH}>Total</th>
-                    {cota.lancamento ? <th className="h-9 px-3 text-center font-medium">Situação</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {cronograma.map((l) => (
-                    <tr key={l.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">{l.numero}</td>
-                      <td className="px-3 py-1.5 text-center tabular-nums">{formatarData(l.vencimento)}</td>
-                      <td className="px-3 py-1.5 text-right">
-                        <MoneyText valor={l.fundoComum} />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <MoneyText valor={l.taxaAdm} />
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <MoneyText valor={l.fundoReserva} />
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-medium">
-                        <MoneyText valor={somarCentavos([l.fundoComum, l.taxaAdm, l.fundoReserva])} />
-                      </td>
-                      {cota.lancamento ? (
-                        <td className="px-3 py-1.5 text-center text-legenda">
-                          {l.paga ? (
-                            <span className="text-status-aprovado">Paga</span>
-                          ) : (
-                            <span className="text-muted-foreground">A pagar</span>
-                          )}
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="financeiro.dividas.cota.cronograma"
+              columns={cota.lancamento ? COLUNAS_CRONOGRAMA_COM_SITUACAO : COLUNAS_CRONOGRAMA}
+              data={cronograma}
+              idDaLinha={(l) => l.id}
+              semPaginacao
+            />
           )}
         </SecaoDetalhe>
 
