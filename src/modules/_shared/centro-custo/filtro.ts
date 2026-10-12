@@ -346,3 +346,28 @@ export function separarCentrosDaListagem(
   }
   return { raizes, segundoCampo };
 }
+
+/**
+ * O cadastro sem os centros que não mexem no relatório.
+ *
+ * Pedido do Tiago em 12/10/2026, olhando o Custo x receita: o seletor oferecia
+ * Escritório, Galpão, Sócios e equipamentos que não têm um real no recorte, e
+ * marcar um deles só desenhava R$ 0,00. Quem diz o que tem movimento é o próprio
+ * relatório (as linhas da RPC), não uma lista de nomes, então um centro novo
+ * entra no filtro sozinho no dia em que receber o primeiro lançamento.
+ *
+ * Fica a etapa que tem movimento e a raiz que tem movimento direto OU alguma
+ * etapa que ficou. `manter` segura o que já está escolhido na URL: um link antigo
+ * para um centro que ficou sem movimento não pode virar escolha invisível.
+ */
+export function cadastroComMovimento(
+  centros: readonly CentroCustoOpcao[],
+  comMovimento: ReadonlySet<string>,
+  manter: readonly string[] = [],
+): CentroCustoOpcao[] {
+  const fica = new Set([...comMovimento, ...manter]);
+  for (const centro of centros) {
+    if (centro.paiId !== null && fica.has(centro.id)) fica.add(centro.paiId);
+  }
+  return centros.filter((centro) => fica.has(centro.id));
+}

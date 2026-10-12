@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import {
+  cadastroComMovimento,
   centrosDaListagem,
   centrosEfetivos,
   etapasDasRaizes,
@@ -319,5 +320,36 @@ describe("sem etapa: o rateio gravado direto na raiz", () => {
     expect(
       etapasValidas(CADASTRO, [OBRA], [valorSemEtapa(MANUT), valorSemEtapa(OBRA)]),
     ).toEqual([valorSemEtapa(OBRA)]);
+  });
+});
+
+describe("cadastroComMovimento", () => {
+  it("tira o centro sem movimento e mantém a raiz de uma etapa com movimento", () => {
+    const ids = cadastroComMovimento(CADASTRO, new Set([MAQ_A])).map(
+      (c) => c.id,
+    );
+    expect(ids).toEqual([MANUT, MAQ_A]);
+  });
+
+  it("raiz com movimento direto fica sem levar as etapas paradas", () => {
+    const ids = cadastroComMovimento(CADASTRO, new Set([OBRA])).map(
+      (c) => c.id,
+    );
+    expect(ids).toEqual([OBRA]);
+  });
+
+  it("o que está escolhido na URL continua na lista mesmo sem movimento", () => {
+    const ids = cadastroComMovimento(CADASTRO, new Set([OBRA]), [
+      ESCRITORIO,
+      MAQ_B,
+    ]).map((c) => c.id);
+    expect(ids).toContain(ESCRITORIO);
+    expect(ids).toContain(MAQ_B);
+    expect(ids).toContain(MANUT);
+    expect(ids).not.toContain(MAQ_A);
+  });
+
+  it("sem movimento nenhum, lista vazia", () => {
+    expect(cadastroComMovimento(CADASTRO, new Set())).toEqual([]);
   });
 });
