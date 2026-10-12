@@ -50,6 +50,10 @@ import {
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
+import {
+  janelasContiguas,
+  type IndiretoDoPeriodo,
+} from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
 // componentes continuem importando tudo de queries.ts, como antes da extração.
@@ -1508,19 +1512,50 @@ export async function rateioIndiretoDoMes(mes: string): Promise<RateioDoMes> {
   };
 }
 
-/** Indireto rateado por obra numa janela [inicio, fim), somado mês a mês. */
+/**
+ * Indireto rateado por obra numa janela [inicio, fim), somado mês a mês, e os
+ * centros que são indiretos (para a tela tirar a linha deles).
+ *
+ * Os indiretos vêm do cadastro (`papel_rateio = 'indireto'`) e não de uma lista
+ * no código: quem decide o papel é o banco, e a tela não pode discordar dele.
+ */
 export async function indiretoDoPeriodo(
   inicio: string,
   fim: string,
-): Promise<{ porObra: Map<string, number>; naoRateado: number }> {
+): Promise<IndiretoDoPeriodo> {
+  return indiretoDasJanelas([{ inicio, fim }]);
+}
+
+/** O mesmo, para meses soltos: uma chamada por janela contígua, somadas em centavos. */
+export async function indiretoDosMeses(meses: readonly string[]): Promise<IndiretoDoPeriodo> {
+  return indiretoDasJanelas(janelasContiguas(meses));
+}
+
+async function indiretoDasJanelas(
+  janelas: readonly { inicio: string; fim: string }[],
+): Promise<IndiretoDoPeriodo> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_rateio_indireto_periodo", { p_inicio: inicio, p_fim: fim });
-  if (error) throw new Error("Não foi possível carregar o rateio do indireto");
-  const porObra = new Map<string, number>();
-  let naoRateado = 0;
-  for (const l of data ?? []) {
-    if (l.centro_id) porObra.set(l.centro_id, Number(l.indireto));
-    else naoRateado += Number(l.nao_rateado);
+  const [periodos, centros] = await Promise.all([
+    Promise.all(
+      janelas.map((j) => supabase.rpc("fn_rateio_indireto_periodo", { p_inicio: j.inicio, p_fim: j.fim })),
+    ),
+    supabase.from("centros_custo").select("id").eq("papel_rateio", "indireto"),
+  ]);
+  if (centros.error || periodos.some((p) => p.error)) {
+    throw new Error("Não foi possível carregar o rateio do indireto");
   }
-  return { porObra, naoRateado };
+  const porObraCent = new Map<string, number>();
+  let naoRateadoCent = 0;
+  for (const { data } of periodos) {
+    for (const l of data ?? []) {
+      if (l.centro_id) {
+        porObraCent.set(l.centro_id, (porObraCent.get(l.centro_id) ?? 0) + paraCentavos(Number(l.indireto)));
+      } else naoRateadoCent += paraCentavos(Number(l.nao_rateado));
+    }
+  }
+  return {
+    porObra: new Map([...porObraCent].map(([id, c]) => [id, paraReais(c)])),
+    naoRateado: paraReais(naoRateadoCent),
+    indiretos: new Set((centros.data ?? []).map((c) => c.id)),
+  };
 }

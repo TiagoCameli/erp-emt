@@ -334,3 +334,13 @@ describe("comparacaoPermitida", () => {
     expect(comparacaoPermitida("vida")).toBe(false);
   });
 });
+
+describe("lerFiltrosCustoCc: com indireto rateado", () => {
+  it("desligado por padrão e liga só no literal 1 de `com_indireto`", () => {
+    expect(lerFiltrosCustoCc({}, MES_CORRENTE).filtros.comIndireto).toBe(false);
+    expect(lerFiltrosCustoCc({ com_indireto: "1" }, MES_CORRENTE).filtros.comIndireto).toBe(true);
+    for (const valor of ["0", "true", "sim", ""]) {
+      expect(lerFiltrosCustoCc({ com_indireto: valor }, MES_CORRENTE).filtros.comIndireto).toBe(false);
+    }
+  });
+});

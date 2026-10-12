@@ -931,6 +931,7 @@ export type Database = {
           obra_id: string | null;
           orcamento: number | null;
           pai_id: string | null;
+          papel_rateio: string | null;
           sistema: boolean;
           tipo: string | null;
           updated_at: string;
@@ -947,6 +948,7 @@ export type Database = {
           obra_id?: string | null;
           orcamento?: number | null;
           pai_id?: string | null;
+          papel_rateio?: string | null;
           sistema?: boolean;
           tipo?: string | null;
           updated_at?: string;
@@ -963,6 +965,7 @@ export type Database = {
           obra_id?: string | null;
           orcamento?: number | null;
           pai_id?: string | null;
+          papel_rateio?: string | null;
           sistema?: boolean;
           tipo?: string | null;
           updated_at?: string;

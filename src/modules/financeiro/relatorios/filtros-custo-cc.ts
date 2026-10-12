@@ -120,6 +120,11 @@ export interface FiltrosCustoCc {
    * padrão, pela decisão D3: ver `filtro-investimento.ts`.
    */
   incluirInvestimento: boolean;
+  /**
+   * Mostrar o custo indireto rateado nas obras (`com_indireto=1`, PR 3). Só vale
+   * sem recorte que mude a base do indireto: ver `rateioPermitidoNoCustoCc`.
+   */
+  comIndireto: boolean;
 }
 
 const MODOS: ModoPeriodo[] = ["mes", "periodo", "total", "vida"];
@@ -203,6 +208,7 @@ export function lerFiltrosCustoCc(
     excluirPrevisto: parametroLigado(params.sem_previsto),
     comparar: parametroLigado(params.comparar),
     incluirInvestimento: lerIncluirInvestimento(params.com_investimento),
+    comIndireto: parametroLigado(params.com_indireto),
   };
 
   // O modo `vida` sem centro não é erro de digitação a ser corrigido em silêncio:

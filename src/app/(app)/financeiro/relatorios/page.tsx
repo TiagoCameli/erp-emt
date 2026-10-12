@@ -57,6 +57,14 @@ import {
 } from "@/modules/financeiro/relatorios/filtros-periodo";
 import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
 import {
+  aplicarIndireto,
+  ID_NAO_RATEADO,
+  margemPorObra,
+  rateioPermitidoNoCustoCc,
+  type IndiretoDoPeriodo,
+} from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
+import { MargemPorObraTabela } from "@/modules/financeiro/relatorios/components/margem-por-obra-tabela";
+import {
   porCentro,
   porMes,
   totais,
@@ -116,6 +124,8 @@ import {
   investimentos,
   sociosLigadas,
   rateioIndiretoDoMes,
+  indiretoDoPeriodo,
+  indiretoDosMeses,
   emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
@@ -920,10 +930,13 @@ async function ConteudoInvestimentos({
 async function ConteudoCustoCc({
   filtros,
   centroIds,
+  centrosCusto,
   erroDoModo,
   podeVerLancamentos,
 }: {
   filtros: FiltrosCustoCc;
+  /** O cadastro, para dar nome à obra que recebeu indireto sem ter custo no recorte. */
+  centrosCusto: readonly { id: string; nome: string; codigo: string | null }[];
   /**
    * Os centros que vão ao banco, já traduzidos da escada da tela: a raiz, ou as
    * etapas dela quando alguma foi escolhida (ver `centrosEfetivos`). Vem por
@@ -1002,7 +1015,20 @@ async function ConteudoCustoCc({
   const comparar = filtros.comparar && comparacaoPermitida(filtros.modo);
   const anterior = comparar ? periodoAnterior(periodo) : null;
 
-  const [custo, custoAnterior, series] = await Promise.all([
+  // "Com indireto rateado": só sem recorte que mude a base do indireto (o banco
+  // rateia o mês inteiro). Pedido e barrado vira um aviso, não um número errado.
+  const rateioPedido = filtros.comIndireto;
+  const rateioVale = rateioPedido && rateioPermitidoNoCustoCc(filtros);
+  // O rateio precisa das duas pontas: em "tudo" e na janela aberta elas vêm do
+  // primeiro e do último mês com lançamento, como no DRE.
+  const pontasDoIndireto = async (p: PeriodoCompetencia) => {
+    const fechado =
+      p.mes || (p.de && p.ate) ? p : periodoFechado(p, await mesesDeCompetencia());
+    const { inicio, fim } = fechado ? pontasDaRpc(fechado) : {};
+    return inicio && fim ? indiretoDoPeriodo(inicio, fim) : null;
+  };
+
+  const [custo, custoAnterior, series, indireto, indiretoAnterior] = await Promise.all([
     custoPorCentroCusto(filtrosDaRpc),
     anterior
       ? custoPorCentroCusto({ ...filtrosDaRpc, ...pontasDaRpc(anterior) })
@@ -1010,6 +1036,8 @@ async function ConteudoCustoCc({
     filtros.modo === "vida" && centroIds.length > 0
       ? serieDosCentros(centroIds, filtrosDaRpc)
       : Promise.resolve(null),
+    rateioVale ? pontasDoIndireto(periodo) : Promise.resolve(null),
+    rateioVale && anterior ? pontasDoIndireto(anterior) : Promise.resolve(null),
   ]);
 
   if (custo.centros.length === 0) {
@@ -1022,15 +1050,26 @@ async function ConteudoCustoCc({
     );
   }
 
-  const maior = custo.centros[0];
+  const nomes = new Map(centrosCusto.map((c) => [c.id, { nome: c.nome, codigo: c.codigo }]));
+  const comIndireto = (base: typeof custo, rateio: IndiretoDoPeriodo | null) =>
+    rateio ? aplicarIndireto(base.centros, rateio, nomes) : base;
+  // A tela inteira (gráfico, tabela, variação) lê o custo já com o indireto
+  // trocado de linha; o cartão "Custo total" continua o do banco, que é o mesmo
+  // dinheiro e prova que nada foi somado duas vezes.
+  const custoDaTela = comIndireto(custo, indireto);
+  const anteriorDaTela = custoAnterior ? comIndireto(custoAnterior, indiretoAnterior) : null;
+  const diferencaDoRateio =
+    Math.round(custoDaTela.total * 100) - Math.round(custo.total * 100);
+
+  const maior = custoDaTela.centros[0];
 
   // Variação por centro, em centavos: somar reais em ponto flutuante sobre dezenas
   // de centros acumula resto, e o total da coluna deixaria de bater com as linhas.
-  const variacao = custoAnterior
+  const variacao = anteriorDaTela
     ? new Map(
-        custo.centros.map((centro) => {
+        custoDaTela.centros.map((centro) => {
           const antes =
-            custoAnterior.centros.find(
+            anteriorDaTela.centros.find(
               (outro) => outro.centroCustoId === centro.centroCustoId,
             )?.valor ?? 0;
           const diferenca =
@@ -1051,8 +1090,8 @@ async function ConteudoCustoCc({
 
   const destinos = podeVerLancamentos
     ? new Map(
-        custo.centros
-          .filter((centro) => centro.centroCustoId)
+        custoDaTela.centros
+          .filter((centro) => centro.centroCustoId && centro.centroCustoId !== ID_NAO_RATEADO)
           .map((centro) => [
             centro.centroCustoId,
             drillCentroCusto({
@@ -1084,8 +1123,8 @@ async function ConteudoCustoCc({
         />
         <KPICard
           titulo="Centros de custo"
-          valor={custo.centros.length}
-          detalhe="Com custo no período"
+          valor={custoDaTela.centros.length}
+          detalhe={indireto ? "Com o indireto rateado nas obras" : "Com custo no período"}
         />
         {maior ? (
           <KPICard
@@ -1119,7 +1158,7 @@ async function ConteudoCustoCc({
           id="financeiro.relatorios.custo-cc.grafico"
           titulo="Custo por centro de custo"
         >
-          <CustoCcGrafico centros={custo.centros} destinos={destinos} />
+          <CustoCcGrafico centros={custoDaTela.centros} destinos={destinos} />
         </PainelGrafico>
       )}
 
@@ -1127,8 +1166,20 @@ async function ConteudoCustoCc({
           conforme o modo (série ou barras), e a tabela é a mesma nos dois. */}
       <GradeKpis id="financeiro.relatorios.custo-cc.tabela" titulo="Tabela do custo por centro" vao="amplo">
         <ItemGrade titulo="Tabela do custo por centro" idCard="tabela" larguraPadrao={12}>
+          {rateioPedido && !rateioVale ? (
+            <p className="mb-2 text-detalhe text-muted-foreground">
+              O rateio do indireto só entra sem filtro de categoria, fornecedor, forma, status, centro, tipo de centro, previsto ou investimentos, e fora da vida do centro.
+            </p>
+          ) : null}
+          {indireto && diferencaDoRateio !== 0 ? (
+            // Não deveria acontecer (a base do rateio é o mesmo custo): se
+            // acontecer, a tela diz em vez de esconder.
+            <p className="mb-2 text-detalhe text-status-pendente">
+              O indireto rateado não fecha com o custo dos centros indiretos: diferença de {formatarBRL(diferencaDoRateio / 100)}.
+            </p>
+          ) : null}
           <CustoCcTabela
-            custo={custo}
+            custo={custoDaTela}
             periodo={periodo}
             filtros={filtrosDoDrill}
             podeVerLancamentos={podeVerLancamentos}
@@ -1179,12 +1230,18 @@ async function ConteudoCustoReceita({
     );
   }
 
-  const linhas = await custoReceita({
-    meses,
-    centrosCusto,
-    centrosReceita,
-    incluirInvestimento,
-  });
+  // Margem por obra só sem corte de centro: com corte, custo e receita são de
+  // conjuntos diferentes e "a margem da obra" deixa de ser uma pergunta.
+  const semCorteDeCentro = centrosCusto.length === 0 && centrosReceita.length === 0;
+  const [linhas, indireto] = await Promise.all([
+    custoReceita({
+      meses,
+      centrosCusto,
+      centrosReceita,
+      incluirInvestimento,
+    }),
+    semCorteDeCentro ? indiretoDosMeses(meses) : Promise.resolve(null),
+  ]);
 
   if (linhas.length === 0) {
     return (
@@ -1200,6 +1257,15 @@ async function ConteudoCustoReceita({
   const porMesDoRelatorio = porMes(linhas);
   const custos = porCentro(linhas, "a_pagar");
   const receitas = porCentro(linhas, "a_receber");
+  const margens = indireto
+    ? margemPorObra(
+        new Map(receitas.map((r) => [r.centroCustoId, { nome: r.nome, receita: r.total }])),
+        new Map(custos.map((c) => [c.centroCustoId, c.total])),
+        indireto.porObra,
+        indireto.indiretos,
+        new Map(custos.map((c) => [c.centroCustoId, c.nome])),
+      )
+    : [];
 
   return (
     <>
@@ -1278,6 +1344,23 @@ async function ConteudoCustoReceita({
       >
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
       </PainelGrafico>
+
+      {margens.length > 0 ? (
+        <GradeKpis id="financeiro.relatorios.custo-receita.margem" titulo="Margem por obra" vao="amplo">
+          <ItemGrade titulo="Margem por obra" idCard="margem-por-obra" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <h3 className="text-corpo font-medium text-foreground">Margem por obra</h3>
+              <p className="text-detalhe text-muted-foreground">
+                O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado rateado nas obras pelo custo direto de cada uma, mês a mês.
+                {indireto && indireto.naoRateado > 0
+                  ? ` ${formatarBRL(indireto.naoRateado)} de indireto ficaram sem obra para receber (mês sem obra com custo).`
+                  : ""}
+              </p>
+              <MargemPorObraTabela linhas={margens} />
+            </div>
+          </ItemGrade>
+        </GradeKpis>
+      ) : null}
     </>
   );
 }
@@ -1708,6 +1791,7 @@ export default async function RelatoriosPage({
               filtrosCustoCc.centroIds,
               filtrosCustoCc.etapaIds,
             )}
+            centrosCusto={opcoesCustoCc[0]}
             erroDoModo={erroDoModo}
             podeVerLancamentos={podeVerLancamentos}
           />
