@@ -1,10 +1,29 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { ID_NAO_RATEADO } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 
-afterEach(cleanup);
+// O DataTable com `idTabela` lê e grava a preferência do usuário por Server
+// Action e usa o router; no teste, os dois ficam no lugar.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/financeiro/relatorios",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 const OBRA = "11111111-1111-4111-8111-111111111111";
 const FILTROS = {

@@ -863,6 +863,25 @@ export interface DataTableProps<TData> {
    * (`total`/`onPaginationChange`): a combinação lança erro.
    */
   subLinhas?: (registro: TData) => TData[] | undefined;
+  /**
+   * Mostra todas as linhas, sem paginação nem a barra "1 a 25 de N". É o modo
+   * dos relatórios: o DRE ou o aging cortado na linha 25 esconderia o total
+   * que a pessoa veio ler. **Opt-in**; não combina com paginação no servidor.
+   */
+  semPaginacao?: boolean;
+  /**
+   * Classe extra na linha, para destacar subtotal e resultado de relatório
+   * (fundo `bg-surface`, borda de cima). Só pinta a linha: o negrito de cada
+   * valor continua sendo da célula, que é quem sabe o que é número.
+   */
+  classeDaLinha?: (registro: TData) => string | undefined;
+  /**
+   * Linha que ocupa a largura toda da tabela, numa célula só: título de seção
+   * ("RECEITAS"), nota, linha de "nenhum lançamento". Devolva o conteúdo para
+   * essas linhas e `null`/`undefined` para as linhas comuns. Ela não tem
+   * colunas, então esconder, reordenar ou alargar coluna não a desmonta.
+   */
+  linhaInteira?: (registro: TData) => React.ReactNode | null | undefined;
 }
 
 /** Um filtro que o usuário pode ligar ou desligar no menu "Filtros". */
@@ -1166,10 +1185,15 @@ export function DataTable<TData>({
   podeExpandir,
   idDaLinha,
   subLinhas,
+  semPaginacao,
+  classeDaLinha,
+  linhaInteira,
 }: DataTableProps<TData>) {
   const modoServidor = total !== undefined && onPaginationChange !== undefined;
   const personalizavel = idTabela !== undefined;
   const arvoreAtiva = subLinhas !== undefined;
+  /** Árvore e relatório mostram tudo: sem modelo de página nem barra de páginas. */
+  const semPaginas = arvoreAtiva || semPaginacao === true;
   /**
    * No celular a lista vira cards e os filtros vão para uma gaveta. A árvore
    * fica de fora: recuo de pai e filho é o que ela comunica, e card não tem
@@ -1188,6 +1212,11 @@ export function DataTable<TData>({
   if (arvoreAtiva && modoServidor) {
     throw new Error(
       "DataTable: subLinhas não combina com paginação no servidor",
+    );
+  }
+  if (semPaginacao && modoServidor) {
+    throw new Error(
+      "DataTable: semPaginacao não combina com paginação no servidor",
     );
   }
 
@@ -1503,8 +1532,10 @@ export function DataTable<TData>({
     altura: number | null;
     largura: number | null;
   } | null>(null);
-  const alturaTabelaEfetiva = (editandoTamanho && previaTabela ? previaTabela.altura : alturaTabela);
-  const larguraTabelaEfetiva = (editandoTamanho && previaTabela ? previaTabela.largura : larguraTabela);
+  const alturaTabelaEfetiva =
+    editandoTamanho && previaTabela ? previaTabela.altura : alturaTabela;
+  const larguraTabelaEfetiva =
+    editandoTamanho && previaTabela ? previaTabela.largura : larguraTabela;
 
   function iniciarTamanhoTabela(
     evento: React.PointerEvent<HTMLElement>,
@@ -1531,7 +1562,9 @@ export function DataTable<TData>({
       if (borda !== "baixo") {
         const pct = ((larguraInicial + e.clientX - inicioX) / larguraPai) * 100;
         proximo.largura =
-          Math.round(Math.min(100, Math.max(LARGURA_TABELA_MINIMA, pct)) * 100) / 100;
+          Math.round(
+            Math.min(100, Math.max(LARGURA_TABELA_MINIMA, pct)) * 100,
+          ) / 100;
       }
       if (borda !== "direita") {
         proximo.altura = Math.round(
@@ -1556,9 +1589,15 @@ export function DataTable<TData>({
       alca.removeEventListener("lostpointercapture", aoSoltar);
       setPreviaTabela(null);
       // Largura de 100% é a padrão: não guarda número que não muda nada.
-      const largura = ultimo.largura !== null && ultimo.largura >= 100 ? null : ultimo.largura;
+      const largura =
+        ultimo.largura !== null && ultimo.largura >= 100
+          ? null
+          : ultimo.largura;
       if (ultimo.altura !== alturaTabela || largura !== larguraTabela) {
-        aplicarPreferencia({ alturaTabela: ultimo.altura, larguraTabela: largura });
+        aplicarPreferencia({
+          alturaTabela: ultimo.altura,
+          larguraTabela: largura,
+        });
       }
     }
     alca.addEventListener("pointermove", aoMover);
@@ -1708,7 +1747,9 @@ export function DataTable<TData>({
     (filtro) => filtro.temValor === true,
   );
   /** O que vai para a gaveta do celular: tudo menos o `fixo` (a busca). */
-  const filtrosGaveta = (filtros ?? []).filter((filtro) => filtro.fixo !== true);
+  const filtrosGaveta = (filtros ?? []).filter(
+    (filtro) => filtro.fixo !== true,
+  );
   /** Quantos, para o selo do botão "Filtros" do celular. */
   const qtdFiltrosAtivos = filtrosGaveta.filter(
     (filtro) => filtro.temValor === true,
@@ -2541,7 +2582,7 @@ export function DataTable<TData>({
           // volta no modelo anterior a paginação (ver RowPagination no
           // TanStack), que é a árvore inteira, e a barra de baixo (que lista
           // "Próxima página") fica escondida (ver o retorno, mais abaixo).
-          ...(arvoreAtiva
+          ...(semPaginas
             ? {}
             : { getPaginationRowModel: getPaginationRowModel() }),
           getSortedRowModel: getSortedRowModel(),
@@ -2960,168 +3001,193 @@ export function DataTable<TData>({
           </TableRow>
         ))
       ) : linhas.length > 0 ? (
-        linhas.map((linha) => (
-          <React.Fragment key={linha.id}>
-            <TableRow
-              data-expandida={expansivel ? linha.getIsExpanded() : undefined}
-              onClick={
-                onRowClick ? () => onRowClick(linha.original) : undefined
-              }
-              onKeyDown={
-                onRowClick
-                  ? (evento) => {
-                      if (evento.key === "Enter" || evento.key === " ") {
-                        evento.preventDefault();
-                        onRowClick(linha.original);
-                      }
-                    }
-                  : undefined
-              }
-              tabIndex={onRowClick ? 0 : undefined}
-              style={estiloLinha}
-              className={cn(
-                "hover:bg-muted/50",
-                alturaLinha === null && "h-9",
-                // A alça de altura é posicionada em relação à linha.
-                personalizavel && "group/linha relative",
-                onRowClick &&
-                  "cursor-pointer foco-anel-dentro focus-visible:bg-muted/50",
-              )}
-            >
-              {linha.getVisibleCells().map((celula, indiceCelula) => {
-                const alinharDireita =
-                  celula.column.columnDef.meta?.alinharDireita === true;
-                const conteudo = flexRender(
-                  celula.column.columnDef.cell,
-                  celula.getContext(),
-                );
-                const naoTruncar =
-                  celula.column.columnDef.meta?.naoTruncar === true;
-                const atomico = celula.column.columnDef.meta?.atomico === true;
-                return (
-                  <TableCell
-                    key={celula.id}
-                    // Marca a coluna na célula: é por aqui que o "ajustar ao
-                    // conteúdo" acha o que medir.
-                    data-coluna={celula.column.id}
-                    className={cn(
-                      "px-3 text-center text-detalhe",
-                      alinharDireita && "text-right",
-                      // Com altura fixa a célula não pode ter folga vertical:
-                      // 28px de linha menos 16px de padding não caberia uma linha
-                      // de texto. O `align-middle` do shadcn continua centralizando.
-                      alturaLinha !== null && "py-0",
-                      classesResponsivas(celula),
-                    )}
-                  >
-                    {indiceCelula === 0 && personalizavel
-                      ? alcaAltura(linha.id)
-                      : null}
-                    {naoTruncar && alturaLinha === null ? (
-                      // Célula que monta o próprio layout, na altura automática:
-                      // ela decide como cortar. Ganha três coisas que faltavam.
-                      //
-                      // `overflow-hidden` + `min-w-0`: era a AUSÊNCIA disso que
-                      // fazia o conteúdo vazar por cima da coluna vizinha. Só o
-                      // overflow não bastaria — item de grid/flex tem largura
-                      // mínima automática igual ao conteúdo, então a caixa cresceria
-                      // junto em vez de cortar.
-                      //
-                      // `whitespace-normal break-words`: desfaz o `nowrap` que a
-                      // `TableCell` do shadcn fixa e que é HERDADO. Sem isso, uma
-                      // coluna de TEXTO que só queria escapar do corte de uma linha
-                      // (Centro de custo, Lançamento) pararia de vazar mas continuaria
-                      // sem quebrar nunca. Quem não pode quebrar pede `atomico`.
-                      // Célula que impõe o próprio `white-space` por dentro
-                      // (CelulaDescricaoCategoria) não é afetada: o dela ganha.
-                      <div className="min-w-0 overflow-hidden whitespace-normal break-words [&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate">
-                        {conteudo}
-                      </div>
-                    ) : (
-                      <div
-                        // O que o "ajustar ao conteúdo" mede nesta coluna.
-                        data-medir
-                        // Altura fixa na `tr` funciona como MÍNIMO, não como
-                        // máximo: sem limitar a altura aqui dentro, a célula de
-                        // duas linhas continuaria empurrando a linha e nada ficaria
-                        // do mesmo tamanho.
-                        style={
-                          alturaLinha === null
-                            ? undefined
-                            : atomico
-                              ? { maxHeight: alturaLinha }
-                              : {
-                                  maxHeight: alturaLinha,
-                                  // Corte ENTRE linhas com reticências, o mesmo que
-                                  // a Descrição faz. Só `maxHeight` + overflow
-                                  // hidden fatiaria a última linha no meio da
-                                  // altura da letra, deixando meia palavra visível.
-                                  ...corteEmLinhas(linhasNaAltura(alturaLinha)),
-                                }
-                        }
-                        className={cn(
-                          // Atômico (dinheiro, data, número, checkbox) é o único
-                          // que fica em uma linha: `truncate` traz nowrap +
-                          // reticências + overflow hidden de uma vez.
-                          atomico && "truncate",
-                          // Texto quebra. `whitespace-normal` é obrigatório porque
-                          // a `TableCell` do shadcn tem `whitespace-nowrap` fixo e
-                          // ele é HERDADO: sem desfazer aqui, tirar o truncate não
-                          // faz o texto quebrar, faz virar uma linha só SEM corte,
-                          // vazando por cima da coluna do lado. `break-words` é
-                          // para o texto sem espaço (chave de acesso, URL), que
-                          // quebra nenhuma resolve.
-                          !atomico && "whitespace-normal break-words",
-                          // Dinheiro, data e número não quebram nem quando a
-                          // coluna aperta: cortam com reticências. Achados pelo
-                          // `tabular-nums`, que a regra 3 do CLAUDE.md já obriga
-                          // em dinheiro e que as datas do app seguem — assim vale
-                          // para as colunas montadas à mão, sem depender de cada
-                          // tela lembrar de marcar `atomico`. Código de documento
-                          // usa `codigo-doc`, não `tabular-nums`, e segue
-                          // quebrando (é onde "LAN-2026-0263 · parcela 2 de 6"
-                          // precisa de duas linhas).
-                          //
-                          // `inline-block` + `max-w-full` porque `text-overflow`
-                          // não corta elemento inline: sem isso o número passaria
-                          // reto por baixo do overflow, sem as reticências.
-                          !atomico &&
-                            "[&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate",
-                          // Contenção vale sempre, não só na altura fixa: é ela
-                          // que impede o vazamento na altura automática.
-                          "min-w-0 overflow-hidden",
-                        )}
-                        // Tooltip só onde pode ter sobrado texto escondido. Com o
-                        // texto quebrando na altura automática ele está todo à
-                        // vista, e tooltip repetindo o que se lê é ruído.
-                        title={
-                          atomico || alturaLinha !== null
-                            ? tituloDaCelula(celula)
-                            : undefined
-                        }
-                      >
-                        {conteudo}
-                      </div>
-                    )}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-            {linhaExpandida && linha.getIsExpanded() ? (
+        linhas.map((linha) => {
+          const inteira = linhaInteira?.(linha.original);
+          if (inteira !== null && inteira !== undefined) {
+            return (
               <TableRow
-                data-linha-expandida={linha.id}
-                className="bg-surface hover:bg-surface"
+                key={linha.id}
+                className={cn(
+                  "hover:bg-transparent",
+                  classeDaLinha?.(linha.original),
+                )}
               >
                 <TableCell
-                  colSpan={linha.getVisibleCells().length}
-                  className="p-0 whitespace-normal"
+                  colSpan={colunasVisiveis.length}
+                  className="px-3 py-2 text-center text-detalhe whitespace-normal"
                 >
-                  {linhaExpandida(linha.original)}
+                  {inteira}
                 </TableCell>
               </TableRow>
-            ) : null}
-          </React.Fragment>
-        ))
+            );
+          }
+          return (
+            <React.Fragment key={linha.id}>
+              <TableRow
+                data-expandida={expansivel ? linha.getIsExpanded() : undefined}
+                onClick={
+                  onRowClick ? () => onRowClick(linha.original) : undefined
+                }
+                onKeyDown={
+                  onRowClick
+                    ? (evento) => {
+                        if (evento.key === "Enter" || evento.key === " ") {
+                          evento.preventDefault();
+                          onRowClick(linha.original);
+                        }
+                      }
+                    : undefined
+                }
+                tabIndex={onRowClick ? 0 : undefined}
+                style={estiloLinha}
+                className={cn(
+                  "hover:bg-muted/50",
+                  alturaLinha === null && "h-9",
+                  // A alça de altura é posicionada em relação à linha.
+                  personalizavel && "group/linha relative",
+                  onRowClick &&
+                    "cursor-pointer foco-anel-dentro focus-visible:bg-muted/50",
+                  classeDaLinha?.(linha.original),
+                )}
+              >
+                {linha.getVisibleCells().map((celula, indiceCelula) => {
+                  const alinharDireita =
+                    celula.column.columnDef.meta?.alinharDireita === true;
+                  const conteudo = flexRender(
+                    celula.column.columnDef.cell,
+                    celula.getContext(),
+                  );
+                  const naoTruncar =
+                    celula.column.columnDef.meta?.naoTruncar === true;
+                  const atomico =
+                    celula.column.columnDef.meta?.atomico === true;
+                  return (
+                    <TableCell
+                      key={celula.id}
+                      // Marca a coluna na célula: é por aqui que o "ajustar ao
+                      // conteúdo" acha o que medir.
+                      data-coluna={celula.column.id}
+                      className={cn(
+                        "px-3 text-center text-detalhe",
+                        alinharDireita && "text-right",
+                        // Com altura fixa a célula não pode ter folga vertical:
+                        // 28px de linha menos 16px de padding não caberia uma linha
+                        // de texto. O `align-middle` do shadcn continua centralizando.
+                        alturaLinha !== null && "py-0",
+                        classesResponsivas(celula),
+                      )}
+                    >
+                      {indiceCelula === 0 && personalizavel
+                        ? alcaAltura(linha.id)
+                        : null}
+                      {naoTruncar && alturaLinha === null ? (
+                        // Célula que monta o próprio layout, na altura automática:
+                        // ela decide como cortar. Ganha três coisas que faltavam.
+                        //
+                        // `overflow-hidden` + `min-w-0`: era a AUSÊNCIA disso que
+                        // fazia o conteúdo vazar por cima da coluna vizinha. Só o
+                        // overflow não bastaria — item de grid/flex tem largura
+                        // mínima automática igual ao conteúdo, então a caixa cresceria
+                        // junto em vez de cortar.
+                        //
+                        // `whitespace-normal break-words`: desfaz o `nowrap` que a
+                        // `TableCell` do shadcn fixa e que é HERDADO. Sem isso, uma
+                        // coluna de TEXTO que só queria escapar do corte de uma linha
+                        // (Centro de custo, Lançamento) pararia de vazar mas continuaria
+                        // sem quebrar nunca. Quem não pode quebrar pede `atomico`.
+                        // Célula que impõe o próprio `white-space` por dentro
+                        // (CelulaDescricaoCategoria) não é afetada: o dela ganha.
+                        <div className="min-w-0 overflow-hidden whitespace-normal break-words [&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate">
+                          {conteudo}
+                        </div>
+                      ) : (
+                        <div
+                          // O que o "ajustar ao conteúdo" mede nesta coluna.
+                          data-medir
+                          // Altura fixa na `tr` funciona como MÍNIMO, não como
+                          // máximo: sem limitar a altura aqui dentro, a célula de
+                          // duas linhas continuaria empurrando a linha e nada ficaria
+                          // do mesmo tamanho.
+                          style={
+                            alturaLinha === null
+                              ? undefined
+                              : atomico
+                                ? { maxHeight: alturaLinha }
+                                : {
+                                    maxHeight: alturaLinha,
+                                    // Corte ENTRE linhas com reticências, o mesmo que
+                                    // a Descrição faz. Só `maxHeight` + overflow
+                                    // hidden fatiaria a última linha no meio da
+                                    // altura da letra, deixando meia palavra visível.
+                                    ...corteEmLinhas(
+                                      linhasNaAltura(alturaLinha),
+                                    ),
+                                  }
+                          }
+                          className={cn(
+                            // Atômico (dinheiro, data, número, checkbox) é o único
+                            // que fica em uma linha: `truncate` traz nowrap +
+                            // reticências + overflow hidden de uma vez.
+                            atomico && "truncate",
+                            // Texto quebra. `whitespace-normal` é obrigatório porque
+                            // a `TableCell` do shadcn tem `whitespace-nowrap` fixo e
+                            // ele é HERDADO: sem desfazer aqui, tirar o truncate não
+                            // faz o texto quebrar, faz virar uma linha só SEM corte,
+                            // vazando por cima da coluna do lado. `break-words` é
+                            // para o texto sem espaço (chave de acesso, URL), que
+                            // quebra nenhuma resolve.
+                            !atomico && "whitespace-normal break-words",
+                            // Dinheiro, data e número não quebram nem quando a
+                            // coluna aperta: cortam com reticências. Achados pelo
+                            // `tabular-nums`, que a regra 3 do CLAUDE.md já obriga
+                            // em dinheiro e que as datas do app seguem — assim vale
+                            // para as colunas montadas à mão, sem depender de cada
+                            // tela lembrar de marcar `atomico`. Código de documento
+                            // usa `codigo-doc`, não `tabular-nums`, e segue
+                            // quebrando (é onde "LAN-2026-0263 · parcela 2 de 6"
+                            // precisa de duas linhas).
+                            //
+                            // `inline-block` + `max-w-full` porque `text-overflow`
+                            // não corta elemento inline: sem isso o número passaria
+                            // reto por baixo do overflow, sem as reticências.
+                            !atomico &&
+                              "[&_.tabular-nums]:inline-block [&_.tabular-nums]:max-w-full [&_.tabular-nums]:truncate",
+                            // Contenção vale sempre, não só na altura fixa: é ela
+                            // que impede o vazamento na altura automática.
+                            "min-w-0 overflow-hidden",
+                          )}
+                          // Tooltip só onde pode ter sobrado texto escondido. Com o
+                          // texto quebrando na altura automática ele está todo à
+                          // vista, e tooltip repetindo o que se lê é ruído.
+                          title={
+                            atomico || alturaLinha !== null
+                              ? tituloDaCelula(celula)
+                              : undefined
+                          }
+                        >
+                          {conteudo}
+                        </div>
+                      )}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+              {linhaExpandida && linha.getIsExpanded() ? (
+                <TableRow
+                  data-linha-expandida={linha.id}
+                  className="bg-surface hover:bg-surface"
+                >
+                  <TableCell
+                    colSpan={linha.getVisibleCells().length}
+                    className="p-0 whitespace-normal"
+                  >
+                    {linhaExpandida(linha.original)}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </React.Fragment>
+          );
+        })
       ) : (
         <TableRow className="hover:bg-transparent">
           <TableCell
@@ -3229,7 +3295,11 @@ export function DataTable<TData>({
         arrasteAltura !== null && "cursor-row-resize select-none",
         arrasteLargura !== null && "cursor-col-resize select-none",
       )}
-      style={larguraTabelaEfetiva === null ? undefined : { width: `${larguraTabelaEfetiva}%` }}
+      style={
+        larguraTabelaEfetiva === null
+          ? undefined
+          : { width: `${larguraTabelaEfetiva}%` }
+      }
     >
       {temBarra && (
         <BlocoFiltros
@@ -3396,7 +3466,8 @@ export function DataTable<TData>({
           className={cn(
             "relative",
             cartoesLigados && celular === null && "max-md:hidden",
-            editandoTamanho && "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
+            editandoTamanho &&
+              "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
           )}
         >
           {cabecalhoFixoEfetivo ? (
@@ -3451,7 +3522,12 @@ export function DataTable<TData>({
                   <button
                     type="button"
                     className="rounded-sm px-1 hover:bg-surface hover:text-foreground"
-                    onClick={() => aplicarPreferencia({ alturaTabela: null, larguraTabela: null })}
+                    onClick={() =>
+                      aplicarPreferencia({
+                        alturaTabela: null,
+                        larguraTabela: null,
+                      })
+                    }
                   >
                     Tamanho padrão
                   </button>
@@ -3482,6 +3558,7 @@ export function DataTable<TData>({
             emptyState={emptyState}
             onRowClick={onRowClick}
             linhaExpandida={linhaExpandida}
+            linhaInteira={linhaInteira}
             rodape={rodape}
             colunas={colunasVisiveis}
             selecaoTodos={(() => {
@@ -3565,7 +3642,7 @@ export function DataTable<TData>({
         </Sheet>
       ) : null}
 
-      {arvoreAtiva ? null : (
+      {semPaginas ? null : (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-detalhe text-muted-foreground tabular-nums">
             {de} a {ate} de {totalRegistros}

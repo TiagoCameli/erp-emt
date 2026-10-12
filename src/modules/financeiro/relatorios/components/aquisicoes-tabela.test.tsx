@@ -1,10 +1,29 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 
 import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
 
-afterEach(cleanup);
+// O DataTable com `idTabela` lê e grava a preferência do usuário por Server
+// Action e usa o router; no teste, os dois ficam no lugar.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/financeiro/relatorios",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 const CARRETA_A = "11111111-1111-4111-8111-111111111111";
 const CARRETA_B = "22222222-2222-4222-8222-222222222222";

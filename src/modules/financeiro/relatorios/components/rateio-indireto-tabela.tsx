@@ -3,14 +3,16 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { ConfirmDialog, InputPercentual, MoneyText } from "@/components/canonicos";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { ConfirmDialog, DataTable, InputPercentual, MoneyText } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   faltaPara100,
   lerPercentual,
   ROTULO_STATUS_RATEIO,
+  type LinhaRateio,
   type RateioDoMes,
 } from "@/modules/financeiro/relatorios/rateio-indireto";
 import { salvarRateioIndireto, voltarRateioAutomatico } from "@/modules/financeiro/relatorios/rateio-indireto-actions";
@@ -21,10 +23,17 @@ interface RateioIndiretoTabelaProps {
   podeAjustar: boolean;
 }
 
-const CAB = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
 const pct = (n: number) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%`;
 
 type Acao = null | "salvar" | "confirmar" | "automatico";
+
+/**
+ * Uma obra do rateio, com o percentual que está sendo digitado, ou a linha do
+ * que ficou sem obra para receber.
+ */
+type LinhaTabela =
+  | (LinhaRateio & { tipo: "obra"; digitado: string })
+  | { tipo: "naoRateado"; indireto: number };
 
 /**
  * O rateio de um mês: custo direto de cada obra, % sugerido (pelo custo
@@ -41,6 +50,88 @@ export function RateioIndiretoTabela({ rateio, podeAjustar }: RateioIndiretoTabe
   const numeros = rateio.linhas.map((l) => lerPercentual(valores[l.centroId] ?? "0"));
   const falta = faltaPara100(numeros);
   const fecha = Math.abs(falta) < 0.0001;
+
+  const dados = React.useMemo<LinhaTabela[]>(
+    () => [
+      ...rateio.linhas.map((l) => ({ ...l, tipo: "obra" as const, digitado: valores[l.centroId] ?? "" })),
+      ...(rateio.naoRateado > 0 ? [{ tipo: "naoRateado" as const, indireto: rateio.naoRateado }] : []),
+    ],
+    [rateio, valores],
+  );
+
+  // Sem ordenação: a linha do não rateado fecha a tabela, e ordenar a jogaria
+  // no meio das obras.
+  const colunas = React.useMemo<ColumnDef<LinhaTabela, unknown>[]>(
+    () => [
+      {
+        id: "obra",
+        header: "Obra",
+        size: 280,
+        enableSorting: false,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => {
+          const l = row.original;
+          if (l.tipo === "naoRateado") {
+            return <span className="text-status-pendente">Não rateado (sem obra com custo para receber)</span>;
+          }
+          return (
+            <>
+              {l.centro}
+              {l.semCusto ? <span className="text-status-pendente"> (sem custo direto neste mês)</span> : null}
+            </>
+          );
+        },
+      },
+      {
+        id: "custoDireto",
+        header: "Custo direto",
+        size: 150,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "Custo direto" },
+        cell: ({ row }) => (row.original.tipo === "obra" ? <MoneyText valor={row.original.custoDireto} /> : null),
+      },
+      {
+        id: "pctSugerido",
+        header: "% sugerido",
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "% sugerido" },
+        cell: ({ row }) =>
+          row.original.tipo === "obra" ? <span className="tabular-nums">{pct(row.original.pctSugerido)}</span> : null,
+      },
+      {
+        id: "pctMes",
+        header: "% do mês",
+        size: 150,
+        enableSorting: false,
+        // O campo monta o próprio layout; o corte de uma linha cortaria o anel de foco.
+        meta: { alinharDireita: true, naoTruncar: true, rotulo: "% do mês" },
+        cell: ({ row }) => {
+          const l = row.original;
+          if (l.tipo !== "obra") return null;
+          return podeAjustar ? (
+            <InputPercentual
+              ariaLabel={`Percentual de ${l.centro}`}
+              className="ml-auto w-28 text-right tabular-nums"
+              valor={l.digitado}
+              onValorChange={(v) => setValores((atual) => ({ ...atual, [l.centroId]: v }))}
+            />
+          ) : (
+            <span className="tabular-nums">{pct(l.pctVigente)}</span>
+          );
+        },
+      },
+      {
+        id: "indireto",
+        header: "Indireto recebido",
+        size: 160,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "Indireto recebido", celular: "valor" },
+        cell: ({ row }) => <MoneyText valor={row.original.indireto} className="font-medium" />,
+      },
+    ],
+    [podeAjustar],
+  );
 
   async function executar(motivo?: string): Promise<boolean> {
     const m = motivo ?? "";
@@ -68,52 +159,14 @@ export function RateioIndiretoTabela({ rateio, podeAjustar }: RateioIndiretoTabe
         Situação do mês: <span className="font-medium text-foreground">{ROTULO_STATUS_RATEIO[rateio.status]}</span> · Custo indireto do mês{" "}
         <MoneyText valor={rateio.custoIndiretoMes} />
       </p>
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className={CAB}>Obra</TableHead>
-              <TableHead className={`${CAB} text-right`}>Custo direto</TableHead>
-              <TableHead className={`${CAB} text-right`}>% sugerido</TableHead>
-              <TableHead className={`${CAB} text-right`}>% do mês</TableHead>
-              <TableHead className={`${CAB} text-right`}>Indireto recebido</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rateio.linhas.map((l) => (
-              <TableRow key={l.centroId}>
-                <TableCell className="px-3 py-2 text-corpo">
-                  {l.centro}
-                  {l.semCusto ? <span className="text-detalhe text-status-pendente"> (sem custo direto neste mês)</span> : null}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-right"><MoneyText valor={l.custoDireto} /></TableCell>
-                <TableCell className="px-3 py-2 text-right tabular-nums">{pct(l.pctSugerido)}</TableCell>
-                <TableCell className="px-3 py-2 text-right">
-                  {podeAjustar ? (
-                    <InputPercentual
-                      ariaLabel={`Percentual de ${l.centro}`}
-                      className="ml-auto w-28 text-right tabular-nums"
-                      valor={valores[l.centroId] ?? ""}
-                      onValorChange={(v) => setValores((atual) => ({ ...atual, [l.centroId]: v }))}
-                    />
-                  ) : (
-                    <span className="tabular-nums">{pct(l.pctVigente)}</span>
-                  )}
-                </TableCell>
-                <TableCell className="px-3 py-2 text-right font-medium"><MoneyText valor={l.indireto} /></TableCell>
-              </TableRow>
-            ))}
-            {rateio.naoRateado > 0 ? (
-              <TableRow>
-                <TableCell className="px-3 py-2 text-corpo text-status-pendente" colSpan={4}>
-                  Não rateado (sem obra com custo para receber)
-                </TableCell>
-                <TableCell className="px-3 py-2 text-right font-medium"><MoneyText valor={rateio.naoRateado} /></TableCell>
-              </TableRow>
-            ) : null}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        idTabela="financeiro.relatorios.rateio-indireto"
+        columns={colunas}
+        data={dados}
+        idDaLinha={(l) => (l.tipo === "obra" ? l.centroId : "nao-rateado")}
+        semPaginacao
+        emptyState="Nenhuma obra recebe indireto neste mês."
+      />
 
       {podeAjustar && rateio.linhas.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">

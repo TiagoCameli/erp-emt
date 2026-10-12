@@ -1,5 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// A tabela é o DataTable com `idTabela`, que busca a preferência salva do
+// usuário por Server Action: fora de uma requisição isso estoura em `cookies()`.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
 
 import { agruparDrePorNatureza } from "@/modules/financeiro/relatorios/calculo";
 import { DreTabela, NOTA_CRONOGRAMA } from "@/modules/financeiro/relatorios/components/dre-tabela";

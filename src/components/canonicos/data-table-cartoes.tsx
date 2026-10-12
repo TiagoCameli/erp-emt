@@ -125,6 +125,8 @@ export interface DataTableCartoesProps<TData> {
   emptyState?: React.ReactNode;
   onRowClick?: (registro: TData) => void;
   linhaExpandida?: (registro: TData) => React.ReactNode;
+  /** A mesma `linhaInteira` da tabela: aqui vira um título entre os cards. */
+  linhaInteira?: (registro: TData) => React.ReactNode | null | undefined;
   /** Totais por id de coluna, o mesmo `rodape` da tabela. */
   rodape?: Record<string, React.ReactNode>;
   colunas: Column<TData, unknown>[];
@@ -160,7 +162,13 @@ function Cartao<TData>({
   linhaExpandida,
 }: Omit<
   DataTableCartoesProps<TData>,
-  "linhas" | "isLoading" | "emptyState" | "rodape" | "colunas" | "selecaoTodos"
+  | "linhas"
+  | "isLoading"
+  | "emptyState"
+  | "rodape"
+  | "colunas"
+  | "selecaoTodos"
+  | "linhaInteira"
 > & { linha: Row<TData> }) {
   const [todos, setTodos] = React.useState(false);
   const colunaSelecao = papeis.selecao;
@@ -319,6 +327,7 @@ export function DataTableCartoes<TData>({
   emptyState,
   onRowClick,
   linhaExpandida,
+  linhaInteira,
   rodape,
   colunas,
   selecaoTodos,
@@ -373,16 +382,26 @@ export function DataTableCartoes<TData>({
         </label>
       ) : null}
       <ul className="flex flex-col gap-2" aria-label="Registros">
-        {linhas.map((linha) => (
-          <Cartao
-            key={linha.id}
-            linha={linha}
-            papeis={papeis}
-            rotuloDe={rotuloDe}
-            onRowClick={onRowClick}
-            linhaExpandida={linhaExpandida}
-          />
-        ))}
+        {linhas.map((linha) => {
+          const inteira = linhaInteira?.(linha.original);
+          return inteira !== null && inteira !== undefined ? (
+            <li
+              key={linha.id}
+              className="px-3 pt-2 text-legenda text-muted-foreground"
+            >
+              {inteira}
+            </li>
+          ) : (
+            <Cartao
+              key={linha.id}
+              linha={linha}
+              papeis={papeis}
+              rotuloDe={rotuloDe}
+              onRowClick={onRowClick}
+              linhaExpandida={linhaExpandida}
+            />
+          );
+        })}
       </ul>
       {totais.length > 0 ? (
         <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-md border border-border bg-surface p-3 text-detalhe">

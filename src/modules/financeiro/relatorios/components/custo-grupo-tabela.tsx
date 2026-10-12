@@ -4,16 +4,10 @@ import * as React from "react";
 import { ChevronDown, ChevronRight, LoaderCircle } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
-import { CelulaVazia, MoneyText } from "@/components/canonicos";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { CelulaVazia, DataTable, MoneyText } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { CLASSE_COR_GRUPO } from "@/modules/cadastros/_shared/insumo-grupos";
@@ -49,7 +43,34 @@ interface LinhaInsumo {
   valor: number;
 }
 
-const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
+type GrupoCusto = CustoPorGrupo["grupos"][number];
+type SubcategoriaCusto = GrupoCusto["subcategorias"][number];
+
+/** Uma linha da tabela, em qualquer dos três níveis do drill-down. */
+type LinhaCusto =
+  | {
+      tipo: "grupo";
+      id: string;
+      chave: string;
+      aberto: boolean;
+      grupo: GrupoCusto;
+    }
+  | {
+      tipo: "sub";
+      id: string;
+      aberta: boolean;
+      /** O nível de insumo já veio do servidor (não busca de novo). */
+      carregada: boolean;
+      carregando: boolean;
+      sub: SubcategoriaCusto;
+    }
+  | { tipo: "insumo"; id: string; insumo: LinhaInsumo };
+
+function valorDaLinha(linha: LinhaCusto): number {
+  if (linha.tipo === "grupo") return linha.grupo.valor;
+  if (linha.tipo === "sub") return linha.sub.valor;
+  return linha.insumo.valor;
+}
 
 /**
  * Percentual que a linha representa no total do período, na mesma casa decimal
@@ -102,253 +123,288 @@ export function CustoGrupoTabela({
   );
   const [carregando, setCarregando] = React.useState<string | null>(null);
 
-  function alternarGrupo(chave: string) {
+  const alternarGrupo = React.useCallback((chave: string) => {
     setGruposAbertos((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(chave)) proximo.delete(chave);
       else proximo.add(chave);
       return proximo;
     });
-  }
+  }, []);
 
-  async function alternarSub(categoriaId: string) {
-    const aberta = subsAbertas.has(categoriaId);
-    setSubsAbertas((atual) => {
-      const proximo = new Set(atual);
-      if (aberta) proximo.delete(categoriaId);
-      else proximo.add(categoriaId);
-      return proximo;
-    });
-    if (aberta || insumos[categoriaId]) return;
+  // `aberta` e `carregada` vêm da linha, e não do estado, para a função não
+  // mudar a cada clique e as colunas da tabela não serem refeitas à toa.
+  const alternarSub = React.useCallback(
+    async (categoriaId: string, aberta: boolean, carregada: boolean) => {
+      setSubsAbertas((atual) => {
+        const proximo = new Set(atual);
+        if (aberta) proximo.delete(categoriaId);
+        else proximo.add(categoriaId);
+        return proximo;
+      });
+      if (aberta || carregada) return;
 
-    setCarregando(categoriaId);
-    const resultado = await insumosDaSubcategoria(
-      categoriaId,
-      periodo,
-      recorte.centroCustoId,
-      // O CAPEX desce para o insumo junto: ligado no grupo e desligado aqui, a
-      // máquina comprada sumiria do nível 3 e o filho não fecharia com o pai.
-      recorte.incluirInvestimento,
-    );
-    setCarregando(null);
+      setCarregando(categoriaId);
+      const resultado = await insumosDaSubcategoria(
+        categoriaId,
+        periodo,
+        recorte.centroCustoId,
+        // O CAPEX desce para o insumo junto: ligado no grupo e desligado aqui, a
+        // máquina comprada sumiria do nível 3 e o filho não fecharia com o pai.
+        recorte.incluirInvestimento,
+      );
+      setCarregando(null);
 
-    if ("erro" in resultado) {
-      toast.error(resultado.erro);
-      return;
+      if ("erro" in resultado) {
+        toast.error(resultado.erro);
+        return;
+      }
+      setInsumos((atual) => ({ ...atual, [categoriaId]: resultado.insumos }));
+    },
+    [periodo, recorte],
+  );
+
+  // A árvore achatada na ordem em que aparece: o grupo, e embaixo dele as
+  // subcategorias e os insumos que estiverem abertos. Não é o modo árvore do
+  // DataTable porque aqui tudo nasce fechado e o nível de insumo só existe
+  // depois de buscado no servidor.
+  const dados = React.useMemo<LinhaCusto[]>(() => {
+    const linhas: LinhaCusto[] = [];
+    for (const grupo of custo.grupos) {
+      const chave = grupo.grupoId ?? "sem-insumo";
+      const aberto = gruposAbertos.has(chave);
+      linhas.push({
+        tipo: "grupo",
+        id: `grupo:${chave}`,
+        chave,
+        aberto,
+        grupo,
+      });
+      if (!aberto) continue;
+      for (const sub of grupo.subcategorias) {
+        const subAberta = subsAbertas.has(sub.categoriaId);
+        const carregados = insumos[sub.categoriaId];
+        linhas.push({
+          tipo: "sub",
+          id: `sub:${sub.categoriaId}`,
+          aberta: subAberta,
+          carregada: carregados !== undefined,
+          carregando: carregando === sub.categoriaId,
+          sub,
+        });
+        if (!subAberta) continue;
+        for (const insumo of carregados ?? []) {
+          linhas.push({
+            tipo: "insumo",
+            id: `insumo:${sub.categoriaId}:${insumo.nome}`,
+            insumo,
+          });
+        }
+      }
     }
-    setInsumos((atual) => ({ ...atual, [categoriaId]: resultado.insumos }));
-  }
+    return linhas;
+  }, [custo.grupos, gruposAbertos, subsAbertas, insumos, carregando]);
+
+  // Sem ordenação em coluna nenhuma: ordenar misturaria insumo de uma
+  // subcategoria com grupo de outra e a hierarquia do drill-down se perderia.
+  const colunas = React.useMemo<ColumnDef<LinhaCusto, unknown>[]>(
+    () => [
+      {
+        id: "nome",
+        // A ÚNICA coluna do app que continua à esquerda, e é de propósito:
+        // aqui o recuo (pl-12 na subcategoria, pl-24 no insumo) é o que diz
+        // de quem a linha é filha. Centralizar centraliza dentro do recuo e
+        // a hierarquia do drill-down desaparece. As colunas de quantidade,
+        // percentual e dinheiro seguem à direita, como no resto do app.
+        header: () => (
+          <span className="block text-left">Grupo, subcategoria e insumo</span>
+        ),
+        size: 360,
+        enableSorting: false,
+        meta: {
+          rotulo: "Grupo, subcategoria e insumo",
+          naoTruncar: true,
+          celular: "titulo",
+        },
+        cell: ({ row }) => {
+          const linha = row.original;
+          if (linha.tipo === "grupo") {
+            const { grupo, chave, aberto } = linha;
+            return (
+              <div className="flex items-center gap-1.5 text-left">
+                {grupo.subcategorias.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={
+                      aberto ? `Fechar ${grupo.nome}` : `Abrir ${grupo.nome}`
+                    }
+                    onClick={() => alternarGrupo(chave)}
+                  >
+                    {aberto ? <ChevronDown /> : <ChevronRight />}
+                  </Button>
+                ) : (
+                  <span className="inline-block w-8 shrink-0" />
+                )}
+                {/*
+                  Só o grupo SEM insumo (grupoId nulo, o lançamento avulso)
+                  vira link. O grupo com insumo soma
+                  `oc_itens.quantidade * preco_unitario`, não o valor do
+                  lançamento, então a lista de lançamentos não fecharia com
+                  a célula — e `drillGrupoInsumo` lança se for chamado
+                  assim. Não acontece hoje: há 0 ordens de compra.
+                */}
+                {grupo.grupoId === null && podeVerLancamentos ? (
+                  <LinkDrill
+                    href={drillGrupoInsumo({
+                      grupoId: null,
+                      periodo,
+                      recorte,
+                    })}
+                    titulo={`Ver os lançamentos de ${grupo.nome} neste recorte`}
+                    className={cn(
+                      "rounded-md px-2 py-0.5 text-legenda font-medium",
+                      CLASSE_COR_GRUPO[grupo.cor],
+                    )}
+                  >
+                    {grupo.nome}
+                  </LinkDrill>
+                ) : (
+                  <span
+                    className={cn(
+                      "rounded-md px-2 py-0.5 text-legenda font-medium",
+                      CLASSE_COR_GRUPO[grupo.cor],
+                    )}
+                  >
+                    {grupo.nome}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          if (linha.tipo === "sub") {
+            const { sub, aberta, carregada, carregando: buscando } = linha;
+            return (
+              <div className="flex items-center gap-1.5 pl-12 text-left">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={
+                    aberta ? `Fechar ${sub.nome}` : `Abrir ${sub.nome}`
+                  }
+                  onClick={() =>
+                    void alternarSub(sub.categoriaId, aberta, carregada)
+                  }
+                >
+                  {buscando ? (
+                    <LoaderCircle className="animate-spin" />
+                  ) : aberta ? (
+                    <ChevronDown />
+                  ) : (
+                    <ChevronRight />
+                  )}
+                </Button>
+                {sub.nome}
+              </div>
+            );
+          }
+          return (
+            <div className="pl-24 text-left text-muted-foreground">
+              {linha.insumo.nome}
+            </div>
+          );
+        },
+      },
+      {
+        id: "quantidade",
+        header: () => (
+          <span title="Quantidade consumida no período, na unidade de cada insumo. Só a linha de insumo tem uma unidade só.">
+            Quantidade
+          </span>
+        ),
+        size: 128,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "Quantidade" },
+        // Grupo e subcategoria não têm quantidade: somar litro de diesel com
+        // hora de máquina daria um número que não existe. A CelulaVazia diz
+        // "não informado" em vez de deixar buraco.
+        cell: ({ row }) =>
+          row.original.tipo === "insumo" ? (
+            <span className="tabular-nums text-muted-foreground">
+              {formatarQuantidade(row.original.insumo.quantidade)}
+            </span>
+          ) : (
+            <CelulaVazia />
+          ),
+      },
+      {
+        id: "percentual",
+        header: "% do total",
+        size: 112,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, rotulo: "% do total" },
+        cell: ({ row }) => (
+          <span className="tabular-nums text-muted-foreground">
+            <PercentualDoTotal
+              valor={valorDaLinha(row.original)}
+              total={custo.total}
+            />
+          </span>
+        ),
+      },
+      {
+        id: "custo",
+        header: "Custo",
+        size: 160,
+        enableSorting: false,
+        meta: {
+          alinharDireita: true,
+          atomico: true,
+          rotulo: "Custo",
+          celular: "valor",
+        },
+        cell: ({ row }) => (
+          <MoneyText
+            valor={valorDaLinha(row.original)}
+            className={
+              row.original.tipo === "grupo" ? "font-medium" : undefined
+            }
+          />
+        ),
+      },
+    ],
+    [
+      alternarGrupo,
+      alternarSub,
+      custo.total,
+      periodo,
+      podeVerLancamentos,
+      recorte,
+    ],
+  );
 
   return (
-    // `overflow-x-auto`, e não `overflow-hidden`: com o recuo de 6rem do
-    // terceiro nível e nome de insumo comprido, o conteúdo passava da largura e
-    // era CORTADO, sem barra para chegar nele. Quem traz a barra é o contêiner
-    // do `Table` canônico, o mesmo das outras oito tabelas do relatório.
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader className="bg-surface">
-          <TableRow className="hover:bg-transparent">
-            {/* A ÚNICA coluna do app que continua à esquerda, e é de propósito:
-                aqui o recuo (pl-12 na subcategoria, pl-24 no insumo) é o que diz
-                de quem a linha é filha. Centralizar centraliza dentro do recuo e
-                a hierarquia do drill-down desaparece. As colunas de quantidade,
-                percentual e dinheiro seguem à direita, como no resto do app. */}
-            <TableHead className={cn(CABECALHO, "text-left")}>
-              Grupo, subcategoria e insumo
-            </TableHead>
-            <TableHead
-              className={cn(CABECALHO, "w-32 text-right")}
-              title="Quantidade consumida no período, na unidade de cada insumo. Só a linha de insumo tem uma unidade só."
-            >
-              Quantidade
-            </TableHead>
-            <TableHead className={cn(CABECALHO, "w-28 text-right")}>
-              % do total
-            </TableHead>
-            <TableHead className={cn(CABECALHO, "w-40 text-right")}>
-              Custo
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {custo.grupos.map((grupo) => {
-            const chave = grupo.grupoId ?? "sem-insumo";
-            const aberto = gruposAbertos.has(chave);
-            return (
-              <React.Fragment key={chave}>
-                <TableRow>
-                  <TableCell className="py-2 text-detalhe">
-                    <div className="flex items-center gap-1.5">
-                      {grupo.subcategorias.length > 0 ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={
-                            aberto
-                              ? `Fechar ${grupo.nome}`
-                              : `Abrir ${grupo.nome}`
-                          }
-                          onClick={() => alternarGrupo(chave)}
-                        >
-                          {aberto ? <ChevronDown /> : <ChevronRight />}
-                        </Button>
-                      ) : (
-                        <span className="inline-block w-8" />
-                      )}
-                      {/*
-                        Só o grupo SEM insumo (grupoId nulo, o lançamento avulso)
-                        vira link. O grupo com insumo soma
-                        `oc_itens.quantidade * preco_unitario`, não o valor do
-                        lançamento, então a lista de lançamentos não fecharia com
-                        a célula — e `drillGrupoInsumo` lança se for chamado
-                        assim. Não acontece hoje: há 0 ordens de compra.
-                      */}
-                      {grupo.grupoId === null && podeVerLancamentos ? (
-                        <LinkDrill
-                          href={drillGrupoInsumo({
-                            grupoId: null,
-                            periodo,
-                            recorte,
-                          })}
-                          titulo={`Ver os lançamentos de ${grupo.nome} neste recorte`}
-                          className={cn(
-                            "rounded-md px-2 py-0.5 text-legenda font-medium",
-                            CLASSE_COR_GRUPO[grupo.cor],
-                          )}
-                        >
-                          {grupo.nome}
-                        </LinkDrill>
-                      ) : (
-                        <span
-                          className={cn(
-                            "rounded-md px-2 py-0.5 text-legenda font-medium",
-                            CLASSE_COR_GRUPO[grupo.cor],
-                          )}
-                        >
-                          {grupo.nome}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  {/* Grupo e subcategoria não têm quantidade: somar litro de
-                      diesel com hora de máquina daria um número que não existe.
-                      A CelulaVazia diz "não informado" em vez de deixar buraco. */}
-                  <TableCell className="py-2 text-right text-detalhe">
-                    <CelulaVazia />
-                  </TableCell>
-                  <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
-                    <PercentualDoTotal valor={grupo.valor} total={custo.total} />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText
-                      valor={grupo.valor}
-                      className="text-detalhe font-medium"
-                    />
-                  </TableCell>
-                </TableRow>
-
-                {aberto
-                  ? grupo.subcategorias.map((sub) => {
-                      const subAberta = subsAbertas.has(sub.categoriaId);
-                      const linhas = insumos[sub.categoriaId] ?? [];
-                      return (
-                        <React.Fragment key={sub.categoriaId}>
-                          <TableRow className="bg-surface/40">
-                            <TableCell className="py-1.5 pl-12 text-detalhe">
-                              <div className="flex items-center gap-1.5">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  aria-label={
-                                    subAberta
-                                      ? `Fechar ${sub.nome}`
-                                      : `Abrir ${sub.nome}`
-                                  }
-                                  onClick={() =>
-                                    void alternarSub(sub.categoriaId)
-                                  }
-                                >
-                                  {carregando === sub.categoriaId ? (
-                                    <LoaderCircle className="animate-spin" />
-                                  ) : subAberta ? (
-                                    <ChevronDown />
-                                  ) : (
-                                    <ChevronRight />
-                                  )}
-                                </Button>
-                                {sub.nome}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-1.5 text-right text-detalhe">
-                              <CelulaVazia />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-right text-detalhe tabular-nums text-muted-foreground">
-                              <PercentualDoTotal
-                                valor={sub.valor}
-                                total={custo.total}
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5 text-right">
-                              <MoneyText
-                                valor={sub.valor}
-                                className="text-detalhe"
-                              />
-                            </TableCell>
-                          </TableRow>
-
-                          {subAberta
-                            ? linhas.map((insumo) => (
-                                <TableRow key={insumo.nome}>
-                                  <TableCell className="py-1.5 pl-24 text-detalhe text-muted-foreground">
-                                    {insumo.nome}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 text-right text-detalhe tabular-nums text-muted-foreground">
-                                    {formatarQuantidade(insumo.quantidade)}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 text-right text-detalhe tabular-nums text-muted-foreground">
-                                    <PercentualDoTotal
-                                      valor={insumo.valor}
-                                      total={custo.total}
-                                    />
-                                  </TableCell>
-                                  <TableCell className="py-1.5 text-right">
-                                    <MoneyText
-                                      valor={insumo.valor}
-                                      className="text-detalhe"
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              ))
-                            : null}
-                        </React.Fragment>
-                      );
-                    })
-                  : null}
-              </React.Fragment>
-            );
-          })}
-
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell className="py-2 text-detalhe font-semibold text-foreground">
-              Total do período
-            </TableCell>
-            <TableCell className="py-2 text-right text-detalhe">
-              <CelulaVazia />
-            </TableCell>
-            <TableCell className="py-2 text-right text-detalhe font-semibold tabular-nums">
-              100,0%
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={custo.total}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.custo-grupo"
+      columns={colunas}
+      data={dados}
+      idDaLinha={(linha) => linha.id}
+      semPaginacao
+      classeDaLinha={(linha) =>
+        linha.tipo === "sub" ? "bg-surface/40" : undefined
+      }
+      rodape={{
+        nome: (
+          <span className="font-semibold text-foreground">
+            Total do período
+          </span>
+        ),
+        quantidade: <CelulaVazia />,
+        percentual: <span className="font-semibold tabular-nums">100,0%</span>,
+        custo: <MoneyText valor={custo.total} className="font-semibold" />,
+      }}
+    />
   );
 }

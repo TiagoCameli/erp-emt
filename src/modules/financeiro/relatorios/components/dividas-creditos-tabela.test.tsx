@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import type { ConsorcioRelatorio, ContratoRelatorio } from "@/modules/financeiro/dividas/relatorio";
@@ -40,6 +40,14 @@ function contrato(parcial: Partial<ContratoRelatorio> = {}): ContratoRelatorio {
   };
 }
 
+// A tabela é o DataTable canônico com idTabela: a preferência de colunas vem
+// do servidor, que aqui não existe.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
 afterEach(cleanup);
 
 describe("DividasContratosTabela", () => {
@@ -56,7 +64,7 @@ describe("DividasContratosTabela", () => {
   it("a seta abre e fecha as próximas parcelas", () => {
     render(<DividasContratosTabela contratos={[contrato()]} podeVerDividas />);
     expect(screen.queryByText(/Próximas 2 parcelas/)).toBeNull();
-    const seta = screen.getByRole("button", { name: /Abrir as próximas parcelas/ });
+    const seta = screen.getByRole("button", { name: "Expandir detalhes" });
     fireEvent.click(seta);
     expect(screen.getByText(/Próximas 2 parcelas/)).toBeTruthy();
     expect(screen.getByText("15/04/2026")).toBeTruthy();
@@ -74,9 +82,21 @@ describe("DividasContratosTabela", () => {
     );
     expect(screen.getByText(/sem cronograma/)).toBeTruthy();
     expect(screen.getByText("—")).toBeTruthy();
-    expect(screen.queryByRole("button")).toBeNull();
+    // A barra do DataTable tem os próprios botões (Altura, Colunas): o que não
+    // pode existir é a seta de abrir parcelas.
+    expect(screen.queryByRole("button", { name: /Expandir detalhes/ })).toBeNull();
     // Sem a permissão de Dívidas o credor não é link.
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("só o contrato com parcela pela frente ganha a seta", () => {
+    render(
+      <DividasContratosTabela
+        contratos={[contrato({ contratoId: "a" }), contrato({ contratoId: "b", proximas: [] })]}
+        podeVerDividas
+      />,
+    );
+    expect(screen.getAllByRole("button", { name: "Expandir detalhes" })).toHaveLength(1);
   });
 
   it("o total soma em centavos", () => {
