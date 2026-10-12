@@ -41,8 +41,9 @@ export interface AlterarMesDialogProps {
  *
  * Confirma antes de propagar porque isso move custo de um mês para outro nos
  * relatórios, e o outro documento da cadeia muda junto: a OC e o lançamento
- * compartilham o mesmo mês de referência. A trava (pagamento aprovado ou pago)
- * é do banco; aqui só mostramos o motivo quando ele recusa.
+ * compartilham o mesmo mês de referência. Pagamento aprovado ou pago não trava;
+ * as travas que sobram (origem RH, mês fechado) são do banco, e aqui só
+ * mostramos o motivo quando ele recusa.
  */
 export function AlterarMesDialog({
   aberto,
