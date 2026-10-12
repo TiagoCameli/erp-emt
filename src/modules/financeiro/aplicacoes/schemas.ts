@@ -24,6 +24,12 @@ export const posicaoSchema = z.object({
   ir: valorReais("IR").optional(),
   iof: valorReais("IOF").optional(),
   observacoes: z.string().trim().max(1000, { error: "Máximo de 1000 caracteres" }).optional(),
+  /**
+   * Rendimento fora do esperado pelo CDI: o banco só grava com a confirmação e
+   * o motivo, que vai para as observações da posição.
+   */
+  confirmar: z.boolean().optional(),
+  motivo: z.string().trim().max(500, { error: "Máximo de 500 caracteres no motivo" }).optional(),
 });
 
 export type PosicaoInput = z.infer<typeof posicaoSchema>;

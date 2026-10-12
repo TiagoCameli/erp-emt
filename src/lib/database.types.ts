@@ -12573,8 +12573,10 @@ export type Database = {
         Args: {
           p_aplicacao_id: string;
           p_data: string;
+          p_confirmar?: boolean;
           p_iof?: number;
           p_ir?: number;
+          p_motivo?: string;
           p_observacoes?: string;
           p_saldo_bruto?: number;
           p_saldo_liquido: number;
@@ -12648,7 +12650,10 @@ export type Database = {
           // Editado a mao: sem posicao anterior as duas vem NULL.
           data_anterior: string | null;
           e_abertura: boolean;
+          fora_do_cdi: boolean;
           rendimento: number;
+          // Editado a mao: sem CDI no periodo ou sem posicao anterior vem NULL.
+          rendimento_esperado: number | null;
           resgatado: number;
           saldo_anterior: number | null;
         }[];

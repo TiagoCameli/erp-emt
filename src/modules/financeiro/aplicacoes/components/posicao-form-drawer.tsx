@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { LoaderCircle, Trash2, TriangleAlert } from "lucide-react";
 
 import {
   CampoFormulario,
@@ -38,6 +38,7 @@ import {
 } from "@/modules/financeiro/aplicacoes/schemas";
 
 const ID_FORM = "form-posicao-aplicacao";
+export const AVISO_FORA_DO_CDI = "Rendimento fora do esperado pelo CDI — confira o saldo digitado";
 const ENTIDADE = "aplicacao_posicao";
 
 function hojeISO(): string {
@@ -83,7 +84,9 @@ export interface PosicaoFormDrawerProps {
  * O ponto da tela é a prévia: o rendimento que a posição vai gerar aparece
  * ANTES de salvar, calculado pelo banco com a mesma conta que grava
  * (`fn_simular_posicao_aplicacao`). É ali que um saldo digitado errado aparece
- * como um rendimento absurdo, e não depois, no DRE.
+ * como um rendimento absurdo, e não depois, no DRE. Fora da faixa do CDI
+ * (negativo, ou longe do esperado) a tela avisa, e gravar pede o motivo, que o
+ * banco guarda nas observações da posição.
  */
 export function PosicaoFormDrawer({
   aberto,
@@ -101,6 +104,8 @@ export function PosicaoFormDrawer({
   });
   const [arquivos, setArquivos] = React.useState<File[]>([]);
   const [confirmarExclusao, setConfirmarExclusao] = React.useState(false);
+  // Valores que esperam o motivo para gravar fora do CDI (null = diálogo fechado).
+  const [pendenteForaDoCdi, setPendenteForaDoCdi] = React.useState<PosicaoFormInput | null>(null);
   // O resultado da prévia guarda a CHAVE que o gerou: a tela só mostra o que
   // bate com o que está digitado agora, sem apagar estado dentro do efeito.
   const [previa, setPrevia] = React.useState<{ chave: string; resultado: Simulacao | null } | null>(null);
@@ -146,6 +151,18 @@ export function PosicaoFormDrawer({
   const simulando = chave !== null && (previa === null || previa.chave !== chave);
 
   async function aoEnviar(valores: PosicaoFormInput) {
+    if (simulacao?.foraDoCdi) {
+      setPendenteForaDoCdi(valores);
+      return;
+    }
+    await gravar(valores);
+  }
+
+  /** Devolve false quando não gravou (o ConfirmDialog fica aberto com o motivo). */
+  async function gravar(
+    valores: PosicaoFormInput,
+    confirmacao?: { motivo: string },
+  ): Promise<boolean> {
     // O PDF do extrato é opcional (Tiago, 09/10/2026): anexa quando tiver.
     const resultado = await salvarPosicao({
       aplicacaoId: valores.aplicacaoId,
@@ -155,10 +172,17 @@ export function PosicaoFormDrawer({
       ir: opcional(valores.ir),
       iof: opcional(valores.iof),
       observacoes: valores.observacoes.trim() || undefined,
+      ...(confirmacao ? { confirmar: true, motivo: confirmacao.motivo } : {}),
     });
     if ("erro" in resultado) {
+      // A prévia pode não ter chegado (ou ter ficado velha): quem decide é o
+      // banco, e a recusa dele abre o mesmo pedido de motivo.
+      if (!confirmacao && /fora do CDI/i.test(resultado.erro)) {
+        setPendenteForaDoCdi(valores);
+        return false;
+      }
       toast.error(resultado.erro);
-      return;
+      return false;
     }
     if (arquivos.length > 0 && resultado.id) {
       const falhas = await subirFilaDeAnexos(ENTIDADE, resultado.id, arquivos);
@@ -168,6 +192,7 @@ export function PosicaoFormDrawer({
     }
     toast.success(editando ? "Posição regravada" : "Posição gravada");
     onAbertoChange(false);
+    return true;
   }
 
   async function aoExcluir(motivo?: string) {
@@ -280,24 +305,44 @@ export function PosicaoFormDrawer({
           {liquido !== null && aplicacaoId ? (
             <div className="rounded-md border border-border bg-surface px-3 py-3" aria-live="polite">
               {simulacao ? (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-legenda">
-                  <dt className="text-muted-foreground">
-                    Posição anterior{simulacao.dataAnterior ? ` (${formatarData(simulacao.dataAnterior)})` : ""}
-                  </dt>
-                  <dd className="text-right">
-                    {simulacao.saldoAnterior === null ? "Nenhuma" : <MoneyText valor={simulacao.saldoAnterior} />}
-                  </dd>
-                  <dt className="text-muted-foreground">Aplicado no período</dt>
-                  <dd className="text-right"><MoneyText valor={simulacao.aplicado} /></dd>
-                  <dt className="text-muted-foreground">Resgatado no período</dt>
-                  <dd className="text-right"><MoneyText valor={simulacao.resgatado} /></dd>
-                  <dt className="font-medium text-foreground">
-                    {simulacao.eAbertura ? "Ajuste de abertura (fora do DRE)" : "Rendimento do período"}
-                  </dt>
-                  <dd className="text-right font-medium">
-                    <MoneyText valor={simulacao.rendimento} />
-                  </dd>
-                </dl>
+                <>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-legenda">
+                    <dt className="text-muted-foreground">
+                      Posição anterior{simulacao.dataAnterior ? ` (${formatarData(simulacao.dataAnterior)})` : ""}
+                    </dt>
+                    <dd className="text-right">
+                      {simulacao.saldoAnterior === null ? "Nenhuma" : <MoneyText valor={simulacao.saldoAnterior} />}
+                    </dd>
+                    <dt className="text-muted-foreground">Aplicado no período</dt>
+                    <dd className="text-right"><MoneyText valor={simulacao.aplicado} /></dd>
+                    <dt className="text-muted-foreground">Resgatado no período</dt>
+                    <dd className="text-right"><MoneyText valor={simulacao.resgatado} /></dd>
+                    <dt className="font-medium text-foreground">
+                      {simulacao.eAbertura ? "Ajuste de abertura (fora do DRE)" : "Rendimento do período"}
+                    </dt>
+                    <dd className="text-right font-medium">
+                      <MoneyText valor={simulacao.rendimento} />
+                    </dd>
+                    {simulacao.eAbertura ? null : (
+                      <>
+                        <dt className="text-muted-foreground">Esperado pelo CDI</dt>
+                        <dd className="text-right">
+                          {simulacao.rendimentoEsperado === null ? (
+                            "sem CDI no período"
+                          ) : (
+                            <MoneyText valor={simulacao.rendimentoEsperado} />
+                          )}
+                        </dd>
+                      </>
+                    )}
+                  </dl>
+                  {simulacao.foraDoCdi ? (
+                    <p className="mt-2 flex items-start gap-2 rounded-md border border-status-pendente/30 bg-status-pendente/5 px-2 py-2 text-legenda text-foreground">
+                      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-status-pendente" aria-hidden="true" />
+                      {AVISO_FORA_DO_CDI}
+                    </p>
+                  ) : null}
+                </>
               ) : (
                 <p className="text-legenda text-muted-foreground">
                   {simulando ? "Calculando o rendimento..." : "Informe a data e o saldo para ver o rendimento."}
@@ -363,6 +408,20 @@ export function PosicaoFormDrawer({
           )}
         </form>
       </FormDrawer>
+
+      <ConfirmDialog
+        aberto={pendenteForaDoCdi !== null}
+        onAbertoChange={(abrir) => {
+          if (!abrir) setPendenteForaDoCdi(null);
+        }}
+        titulo="Gravar fora do esperado pelo CDI?"
+        descricao="O rendimento desta posição está negativo ou longe do que o CDI do período daria. Se o saldo do extrato está certo, diga o motivo: ele fica nas observações da posição."
+        textoConfirmar="Gravar mesmo assim"
+        exigeMotivo
+        onConfirmar={(motivo) =>
+          pendenteForaDoCdi ? gravar(pendenteForaDoCdi, { motivo: motivo ?? "" }) : false
+        }
+      />
 
       <ConfirmDialog
         aberto={confirmarExclusao}

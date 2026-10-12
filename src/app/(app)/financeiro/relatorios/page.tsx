@@ -897,8 +897,9 @@ async function ConteudoInvestimentos({
                 Saldo por aplicação
               </h3>
               <p className="text-legenda text-muted-foreground">
-                Saldo aplicado é tudo o que foi aplicado menos o que foi resgatado,
-                no histórico inteiro. O período recorta só as colunas do período.
+                Saldo aplicado é o saldo real de cada aplicação: a última posição do
+                extrato mais o que entrou e saiu depois. O período recorta só as
+                colunas do período.
               </p>
             </div>
             <AplicacoesTabela dados={dados} />

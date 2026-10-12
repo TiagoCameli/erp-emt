@@ -7,10 +7,11 @@
  * dinheiro voltando. As duas coisas são transferências entre a conta e a
  * subconta, marcadas com a aplicação (uma etapa do centro de investimento).
  *
- * A regra do saldo é dele: "o saldo em aplicação é tudo que foi aplicado menos o
- * que foi resgatado". Por isso a posição de cada aplicação soma o histórico
- * INTEIRO das transferências dela, e não só o período escolhido: o período
- * recorta o movimento (aplicado e resgatado no período), nunca a posição.
+ * O saldo de cada aplicação é o REAL, de `fn_saldos_das_aplicacoes` (a última
+ * posição do extrato mais os fluxos depois dela), o mesmo de Contas bancárias e
+ * de Aplicações (12/10/2026). Aplicado menos resgatado ignorava o rendimento e
+ * fica só de reserva, para a aplicação que a RPC não devolve. O período recorta
+ * o movimento (aplicado e resgatado no período), nunca o saldo.
  *
  * Módulo puro: a consulta mora em `queries.ts`. Soma em centavos, pelo mesmo
  * motivo do resto dos relatórios: somar reais em ponto flutuante erra o centavo
@@ -36,6 +37,17 @@ export interface MovimentoInvestimento {
   descricao: string | null;
 }
 
+/**
+ * Saldo real de uma aplicação (`fn_saldos_das_aplicacoes`), já pela chave dos
+ * movimentos: a ETAPA do centro Investimentos, não o id da tabela aplicacoes.
+ */
+export interface SaldoRealAplicacao {
+  aplicacaoId: string;
+  nome: string;
+  subcontaId: string;
+  saldo: number;
+}
+
 /** Subconta de investimentos, com o saldo quando a pessoa pode vê-lo. */
 export interface SubcontaInvestimento {
   contaId: string;
@@ -54,7 +66,7 @@ export interface LinhaAplicacao {
   /** Histórico inteiro. */
   aplicado: number;
   resgatado: number;
-  /** aplicado - resgatado: a regra do Tiago para o saldo em aplicação. */
+  /** Saldo real da RPC; sem a linha dela, aplicado - resgatado. */
   posicao: number;
   aplicadoPeriodo: number;
   resgatadoPeriodo: number;
@@ -118,7 +130,9 @@ export function montarInvestimentos(
   movimentos: readonly MovimentoInvestimento[],
   subcontas: readonly SubcontaInvestimento[],
   periodo: PeriodoInvestimentos,
+  saldosReais: readonly SaldoRealAplicacao[] = [],
 ): Investimentos {
+  const saldoReal = new Map(saldosReais.map((s) => [s.aplicacaoId, s]));
   const contaDaSubconta = new Map(subcontas.map((s) => [s.contaId, s.contaPaiNome]));
 
   const porAplicacao = new Map<
@@ -168,6 +182,20 @@ export function montarInvestimentos(
     porMes.set(m.data.slice(0, 7), mes);
   }
 
+  // Aplicação que só tem saldo de abertura (sem transferência) também mora na
+  // subconta: entra com o saldo real e aplicado/resgatado zerados.
+  for (const s of saldosReais) {
+    if (porAplicacao.has(s.aplicacaoId) || centavos(s.saldo) === 0) continue;
+    porAplicacao.set(s.aplicacaoId, {
+      nome: s.nome,
+      subcontaId: s.subcontaId,
+      aplicado: 0,
+      resgatado: 0,
+      aplicadoPeriodo: 0,
+      resgatadoPeriodo: 0,
+    });
+  }
+
   const aplicacoes: LinhaAplicacao[] = [...porAplicacao.entries()]
     .map(([aplicacaoId, l]) => ({
       aplicacaoId,
@@ -175,7 +203,11 @@ export function montarInvestimentos(
       conta: contaDaSubconta.get(l.subcontaId) ?? "",
       aplicado: reais(l.aplicado),
       resgatado: reais(l.resgatado),
-      posicao: reais(l.aplicado - l.resgatado),
+      posicao: reais(
+        saldoReal.has(aplicacaoId)
+          ? centavos(saldoReal.get(aplicacaoId)!.saldo)
+          : l.aplicado - l.resgatado,
+      ),
       aplicadoPeriodo: reais(l.aplicadoPeriodo),
       resgatadoPeriodo: reais(l.resgatadoPeriodo),
     }))

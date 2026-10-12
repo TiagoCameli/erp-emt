@@ -43,7 +43,7 @@ describe("montarInvestimentos", () => {
     mov({ numero: "TRF-5", data: "2026-09-21", valor: 2000000, aplicacaoId: "cdb" }),
   ];
 
-  it("a posição de cada aplicação é tudo o que foi aplicado menos o resgatado (a regra do Tiago)", () => {
+  it("sem saldo real, a posição de cada aplicação é tudo o que foi aplicado menos o resgatado", () => {
     const r = montarInvestimentos(movimentos, subcontas, { de: "", ate: "" });
     const cdb = r.aplicacoes.find((a) => a.aplicacaoId === "cdb")!;
     const fundo = r.aplicacoes.find((a) => a.aplicacaoId === "fundo")!;
@@ -91,6 +91,40 @@ describe("montarInvestimentos", () => {
     expect(r.saldoAplicado).toBe(5913186.79);
     expect(r.subcontasOcultas).toBe(1);
     expect(r.meses).toEqual([]);
+  });
+
+  it("com o saldo real da RPC, a posição é ele (rendimento incluso), não aplicado menos resgatado", () => {
+    const r = montarInvestimentos(movimentos, subcontas, { de: "", ate: "" }, [
+      { aplicacaoId: "cdb", nome: "Caixa Econômica - CDB 95", subcontaId: SUB, saldo: 2013456.71 },
+    ]);
+    const cdb = r.aplicacoes.find((a) => a.aplicacaoId === "cdb")!;
+    const fundo = r.aplicacoes.find((a) => a.aplicacaoId === "fundo")!;
+    expect(cdb.posicao).toBe(2013456.71);
+    // O histórico continua o mesmo: só o saldo muda de fonte.
+    expect(cdb.aplicado).toBe(2500000);
+    expect(cdb.resgatado).toBe(514309.72);
+    // Sem linha na RPC (sem permissão de saldo), cai no aplicado menos resgatado.
+    expect(fundo.posicao).toBe(999999.9);
+    expect(r.aplicacoes.map((a) => a.aplicacaoId)).toEqual(["cdb", "fundo"]);
+  });
+
+  it("aplicação só com saldo de abertura (sem transferência) entra com o saldo real", () => {
+    const r = montarInvestimentos([], subcontas, { de: "", ate: "" }, [
+      { aplicacaoId: "lci", nome: "Caixa Econômica - LCI", subcontaId: SUB, saldo: 300000.5 },
+      { aplicacaoId: "zerada", nome: "Antiga", subcontaId: SUB, saldo: 0 },
+    ]);
+    expect(r.aplicacoes).toEqual([
+      {
+        aplicacaoId: "lci",
+        nome: "Caixa Econômica - LCI",
+        conta: "CAIXA ECONOMICA 578367973-5",
+        aplicado: 0,
+        resgatado: 0,
+        posicao: 300000.5,
+        aplicadoPeriodo: 0,
+        resgatadoPeriodo: 0,
+      },
+    ]);
   });
 
   it("dinheiro que ENTRA na subconta é aplicação; o que sai é resgate", () => {

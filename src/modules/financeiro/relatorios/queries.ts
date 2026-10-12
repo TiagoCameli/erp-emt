@@ -20,6 +20,7 @@ import {
   type Investimentos,
   type MovimentoInvestimento,
   type PeriodoInvestimentos,
+  type SaldoRealAplicacao,
   type SubcontaInvestimento,
 } from "@/modules/financeiro/relatorios/investimentos";
 import {
@@ -1380,18 +1381,24 @@ export async function investimentos(
 ): Promise<Investimentos> {
   const supabase = await createClient();
 
-  const [contasResultado, saldosResultado] = await Promise.all([
-    supabase
-      .from("contas_bancarias")
-      .select("id, nome, tipo, conta_pai_id, ativo")
-      .order("nome"),
-    supabase.rpc("fn_saldos_das_contas"),
-  ]);
+  const [contasResultado, saldosResultado, aplicacoesResultado, saldosAplicacoesResultado] =
+    await Promise.all([
+      supabase
+        .from("contas_bancarias")
+        .select("id, nome, tipo, conta_pai_id, ativo")
+        .order("nome"),
+      supabase.rpc("fn_saldos_das_contas"),
+      supabase.from("aplicacoes").select("id, centro_custo_id"),
+      supabase.rpc("fn_saldos_das_aplicacoes"),
+    ]);
   if (contasResultado.error) {
     throw new Error("Não foi possível carregar as contas bancárias");
   }
   if (saldosResultado.error) {
     throw new Error("Não foi possível carregar o saldo das contas");
+  }
+  if (aplicacoesResultado.error || saldosAplicacoesResultado.error) {
+    throw new Error("Não foi possível carregar o saldo das aplicações");
   }
 
   const contas = contasResultado.data ?? [];
@@ -1455,7 +1462,25 @@ export async function investimentos(
       saldoAtual: saldoPorConta.get(conta.id) ?? null,
     }));
 
-  return montarInvestimentos(movimentos, subcontas, periodo);
+  // A RPC devolve pelo id da aplicação; os movimentos são pela etapa. Aplicação
+  // cujo saldo a pessoa não vê não vem, e o relatório cai no aplicado menos
+  // resgatado dela.
+  const etapaDaAplicacao = new Map(
+    (aplicacoesResultado.data ?? []).map((a) => [a.id, a.centro_custo_id]),
+  );
+  const saldosReais: SaldoRealAplicacao[] = [];
+  for (const linha of saldosAplicacoesResultado.data ?? []) {
+    const etapa = etapaDaAplicacao.get(linha.aplicacao_id);
+    if (!etapa) continue;
+    saldosReais.push({
+      aplicacaoId: etapa,
+      nome: linha.nome,
+      subcontaId: linha.conta_bancaria_id,
+      saldo: Number(linha.saldo),
+    });
+  }
+
+  return montarInvestimentos(movimentos, subcontas, periodo, saldosReais);
 }
 
 
