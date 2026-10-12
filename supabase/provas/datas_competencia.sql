@@ -9,8 +9,8 @@
 --   3. lançamento de OC herda data da compra E mês de referência
 --   4. lançamento avulso exige as duas datas
 --   5. alterar o mês no lançamento reflete na OC (e vice-versa)
---   6. mês travado depois do pagamento aprovado (manda desaprovar)
---   7. mês travado depois do pagamento pago (manda estornar)
+--   6. mês muda mesmo com pagamento aprovado
+--   7. mês muda mesmo com pagamento pago (desde 12/10/2026 não há trava)
 --   8. parcela não pode vencer antes da DATA DA COMPRA
 --   9. DRE agrupa pelo mês de referência, não pela data de criação
 --
@@ -226,7 +226,7 @@ begin
           '2026-08-01 / 2026-08-01', v_txt, v_txt = '2026-08-01 / 2026-08-01');
 
   -- ---------------------------------------------------------------------
-  -- 6. travado depois do pagamento aprovado
+  -- 6. muda mesmo com pagamento aprovado
   -- ---------------------------------------------------------------------
   select id into v_parcela from public.lancamento_parcelas
   where lancamento_id = v_lanc order by numero_parcela limit 1;
@@ -234,15 +234,15 @@ begin
 
   begin
     perform public.fn_alterar_mes_competencia('lancamento', v_lanc, '2026-10-01');
+    select mes_competencia into v_data from public.lancamentos where id = v_lanc;
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('6. alterar mes com pagamento aprovado', 'recusado', 'aceitou', false);
+    values ('6. alterar mes com pagamento aprovado', '2026-10-01', v_data::text, v_data = '2026-10-01');
   exception when others then
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('6. alterar mes com pagamento aprovado', 'recusado (desaprove)', left(sqlerrm, 45),
-            sqlerrm ilike '%esaprove%');
+    values ('6. alterar mes com pagamento aprovado', 'aceito', left(sqlerrm, 45), false);
   end;
 
-  -- Desaprovando, volta a poder.
+  -- Desaprovado, continua mudando.
   perform public.fn_desaprovar_parcela(v_parcela, 'prova: liberar mes');
   perform public.fn_alterar_mes_competencia('lancamento', v_lanc, '2026-10-01');
   select mes_competencia into v_data from public.lancamentos where id = v_lanc;
@@ -250,7 +250,7 @@ begin
   values ('6b. desaprovado, o mes volta a mudar', '2026-10-01', v_data::text, v_data = '2026-10-01');
 
   -- ---------------------------------------------------------------------
-  -- 7. travado depois do pagamento pago (dinheiro: nasce aprovado)
+  -- 7. muda mesmo com pagamento pago (dinheiro: nasce aprovado)
   -- ---------------------------------------------------------------------
   v_oc_din := public.fn_criar_ordem_compra(
     jsonb_build_object(
@@ -275,15 +275,15 @@ begin
 
   begin
     perform public.fn_alterar_mes_competencia('lancamento', v_lanc_din, '2026-09-01');
+    select mes_competencia into v_data from public.lancamentos where id = v_lanc_din;
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('7. dinheiro nasce aprovado: mes travado', 'recusado', 'aceitou', false);
+    values ('7. dinheiro nasce aprovado: mes muda', '2026-09-01', v_data::text, v_data = '2026-09-01');
   exception when others then
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('7. dinheiro nasce aprovado: mes travado', 'recusado (desaprove)', left(sqlerrm, 45),
-            sqlerrm ilike '%esaprove%');
+    values ('7. dinheiro nasce aprovado: mes muda', 'aceito', left(sqlerrm, 45), false);
   end;
 
-  -- Paga a parcela e confirma que a mensagem passa a mandar estornar.
+  -- Paga a parcela e confirma que o mes ainda muda.
   select id into v_parcela from public.lancamento_parcelas
   where lancamento_id = v_lanc_din limit 1;
   update public.lancamento_parcelas set status = 'pago',
@@ -291,14 +291,17 @@ begin
   where id = v_parcela;
 
   begin
-    perform public.fn_alterar_mes_competencia('lancamento', v_lanc_din, '2026-09-01');
+    perform public.fn_alterar_mes_competencia('lancamento', v_lanc_din, '2026-10-01');
+    select mes_competencia into v_data from public.lancamentos where id = v_lanc_din;
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('7b. pago: mes travado mandando estornar', 'recusado', 'aceitou', false);
+    values ('7b. pago: mes muda', '2026-10-01', v_data::text, v_data = '2026-10-01');
   exception when others then
     insert into prova_datas (caso, esperado, obtido, passou)
-    values ('7b. pago: mes travado mandando estornar', 'recusado (estorne)', left(sqlerrm, 45),
-            sqlerrm ilike '%storne%');
+    values ('7b. pago: mes muda', 'aceito', left(sqlerrm, 45), false);
   end;
+
+  -- Volta para 07/2026: o caso 9b conta este lancamento na DRE de julho.
+  perform public.fn_alterar_mes_competencia('lancamento', v_lanc_din, '2026-07-01');
 
   -- ---------------------------------------------------------------------
   -- 9. DRE agrupa pelo mês de referência

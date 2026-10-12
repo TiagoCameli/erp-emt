@@ -14,9 +14,10 @@ export type ResultadoCompetencia = { ok: true } | { erro: string };
 
 /**
  * Altera o mês de referência da OC e do lançamento dela ao mesmo tempo: é um
- * único mês da mesma compra, visto de dois lugares. Quem garante a regra é o
- * banco (`fn_alterar_mes_competencia`), que recusa quando o pagamento já foi
- * aprovado ou pago e manda desaprovar ou estornar antes.
+ * único mês da mesma compra, visto de dois lugares. Muda a qualquer momento,
+ * mesmo com pagamento aprovado ou pago: o mês só diz onde o custo entra nos
+ * relatórios. Quem guarda as regras que sobram (origem RH, mês fechado) é o
+ * banco (`fn_alterar_mes_competencia`).
  *
  * Aceita o mês do input ("2026-08") ou já normalizado ("2026-08-01").
  */
