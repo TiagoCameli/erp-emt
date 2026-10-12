@@ -273,7 +273,7 @@ export function AprovarDrawer({ aberto, onAbertoChange, medicaoId, revisaoRotulo
                 </ul>
               </div>
             ) : null}
-            <DataTable columns={colunas} data={dados} idDaLinha={(l) => l.itemId} />
+            <DataTable idTabela="medicao.medicoes.aprovacao" columns={colunas} data={dados} idDaLinha={(l) => l.itemId} />
           </div>
         )}
       </FormDrawer>

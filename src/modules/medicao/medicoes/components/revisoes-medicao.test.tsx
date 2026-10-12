@@ -53,8 +53,8 @@ describe("RevisoesMedicao", () => {
   it("compara as duas últimas revisões congeladas, item a item, com a diferença", () => {
     render(<RevisoesMedicao revisoes={[REV0, REV1, REV2, REV3]} congelados={CONGELADOS} rotulos={ROTULOS} />);
     const comparacao = screen.getByTestId("revisoes-comparacao");
-    expect(within(comparacao).getByRole("columnheader", { name: "REV01" })).toBeTruthy();
-    expect(within(comparacao).getByRole("columnheader", { name: "REV02" })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: /^REV01/ })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: /^REV02/ })).toBeTruthy();
     const cbuq = within(comparacao).getByText("CBUQ").closest("tr") as HTMLElement;
     expect(within(cbuq).getByText("29")).toBeTruthy();
     expect(within(cbuq).getByText("30")).toBeTruthy();
@@ -70,7 +70,7 @@ describe("RevisoesMedicao", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Comparar" }));
     fireEvent.click(screen.getByRole("option", { name: /REV00/ }));
     const comparacao = screen.getByTestId("revisoes-comparacao");
-    expect(within(comparacao).getByRole("columnheader", { name: "REV00" })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: /^REV00/ })).toBeTruthy();
     const cbuq = linhaDe("CBUQ");
     expect(within(cbuq).getByText("28")).toBeTruthy();
     expect(within(cbuq).getByText("+2")).toBeTruthy();
@@ -86,11 +86,11 @@ describe("RevisoesMedicao", () => {
 
   it("depois do refresh com uma revisão nova enviada, passa a comparar as duas últimas", () => {
     const { rerender } = render(<RevisoesMedicao revisoes={[REV0, REV1, { ...REV2, status: "em_aberto" }]} congelados={CONGELADOS.slice(0, 3)} rotulos={ROTULOS} />);
-    expect(within(screen.getByTestId("revisoes-comparacao")).getByRole("columnheader", { name: "REV00" })).toBeTruthy();
+    expect(within(screen.getByTestId("revisoes-comparacao")).getByRole("columnheader", { name: /^REV00/ })).toBeTruthy();
     rerender(<RevisoesMedicao revisoes={[REV0, REV1, REV2]} congelados={CONGELADOS} rotulos={ROTULOS} />);
     const comparacao = screen.getByTestId("revisoes-comparacao");
-    expect(within(comparacao).getByRole("columnheader", { name: "REV01" })).toBeTruthy();
-    expect(within(comparacao).getByRole("columnheader", { name: "REV02" })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: /^REV01/ })).toBeTruthy();
+    expect(within(comparacao).getByRole("columnheader", { name: /^REV02/ })).toBeTruthy();
   });
 
   it("medição de carga (aprovada sem quantidade congelada): explica que não há o que comparar", () => {

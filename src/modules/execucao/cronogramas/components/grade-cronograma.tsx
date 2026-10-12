@@ -378,6 +378,7 @@ export function AtividadesCelular({ atividades }: { atividades: AtividadeGrade[]
   const linhas = React.useMemo(() => emOrdem(atividades), [atividades]);
   return (
     <DataTable<Linha>
+      idTabela="execucao.cronogramas.grade"
       columns={colunasCelular}
       data={linhas}
       idDaLinha={(l) => l.id}

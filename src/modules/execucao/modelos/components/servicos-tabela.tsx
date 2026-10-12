@@ -61,6 +61,7 @@ export function ServicosTabela({ servicos, unidades, podeCriar, podeEditar }: Se
   return (
     <SecaoDetalhe titulo="Serviços" acao={botaoNovo}>
       <DataTable<Servico>
+        idTabela="execucao.modelos.servicos"
         columns={colunas}
         data={servicos}
         idDaLinha={(s) => s.id}

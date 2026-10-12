@@ -132,9 +132,8 @@ export function ProvisoesTabela({
 
   return (
     <>
-      {/* Sem `idTabela` de propósito, igual às faixas de INSS/IRRF: lista
-          curta, esconder/reordenar coluna não paga a barra extra. */}
       <DataTable
+        idTabela="rh.provisoes"
         columns={colunas}
         data={provisoes}
         emptyState={

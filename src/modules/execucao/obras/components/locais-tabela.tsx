@@ -110,6 +110,7 @@ export function LocaisTabela({ obraId, tipoObra, locais, podeCriar, podeEditar, 
       }
     >
       <DataTable<NoLocal>
+        idTabela="execucao.obras.locais"
         columns={colunas}
         data={raizes}
         subLinhas={(l) => l.filhos}

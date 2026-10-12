@@ -31,6 +31,7 @@ export function CronogramasDaObra({ cronogramas }: { cronogramas: CronogramaList
   return (
     <SecaoDetalhe titulo="Cronogramas">
       <DataTable<CronogramaLista>
+        idTabela="execucao.obras.cronogramas"
         columns={colunas}
         data={cronogramas}
         idDaLinha={(c) => c.id}
