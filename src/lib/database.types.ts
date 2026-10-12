@@ -12095,6 +12095,33 @@ export type Database = {
           valor: number;
         }[];
       };
+      fn_rateio_indireto_mes: {
+        Args: { p_mes: string };
+        Returns: {
+          centro: string | null;
+          centro_id: string | null;
+          custo_direto: number;
+          custo_indireto_mes: number;
+          indireto: number;
+          nao_rateado: number;
+          pct_sugerido: number;
+          pct_vigente: number;
+          sem_custo: boolean;
+          status: string;
+        }[];
+      };
+      fn_rateio_indireto_periodo: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: { centro_id: string | null; indireto: number; nao_rateado: number }[];
+      };
+      fn_rateio_indireto_salvar: {
+        Args: { p_confirmar: boolean; p_mes: string; p_motivo: string; p_percentuais: Json };
+        Returns: undefined;
+      };
+      fn_rateio_indireto_automatico: {
+        Args: { p_mes: string; p_motivo: string };
+        Returns: undefined;
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {

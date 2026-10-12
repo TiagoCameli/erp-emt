@@ -9,7 +9,7 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
+import { formatarBRL, formatarMesAno, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -88,6 +88,8 @@ import {
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
+import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
+import Link from "next/link";
 import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
 import { FiltrosInvestimentosBarra } from "@/modules/financeiro/relatorios/components/filtros-investimentos-barra";
 import {
@@ -113,6 +115,7 @@ import {
   creditos,
   investimentos,
   sociosLigadas,
+  rateioIndiretoDoMes,
   emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
@@ -132,6 +135,7 @@ interface RelatoriosPageProps {
     rel?: string | string[];
     mes?: string | string[];
     fornecedor?: string | string[];
+    mes_rateio?: string | string[];
   }>;
 }
 
@@ -778,6 +782,36 @@ async function ConteudoCreditos({
  * Sem filtro de período de propósito: o acumulado do mútuo é o que a empresa
  * ligada deve hoje, e é a pergunta que a tela responde.
  */
+/** yyyy-MM somando meses (negativo volta). */
+function somarMeses(mes: string, n: number): string {
+  const [a, m] = mes.split("-").map(Number);
+  const d = new Date(Date.UTC(a, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Rateio do indireto de um mês. Abre no mês anterior ao corrente, que é o que
+ * se fecha; as setas andam de mês em mês pela URL (`mes_rateio`).
+ */
+async function ConteudoRateioIndireto({ mes, podeAjustar }: { mes: string; podeAjustar: boolean }) {
+  const rateio = await rateioIndiretoDoMes(mes);
+  const href = (m: string) => `/financeiro/relatorios?rel=rateio-indireto&mes_rateio=${m}`;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 text-corpo">
+        <Link className="text-primary hover:underline" href={href(somarMeses(mes, -1))}>← mês anterior</Link>
+        <span className="font-medium">{formatarMesAno(`${mes}-01`)}</span>
+        <Link className="text-primary hover:underline" href={href(somarMeses(mes, 1))}>próximo mês →</Link>
+      </div>
+      {rateio.linhas.length === 0 && rateio.custoIndiretoMes === 0 ? (
+        <EmptyState icone={BarChart3} titulo="Sem custo indireto neste mês" descricao="Escritório Central, Manutenção/Documentação de Equipamentos e 002 Equipamentos Colorado não tiveram custo no mês." />
+      ) : (
+        <RateioIndiretoTabela key={`${mes}-${rateio.status}`} rateio={rateio} podeAjustar={podeAjustar} />
+      )}
+    </div>
+  );
+}
+
 async function ConteudoSociosLigadas() {
   const ano = Number(mesCorrente().slice(0, 4));
   const [doAno, acumulado] = await Promise.all([
@@ -1618,6 +1652,18 @@ export default async function RelatoriosPage({
           <ConteudoCreditos
             situacao={filtrosCreditos.situacao}
             podeVerLancamentos={podeVerLancamentos}
+          />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "rateio-indireto" ? (
+        <SecaoRelatorio
+          titulo="Rateio do custo indireto"
+          descricao="O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado distribuído nas obras pelo custo direto de cada uma no mês. Quem fecha o mês ajusta os percentuais e confirma. Os lançamentos não mudam: o rateio aparece nos relatórios de custo."
+        >
+          <ConteudoRateioIndireto
+            mes={/^\d{4}-\d{2}$/.test(primeiro(params.mes_rateio) ?? "") ? (primeiro(params.mes_rateio) as string) : somarMeses(mesCorrente(), -1)}
+            podeAjustar={temPermissao(usuario, "financeiro.competencias", "aprovar")}
           />
         </SecaoRelatorio>
       ) : null}

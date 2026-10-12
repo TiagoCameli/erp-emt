@@ -49,6 +49,7 @@ import {
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
+import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
 // componentes continuem importando tudo de queries.ts, como antes da extração.
@@ -1474,4 +1475,52 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
     devolvido: Number(l.devolvido),
     saldo: Number(l.saldo),
   }));
+}
+
+
+// =====================================================================
+// Rateio do custo indireto (PR 3 do controle total, D6/D7/D8)
+// =====================================================================
+
+/** O rateio de um mês (yyyy-MM), como `fn_rateio_indireto_mes` calcula. */
+export async function rateioIndiretoDoMes(mes: string): Promise<RateioDoMes> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rateio_indireto_mes", { p_mes: `${mes}-01` });
+  if (error) throw new Error("Não foi possível carregar o rateio do indireto");
+  const linhas = data ?? [];
+  const primeira = linhas[0];
+  return {
+    mes,
+    status: (primeira?.status ?? "automatico") as StatusRateio,
+    custoIndiretoMes: Number(primeira?.custo_indireto_mes ?? 0),
+    naoRateado: Number(primeira?.nao_rateado ?? 0),
+    linhas: linhas
+      .filter((l) => l.centro_id !== null)
+      .map((l) => ({
+        centroId: l.centro_id as string,
+        centro: l.centro ?? "",
+        custoDireto: Number(l.custo_direto),
+        pctSugerido: Number(l.pct_sugerido),
+        pctVigente: Number(l.pct_vigente),
+        indireto: Number(l.indireto),
+        semCusto: l.sem_custo,
+      })),
+  };
+}
+
+/** Indireto rateado por obra numa janela [inicio, fim), somado mês a mês. */
+export async function indiretoDoPeriodo(
+  inicio: string,
+  fim: string,
+): Promise<{ porObra: Map<string, number>; naoRateado: number }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rateio_indireto_periodo", { p_inicio: inicio, p_fim: fim });
+  if (error) throw new Error("Não foi possível carregar o rateio do indireto");
+  const porObra = new Map<string, number>();
+  let naoRateado = 0;
+  for (const l of data ?? []) {
+    if (l.centro_id) porObra.set(l.centro_id, Number(l.indireto));
+    else naoRateado += Number(l.nao_rateado);
+  }
+  return { porObra, naoRateado };
 }
