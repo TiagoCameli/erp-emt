@@ -19,7 +19,8 @@
 - Data da posição exigida no fechamento: o **último dia do mês** (o extrato de investimento dá o saldo do dia mesmo em fim de semana).
 - Faixa do CDI: rendimento < 0, ou fora de 50%–150% do esperado quando o esperado passa de R$ 100 (abaixo disso o ruído domina). Esperado = base × (fator do CDI no período − 1) × (% contratado ou 100%) ; base = posição anterior + aplicado − resgatado.
 - Confirmado fora do CDI: o motivo vai para as observações da posição com o prefixo "[Fora do CDI]".
-- Correção do dado: a migration alinha as transferências já casadas com data diferente do OFX (hoje só a TRF-2026-0862) — o gatilho recalcula o Fundo da Caixa e some o ±R$ 178 mil.
+- ~~Correção do dado / alinhar a data ao OFX~~ **retirada (12/10)**: ensaiada, ela piora o Fundo da Caixa (+243 mil em 08/10, −240,7 mil em 09/10, contra −178,5 / +181 mil hoje). O rendimento de 25/09 a 09/10 fecha (R$ 2.465,28); o que não fecha é a posição de 08/10 (R$ 1.012.470,45), que o Tiago confere no extrato do fundo. O alerta do CDI (Task 2) é quem pega esse caso ao gravar.
+- Alerta só contra posição anterior gravada: o primeiro período depois da abertura virtual (saldo inicial de corte) é calibragem e não alerta.
 - Resgate automático: tipo resgate e (descrição com "RESGATE AUTO" em qualquer forma, ou sufixo "(regra)").
 
 ## Review Focus
@@ -31,7 +32,7 @@
 
 ---
 
-### Task 1 (banco): data do OFX no casamento + correção do dado
+### ~~Task 1 (banco): data do OFX no casamento + correção do dado~~ (retirada, ver Decisões)
 - [ ] Prova (RED): criar transferência conta→subconta datada D+1 de uma linha de OFX não casada, casar por `fn_conciliacao_casar(.., 'transferencia', ..)` e esperar `data_transferencia = data_movimento`; após a migration, TRF-2026-0862 com data 2026-10-08 e o rendimento do Fundo em 08/10 ≥ 0.
 - [ ] Migration: corpo vivo de `fn_conciliar_transferencia` + alinhamento (com `fn_conciliacao_exigir_data_aberta` nas duas contas, nas duas datas) + update único das já casadas.
 
