@@ -1,8 +1,13 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink, Receipt } from "lucide-react";
 
 import {
   CelulaVazia,
+  DataTable,
   EmptyState,
   MoneyText,
   StatusBadge,
@@ -27,86 +32,105 @@ export interface LancamentosGeradosProps {
 
 /** Tabela de uma lista de lançamentos (salários ou guias) com o total no rodapé. */
 function TabelaLancamentos({
+  idTabela,
   lancamentos,
   total,
   podeVerLancamento,
 }: {
+  /** Salários e guias são tabelas distintas: cada uma guarda o próprio ajuste. */
+  idTabela: string;
   lancamentos: LancamentoDaFolha[];
   total: number;
   podeVerLancamento: boolean;
 }) {
+  const colunas = React.useMemo<ColumnDef<LancamentoDaFolha, unknown>[]>(
+    () => [
+      {
+        id: "descricao",
+        header: "Descrição",
+        accessorFn: (lancamento) => lancamento.descricao,
+        size: 280,
+        meta: { celular: "titulo" },
+      },
+      {
+        id: "vencimento",
+        header: "Vencimento",
+        accessorFn: (lancamento) => lancamento.dataVencimento ?? "",
+        size: 120,
+        meta: { atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.dataVencimento ? (
+              formatarData(row.original.dataVencimento)
+            ) : (
+              <CelulaVazia />
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        accessorFn: (lancamento) =>
+          STATUS_PARCELA[lancamento.statusParcela].rotulo,
+        size: 130,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => {
+          const infoParcela = STATUS_PARCELA[row.original.statusParcela];
+          return (
+            <StatusBadge status={infoParcela.badge} rotulo={infoParcela.rotulo} />
+          );
+        },
+      },
+      {
+        id: "valor",
+        header: "Valor",
+        accessorFn: (lancamento) => lancamento.valor,
+        size: 140,
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => <MoneyText valor={row.original.valor} />,
+      },
+      {
+        id: "lancamento",
+        header: () => <span className="sr-only">Lançamento no Financeiro</span>,
+        accessorFn: (lancamento) => lancamento.numero ?? "",
+        size: 150,
+        meta: { alinharDireita: true, atomico: true, rotulo: "Lançamento" },
+        cell: ({ row }) => {
+          const lancamento = row.original;
+          return podeVerLancamento ? (
+            <Link
+              href={`/financeiro/lancamentos/${lancamento.id}`}
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              <span className="codigo-doc">{lancamento.numero ?? "Abrir"}</span>
+              <ExternalLink className="size-3.5" aria-hidden="true" />
+            </Link>
+          ) : lancamento.numero ? (
+            <span className="codigo-doc text-muted-foreground">
+              {lancamento.numero}
+            </span>
+          ) : (
+            <CelulaVazia />
+          );
+        },
+      },
+    ],
+    [podeVerLancamento],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-detalhe">
-        <thead>
-          <tr className="border-b border-border text-legenda text-muted-foreground">
-            <th className="px-3 py-2 text-center font-medium">Descrição</th>
-            <th className="px-3 py-2 text-center font-medium">Vencimento</th>
-            <th className="px-3 py-2 text-center font-medium">Status</th>
-            <th className="px-3 py-2 text-right font-medium">Valor</th>
-            <th className="px-3 py-2 text-right font-medium">
-              <span className="sr-only">Lançamento no Financeiro</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {lancamentos.map((lancamento) => {
-            const infoParcela = STATUS_PARCELA[lancamento.statusParcela];
-            return (
-              <tr key={lancamento.id} className="border-b border-border last:border-0">
-                <td className="px-3 py-2 text-center">{lancamento.descricao}</td>
-                <td className="px-3 py-2 text-center tabular-nums">
-                  {lancamento.dataVencimento ? (
-                    formatarData(lancamento.dataVencimento)
-                  ) : (
-                    <CelulaVazia />
-                  )}
-                </td>
-                <td className="px-3 py-2 text-center">
-                  <StatusBadge
-                    status={infoParcela.badge}
-                    rotulo={infoParcela.rotulo}
-                  />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <MoneyText valor={lancamento.valor} />
-                </td>
-                <td className="px-3 py-2 text-right">
-                  {podeVerLancamento ? (
-                    <Link
-                      href={`/financeiro/lancamentos/${lancamento.id}`}
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <span className="codigo-doc">
-                        {lancamento.numero ?? "Abrir"}
-                      </span>
-                      <ExternalLink className="size-3.5" aria-hidden="true" />
-                    </Link>
-                  ) : lancamento.numero ? (
-                    <span className="codigo-doc text-muted-foreground">
-                      {lancamento.numero}
-                    </span>
-                  ) : (
-                    <CelulaVazia />
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-border font-semibold">
-            <td className="px-3 py-2 text-center" colSpan={3}>
-              Total
-            </td>
-            <td className="px-3 py-2 text-right">
-              <MoneyText valor={total} />
-            </td>
-            <td className="px-3 py-2" />
-          </tr>
-        </tfoot>
-      </table>
-    </div>
+    <DataTable
+      idTabela={idTabela}
+      columns={colunas}
+      data={lancamentos}
+      idDaLinha={(lancamento) => lancamento.id}
+      semPaginacao
+      rodape={{
+        descricao: <span className="font-semibold">Total</span>,
+        valor: <MoneyText valor={total} className="font-semibold" />,
+      }}
+    />
   );
 }
 
@@ -181,6 +205,7 @@ export function LancamentosGerados({
           </p>
         ) : (
           <TabelaLancamentos
+            idTabela="rh.folha.detalhe.lancamentos-salarios"
             lancamentos={agrupado.salarios}
             total={agrupado.totalSalarios}
             podeVerLancamento={podeVerLancamento}
@@ -197,6 +222,7 @@ export function LancamentosGerados({
           </p>
         ) : (
           <TabelaLancamentos
+            idTabela="rh.folha.detalhe.lancamentos-guias"
             lancamentos={agrupado.guias}
             total={agrupado.totalGuias}
             podeVerLancamento={podeVerLancamento}

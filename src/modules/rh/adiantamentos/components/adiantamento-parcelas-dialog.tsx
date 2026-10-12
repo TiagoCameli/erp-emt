@@ -1,9 +1,16 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
+import type { ColumnDef } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
 
-import { CelulaVazia, MoneyText, StatusBadge } from "@/components/canonicos";
+import {
+  CelulaVazia,
+  DataTable,
+  MoneyText,
+  StatusBadge,
+} from "@/components/canonicos";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +47,82 @@ function situacaoParcela(parcela: { folhaId: string | null; valorDescontado: num
   return { status: "pendente_aprovacao", rotulo: "Sem desconto" } as const;
 }
 
+type Parcela = AdiantamentoLista["parcelas"][number];
+
+/**
+ * Colunas do plano. A ordem é a do plano (competência), então nenhuma coluna
+ * ordena.
+ */
+function colunasParcelas(podeVerFolha: boolean): ColumnDef<Parcela, unknown>[] {
+  return [
+    {
+      id: "competencia",
+      header: "Competência",
+      size: 120,
+      enableSorting: false,
+      meta: { atomico: true, celular: "titulo" },
+      cell: ({ row }) => (
+        <span className="tabular-nums">
+          {formatarMesAno(row.original.competencia)}
+        </span>
+      ),
+    },
+    {
+      id: "previsto",
+      header: "Previsto",
+      size: 130,
+      enableSorting: false,
+      meta: { alinharDireita: true, atomico: true },
+      cell: ({ row }) => <MoneyText valor={row.original.valorPrevisto} />,
+    },
+    {
+      id: "descontado",
+      header: "Descontado",
+      size: 130,
+      enableSorting: false,
+      meta: { alinharDireita: true, atomico: true, celular: "valor" },
+      cell: ({ row }) => <MoneyText valor={row.original.valorDescontado} />,
+    },
+    {
+      id: "situacao",
+      header: "Situação",
+      size: 130,
+      enableSorting: false,
+      meta: { naoTruncar: true, celular: "destaque" },
+      cell: ({ row }) => {
+        const situacao = situacaoParcela(row.original);
+        return <StatusBadge status={situacao.status} rotulo={situacao.rotulo} />;
+      },
+    },
+    {
+      id: "folha",
+      header: "Folha",
+      size: 150,
+      enableSorting: false,
+      meta: { atomico: true },
+      cell: ({ row }) => {
+        const parcela = row.original;
+        if (parcela.folhaId === null) return <CelulaVazia />;
+        return podeVerFolha ? (
+          <Link
+            href={`/rh/folha/${parcela.folhaId}`}
+            className="inline-flex items-center gap-1 text-primary hover:underline"
+          >
+            <span className="codigo-doc">
+              Folha {formatarMesAno(parcela.competencia)}
+            </span>
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className="codigo-doc text-muted-foreground">
+            Folha {formatarMesAno(parcela.competencia)}
+          </span>
+        );
+      },
+    },
+  ];
+}
+
 /**
  * Detalhe do plano de parcelas de um adiantamento: competência, previsto,
  * descontado, situação e a folha que descontou. Ordenado por competência (a
@@ -56,6 +139,10 @@ export function AdiantamentoParcelasDialog({
   onAbertoChange,
   podeVerFolha,
 }: AdiantamentoParcelasDialogProps) {
+  const colunas = React.useMemo(
+    () => colunasParcelas(podeVerFolha),
+    [podeVerFolha],
+  );
   if (!adiantamento) return null;
 
   const resumo = resumirParcelas(adiantamento.valor, adiantamento.parcelas);
@@ -90,71 +177,13 @@ export function AdiantamentoParcelasDialog({
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-md border border-border">
-          <table className="w-full text-detalhe">
-            <thead>
-              <tr className="border-b border-border text-legenda text-muted-foreground">
-                <th className="px-3 py-2 text-center font-medium">
-                  Competência
-                </th>
-                <th className="px-3 py-2 text-right font-medium">Previsto</th>
-                <th className="px-3 py-2 text-right font-medium">
-                  Descontado
-                </th>
-                <th className="px-3 py-2 text-center font-medium">
-                  Situação
-                </th>
-                <th className="px-3 py-2 text-center font-medium">Folha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {adiantamento.parcelas.map((parcela) => {
-                const situacao = situacaoParcela(parcela);
-                return (
-                  <tr
-                    key={parcela.id}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="px-3 py-2 text-center tabular-nums">
-                      {formatarMesAno(parcela.competencia)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText valor={parcela.valorPrevisto} />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText valor={parcela.valorDescontado} />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <StatusBadge
-                        status={situacao.status}
-                        rotulo={situacao.rotulo}
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {parcela.folhaId === null ? (
-                        <CelulaVazia />
-                      ) : podeVerFolha ? (
-                        <Link
-                          href={`/rh/folha/${parcela.folhaId}`}
-                          className="inline-flex items-center gap-1 text-primary hover:underline"
-                        >
-                          <span className="codigo-doc">
-                            Folha {formatarMesAno(parcela.competencia)}
-                          </span>
-                          <ExternalLink className="size-3.5" aria-hidden="true" />
-                        </Link>
-                      ) : (
-                        <span className="codigo-doc text-muted-foreground">
-                          Folha {formatarMesAno(parcela.competencia)}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          idTabela="rh.adiantamentos.parcelas"
+          columns={colunas}
+          data={adiantamento.parcelas}
+          idDaLinha={(parcela) => parcela.id}
+          semPaginacao
+        />
       </DialogContent>
     </Dialog>
   );

@@ -143,6 +143,14 @@ declare module "@tanstack/react-table" {
      * `oculta` tira a coluna do card (continua na tabela).
      */
     celular?: "titulo" | "valor" | "destaque" | "oculta";
+    /**
+     * Classe extra na célula desta coluna, por registro: o fundo verde do menor
+     * preço no mapa de cotações. Vai na `td`, não no conteúdo, porque o conteúdo
+     * mora numa caixa que corta e não pinta a célula inteira.
+     */
+    classeDaCelula?: (registro: TData) => string | undefined;
+    /** Classe extra na célula desta coluna no pé de totais (`rodape`). */
+    classeDoRodape?: string;
   }
 }
 
@@ -3075,6 +3083,9 @@ export function DataTable<TData>({
                         // de texto. O `align-middle` do shadcn continua centralizando.
                         alturaLinha !== null && "py-0",
                         classesResponsivas(celula),
+                        celula.column.columnDef.meta?.classeDaCelula?.(
+                          linha.original,
+                        ),
                       )}
                     >
                       {indiceCelula === 0 && personalizavel
@@ -3217,6 +3228,11 @@ export function DataTable<TData>({
                 "h-9 py-0 font-medium",
                 coluna.columnDef.meta?.alinharDireita === true &&
                   "text-right tabular-nums",
+                // Com a tabela rolando por dentro, o total fica à vista embaixo,
+                // como o cabeçalho fica em cima.
+                cabecalhoFixo &&
+                  "sticky bottom-0 z-10 bg-surface shadow-[inset_0_1px_0_var(--color-border)]",
+                coluna.columnDef.meta?.classeDoRodape,
               )}
               style={personalizavel ? { width: coluna.getSize() } : undefined}
             >

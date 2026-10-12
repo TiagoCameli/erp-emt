@@ -1,10 +1,26 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { ChipTendencia } from "@/modules/combustivel/analitico/components/kpi-analitico";
-import { BarraPercentual, CelulaTendencia, TabelaRanking } from "@/modules/combustivel/analitico/components/ranking";
+import {
+  BarraPercentual,
+  CelulaTendencia,
+  idTabelaRanking,
+  TabelaRanking,
+} from "@/modules/combustivel/analitico/components/ranking";
 
-afterEach(cleanup);
+// O ranking é DataTable com idTabela: a preferência salva é do servidor.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 interface Linha {
   id: string;
@@ -39,6 +55,13 @@ describe("TabelaRanking", () => {
     expect(screen.getByText("EC-01")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getByText("5 L")).toBeInTheDocument();
+  });
+
+  it("cada ranking guarda a preferência no seu id, pelo cabeçalho do nome", () => {
+    expect(idTabelaRanking("Equipamento")).toBe("combustivel.ranking.equipamento");
+    expect(idTabelaRanking("Placa")).toBe("combustivel.ranking.placa");
+    expect(idTabelaRanking("Fornecedor")).toBe("combustivel.ranking.fornecedor");
+    expect(idTabelaRanking("Obra")).toBe("combustivel.ranking.obra");
   });
 
   it("barra com piso de 2% e o percentual com 1 casa", () => {

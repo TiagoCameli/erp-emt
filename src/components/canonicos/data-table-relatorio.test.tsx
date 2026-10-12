@@ -99,6 +99,41 @@ describe("DataTable em modo relatório", () => {
     expect(linhaTotal?.className).toContain("linha-total");
   });
 
+  it("meta.classeDaCelula pinta a td do registro, e o pé fica preso com cabeçalho fixo", () => {
+    const colunas: ColumnDef<Linha, unknown>[] = [
+      { accessorKey: "nome", header: "Nome" },
+      {
+        accessorKey: "valor",
+        header: "Valor",
+        meta: {
+          alinharDireita: true,
+          classeDaCelula: (l: Linha) => (l.valor === 1 ? "menor-preco" : undefined),
+          classeDoRodape: "pe-valor",
+        },
+      },
+    ];
+    const dados: Linha[] = [
+      { id: "a", nome: "A", valor: 1, tipo: "item" },
+      { id: "b", nome: "B", valor: 2, tipo: "item" },
+    ];
+    const { container } = render(
+      <DataTable
+        idTabela="teste.relatorio"
+        columns={colunas}
+        data={dados}
+        idDaLinha={(l) => l.id}
+        semPaginacao
+        cabecalhoFixo
+        rodape={{ valor: "3" }}
+      />,
+    );
+    const celulas = [...container.querySelectorAll('td[data-coluna="valor"]')];
+    expect(celulas.filter((td) => td.className.includes("menor-preco"))).toHaveLength(1);
+    const pe = container.querySelector('tfoot td[data-coluna="valor"]');
+    expect(pe?.className).toContain("sticky");
+    expect(pe?.className).toContain("pe-valor");
+  });
+
   it("semPaginacao com paginação no servidor é erro de uso", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     expect(() =>

@@ -1,5 +1,9 @@
-import { MoneyText } from "@/components/canonicos";
-import type { PedidoLinha } from "@/modules/frete/pedidos-material/queries";
+"use client";
+
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
+import type { ItemPedidoLinha, PedidoLinha } from "@/modules/frete/pedidos-material/queries";
 import { subtotal } from "@/modules/frete/pedidos-material/regras";
 import { formatarValorOperacional } from "@/modules/manutencao/servicos/formato";
 
@@ -8,39 +12,76 @@ function formatarQuantidadePedido(valor: number): string {
   return valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
+const COLUNAS_ITENS: ColumnDef<ItemPedidoLinha, unknown>[] = [
+  {
+    id: "material",
+    accessorFn: (item) => item.insumoNome || item.insumoId,
+    header: "Material",
+    size: 260,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => row.original.insumoNome || row.original.insumoId,
+  },
+  {
+    id: "quantidade",
+    accessorFn: (item) => item.quantidade,
+    header: "Quantidade",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => (
+      <span className="tabular-nums">
+        {formatarQuantidadePedido(row.original.quantidade)}
+        {row.original.unidade ? (
+          <span className="ml-1 text-muted-foreground">{row.original.unidade}</span>
+        ) : null}
+      </span>
+    ),
+  },
+  {
+    id: "valorUnitario",
+    accessorFn: (item) => item.valorUnitario,
+    header: "Vlr unitário",
+    size: 130,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => (
+      <span className="tabular-nums">{formatarValorOperacional(row.original.valorUnitario)}</span>
+    ),
+  },
+  {
+    id: "subtotal",
+    accessorFn: (item) => subtotal(item.quantidade, item.valorUnitario),
+    header: "Subtotal",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => (
+      <MoneyText valor={subtotal(row.original.quantidade, row.original.valorUnitario)} />
+    ),
+  },
+];
+
 /**
  * Sub-tabela dos itens do pedido (a linha expandida do PedidoMaterialList da origem):
  * Material, Quantidade, Vlr unitário, Subtotal e as observações.
+ *
+ * Sem `idDaLinha`: o mesmo insumo pode repetir no pedido, então a posição é a
+ * única chave que não colide.
  */
 export function PedidoItens({ pedido }: { pedido: PedidoLinha }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-x-auto rounded-md border border-border">
-        <table className="w-full text-detalhe">
-          <thead>
-            <tr className="border-b border-border text-legenda text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">Material</th>
-              <th className="px-3 py-2 text-right font-medium">Quantidade</th>
-              <th className="px-3 py-2 text-right font-medium">Vlr unitário</th>
-              <th className="px-3 py-2 text-right font-medium">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pedido.itens.map((item, indice) => (
-              <tr key={`${item.insumoId}-${indice}`} className="border-b border-border last:border-b-0">
-                <td className="px-3 py-1.5">{item.insumoNome || item.insumoId}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">
-                  {formatarQuantidadePedido(item.quantidade)}
-                  {item.unidade ? <span className="ml-1 text-muted-foreground">{item.unidade}</span> : null}
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{formatarValorOperacional(item.valorUnitario)}</td>
-                <td className="px-3 py-1.5 text-right">
-                  <MoneyText valor={subtotal(item.quantidade, item.valorUnitario)} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/*
+        Em Pedidos de material esta tabela vive dentro de uma célula da listagem,
+        cuja linha abre e fecha no clique e no Enter/Espaço. Sem barrar a subida
+        do evento, ordenar, alargar coluna ou mexer no menu "Colunas" daqui
+        fecharia o pedido no meio do gesto (o evento do portal do menu também
+        sobe pela árvore do React).
+      */}
+      <div onClick={(evento) => evento.stopPropagation()} onKeyDown={(evento) => evento.stopPropagation()}>
+        <DataTable
+          idTabela="frete.pedidos-material.itens"
+          columns={COLUNAS_ITENS}
+          data={pedido.itens}
+          semPaginacao
+        />
       </div>
       {pedido.observacoes ? (
         <p className="text-legenda text-muted-foreground">
@@ -50,4 +91,3 @@ export function PedidoItens({ pedido }: { pedido: PedidoLinha }) {
     </div>
   );
 }
-

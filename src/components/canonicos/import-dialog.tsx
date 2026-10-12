@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   CircleAlert,
   CircleCheck,
@@ -21,15 +22,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+
+import { DataTable } from "./data-table";
 
 /** Resumo de uma linha inválida na prévia da importação. */
 export interface LinhaInvalidaResumo {
@@ -54,9 +49,45 @@ export interface ImportDialogProps {
   onValidarArquivo: (arquivo: File) => Promise<ResumoValidacao>;
   /** Importa as linhas válidas do último arquivo validado. */
   onConfirmarImportacao: () => Promise<{ importadas: number }>;
+  /**
+   * Id da prévia das linhas com erro na memória de ajuste da tabela (largura,
+   * altura, colunas). Cada tela que importa pode passar o seu, no padrão
+   * `<modulo>.<tela>.importacao`; sem ele, todas dividem "importacao.previa".
+   */
+  idTabela?: string;
 }
 
 type Passo = "arquivo" | "previa" | "resultado";
+
+// Centralizado é o padrão de tabela do app (ver DataTable); só dinheiro,
+// quantidade, total, percentual e horas vão à direita, e aqui não há nenhum
+// deles. A ordem é a da planilha, então nenhuma coluna ordena.
+const COLUNAS_INVALIDAS: ColumnDef<LinhaInvalidaResumo, unknown>[] = [
+  {
+    id: "linha",
+    header: "Linha",
+    size: 80,
+    enableSorting: false,
+    meta: { atomico: true, celular: "destaque" },
+    cell: ({ row }) => (
+      <span className="font-mono text-legenda tabular-nums">
+        {row.original.linha}
+      </span>
+    ),
+  },
+  {
+    id: "erros",
+    header: "Erros",
+    size: 360,
+    enableSorting: false,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => (
+      <span className="text-legenda text-destructive">
+        {row.original.erros.join("; ")}
+      </span>
+    ),
+  },
+];
 
 function mensagemDeErro(erro: unknown): string {
   if (erro instanceof Error && erro.message) return erro.message;
@@ -76,6 +107,7 @@ export function ImportDialog({
   onBaixarModelo,
   onValidarArquivo,
   onConfirmarImportacao,
+  idTabela,
 }: ImportDialogProps) {
   const [passo, setPasso] = React.useState<Passo>("arquivo");
   const [nomeArquivo, setNomeArquivo] = React.useState<string | null>(null);
@@ -286,35 +318,15 @@ export function ImportDialog({
                   <span>As linhas com erro serão ignoradas</span>
                 </div>
 
-                <div className="max-h-56 overflow-y-auto rounded-md border border-border">
-                  <Table>
-                    <TableHeader>
-                      {/* Centralizado é o padrão de tabela do app (ver
-                          DataTable); só dinheiro, quantidade, total, percentual
-                          e horas vão à direita, e aqui não há nenhum deles. */}
-                      <TableRow>
-                        <TableHead className="h-8 w-20 text-center text-legenda">
-                          Linha
-                        </TableHead>
-                        <TableHead className="h-8 text-center text-legenda">
-                          Erros
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {validacao.invalidas.map((linhaInvalida) => (
-                        <TableRow key={linhaInvalida.linha}>
-                          <TableCell className="py-1.5 text-center font-mono text-legenda tabular-nums">
-                            {linhaInvalida.linha}
-                          </TableCell>
-                          <TableCell className="py-1.5 text-center text-legenda text-destructive">
-                            {linhaInvalida.erros.join("; ")}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <DataTable
+                  idTabela={idTabela ?? "importacao.previa"}
+                  columns={COLUNAS_INVALIDAS}
+                  data={validacao.invalidas}
+                  idDaLinha={(linhaInvalida) => String(linhaInvalida.linha)}
+                  semPaginacao
+                  cabecalhoFixo
+                  alturaMaxima="14rem"
+                />
               </>
             )}
 

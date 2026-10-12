@@ -1,25 +1,20 @@
 "use client";
 
 import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import {
   CelulaVazia,
   Combobox,
+  DataTable,
   EmptyState,
   InputPreco,
   InputQuantidade,
   MoneyText,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import {
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { rotuloInsumo } from "@/modules/_shared/insumo/rotulo";
@@ -34,11 +29,14 @@ import type {
 } from "@/modules/compras/cotacoes/queries";
 
 /**
- * Classes do cabeçalho do mapa. Fica fixo no topo enquanto a matriz rola, no
- * mesmo padrão das listagens (DataTable com cabecalhoFixo).
+ * Fundo do menor preço da linha e do menor total. No pé, que fica preso por
+ * cima da matriz quando ela rola, o verde vai como camada de imagem sobre o
+ * `bg-surface` do pé: como cor de fundo ele substituiria o surface, e o verde a
+ * 10% deixaria ver as linhas passando por baixo.
  */
-const CLASSES_CABECALHO =
-  "sticky top-0 z-10 h-9 bg-background px-3 text-detalhe font-medium text-muted-foreground shadow-[inset_0_-1px_0_var(--color-border)]";
+const CLASSE_MENOR = "bg-status-aprovado/10";
+const CLASSE_MENOR_RODAPE =
+  "bg-linear-to-b from-status-aprovado/10 to-status-aprovado/10";
 
 /** Estado editável de uma linha do mapa (um insumo). */
 interface LinhaEditavel {
@@ -49,6 +47,18 @@ interface LinhaEditavel {
   quantidade: string;
   /** Preço unitário por cotacao_fornecedor_id, como string do input. */
   precos: Record<string, string>;
+}
+
+/** Linha como a tabela recebe: a editável mais o menor preço dela. */
+interface LinhaMapa extends LinhaEditavel {
+  /** Menor preço lançado na linha (undefined sem preço nenhum). */
+  menor: number | undefined;
+}
+
+/** O preço deste fornecedor é o menor da linha? Pinta a célula de verde. */
+function ehMenorDaLinha(linha: LinhaMapa, fornecedorId: string): boolean {
+  const preco = paraNumero(linha.precos[fornecedorId] ?? "");
+  return preco > 0 && linha.menor !== undefined && preco === linha.menor;
 }
 
 /**
@@ -153,26 +163,232 @@ export function MapaComparativo({
     [linhas, fornecedores],
   );
 
-  function alterarQuantidade(insumoId: string, valor: string) {
-    setLinhas((atual) =>
-      atual.map((linha) =>
-        linha.insumoId === insumoId ? { ...linha, quantidade: valor } : linha,
-      ),
-    );
-  }
+  const dados = React.useMemo<LinhaMapa[]>(
+    () =>
+      linhas.map((linha) => ({
+        ...linha,
+        menor: calc.menorPorLinha.get(linha.insumoId),
+      })),
+    [linhas, calc],
+  );
 
-  function alterarPreco(insumoId: string, fornecedorId: string, valor: string) {
-    setLinhas((atual) =>
-      atual.map((linha) =>
-        linha.insumoId === insumoId
-          ? { ...linha, precos: { ...linha.precos, [fornecedorId]: valor } }
-          : linha,
-      ),
-    );
-  }
+  // Quem tem o menor total (pode empatar), como chave de texto: o verde do pé
+  // só é refeito quando o sugerido muda, e não a cada tecla digitada.
+  const menoresTotais = fornecedores
+    .filter((fornecedor) => {
+      const total = calc.totalPorFornecedor.get(fornecedor.id) ?? 0;
+      return total > 0 && total === calc.menorTotal;
+    })
+    .map((fornecedor) => fornecedor.id)
+    .join(",");
 
-  function removerInsumo(insumoId: string) {
-    setLinhas((atual) => atual.filter((linha) => linha.insumoId !== insumoId));
+  /*
+    Linhas = insumos, colunas = fornecedores. Cada fornecedor é uma coluna com o
+    id da cotacao_fornecedor, para a largura e a ordem que o usuário escolher
+    ficarem presas ao fornecedor certo. Nenhuma coluna ordena: o mapa é de
+    edição, e ordenar por preço faria a linha pular de lugar no meio da
+    digitação.
+
+    As colunas NÃO podem ser refeitas enquanto a pessoa digita: o TanStack
+    trata a função `cell` como componente, e uma função nova é um componente
+    novo, que desmonta o campo e tira o foco no meio do número. Por isso os
+    campos leem o valor da própria linha (`row.original`), estas colunas só
+    dependem dos fornecedores e do modo de edição, e o verde do menor total
+    entra por cima, abaixo, sem trocar a `cell`.
+  */
+  const colunasBase = React.useMemo<ColumnDef<LinhaMapa, unknown>[]>(() => {
+    function alterarPreco(insumoId: string, fornecedorId: string, valor: string) {
+      setLinhas((atual) =>
+        atual.map((linha) =>
+          linha.insumoId === insumoId
+            ? { ...linha, precos: { ...linha.precos, [fornecedorId]: valor } }
+            : linha,
+        ),
+      );
+    }
+
+    return [
+      {
+        id: "insumo",
+        header: "Insumo",
+        size: 260,
+        enableSorting: false,
+        meta: { fixa: true, naoTruncar: true, celular: "titulo" },
+        cell: ({ row }) => (
+          <>
+            <span className="font-medium">{row.original.insumoNome}</span>
+            {row.original.insumoCodigo ? (
+              <span className="ml-2 codigo-doc text-muted-foreground">
+                {row.original.insumoCodigo}
+              </span>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        id: "quantidade",
+        header: "Quantidade",
+        size: editavel ? 160 : 130,
+        enableSorting: false,
+        // O campo monta o próprio layout; o corte de uma linha cortaria o anel de foco.
+        meta: { alinharDireita: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const linha = row.original;
+          return editavel ? (
+            <div className="flex items-center justify-end gap-1">
+              <InputQuantidade
+                valor={linha.quantidade}
+                onValorChange={(valor) =>
+                  setLinhas((atual) =>
+                    atual.map((outra) =>
+                      outra.insumoId === linha.insumoId
+                        ? { ...outra, quantidade: valor }
+                        : outra,
+                    ),
+                  )
+                }
+                className="h-8 w-24"
+                placeholder="0"
+                ariaLabel={`Quantidade de ${linha.insumoNome}`}
+              />
+              {linha.unidadeSigla ? (
+                <span className="text-legenda text-muted-foreground">
+                  {linha.unidadeSigla}
+                </span>
+              ) : null}
+            </div>
+          ) : (
+            <span className="tabular-nums">
+              {formatarQuantidade(paraNumero(linha.quantidade))}
+              {linha.unidadeSigla ? ` ${linha.unidadeSigla}` : ""}
+            </span>
+          );
+        },
+      },
+      ...fornecedores.map(
+        (fornecedor): ColumnDef<LinhaMapa, unknown> => ({
+          id: fornecedor.id,
+          header: () => (
+            // `ml-auto` porque `block` não obedece ao `text-right` da célula: o
+            // nome ficava colado na borda ESQUERDA da coluna, desalinhado dos
+            // preços que ele encabeça.
+            <span
+              className="ml-auto block max-w-40 truncate"
+              title={fornecedor.fornecedorNome}
+            >
+              {fornecedor.fornecedorNome}
+            </span>
+          ),
+          size: editavel ? 150 : 140,
+          enableSorting: false,
+          meta: {
+            alinharDireita: true,
+            naoTruncar: true,
+            rotulo: fornecedor.fornecedorNome,
+            // Menor preço por linha em verde.
+            classeDaCelula: (linha) =>
+              ehMenorDaLinha(linha, fornecedor.id) ? CLASSE_MENOR : undefined,
+          },
+          cell: ({ row }) => {
+            const linha = row.original;
+            const precoTexto = linha.precos[fornecedor.id] ?? "";
+            const preco = paraNumero(precoTexto);
+            const ehMenor = ehMenorDaLinha(linha, fornecedor.id);
+            if (editavel) {
+              return (
+                <InputPreco
+                  valor={precoTexto}
+                  onValorChange={(valor) =>
+                    alterarPreco(linha.insumoId, fornecedor.id, valor)
+                  }
+                  className={cn(
+                    "ml-auto h-8 w-28",
+                    ehMenor && "text-status-aprovado",
+                  )}
+                  ariaLabel={`Preço de ${linha.insumoNome} no fornecedor ${fornecedor.fornecedorNome}`}
+                />
+              );
+            }
+            return preco > 0 ? (
+              <MoneyText
+                valor={preco}
+                className={cn(
+                  "inline",
+                  ehMenor && "text-status-aprovado font-medium",
+                )}
+              />
+            ) : (
+              <CelulaVazia />
+            );
+          },
+        }),
+      ),
+      ...(editavel
+        ? [
+            {
+              id: "remover",
+              header: "",
+              size: 56,
+              enableSorting: false,
+              enableHiding: false,
+              meta: { alinharDireita: true, fixa: true, rotulo: "Remover" },
+              cell: ({ row }) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remover ${row.original.insumoNome}`}
+                  onClick={() =>
+                    setLinhas((atual) =>
+                      atual.filter(
+                        (linha) => linha.insumoId !== row.original.insumoId,
+                      ),
+                    )
+                  }
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              ),
+            } satisfies ColumnDef<LinhaMapa, unknown>,
+          ]
+        : []),
+    ];
+  }, [fornecedores, editavel]);
+
+  // Menor total por coluna em verde. Troca só a `meta`; a `cell` continua a
+  // mesma função, e o campo, o mesmo elemento.
+  const colunas = React.useMemo<ColumnDef<LinhaMapa, unknown>[]>(() => {
+    const sugeridos = new Set(menoresTotais.split(","));
+    return colunasBase.map((coluna) =>
+      coluna.id !== undefined && sugeridos.has(coluna.id)
+        ? { ...coluna, meta: { ...coluna.meta, classeDoRodape: CLASSE_MENOR_RODAPE } }
+        : coluna,
+    );
+  }, [colunasBase, menoresTotais]);
+
+  // O Total por fornecedor, preso ao id da coluna dele.
+  const rodape: Record<string, React.ReactNode> = {
+    insumo: <span className="font-medium">Total</span>,
+  };
+  for (const fornecedor of fornecedores) {
+    const total = calc.totalPorFornecedor.get(fornecedor.id) ?? 0;
+    const ehMenorTotal = total > 0 && total === calc.menorTotal;
+    rodape[fornecedor.id] = (
+      <>
+        <MoneyText
+          valor={total}
+          className={cn(
+            "inline font-medium",
+            ehMenorTotal && "text-status-aprovado",
+          )}
+        />
+        {ehMenorTotal ? (
+          <span className="block text-legenda font-medium text-status-aprovado">
+            sugerido
+          </span>
+        ) : null}
+      </>
+    );
   }
 
   function adicionarInsumo() {
@@ -244,193 +460,19 @@ export function MapaComparativo({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-[calc(100vh-22rem)] overflow-auto rounded-md border border-border">
-        {/* `table` cru, e não o `Table` do shadcn, pelo mesmo motivo que a
-            DataTable com cabecalhoFixo faz assim: o `Table` embrulha a tabela
-            num `div` com `overflow-x: auto`, e overflow em um eixo obriga o
-            outro a virar `auto` também. Esse div passa a ser o contêiner de
-            rolagem mais próximo do `sticky`, e como a altura dele não é
-            limitada (o `max-h` está no div de fora) ele nunca rola: o cabeçalho
-            e a linha de Total ficavam `sticky` sem nada para grudar. */}
-        <table className="w-full caption-bottom text-sm">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              {/* Centralizado é o padrão de tabela do app (ver DataTable); só
-                  dinheiro, quantidade, total, percentual e horas vão à direita. */}
-              <TableHead className={cn(CLASSES_CABECALHO, "text-center")}>
-                Insumo
-              </TableHead>
-              <TableHead className={cn(CLASSES_CABECALHO, "text-right")}>
-                Quantidade
-              </TableHead>
-              {fornecedores.map((fornecedor) => (
-                <TableHead
-                  key={fornecedor.id}
-                  className={cn(CLASSES_CABECALHO, "text-right")}
-                  title={fornecedor.fornecedorNome}
-                >
-                  {/* `ml-auto` porque `block` não obedece ao `text-right` da
-                      célula: o nome ficava colado na borda ESQUERDA da coluna,
-                      desalinhado dos preços que ele encabeça. */}
-                  <span className="ml-auto block max-w-40 truncate">
-                    {fornecedor.fornecedorNome}
-                  </span>
-                </TableHead>
-              ))}
-              {editavel ? (
-                <TableHead className={cn(CLASSES_CABECALHO, "w-10")} />
-              ) : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {linhas.length === 0 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell
-                  colSpan={fornecedores.length + (editavel ? 3 : 2)}
-                  className="h-24 text-center text-detalhe text-muted-foreground"
-                >
-                  {editavel
-                    ? "Adicione insumos para cotar"
-                    : "Sem insumos nesta cotação"}
-                </TableCell>
-              </TableRow>
-            ) : (
-              linhas.map((linha) => {
-                const menorLinha = calc.menorPorLinha.get(linha.insumoId);
-                return (
-                  <TableRow key={linha.insumoId} className="hover:bg-muted/50">
-                    <TableCell className="px-3 text-center text-detalhe">
-                      <span className="font-medium">{linha.insumoNome}</span>
-                      {linha.insumoCodigo ? (
-                        <span className="ml-2 codigo-doc text-muted-foreground">
-                          {linha.insumoCodigo}
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="px-3 text-right text-detalhe">
-                      {editavel ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <InputQuantidade
-                            valor={linha.quantidade}
-                            onValorChange={(valor) =>
-                              alterarQuantidade(linha.insumoId, valor)
-                            }
-                            className="h-8 w-24"
-                            placeholder="0"
-                            ariaLabel={`Quantidade de ${linha.insumoNome}`}
-                          />
-                          {linha.unidadeSigla ? (
-                            <span className="text-legenda text-muted-foreground">
-                              {linha.unidadeSigla}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="tabular-nums">
-                          {formatarQuantidade(paraNumero(linha.quantidade))}
-                          {linha.unidadeSigla ? ` ${linha.unidadeSigla}` : ""}
-                        </span>
-                      )}
-                    </TableCell>
-                    {fornecedores.map((fornecedor) => {
-                      const precoTexto = linha.precos[fornecedor.id] ?? "";
-                      const preco = paraNumero(precoTexto);
-                      const ehMenor =
-                        preco > 0 &&
-                        menorLinha !== undefined &&
-                        preco === menorLinha;
-                      return (
-                        <TableCell
-                          key={fornecedor.id}
-                          className={cn(
-                            "px-3 text-right text-detalhe",
-                            ehMenor && "bg-status-aprovado/10",
-                          )}
-                        >
-                          {editavel ? (
-                            <InputPreco
-                              valor={precoTexto}
-                              onValorChange={(valor) =>
-                                alterarPreco(
-                                  linha.insumoId,
-                                  fornecedor.id,
-                                  valor,
-                                )
-                              }
-                              className={cn(
-                                "h-8 w-28",
-                                ehMenor && "text-status-aprovado",
-                              )}
-                              ariaLabel={`Preço de ${linha.insumoNome} no fornecedor ${fornecedor.fornecedorNome}`}
-                            />
-                          ) : preco > 0 ? (
-                            <MoneyText
-                              valor={preco}
-                              className={cn(
-                                "inline",
-                                ehMenor && "text-status-aprovado font-medium",
-                              )}
-                            />
-                          ) : (
-                            <CelulaVazia />
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                    {editavel ? (
-                      <TableCell className="px-3 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Remover ${linha.insumoNome}`}
-                          onClick={() => removerInsumo(linha.insumoId)}
-                        >
-                          <Trash2 aria-hidden="true" />
-                        </Button>
-                      </TableCell>
-                    ) : null}
-                  </TableRow>
-                );
-              })
-            )}
-
-            <TableRow className="sticky bottom-0 border-t border-border bg-surface shadow-[inset_0_1px_0_var(--color-border)] hover:bg-surface">
-              <TableCell className="px-3 text-center text-detalhe font-medium">
-                Total
-              </TableCell>
-              <TableCell className="px-3" />
-              {fornecedores.map((fornecedor) => {
-                const total = calc.totalPorFornecedor.get(fornecedor.id) ?? 0;
-                const ehMenorTotal = total > 0 && total === calc.menorTotal;
-                return (
-                  <TableCell
-                    key={fornecedor.id}
-                    className={cn(
-                      "px-3 text-right text-detalhe",
-                      ehMenorTotal && "bg-status-aprovado/10",
-                    )}
-                  >
-                    <MoneyText
-                      valor={total}
-                      className={cn(
-                        "inline font-medium",
-                        ehMenorTotal && "text-status-aprovado",
-                      )}
-                    />
-                    {ehMenorTotal ? (
-                      <span className="block text-legenda font-medium text-status-aprovado">
-                        sugerido
-                      </span>
-                    ) : null}
-                  </TableCell>
-                );
-              })}
-              {editavel ? <TableCell className="px-3" /> : null}
-            </TableRow>
-          </TableBody>
-        </table>
-      </div>
+      <DataTable
+        idTabela="compras.cotacoes.mapa"
+        columns={colunas}
+        data={dados}
+        idDaLinha={(linha) => linha.insumoId}
+        semPaginacao
+        cabecalhoFixo
+        alturaMaxima="calc(100vh - 22rem)"
+        rodape={rodape}
+        emptyState={
+          editavel ? "Adicione insumos para cotar" : "Sem insumos nesta cotação"
+        }
+      />
 
       {editavel ? (
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -1,6 +1,8 @@
 "use client";
 
-import { MoneyText } from "@/components/canonicos";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { formatarData } from "@/lib/formatadores";
 import { ROTULO_PRODUTO } from "@/modules/financeiro/aplicacoes/calculo";
 import {
@@ -13,6 +15,78 @@ export interface AplicacoesDaSubcontaExpandidaProps {
   subconta: ContaLista;
   aplicacoes: readonly SaldoDaAplicacao[];
 }
+
+/**
+ * Uma aplicação da subconta, ou a linha do que sobra no saldo sem aplicação
+ * (sempre a última).
+ */
+type LinhaAplicacao =
+  | { tipo: "aplicacao"; id: string; aplicacao: SaldoDaAplicacao; saldo: number }
+  | { tipo: "fora"; id: string; saldo: number };
+
+// A linha "Fora dos investimentos" fecha a lista: ordenar a levaria para o meio,
+// então nenhuma coluna ordena.
+const COLUNAS: ColumnDef<LinhaAplicacao, unknown>[] = [
+  {
+    id: "investimento",
+    header: "Investimento",
+    size: 260,
+    enableSorting: false,
+    meta: { celular: "titulo" },
+    cell: ({ row }) => {
+      const r = row.original;
+      if (r.tipo === "fora") {
+        return (
+          <span title="Movimento lançado na subconta sem investimento. Abra o extrato da subconta para achar qual é.">
+            Fora dos investimentos
+          </span>
+        );
+      }
+      return (
+        <>
+          {r.aplicacao.nome}
+          {r.aplicacao.ativa ? null : <span className="text-muted-foreground"> (inativa)</span>}
+        </>
+      );
+    },
+  },
+  {
+    id: "tipo",
+    header: "Tipo",
+    size: 140,
+    enableSorting: false,
+    cell: ({ row }) =>
+      row.original.tipo === "aplicacao" ? (
+        <span className="text-muted-foreground">
+          {ROTULO_PRODUTO[row.original.aplicacao.produto] ?? row.original.aplicacao.produto}
+        </span>
+      ) : null,
+  },
+  {
+    id: "ultimaPosicao",
+    header: "Última posição",
+    size: 150,
+    enableSorting: false,
+    meta: { atomico: true },
+    cell: ({ row }) => {
+      const r = row.original;
+      if (r.tipo !== "aplicacao") return null;
+      return (
+        <span className="text-muted-foreground">
+          {r.aplicacao.ultimaPosicao ? formatarData(r.aplicacao.ultimaPosicao) : "Sem posição gravada"}
+        </span>
+      );
+    },
+  },
+  {
+    id: "saldo",
+    header: "Saldo",
+    size: 160,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <MoneyText valor={row.original.saldo} />,
+  },
+];
 
 /**
  * A linha expandida da subconta de investimentos: quais são os investimentos e
@@ -34,62 +108,34 @@ export function AplicacoesDaSubcontaExpandida({
     );
   }
 
+  const registros: LinhaAplicacao[] = resumo.aplicacoes.map((a) => ({
+    tipo: "aplicacao" as const,
+    id: a.aplicacaoId,
+    aplicacao: a,
+    saldo: a.saldo,
+  }));
+  if (resumo.foraDasAplicacoes !== null) {
+    registros.push({ tipo: "fora", id: "fora-dos-investimentos", saldo: resumo.foraDasAplicacoes });
+  }
+
   return (
     <div className="border-t border-border px-4 py-3" data-testid="aplicacoes-da-subconta">
-      <table className="w-full max-w-3xl text-detalhe">
-        <caption className="sr-only">Investimentos de {subconta.nome}</caption>
-        <thead>
-          <tr className="text-legenda text-muted-foreground">
-            <th scope="col" className="pb-1 text-left font-medium">Investimento</th>
-            <th scope="col" className="pb-1 text-left font-medium">Tipo</th>
-            <th scope="col" className="pb-1 text-left font-medium">Última posição</th>
-            <th scope="col" className="pb-1 text-right font-medium">Saldo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {resumo.aplicacoes.map((a) => (
-            <tr key={a.aplicacaoId} className="border-t border-border/60">
-              <td className="py-1.5 pr-4">
-                {a.nome}
-                {a.ativa ? null : <span className="text-muted-foreground"> (inativa)</span>}
-              </td>
-              <td className="py-1.5 pr-4 text-muted-foreground">
-                {ROTULO_PRODUTO[a.produto] ?? a.produto}
-              </td>
-              <td className="py-1.5 pr-4 text-muted-foreground">
-                {a.ultimaPosicao ? formatarData(a.ultimaPosicao) : "Sem posição gravada"}
-              </td>
-              <td className="py-1.5 text-right">
-                <MoneyText valor={a.saldo} />
-              </td>
-            </tr>
-          ))}
-          {resumo.foraDasAplicacoes !== null ? (
-            <tr className="border-t border-border/60 text-status-pendente">
-              <td
-                className="py-1.5 pr-4"
-                colSpan={3}
-                title="Movimento lançado na subconta sem investimento. Abra o extrato da subconta para achar qual é."
-              >
-                Fora dos investimentos
-              </td>
-              <td className="py-1.5 text-right">
-                <MoneyText valor={resumo.foraDasAplicacoes} />
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-border font-semibold">
-            <td className="pt-1.5" colSpan={3}>
-              Total da subconta
-            </td>
-            <td className="pt-1.5 text-right">
-              <MoneyText valor={subconta.saldoAtual ?? resumo.total} />
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+      <div className="max-w-3xl">
+        <DataTable
+          idTabela="financeiro.contas-bancarias.aplicacoes-da-subconta"
+          columns={COLUNAS}
+          data={registros}
+          idDaLinha={(r) => r.id}
+          semPaginacao
+          classeDaLinha={(r) => (r.tipo === "fora" ? "text-status-pendente" : undefined)}
+          rodape={{
+            investimento: <span className="font-semibold">Total da subconta</span>,
+            saldo: (
+              <MoneyText valor={subconta.saldoAtual ?? resumo.total} className="font-semibold" />
+            ),
+          }}
+        />
+      </div>
     </div>
   );
 }

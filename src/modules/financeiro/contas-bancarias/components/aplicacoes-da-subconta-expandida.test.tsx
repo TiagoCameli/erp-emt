@@ -1,5 +1,7 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
+
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 
 import { formatarBRL } from "@/lib/formatadores";
 import type { SaldoDaAplicacao } from "@/modules/financeiro/contas-bancarias/aplicacoes-da-subconta";
@@ -7,7 +9,24 @@ import type { ContaLista } from "@/modules/financeiro/contas-bancarias/queries";
 
 import { AplicacoesDaSubcontaExpandida } from "./aplicacoes-da-subconta-expandida";
 
-afterEach(cleanup);
+// O DataTable com `idTabela` lê e grava a preferência do usuário por Server
+// Action e usa o router; no teste, os dois ficam no lugar.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/financeiro/contas-bancarias",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 /** O `Intl` põe espaço não separável depois do R$; o testing-library normaliza o do DOM. */
 const brl = (valor: number) => formatarBRL(valor).replace(/\u00a0/g, " ");

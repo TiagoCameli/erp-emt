@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { LoaderCircle, Plus, Trash2 } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 
-import { CampoFormulario, Combobox, InputHoras } from "@/components/canonicos";
+import { CampoFormulario, Combobox, DataTable, InputHoras } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,20 +57,85 @@ export function ExcecoesCalendario({ calendarioId, excecoes, podeEditar, onAlter
     }
   }
 
-  async function remover(e: Excecao) {
-    setOcupado(true);
-    try {
-      const r = await excluirExcecao(calendarioId, e.data);
-      if ("erro" in r) {
-        toast.error(r.erro);
-        return;
+  const remover = React.useCallback(
+    async (e: Excecao) => {
+      setOcupado(true);
+      try {
+        const r = await excluirExcecao(calendarioId, e.data);
+        if ("erro" in r) {
+          toast.error(r.erro);
+          return;
+        }
+        toast.success("Exceção excluída");
+        onAlterado?.();
+      } finally {
+        setOcupado(false);
       }
-      toast.success("Exceção excluída");
-      onAlterado?.();
-    } finally {
-      setOcupado(false);
-    }
-  }
+    },
+    [calendarioId, onAlterado],
+  );
+
+  const colunas = React.useMemo<ColumnDef<Excecao, unknown>[]>(
+    () => [
+      {
+        accessorKey: "data",
+        header: "Data",
+        meta: { atomico: true, celular: "titulo" },
+        cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.data)}</span>,
+      },
+      {
+        accessorKey: "horas",
+        header: "Horas",
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => <span className="tabular-nums">{formatarQuantidade(row.original.horas)}</span>,
+      },
+      {
+        id: "tipo",
+        accessorFn: (e) => ROTULO_TIPO[e.tipo] ?? e.tipo,
+        header: "Tipo",
+        cell: ({ row }) => ROTULO_TIPO[row.original.tipo] ?? row.original.tipo,
+      },
+      {
+        accessorKey: "descricao",
+        header: "Descrição",
+        cell: ({ row }) => (
+          <>
+            {row.original.descricao}
+            {row.original.herdada ? (
+              <span className="block text-muted-foreground">vem do calendário {row.original.origemNome ?? "modelo"}</span>
+            ) : null}
+          </>
+        ),
+      },
+      ...(podeEditar
+        ? [
+            {
+              id: "excluir",
+              header: "",
+              size: 48,
+              enableSorting: false,
+              enableResizing: false,
+              // `rotulo: "Ações"` põe o botão no canto do card no celular.
+              meta: { fixa: true, naoTruncar: true, alinharDireita: true, rotulo: "Ações" },
+              cell: ({ row }) =>
+                row.original.herdada ? null : (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label={`Excluir exceção de ${formatarData(row.original.data)}`}
+                    disabled={ocupado}
+                    onClick={() => remover(row.original)}
+                  >
+                    <Trash2 />
+                  </Button>
+                ),
+            } satisfies ColumnDef<Excecao, unknown>,
+          ]
+        : []),
+    ],
+    [podeEditar, ocupado, remover],
+  );
 
   return (
     <section className="flex flex-col gap-3" aria-label="Exceções do calendário">
@@ -80,37 +146,14 @@ export function ExcecoesCalendario({ calendarioId, excecoes, podeEditar, onAlter
       {excecoes.length === 0 ? (
         <p className="text-detalhe text-muted-foreground">Nenhuma exceção neste calendário.</p>
       ) : (
-        <table className="w-full text-detalhe">
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th className="py-1 pr-2 font-medium">Data</th>
-              <th className="py-1 pr-2 text-right font-medium">Horas</th>
-              <th className="py-1 pr-2 font-medium">Tipo</th>
-              <th className="py-1 pr-2 font-medium">Descrição</th>
-              <th className="py-1" />
-            </tr>
-          </thead>
-          <tbody>
-            {excecoes.map((e) => (
-              <tr key={`${e.herdada ? "h" : "p"}-${e.data}`} className="border-t">
-                <td className="py-1.5 pr-2 tabular-nums">{formatarData(e.data)}</td>
-                <td className="py-1.5 pr-2 text-right tabular-nums">{formatarQuantidade(e.horas)}</td>
-                <td className="py-1.5 pr-2">{ROTULO_TIPO[e.tipo] ?? e.tipo}</td>
-                <td className="py-1.5 pr-2">
-                  {e.descricao}
-                  {e.herdada ? <span className="block text-muted-foreground">vem do calendário {e.origemNome ?? "modelo"}</span> : null}
-                </td>
-                <td className="py-1.5 text-right">
-                  {podeEditar && !e.herdada ? (
-                    <Button type="button" size="icon" variant="ghost" aria-label={`Excluir exceção de ${formatarData(e.data)}`} disabled={ocupado} onClick={() => remover(e)}>
-                      <Trash2 />
-                    </Button>
-                  ) : null}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          idTabela="execucao.modelos.calendario.excecoes"
+          columns={colunas}
+          data={excecoes}
+          // A mesma data pode vir do pai (herdada) e do próprio calendário.
+          idDaLinha={(e) => `${e.herdada ? "h" : "p"}-${e.data}`}
+          semPaginacao
+        />
       )}
       {podeEditar ? (
         <div className="flex flex-col gap-3 rounded-md border p-3" role="group" aria-label="Nova exceção">

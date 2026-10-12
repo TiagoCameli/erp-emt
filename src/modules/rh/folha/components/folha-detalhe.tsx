@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ChevronDown,
   Copy,
@@ -20,6 +21,7 @@ import {
   ApprovalBar,
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   GradeKpis,
   KPICard,
   MoneyText,
@@ -116,6 +118,30 @@ function rotuloCentroCusto(grupo: CustoCentroCusto): string {
   return grupo.centroCustoCodigo
     ? `${grupo.centroCustoCodigo} - ${grupo.centroCustoNome}`
     : grupo.centroCustoNome;
+}
+
+/**
+ * Controle dentro de uma linha clicável (botão, `<details>` da provisão). Sem
+ * isto, clicar em "Holerite" abriria o holerite E o editor por baixo dele, e
+ * abrir o `<details>` da provisão abriria o drawer junto. O teclado também para
+ * aqui: Enter num botão subiria até a linha, que trata Enter como "abrir".
+ */
+function ForaDoCliqueDaLinha({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={className}
+      onClick={(evento) => evento.stopPropagation()}
+      onKeyDown={(evento) => evento.stopPropagation()}
+    >
+      {children}
+    </div>
+  );
 }
 
 export interface FolhaDetalheViewProps {
@@ -261,25 +287,466 @@ export function FolhaDetalheView({
 
   /**
    * Clicar na LINHA abre o editor daquela pessoa (pedido do Tiago, 29/08/2026).
+   * Os controles da linha ficam em `ForaDoCliqueDaLinha`, para o clique neles
+   * não abrir o editor junto.
    *
-   * Ignora o clique que nasceu dentro de um controle: sem esta checagem, clicar
-   * em "Holerite" abriria o holerite E o editor por baixo dele, e abrir o
-   * `<details>` da provisão abriria o drawer junto.
-   *
-   * O botão "Editar" continua na linha de propósito: `<tr>` não vira botão
-   * acessível (role="button" dentro de tabela quebra a semântica da grade), e
-   * ele é o caminho que funciona por teclado e leitor de tela. O clique na linha
-   * é atalho de mouse, não a única porta.
+   * O botão "Editar" continua na linha de propósito: ele é o caminho que o
+   * leitor de tela anuncia pelo nome. O clique na linha é atalho, não a única
+   * porta.
    */
-  function aoClicarNaLinha(
-    evento: React.MouseEvent<HTMLTableRowElement>,
-    item: FolhaItem,
-  ) {
-    if (!podeEditarLinha) return;
-    const alvo = evento.target as HTMLElement;
-    if (alvo.closest("button, a, summary, input, select, textarea")) return;
-    setItemEmEdicao(item);
-  }
+  const aoClicarNaLinha = podeEditarLinha
+    ? (item: FolhaItem) => setItemEmEdicao(item)
+    : undefined;
+
+  /** Colunas de "Itens por colaborador". Lista plana: ordena por coluna. */
+  const colunasItens = React.useMemo<ColumnDef<FolhaItem, unknown>[]>(() => {
+    const dinheiro = (
+      id: string,
+      header: string,
+      valor: (item: FolhaItem) => number,
+      celula: (item: FolhaItem) => React.ReactNode,
+      extra: Partial<ColumnDef<FolhaItem, unknown>> = {},
+    ): ColumnDef<FolhaItem, unknown> => ({
+      id,
+      header,
+      accessorFn: valor,
+      size: 130,
+      meta: { alinharDireita: true, atomico: true },
+      cell: ({ row }) => celula(row.original),
+      ...extra,
+    });
+    return [
+      {
+        id: "colaborador",
+        header: "Colaborador",
+        accessorFn: (item) => item.colaboradorNome,
+        size: 220,
+        meta: { celular: "titulo", fixa: true },
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <span className="font-medium">
+              {item.colaboradorNome}
+              {/* Selo de linha editada à mão: sem ele, um salário ajustado e um
+                  salário vindo do cadastro ficam indistinguíveis, e o Regerar
+                  trata os dois de formas diferentes (preserva um, recalcula o
+                  outro). */}
+              {item.editadoManualmente ? (
+                <span
+                  className="ml-1.5 align-middle text-legenda font-normal text-status-pendente"
+                  title="Valores desta linha foram alterados à mão. Regerar a folha preserva o que foi digitado."
+                >
+                  editado
+                </span>
+              ) : null}
+            </span>
+          );
+        },
+      },
+      {
+        id: "vinculo",
+        header: "Vínculo",
+        accessorFn: (item) =>
+          ROTULO_VINCULO[item.colaboradorVinculo as Vinculo] ??
+          item.colaboradorVinculo,
+        size: 110,
+        cell: ({ getValue }) => (
+          <span className="text-muted-foreground">{getValue<string>()}</span>
+        ),
+      },
+      {
+        id: "funcao",
+        header: "Função",
+        accessorFn: (item) => item.colaboradorFuncao ?? "",
+        size: 150,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.colaboradorFuncao ?? <CelulaVazia />}
+          </span>
+        ),
+      },
+      {
+        id: "centroCusto",
+        header: "Centro de custo",
+        accessorFn: (item) => item.centroCustoNome ?? "",
+        size: 200,
+        cell: ({ row }) => {
+          const item = row.original;
+          return item.centroCustoNome ? (
+            <span>
+              {item.centroCustoCodigo ? (
+                <span className="codigo-doc text-muted-foreground">
+                  {item.centroCustoCodigo}{" "}
+                </span>
+              ) : null}
+              {item.centroCustoNome}
+            </span>
+          ) : (
+            <CelulaVazia />
+          );
+        },
+      },
+      dinheiro(
+        "salarioBase",
+        "Salário base",
+        (item) => item.salarioBase,
+        (item) => <MoneyText valor={item.salarioBase} />,
+      ),
+      dinheiro(
+        "gratificacao",
+        "Gratificação",
+        (item) => item.gratificacao,
+        (item) =>
+          item.gratificacao > 0 ? (
+            <MoneyText valor={item.gratificacao} />
+          ) : (
+            <span className="text-muted-foreground">
+              <MoneyText valor={0} />
+            </span>
+          ),
+      ),
+      {
+        id: "horasNormais",
+        header: "Horas normais",
+        accessorFn: (item) => item.horasNormais,
+        size: 120,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarQuantidade(row.original.horasNormais)}
+          </span>
+        ),
+      },
+      {
+        id: "horasExtras",
+        header: "Horas extras",
+        accessorFn: (item) => item.horasExtras,
+        size: 120,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {formatarQuantidade(row.original.horasExtras)}
+          </span>
+        ),
+      },
+      dinheiro(
+        "valorExtras",
+        "Valor extras",
+        (item) => item.valorExtras,
+        (item) => <MoneyText valor={item.valorExtras} />,
+      ),
+      dinheiro(
+        "descontos",
+        "Desconto",
+        (item) => item.descontos,
+        (item) => (
+          <span className="text-muted-foreground">
+            {/* Só o valor, sem legenda. Aqui havia o percentual embaixo ("7,5%
+                desta pessoa"), que explicava de onde vinham os R$ 121,58 — mas
+                desde 26/08/2026 não vêm de conta nenhuma: o desconto é digitado
+                em reais, porque 7,5% de R$ 1.621,00 dá 121,575 e o centavo que
+                o contracheque usa não se deduz por fórmula. Repetir "121,58
+                (7,5%)" agora seria afirmar uma origem que o número não tem.
+                Quem não tem desconto fica com um R$ 0,00 apagado, e não em
+                branco: coluna de dinheiro com célula vazia se lê como dado
+                faltando. */}
+            {item.descontos > 0 ? (
+              // As HORAS embaixo do valor, quando o desconto foi informado por
+              // elas (26/08/2026). Diferente do percentual que ficava aqui
+              // antes: hora não é uma fórmula que reproduz o valor, é o motivo
+              // do desconto — e é o que responde "por que saíram R$ 64,84 desta
+              // pessoa" sem abrir a linha.
+              <span className="flex flex-col items-end">
+                <MoneyText valor={item.descontos} />
+                {item.descontoHoras !== null && item.descontoHoras > 0 ? (
+                  <span className="text-legenda">
+                    {formatarQuantidade(item.descontoHoras)}h não trabalhadas
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              <MoneyText valor={0} />
+            )}
+          </span>
+        ),
+        // Duas linhas (valor e horas): não cabe no corte de uma linha só.
+        { meta: { alinharDireita: true, naoTruncar: true } },
+      ),
+      dinheiro(
+        "provisoes",
+        "Provisão",
+        (item) => item.provisoes,
+        (item) => (
+          <span className="text-muted-foreground">
+            {item.provisoesDetalhe.length > 0 ? (
+              <ForaDoCliqueDaLinha>
+                <details className="group">
+                  <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
+                    <MoneyText valor={item.provisoes} />
+                    <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
+                    {item.provisoesDetalhe.map((provisao) => (
+                      <li key={provisao.nome} className="flex flex-col gap-0.5">
+                        <span className="font-medium text-foreground">
+                          {provisao.nome}
+                        </span>
+                        <span className="flex items-center justify-between gap-3">
+                          <span>Principal</span>
+                          <MoneyText valor={provisao.valorPrincipal} />
+                        </span>
+                        <span className="flex items-center justify-between gap-3">
+                          <span>Encargos</span>
+                          <MoneyText valor={provisao.valorEncargos} />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </ForaDoCliqueDaLinha>
+            ) : (
+              <MoneyText valor={item.provisoes} />
+            )}
+          </span>
+        ),
+        // O `<details>` abre o detalhe por provisão embaixo do valor.
+        { meta: { alinharDireita: true, naoTruncar: true } },
+      ),
+      dinheiro(
+        "adiantamentos",
+        "Adiantamentos",
+        (item) => item.adiantamentos,
+        (item) => (
+          <span className="text-muted-foreground">
+            <MoneyText valor={item.adiantamentos} />
+          </span>
+        ),
+      ),
+      dinheiro(
+        "custoTotal",
+        "Custo total",
+        (item) => item.custoTotal,
+        (item) => <MoneyText valor={item.custoTotal} className="font-medium" />,
+      ),
+      dinheiro(
+        "valorLiquido",
+        "Líquido",
+        (item) => item.valorLiquido,
+        (item) => (
+          <MoneyText valor={item.valorLiquido} className="font-medium" />
+        ),
+        { meta: { alinharDireita: true, atomico: true, celular: "valor" } },
+      ),
+      {
+        id: "acoes",
+        header: () => <span className="sr-only">Ações da linha</span>,
+        size: 290,
+        enableSorting: false,
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações", naoTruncar: true },
+        cell: ({ row }) => {
+          const item = row.original;
+          return (
+            <ForaDoCliqueDaLinha className="flex items-center justify-end gap-2">
+              {podeEditarLinha ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setItemEmEdicao(item)}
+                >
+                  <Pencil />
+                  Editar
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setHoleriteItem(item)}
+              >
+                <FileText />
+                Holerite
+              </Button>
+              {podeEditarLinha ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  title={`Tirar ${item.colaboradorNome} desta folha`}
+                  onClick={() => setItemParaTirar(item)}
+                >
+                  <UserMinus />
+                  Tirar
+                </Button>
+              ) : null}
+            </ForaDoCliqueDaLinha>
+          );
+        },
+      },
+    ];
+  }, [podeEditarLinha]);
+
+  /** Colunas de "Fora desta folha". */
+  const colunasFora = React.useMemo<ColumnDef<ColaboradorForaDaFolha, unknown>[]>(
+    () => [
+      {
+        id: "colaborador",
+        header: "Colaborador",
+        accessorFn: (fora) => fora.nome,
+        size: 260,
+        meta: { celular: "titulo", fixa: true, naoTruncar: true },
+        cell: ({ row }) => {
+          const fora = row.original;
+          return (
+            <div className="flex flex-col">
+              <span className="font-medium">{fora.nome}</span>
+              <span className="text-legenda text-muted-foreground">
+                {ROTULO_VINCULO[fora.vinculo as Vinculo] ?? fora.vinculo}
+                {" · tirado em "}
+                {formatarData(fora.tiradoEm)}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "funcao",
+        header: "Função",
+        accessorFn: (fora) => fora.funcao ?? "",
+        size: 160,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.funcao ?? <CelulaVazia />}
+          </span>
+        ),
+      },
+      {
+        id: "motivo",
+        header: "Motivo",
+        accessorFn: (fora) => fora.motivo ?? "",
+        size: 240,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.motivo ?? <CelulaVazia />}
+          </span>
+        ),
+      },
+      {
+        id: "acoes",
+        header: "Ação",
+        size: 170,
+        enableSorting: false,
+        meta: { alinharDireita: true, fixa: true, rotulo: "Ações", naoTruncar: true },
+        cell: ({ row }) => {
+          const fora = row.original;
+          return podeEditarLinha ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={voltandoId !== null}
+              onClick={() => void aoVoltarParaFolha(fora)}
+            >
+              {voltandoId === fora.colaboradorId ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <UserPlus />
+              )}
+              Colocar de volta
+            </Button>
+          ) : null;
+        },
+      },
+    ],
+    // aoVoltarParaFolha é recriada a cada render, mas só lê folha.id e os
+    // setters: depender dela recriaria as colunas sem motivo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [podeEditarLinha, voltandoId],
+  );
+
+  /** Colunas de "Custo por centro de custo". */
+  const colunasCustos = React.useMemo<ColumnDef<CustoCentroCusto, unknown>[]>(
+    () => [
+      {
+        id: "centroCusto",
+        header: "Centro de custo",
+        accessorFn: (grupo) => rotuloCentroCusto(grupo),
+        size: 320,
+        meta: { celular: "titulo" },
+      },
+      {
+        id: "custoTotal",
+        header: "Custo total",
+        accessorFn: (grupo) => grupo.custoTotal,
+        size: 160,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <MoneyText valor={row.original.custoTotal} />,
+      },
+    ],
+    [],
+  );
+
+  /** Colunas de "Encargos por tipo". */
+  const colunasEncargos = React.useMemo<ColumnDef<ResumoEncargo, unknown>[]>(
+    () => [
+      {
+        id: "encargo",
+        header: "Encargo",
+        accessorFn: (encargo) => encargo.nome,
+        size: 320,
+        meta: { celular: "titulo" },
+      },
+      {
+        id: "total",
+        header: "Total",
+        accessorFn: (encargo) => encargo.total,
+        size: 160,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <MoneyText valor={row.original.total} />,
+      },
+    ],
+    [],
+  );
+
+  /** Colunas de "Provisões por tipo". */
+  const colunasProvisoes = React.useMemo<ColumnDef<ResumoProvisao, unknown>[]>(
+    () => [
+      {
+        id: "provisao",
+        header: "Provisão",
+        accessorFn: (provisao) => provisao.nome,
+        size: 260,
+        meta: { celular: "titulo" },
+      },
+      {
+        id: "principal",
+        header: "Principal",
+        accessorFn: (provisao) => provisao.principal,
+        size: 150,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <MoneyText valor={row.original.principal} />,
+      },
+      {
+        id: "encargos",
+        header: "Encargos",
+        accessorFn: (provisao) => provisao.encargos,
+        size: 150,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <MoneyText valor={row.original.encargos} />,
+      },
+      {
+        id: "total",
+        header: "Total",
+        accessorFn: (provisao) => provisao.total,
+        size: 150,
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => (
+          <MoneyText valor={row.original.total} className="font-medium" />
+        ),
+      },
+    ],
+    [],
+  );
 
   async function aoTirarDaFolha(motivo?: string) {
     if (!itemParaTirar) return;
@@ -642,246 +1109,14 @@ export function FolhaDetalheView({
               cadastro e regere a folha.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  {/* Centralizado é o padrão de tabela do app (ver DataTable); só
-                      dinheiro, quantidade, total, percentual e horas vão à
-                      direita. */}
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">
-                      Colaborador
-                    </th>
-                    <th className="px-3 py-2 text-center font-medium">Vínculo</th>
-                    <th className="px-3 py-2 text-center font-medium">Função</th>
-                    <th className="px-3 py-2 text-center font-medium">
-                      Centro de custo
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Salário base
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Gratificação
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Horas normais
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Horas extras
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Valor extras
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Desconto</th>
-                    <th className="px-3 py-2 text-right font-medium">Provisão</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Adiantamentos
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Custo total
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Líquido</th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      <span className="sr-only">Ações da linha</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {folha.itens.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={
-                        podeEditarLinha
-                          ? "cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
-                          : "border-b border-border last:border-0"
-                      }
-                      title={
-                        podeEditarLinha
-                          ? `Editar a linha de ${item.colaboradorNome}`
-                          : undefined
-                      }
-                      onClick={(evento) => aoClicarNaLinha(evento, item)}
-                    >
-                      <td className="px-3 py-2 text-center font-medium">
-                        {item.colaboradorNome}
-                        {/* Selo de linha editada à mão: sem ele, um salário
-                            ajustado e um salário vindo do cadastro ficam
-                            indistinguíveis, e o Regerar trata os dois de formas
-                            diferentes (preserva um, recalcula o outro). */}
-                        {item.editadoManualmente ? (
-                          <span
-                            className="ml-1.5 align-middle text-legenda font-normal text-status-pendente"
-                            title="Valores desta linha foram alterados à mão. Regerar a folha preserva o que foi digitado."
-                          >
-                            editado
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-center text-muted-foreground">
-                        {ROTULO_VINCULO[item.colaboradorVinculo as Vinculo] ??
-                          item.colaboradorVinculo}
-                      </td>
-                      <td className="px-3 py-2 text-center text-muted-foreground">
-                        {item.colaboradorFuncao ?? <CelulaVazia />}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {item.centroCustoNome ? (
-                          <span>
-                            {item.centroCustoCodigo ? (
-                              <span className="codigo-doc text-muted-foreground">
-                                {item.centroCustoCodigo}{" "}
-                              </span>
-                            ) : null}
-                            {item.centroCustoNome}
-                          </span>
-                        ) : (
-                          <CelulaVazia />
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={item.salarioBase} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {item.gratificacao > 0 ? (
-                          <MoneyText valor={item.gratificacao} />
-                        ) : (
-                          <span className="text-muted-foreground">
-                            <MoneyText valor={0} />
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarQuantidade(item.horasNormais)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {formatarQuantidade(item.horasExtras)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={item.valorExtras} />
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
-                        {/* Só o valor, sem legenda. Aqui havia o percentual
-                            embaixo ("7,5% desta pessoa"), que explicava de onde
-                            vinham os R$ 121,58 — mas desde 26/08/2026 não vêm de
-                            conta nenhuma: o desconto é digitado em reais, porque
-                            7,5% de R$ 1.621,00 dá 121,575 e o centavo que o
-                            contracheque usa não se deduz por fórmula. Repetir
-                            "121,58 (7,5%)" agora seria afirmar uma origem que o
-                            número não tem.
-                            Quem não tem desconto fica com um R$ 0,00 apagado, e
-                            não em branco: coluna de dinheiro com célula vazia se
-                            lê como dado faltando. */}
-                        {item.descontos > 0 ? (
-                          // As HORAS embaixo do valor, quando o desconto foi
-                          // informado por elas (26/08/2026). Diferente do
-                          // percentual que ficava aqui antes: hora não é uma
-                          // fórmula que reproduz o valor, é o motivo do desconto —
-                          // e é o que responde "por que saíram R$ 64,84 desta
-                          // pessoa" sem abrir a linha.
-                          <div className="flex flex-col items-end">
-                            <MoneyText valor={item.descontos} />
-                            {item.descontoHoras !== null &&
-                            item.descontoHoras > 0 ? (
-                              <span className="text-legenda">
-                                {formatarQuantidade(item.descontoHoras)}h não
-                                trabalhadas
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            <MoneyText valor={0} />
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
-                        {item.provisoesDetalhe.length > 0 ? (
-                          <details className="group">
-                            <summary className="flex cursor-pointer list-none items-center justify-end gap-1 select-none [&::-webkit-details-marker]:hidden">
-                              <MoneyText valor={item.provisoes} />
-                              <ChevronDown className="size-3.5 shrink-0 transition-transform group-open:rotate-180" />
-                            </summary>
-                            <ul className="mt-1.5 space-y-1 border-t border-border pt-1.5 text-left text-legenda">
-                              {item.provisoesDetalhe.map((provisao) => (
-                                <li
-                                  key={provisao.nome}
-                                  className="flex flex-col gap-0.5"
-                                >
-                                  <span className="font-medium text-foreground">
-                                    {provisao.nome}
-                                  </span>
-                                  <span className="flex items-center justify-between gap-3">
-                                    <span>Principal</span>
-                                    <MoneyText valor={provisao.valorPrincipal} />
-                                  </span>
-                                  <span className="flex items-center justify-between gap-3">
-                                    <span>Encargos</span>
-                                    <MoneyText valor={provisao.valorEncargos} />
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
-                        ) : (
-                          <MoneyText valor={item.provisoes} />
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right text-muted-foreground">
-                        <MoneyText valor={item.adiantamentos} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText
-                          valor={item.custoTotal}
-                          className="font-medium"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText
-                          valor={item.valorLiquido}
-                          className="font-medium"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {podeEditarLinha ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setItemEmEdicao(item)}
-                            >
-                              <Pencil />
-                              Editar
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setHoleriteItem(item)}
-                          >
-                            <FileText />
-                            Holerite
-                          </Button>
-                          {podeEditarLinha ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              title={`Tirar ${item.colaboradorNome} desta folha`}
-                              onClick={() => setItemParaTirar(item)}
-                            >
-                              <UserMinus />
-                              Tirar
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="rh.folha.detalhe.itens"
+              columns={colunasItens}
+              data={folha.itens}
+              idDaLinha={(item) => item.id}
+              semPaginacao
+              onRowClick={aoClicarNaLinha}
+            />
           )}
         </Secao>
 
@@ -900,64 +1135,13 @@ export function FolhaDetalheView({
               normalmente na folha da próxima competência. Eles só não entram
               nesta, nem nos totais acima.
             </p>
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-left font-medium">
-                      Colaborador
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium">Função</th>
-                    <th className="px-3 py-2 text-left font-medium">Motivo</th>
-                    <th className="px-3 py-2 text-right font-medium">Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {folha.foraDaFolha.map((fora) => (
-                    <tr
-                      key={fora.colaboradorId}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2">
-                        <div className="flex flex-col">
-                          <span className="font-medium">{fora.nome}</span>
-                          <span className="text-legenda text-muted-foreground">
-                            {ROTULO_VINCULO[fora.vinculo as Vinculo] ??
-                              fora.vinculo}
-                            {" · tirado em "}
-                            {formatarData(fora.tiradoEm)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {fora.funcao ?? <CelulaVazia />}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">
-                        {fora.motivo ?? <CelulaVazia />}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {podeEditarLinha ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={voltandoId !== null}
-                            onClick={() => void aoVoltarParaFolha(fora)}
-                          >
-                            {voltandoId === fora.colaboradorId ? (
-                              <LoaderCircle className="animate-spin" />
-                            ) : (
-                              <UserPlus />
-                            )}
-                            Colocar de volta
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="rh.folha.detalhe.fora-da-folha"
+              columns={colunasFora}
+              data={folha.foraDaFolha}
+              idDaLinha={(fora) => fora.colaboradorId}
+              semPaginacao
+            />
           </Secao>
         ) : null}
 
@@ -967,150 +1151,78 @@ export function FolhaDetalheView({
               Sem custo alocado ainda.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">
-                      Centro de custo
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Custo total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {custosPorCentro.map((grupo) => (
-                    <tr
-                      key={grupo.centroCustoId ?? "__sem_centro__"}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2 text-center">
-                        {rotuloCentroCusto(grupo)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={grupo.custoTotal} />
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border">
-                    <td className="px-3 py-2 text-center font-semibold">Total</td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText
-                        valor={folha.custoTotal}
-                        className="font-semibold"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="rh.folha.detalhe.custos-centro"
+              columns={colunasCustos}
+              data={custosPorCentro}
+              idDaLinha={(grupo) => grupo.centroCustoId ?? "__sem_centro__"}
+              semPaginacao
+              rodape={{
+                centroCusto: <span className="font-semibold">Total</span>,
+                custoTotal: (
+                  <MoneyText valor={folha.custoTotal} className="font-semibold" />
+                ),
+              }}
+            />
           )}
         </Secao>
 
         {resumoEncargos.length > 0 ? (
           <Secao larguraPadrao={12} titulo="Encargos por tipo">
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">Encargo</th>
-                    <th className="px-3 py-2 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resumoEncargos.map((encargo) => (
-                    <tr
-                      key={encargo.nome}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2 text-center">{encargo.nome}</td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={encargo.total} />
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border">
-                    <td className="px-3 py-2 text-center font-semibold">Total</td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText
-                        valor={folha.valorEncargos}
-                        className="font-semibold"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="rh.folha.detalhe.encargos"
+              columns={colunasEncargos}
+              data={resumoEncargos}
+              idDaLinha={(encargo) => encargo.nome}
+              semPaginacao
+              rodape={{
+                encargo: <span className="font-semibold">Total</span>,
+                total: (
+                  <MoneyText
+                    valor={folha.valorEncargos}
+                    className="font-semibold"
+                  />
+                ),
+              }}
+            />
           </Secao>
         ) : null}
 
         {resumoProvisoes.length > 0 ? (
           <Secao larguraPadrao={12} titulo="Provisões por tipo">
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="w-full text-detalhe">
-                <thead>
-                  <tr className="border-b border-border text-legenda text-muted-foreground">
-                    <th className="px-3 py-2 text-center font-medium">
-                      Provisão
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">
-                      Principal
-                    </th>
-                    <th className="px-3 py-2 text-right font-medium">Encargos</th>
-                    <th className="px-3 py-2 text-right font-medium">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resumoProvisoes.map((provisao) => (
-                    <tr
-                      key={provisao.nome}
-                      className="border-b border-border last:border-0"
-                    >
-                      <td className="px-3 py-2 text-center">{provisao.nome}</td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={provisao.principal} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText valor={provisao.encargos} />
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <MoneyText
-                          valor={provisao.total}
-                          className="font-medium"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="border-t border-border">
-                    <td className="px-3 py-2 text-center font-semibold">Total</td>
-                    {/* Fonte única: soma sobre `resumoProvisoes`, a mesma lista
-                        que preenche as linhas acima — as 3 células desta linha
-                        sempre somam entre si. `folha.valorProvisoes` (o banco) é
-                        a fonte do KPI de custo total, onde uma eventual
-                        divergência entre item e consolidado aparece. */}
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText
-                        valor={totalProvisoes.principal}
-                        className="font-semibold"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText
-                        valor={totalProvisoes.encargos}
-                        className="font-semibold"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <MoneyText
-                        valor={totalProvisoes.total}
-                        className="font-semibold"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              idTabela="rh.folha.detalhe.provisoes"
+              columns={colunasProvisoes}
+              data={resumoProvisoes}
+              idDaLinha={(provisao) => provisao.nome}
+              semPaginacao
+              // Fonte única: soma sobre `resumoProvisoes`, a mesma lista que
+              // preenche as linhas acima — as 3 células desta linha sempre somam
+              // entre si. `folha.valorProvisoes` (o banco) é a fonte do KPI de
+              // custo total, onde uma eventual divergência entre item e
+              // consolidado aparece.
+              rodape={{
+                provisao: <span className="font-semibold">Total</span>,
+                principal: (
+                  <MoneyText
+                    valor={totalProvisoes.principal}
+                    className="font-semibold"
+                  />
+                ),
+                encargos: (
+                  <MoneyText
+                    valor={totalProvisoes.encargos}
+                    className="font-semibold"
+                  />
+                ),
+                total: (
+                  <MoneyText
+                    valor={totalProvisoes.total}
+                    className="font-semibold"
+                  />
+                ),
+              }}
+            />
           </Secao>
         ) : null}
 

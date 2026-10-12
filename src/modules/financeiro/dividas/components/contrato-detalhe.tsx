@@ -3,11 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Calculator, FileSpreadsheet, History, Pencil, Repeat } from "lucide-react";
 
 import {
   CelulaVazia,
   ConfirmDialog,
+  DataTable,
   GradeKpis,
   KPICard,
   MoneyText,
@@ -63,66 +65,109 @@ function Lancamento({ lancamento, link }: { lancamento: LancamentoLigado | null;
   );
 }
 
-const TH = "h-9 px-3 text-right font-medium";
+/** A coluna da situação no lançamento: paga, a pagar, ou nada quando não é parcela. */
+function Situacao({ paga }: { paga: boolean | null }) {
+  if (paga === null) return <CelulaVazia />;
+  return paga ? (
+    <span className="text-legenda text-status-aprovado">Paga</span>
+  ) : (
+    <span className="text-legenda text-muted-foreground">A pagar</span>
+  );
+}
+
+// Sem ordenação: o cronograma tem ordem de vencimento, e os eventos (aporte,
+// amortização) ficam no lugar deles entre as parcelas.
+const COLUNAS_CRONOGRAMA: ColumnDef<LinhaCronograma, unknown>[] = [
+  {
+    id: "numero",
+    header: "Nº",
+    size: 110,
+    enableSorting: false,
+    meta: { alinharDireita: true, rotulo: "Nº", celular: "titulo" },
+    cell: ({ row }) => (
+      <span className="tabular-nums text-muted-foreground">
+        {row.original.numero ?? rotulo(ROTULO_EVENTO, row.original.tipo)}
+      </span>
+    ),
+  },
+  {
+    id: "vencimento",
+    header: "Vencimento",
+    size: 120,
+    enableSorting: false,
+    meta: { atomico: true, rotulo: "Vencimento", celular: "destaque" },
+    cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.vencimento)}</span>,
+  },
+  {
+    id: "principal",
+    header: "Principal",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Principal" },
+    cell: ({ row }) => <MoneyText valor={row.original.principal} />,
+  },
+  {
+    id: "juros",
+    header: "Juros",
+    size: 130,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Juros" },
+    cell: ({ row }) => <MoneyText valor={row.original.juros} />,
+  },
+  {
+    id: "encargos",
+    header: "Encargos",
+    size: 130,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Encargos" },
+    cell: ({ row }) => <MoneyText valor={row.original.encargos} />,
+  },
+  {
+    id: "total",
+    header: "Total",
+    size: 140,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Total", celular: "valor" },
+    cell: ({ row }) => (
+      <MoneyText
+        valor={somarCentavos([row.original.principal, row.original.juros, row.original.encargos])}
+        className="font-medium"
+      />
+    ),
+  },
+  {
+    id: "saldoApos",
+    header: "Saldo depois",
+    size: 150,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, rotulo: "Saldo depois" },
+    cell: ({ row }) => <MoneyText valor={row.original.saldoApos} />,
+  },
+];
+
+const COLUNA_SITUACAO: ColumnDef<LinhaCronograma, unknown> = {
+  id: "situacao",
+  header: "Situação",
+  size: 110,
+  enableSorting: false,
+  meta: { rotulo: "Situação", celular: "destaque" },
+  cell: ({ row }) => <Situacao paga={row.original.paga} />,
+};
+
+const COLUNAS_CRONOGRAMA_COM_SITUACAO = [...COLUNAS_CRONOGRAMA, COLUNA_SITUACAO];
 
 /** A tabela de uma versão do cronograma (a atual ou uma do histórico). */
 export function TabelaCronograma({ linhas, mostrarPaga }: { linhas: LinhaCronograma[]; mostrarPaga: boolean }) {
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <table className="w-full text-detalhe">
-        <thead>
-          <tr className="border-b border-border text-muted-foreground">
-            <th className={TH}>Nº</th>
-            <th className="h-9 px-3 text-center font-medium">Vencimento</th>
-            <th className={TH}>Principal</th>
-            <th className={TH}>Juros</th>
-            <th className={TH}>Encargos</th>
-            <th className={TH}>Total</th>
-            <th className={TH}>Saldo depois</th>
-            {mostrarPaga ? <th className="h-9 px-3 text-center font-medium">Situação</th> : null}
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map((l) => (
-            <tr
-              key={l.id}
-              className={l.tipo === "parcela" ? "border-b border-border last:border-0" : "border-b border-border bg-surface last:border-0"}
-            >
-              <td className="px-3 py-1.5 text-right tabular-nums text-muted-foreground">
-                {l.numero ?? rotulo(ROTULO_EVENTO, l.tipo)}
-              </td>
-              <td className="px-3 py-1.5 text-center tabular-nums">{formatarData(l.vencimento)}</td>
-              <td className="px-3 py-1.5 text-right">
-                <MoneyText valor={l.principal} />
-              </td>
-              <td className="px-3 py-1.5 text-right">
-                <MoneyText valor={l.juros} />
-              </td>
-              <td className="px-3 py-1.5 text-right">
-                <MoneyText valor={l.encargos} />
-              </td>
-              <td className="px-3 py-1.5 text-right font-medium">
-                <MoneyText valor={somarCentavos([l.principal, l.juros, l.encargos])} />
-              </td>
-              <td className="px-3 py-1.5 text-right">
-                <MoneyText valor={l.saldoApos} />
-              </td>
-              {mostrarPaga ? (
-                <td className="px-3 py-1.5 text-center text-legenda">
-                  {l.paga === null ? (
-                    <CelulaVazia />
-                  ) : l.paga ? (
-                    <span className="text-status-aprovado">Paga</span>
-                  ) : (
-                    <span className="text-muted-foreground">A pagar</span>
-                  )}
-                </td>
-              ) : null}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      idTabela="financeiro.dividas.contrato.cronograma"
+      columns={mostrarPaga ? COLUNAS_CRONOGRAMA_COM_SITUACAO : COLUNAS_CRONOGRAMA}
+      data={linhas}
+      idDaLinha={(l) => l.id}
+      semPaginacao
+      // Evento (aporte, amortização) entre as parcelas aparece com fundo.
+      classeDaLinha={(l) => (l.tipo === "parcela" ? undefined : "bg-surface")}
+    />
   );
 }
 

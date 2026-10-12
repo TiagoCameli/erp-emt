@@ -87,6 +87,7 @@ export function ImportarPlanilhaFrete({
         Importar planilha
       </Button>
       <ImportDialog
+        idTabela="frete.pagamentos.importacao"
         aberto={aberto}
         onAbertoChange={setAberto}
         titulo={titulo}

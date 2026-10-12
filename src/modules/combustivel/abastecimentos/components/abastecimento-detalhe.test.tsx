@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
+
 import { AbastecimentoDetalheView } from "@/modules/combustivel/abastecimentos/components/abastecimento-detalhe";
 import { AbastecimentoFormDrawer } from "@/modules/combustivel/abastecimentos/components/abastecimento-form-drawer";
 import type { AbastecimentoCompleto, SaidaDetalhe } from "@/modules/combustivel/abastecimentos/queries";
@@ -26,7 +28,17 @@ vi.mock("@/modules/combustivel/abastecimentos/actions", () => ({
   salvarAbastecimento: vi.fn(),
 }));
 
-afterEach(cleanup);
+// As tabelas do detalhe são DataTable com idTabela: a preferência salva é do servidor.
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
+
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 const TANQUE = "11111111-1111-4111-8111-111111111111";
 const EXTERNO = "12121212-1212-4212-8212-121212121212";

@@ -1,20 +1,17 @@
+"use client";
+
+import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart3 } from "lucide-react";
 
-import { EmptyState, MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, EmptyState, MoneyText } from "@/components/canonicos";
 import { formatarPercentual } from "@/lib/formatadores";
 import {
   ROTULOS_MESES,
   custosPorCategoria,
   custosPorCentro,
   mesesVisiveis,
+  type CategoriaIndireta,
   type CustoIndiretoLinha,
 } from "@/modules/financeiro/relatorios/custos-indiretos";
 
@@ -25,126 +22,148 @@ interface CustosIndiretosTabelaProps {
   mesCorrente: string;
 }
 
-const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
-const CELULA = "px-3 py-2 text-corpo";
-const NUMERO = "px-3 py-2 text-right whitespace-nowrap";
-
 function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="text-corpo font-semibold text-foreground">{titulo}</h3>
-      <div className="overflow-x-auto rounded-md border border-border">{children}</div>
+      {children}
     </div>
   );
 }
 
 /** Zero vira "—": a grade de doze meses fica legível. */
-function Valor({ valor }: { valor: number }) {
-  return valor === 0 ? <span className="text-muted-foreground">—</span> : <MoneyText valor={valor} />;
+function Valor({ valor, className }: { valor: number; className?: string }) {
+  return valor === 0 ? (
+    <span className="text-muted-foreground">—</span>
+  ) : (
+    <MoneyText valor={valor} className={className} />
+  );
 }
 
-function CelulasMeses({
-  porMes,
-  total,
-  meses,
-  className = "",
-}: {
+/** Linha da tabela por centro: o subtotal da raiz ou uma etapa dela. */
+interface LinhaCentro {
+  tipo: "raiz" | "centro";
+  id: string;
+  nome: string;
   porMes: number[];
   total: number;
-  meses: number;
-  className?: string;
-}) {
-  return (
-    <>
-      {porMes.slice(0, meses).map((v, i) => (
-        <TableCell key={ROTULOS_MESES[i]} className={`${NUMERO} ${className}`}>
-          <Valor valor={v} />
-        </TableCell>
-      ))}
-      <TableCell className={`${NUMERO} font-medium ${className}`}>
-        <Valor valor={total} />
-      </TableCell>
-    </>
-  );
 }
 
 function TabelaPorCentro({ ano, linhas, mesCorrente }: CustosIndiretosTabelaProps) {
-  const dados = custosPorCentro(linhas);
+  const dados = React.useMemo(() => custosPorCentro(linhas), [linhas]);
   const meses = mesesVisiveis(ano, mesCorrente, dados.porMes);
+  const registros = React.useMemo<LinhaCentro[]>(
+    () =>
+      dados.raizes.flatMap((r) => [
+        { tipo: "raiz" as const, id: `raiz:${r.raizId}`, nome: r.raiz, porMes: r.porMes, total: r.total },
+        ...r.centros.map((c) => ({
+          tipo: "centro" as const,
+          id: `centro:${r.raizId}:${c.centroId}`,
+          nome: c.centro,
+          porMes: c.porMes,
+          total: c.total,
+        })),
+      ]),
+    [dados],
+  );
+
+  // Raiz com subtotal e as etapas logo abaixo: ordenar por coluna misturaria
+  // etapa de uma raiz com o subtotal de outra, então nenhuma coluna ordena.
+  const colunas = React.useMemo<ColumnDef<LinhaCentro, unknown>[]>(() => {
+    const peso = (r: LinhaCentro) => (r.tipo === "raiz" ? "font-medium" : undefined);
+    return [
+      {
+        id: "centro",
+        header: "Centro",
+        size: 260,
+        enableSorting: false,
+        meta: { celular: "titulo" },
+        cell: ({ row }) =>
+          row.original.tipo === "raiz" ? (
+            <span className="font-medium">{row.original.nome}</span>
+          ) : (
+            row.original.nome
+          ),
+      },
+      ...ROTULOS_MESES.slice(0, meses).map<ColumnDef<LinhaCentro, unknown>>((rotulo, i) => ({
+        id: `mes${i + 1}`,
+        header: rotulo,
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <Valor valor={row.original.porMes[i]} className={peso(row.original)} />,
+      })),
+      {
+        id: "total",
+        header: "Total",
+        size: 140,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => <Valor valor={row.original.total} className="font-medium" />,
+      },
+    ];
+  }, [meses]);
+
+  const rodape: Record<string, React.ReactNode> = {
+    centro: <span className="font-semibold">Total</span>,
+    total: <Valor valor={dados.total} className="font-semibold" />,
+  };
+  dados.porMes.slice(0, meses).forEach((v, i) => {
+    rodape[`mes${i + 1}`] = <Valor valor={v} className="font-semibold" />;
+  });
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead className={CABECALHO}>Centro</TableHead>
-          {ROTULOS_MESES.slice(0, meses).map((m) => (
-            <TableHead key={m} className={`${CABECALHO} text-right`}>{m}</TableHead>
-          ))}
-          <TableHead className={`${CABECALHO} text-right`}>Total</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {dados.raizes.map((r) => (
-          <GrupoRaiz key={r.raizId} raiz={r} meses={meses} />
-        ))}
-        <TableRow className="border-t-2 bg-surface hover:bg-surface">
-          <TableCell className={`${CELULA} font-semibold`}>Total</TableCell>
-          <CelulasMeses porMes={dados.porMes} total={dados.total} meses={meses} className="font-semibold" />
-        </TableRow>
-      </TableBody>
-    </Table>
+    <DataTable
+      idTabela="financeiro.relatorios.custos-indiretos.por-centro"
+      columns={colunas}
+      data={registros}
+      idDaLinha={(r) => r.id}
+      semPaginacao
+      classeDaLinha={(r) => (r.tipo === "raiz" ? "bg-surface/40 hover:bg-surface/40" : undefined)}
+      rodape={rodape}
+    />
   );
 }
 
-function GrupoRaiz({
-  raiz,
-  meses,
-}: {
-  raiz: ReturnType<typeof custosPorCentro>["raizes"][number];
-  meses: number;
-}) {
-  return (
-    <>
-      <TableRow className="bg-surface/40 hover:bg-surface/40">
-        <TableCell className={`${CELULA} font-medium`}>{raiz.raiz}</TableCell>
-        <CelulasMeses porMes={raiz.porMes} total={raiz.total} meses={meses} className="font-medium" />
-      </TableRow>
-      {raiz.centros.map((c) => (
-        <TableRow key={c.centroId}>
-          <TableCell className={`${CELULA} pl-6`}>{c.centro}</TableCell>
-          <CelulasMeses porMes={c.porMes} total={c.total} meses={meses} />
-        </TableRow>
-      ))}
-    </>
-  );
-}
+const COLUNAS_CATEGORIA: ColumnDef<CategoriaIndireta, unknown>[] = [
+  {
+    accessorKey: "categoria",
+    header: "Categoria",
+    size: 260,
+    meta: { celular: "titulo" },
+  },
+  {
+    accessorKey: "total",
+    header: "Total no ano",
+    size: 150,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+    cell: ({ row }) => <Valor valor={row.original.total} />,
+  },
+  {
+    accessorKey: "pct",
+    header: "% do total",
+    size: 110,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <span className="tabular-nums">{formatarPercentual(row.original.pct, 1)}</span>,
+  },
+];
 
 function TabelaPorCategoria({ linhas }: { linhas: CustoIndiretoLinha[] }) {
-  const categorias = custosPorCategoria(linhas);
+  const categorias = React.useMemo(() => custosPorCategoria(linhas), [linhas]);
   const total = categorias.reduce((s, c) => s + Math.round(c.total * 100), 0) / 100;
   return (
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead className={CABECALHO}>Categoria</TableHead>
-          <TableHead className={`${CABECALHO} text-right`}>Total no ano</TableHead>
-          <TableHead className={`${CABECALHO} text-right`}>% do total</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {categorias.map((c) => (
-          <TableRow key={c.categoriaId ?? `sem-${c.categoria}`}>
-            <TableCell className={CELULA}>{c.categoria}</TableCell>
-            <TableCell className={NUMERO}><Valor valor={c.total} /></TableCell>
-            <TableCell className={`${NUMERO} tabular-nums`}>{formatarPercentual(c.pct, 1)}</TableCell>
-          </TableRow>
-        ))}
-        <TableRow className="border-t-2 bg-surface hover:bg-surface">
-          <TableCell className={`${CELULA} font-semibold`}>Total</TableCell>
-          <TableCell className={`${NUMERO} font-semibold`}><MoneyText valor={total} /></TableCell>
-          <TableCell className={`${NUMERO} font-semibold tabular-nums`}>{formatarPercentual(100, 1)}</TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
+    <DataTable
+      idTabela="financeiro.relatorios.custos-indiretos.por-categoria"
+      columns={COLUNAS_CATEGORIA}
+      data={categorias}
+      idDaLinha={(c) => c.categoriaId ?? `sem-${c.categoria}`}
+      semPaginacao
+      rodape={{
+        categoria: <span className="font-semibold">Total</span>,
+        total: <MoneyText valor={total} className="font-semibold" />,
+        pct: <span className="font-semibold tabular-nums">{formatarPercentual(100, 1)}</span>,
+      }}
+    />
   );
 }
 
