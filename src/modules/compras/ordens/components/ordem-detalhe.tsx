@@ -412,7 +412,10 @@ export function OrdemDetalheView({
         ]
       : []),
   ];
-  const colunasParcelas = colunasParcelasOC(ordem.formas);
+  const colunasParcelas = React.useMemo(
+    () => colunasParcelasOC(ordem.formas),
+    [ordem.formas],
+  );
   const editavel =
     podeEditar &&
     (ordem.status === "rascunho" || ordem.status === "pendente_aprovacao");
