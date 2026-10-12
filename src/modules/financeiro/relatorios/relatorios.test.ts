@@ -26,6 +26,11 @@ describe("normalizarRelatorio", () => {
     expect(normalizarRelatorio("aquisicoes")).toBe("aquisicoes");
   });
 
+  it("Custos indiretos é um relatório da navegação", () => {
+    expect(RELATORIOS).toContain("custos-indiretos");
+    expect(normalizarRelatorio("custos-indiretos")).toBe("custos-indiretos");
+  });
+
   it("o padrão é um relatório que existe", () => {
     expect(RELATORIOS).toContain(RELATORIO_PADRAO);
   });

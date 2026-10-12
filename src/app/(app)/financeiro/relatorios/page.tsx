@@ -107,6 +107,8 @@ import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/component
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
 import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
+import { CustosIndiretosTabela } from "@/modules/financeiro/relatorios/components/custos-indiretos-tabela";
+import { anoDoIndireto } from "@/modules/financeiro/relatorios/custos-indiretos";
 import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
 import Link from "next/link";
 import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
@@ -135,6 +137,7 @@ import {
   investimentos,
   sociosLigadas,
   aquisicoes,
+  custosIndiretos,
   rateioIndiretoDoMes,
   indiretoDoPeriodo,
   indiretoDosMeses,
@@ -158,6 +161,7 @@ interface RelatoriosPageProps {
     mes?: string | string[];
     fornecedor?: string | string[];
     mes_rateio?: string | string[];
+    ano_indireto?: string | string[];
   }>;
 }
 
@@ -174,7 +178,7 @@ function SecaoRelatorio({
   children,
 }: {
   titulo: string;
-  descricao: string;
+  descricao: React.ReactNode;
   /**
    * Qual relatório esta seção mostra. Presente, desenha "Exportar Excel" ao
    * lado do título.
@@ -900,6 +904,25 @@ async function ConteudoSociosLigadas() {
 async function ConteudoAquisicoes({ podeVerLancamentos }: { podeVerLancamentos: boolean }) {
   // O estado vazio mora na tabela, junto das duas seções.
   return <AquisicoesTabela linhas={await aquisicoes()} podeVerLancamentos={podeVerLancamentos} />;
+}
+
+/**
+ * Custos indiretos de um ano. Abre no ano corrente; as setas andam de ano em
+ * ano pela URL (`ano_indireto`).
+ */
+async function ConteudoCustosIndiretos({ ano }: { ano: number }) {
+  const linhas = await custosIndiretos(ano);
+  const href = (a: number) => `/financeiro/relatorios?rel=custos-indiretos&ano_indireto=${a}`;
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3 text-corpo">
+        <Link className="text-primary hover:underline" href={href(ano - 1)}>← ano anterior</Link>
+        <span className="font-medium tabular-nums">{ano}</span>
+        <Link className="text-primary hover:underline" href={href(ano + 1)}>próximo ano →</Link>
+      </div>
+      <CustosIndiretosTabela ano={ano} linhas={linhas} mesCorrente={mesCorrente()} />
+    </div>
+  );
 }
 
 async function ConteudoInvestimentos({
@@ -1830,6 +1853,25 @@ export default async function RelatoriosPage({
           descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada."
         >
           <ConteudoAquisicoes podeVerLancamentos={podeVerLancamentos} />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "custos-indiretos" ? (
+        <SecaoRelatorio
+          titulo="Custos indiretos"
+          descricao={
+            <>
+              O que compõe o custo indireto (Escritório Central, Manutenção/Documentação de Equipamentos e 002 - Equipamentos Colorado). É o mesmo valor que o{" "}
+              <Link className="text-primary hover:underline" href="/financeiro/relatorios?rel=rateio-indireto">
+                Rateio do indireto
+              </Link>{" "}
+              distribui entre as obras.
+            </>
+          }
+        >
+          <ConteudoCustosIndiretos
+            ano={anoDoIndireto(primeiro(params.ano_indireto), Number(mesCorrente().slice(0, 4)))}
+          />
         </SecaoRelatorio>
       ) : null}
 

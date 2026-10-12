@@ -51,6 +51,7 @@ import {
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
+import type { CustoIndiretoLinha } from "@/modules/financeiro/relatorios/custos-indiretos";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
 import {
   janelasContiguas,
@@ -1535,6 +1536,33 @@ export async function aquisicoes(): Promise<AquisicaoLinha[]> {
     valor: Number(l.valor),
     pago: Number(l.pago),
     aPagar: Number(l.a_pagar),
+  }));
+}
+
+
+// =====================================================================
+// Custos indiretos (12/10/2026)
+// =====================================================================
+
+/**
+ * O custo dos centros indiretos no ano, por mês, etapa e categoria. Mesmo
+ * critério do rateio do indireto: a soma do mês é o que ele distribui.
+ */
+export async function custosIndiretos(ano: number): Promise<CustoIndiretoLinha[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custos_indiretos", { p_ano: ano });
+  if (error) {
+    throw new Error("Não foi possível carregar o relatório de custos indiretos");
+  }
+  return (data ?? []).map((l) => ({
+    mes: l.mes,
+    raizId: l.raiz_id,
+    raiz: l.raiz,
+    centroId: l.centro_id,
+    centro: l.centro,
+    categoriaId: l.categoria_id ?? null,
+    categoria: l.categoria,
+    total: Number(l.total),
   }));
 }
 
