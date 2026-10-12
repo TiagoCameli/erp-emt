@@ -68,6 +68,7 @@ const CUSTO_CC_VAZIO: FiltrosCustoCc = {
   tiposCentro: [],
   excluirPrevisto: false,
   comparar: false,
+  comIndireto: false,
   incluirInvestimento: false,
 };
 

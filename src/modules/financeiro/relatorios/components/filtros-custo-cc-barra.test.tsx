@@ -70,6 +70,7 @@ const VAZIO: FiltrosCustoCc = {
   excluirPrevisto: false,
   incluirInvestimento: false,
   comparar: false,
+  comIndireto: false,
 };
 
 function montar(filtros: Partial<FiltrosCustoCc> = {}) {
@@ -224,5 +225,34 @@ describe("FiltrosCustoCcBarra: incluir investimentos", () => {
     fireEvent.click(caixa());
 
     expect(ultimaQuery().has("com_investimento")).toBe(false);
+  });
+});
+
+describe("FiltrosCustoCcBarra: com indireto rateado", () => {
+  const caixa = () => screen.getByLabelText("Com indireto rateado");
+
+  it("aparece na barra, desmarcada por padrão", () => {
+    montar();
+    expect(caixa().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("marcar escreve `com_indireto=1`, desmarcar remove o parâmetro", () => {
+    navegador.query = "rel=custo-cc";
+    montar();
+    fireEvent.click(caixa());
+    expect(ultimaQuery().get("com_indireto")).toBe("1");
+    expect(ultimaQuery().get("rel")).toBe("custo-cc");
+
+    cleanup();
+    navegador.query = "com_indireto=1";
+    montar({ comIndireto: true });
+    expect(caixa().getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(caixa());
+    expect(ultimaQuery().has("com_indireto")).toBe(false);
+  });
+
+  it("no modo vida fica desabilitada: o rateio é por mês, não pela vida do centro", () => {
+    montar({ modo: "vida", centroIds: [OBRA], comIndireto: true });
+    expect(caixa().hasAttribute("disabled") || caixa().getAttribute("data-disabled") !== null).toBe(true);
   });
 });

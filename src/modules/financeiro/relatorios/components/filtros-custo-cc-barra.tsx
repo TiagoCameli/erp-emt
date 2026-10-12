@@ -223,6 +223,27 @@ export function FiltrosCustoCcBarra({
       marcado: filtros.incluirInvestimento,
       setMuitos,
     }),
+    {
+      // Fixo como o de investimentos: muda o significado da linha da obra (com
+      // ou sem a parte dela no escritório e na manutenção).
+      id: "com_indireto",
+      rotulo: "Indireto",
+      fixo: true,
+      temValor: filtros.comIndireto,
+      onLimpar: () => setMuitos({ com_indireto: null }),
+      elemento: (
+        <FiltroMarcar
+          id="filtro-com-indireto"
+          rotulo="Com indireto rateado"
+          marcado={filtros.comIndireto && filtros.modo !== "vida"}
+          desabilitado={filtros.modo === "vida"}
+          motivo="O rateio do indireto é por mês; na vida do centro cada centro tem a própria janela."
+          onMarcarChange={(marcado) =>
+            setMuitos({ com_indireto: marcado ? "1" : null })
+          }
+        />
+      ),
+    },
   ];
 
   filtrosDaBarra.push({

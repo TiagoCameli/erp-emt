@@ -18,10 +18,20 @@ import {
   sinalDaVariacaoDeCusto,
 } from "@/modules/financeiro/relatorios/relatorios";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
+import { ID_NAO_RATEADO } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 import type { CustoPorCentroCusto } from "../queries";
 
+/**
+ * Linha com o indireto rateado ("Com indireto rateado" ligado): `valor` é o
+ * total (direto + indireto) e as duas partes vêm ao lado.
+ */
+type CentroDaTabela = CustoPorCentroCusto["centros"][number] & {
+  direto?: number;
+  indireto?: number;
+};
+
 interface CustoCcTabelaProps {
-  custo: CustoPorCentroCusto;
+  custo: { centros: CentroDaTabela[]; total: number };
   /** O período que o relatório está mostrando, para o clique abrir o mesmo. */
   periodo: PeriodoCompetencia;
   /** Os filtros do relatório, que viajam junto no clique. */
@@ -121,6 +131,11 @@ export function CustoCcTabela({
   variacao,
 }: CustoCcTabelaProps) {
   const mostrarVariacao = variacao !== undefined;
+  // As colunas do rateio só aparecem quando as linhas trazem as duas partes:
+  // sem o rateio ligado, "Direto" seria só uma cópia do Valor.
+  const mostrarIndireto = custo.centros.some((c) => c.direto !== undefined);
+  const somaCent = (campo: "direto" | "indireto") =>
+    custo.centros.reduce((s, c) => s + Math.round((c[campo] ?? 0) * 100), 0) / 100;
   return (
     <div className="overflow-x-auto rounded-md border border-border">
       <Table>
@@ -134,6 +149,16 @@ export function CustoCcTabela({
             <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
               Centro de custo
             </TableHead>
+            {mostrarIndireto ? (
+              <>
+                <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                  Direto
+                </TableHead>
+                <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
+                  Indireto
+                </TableHead>
+              </>
+            ) : null}
             <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
               Valor
             </TableHead>
@@ -169,7 +194,9 @@ export function CustoCcTabela({
                 {/* "Sem centro de custo" (id nulo) não vira link: não há centro
                     para filtrar, e um link que abrisse a lista inteira mentiria
                     sobre o que ele mostra. */}
-                {centro.centroCustoId && podeVerLancamentos ? (
+                {centro.centroCustoId &&
+                centro.centroCustoId !== ID_NAO_RATEADO &&
+                podeVerLancamentos ? (
                   <LinkDrill
                     href={drillCentroCusto({
                       centroCustoIds: [centro.centroCustoId],
@@ -184,6 +211,16 @@ export function CustoCcTabela({
                   centro.nome
                 )}
               </TableCell>
+              {mostrarIndireto ? (
+                <>
+                  <TableCell className="py-2 text-right">
+                    <MoneyText valor={centro.direto ?? 0} className="text-detalhe text-muted-foreground" />
+                  </TableCell>
+                  <TableCell className="py-2 text-right">
+                    <MoneyText valor={centro.indireto ?? 0} className="text-detalhe text-muted-foreground" />
+                  </TableCell>
+                </>
+              ) : null}
               <TableCell className="py-2 text-right">
                 <MoneyText valor={centro.valor} className="text-detalhe" />
               </TableCell>
@@ -202,6 +239,16 @@ export function CustoCcTabela({
             >
               Total
             </TableCell>
+            {mostrarIndireto ? (
+              <>
+                <TableCell className="py-2 text-right">
+                  <MoneyText valor={somaCent("direto")} className="text-detalhe font-semibold" />
+                </TableCell>
+                <TableCell className="py-2 text-right">
+                  <MoneyText valor={somaCent("indireto")} className="text-detalhe font-semibold" />
+                </TableCell>
+              </>
+            ) : null}
             <TableCell className="py-2 text-right">
               <MoneyText
                 valor={custo.total}

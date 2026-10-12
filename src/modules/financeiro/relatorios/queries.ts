@@ -49,6 +49,11 @@ import {
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
+import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
+import {
+  janelasContiguas,
+  type IndiretoDoPeriodo,
+} from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 
 // Reexporta a API pública dos relatórios (tipos e tabelas de faixa) para que os
 // componentes continuem importando tudo de queries.ts, como antes da extração.
@@ -1474,4 +1479,85 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
     devolvido: Number(l.devolvido),
     saldo: Number(l.saldo),
   }));
+}
+
+
+// =====================================================================
+// Rateio do custo indireto (PR 3 do controle total, D6/D7/D8)
+// =====================================================================
+
+/** O rateio de um mês (yyyy-MM), como `fn_rateio_indireto_mes` calcula. */
+export async function rateioIndiretoDoMes(mes: string): Promise<RateioDoMes> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rateio_indireto_mes", { p_mes: `${mes}-01` });
+  if (error) throw new Error("Não foi possível carregar o rateio do indireto");
+  const linhas = data ?? [];
+  const primeira = linhas[0];
+  return {
+    mes,
+    status: (primeira?.status ?? "automatico") as StatusRateio,
+    custoIndiretoMes: Number(primeira?.custo_indireto_mes ?? 0),
+    naoRateado: Number(primeira?.nao_rateado ?? 0),
+    linhas: linhas
+      .filter((l) => l.centro_id !== null)
+      .map((l) => ({
+        centroId: l.centro_id as string,
+        centro: l.centro ?? "",
+        custoDireto: Number(l.custo_direto),
+        pctSugerido: Number(l.pct_sugerido),
+        pctVigente: Number(l.pct_vigente),
+        indireto: Number(l.indireto),
+        semCusto: l.sem_custo,
+      })),
+  };
+}
+
+/**
+ * Indireto rateado por obra numa janela [inicio, fim), somado mês a mês, e os
+ * centros que são indiretos (para a tela tirar a linha deles).
+ *
+ * Os indiretos vêm do cadastro (`papel_rateio = 'indireto'`) e não de uma lista
+ * no código: quem decide o papel é o banco, e a tela não pode discordar dele.
+ */
+export async function indiretoDoPeriodo(
+  inicio: string,
+  fim: string,
+): Promise<IndiretoDoPeriodo> {
+  return indiretoDasJanelas([{ inicio, fim }]);
+}
+
+/** O mesmo, para meses soltos: uma chamada por janela contígua, somadas em centavos. */
+export async function indiretoDosMeses(meses: readonly string[]): Promise<IndiretoDoPeriodo> {
+  return indiretoDasJanelas(janelasContiguas(meses));
+}
+
+async function indiretoDasJanelas(
+  janelas: readonly { inicio: string; fim: string }[],
+): Promise<IndiretoDoPeriodo> {
+  const supabase = await createClient();
+  const [periodos, centros] = await Promise.all([
+    Promise.all(
+      janelas.map((j) => supabase.rpc("fn_rateio_indireto_periodo", { p_inicio: j.inicio, p_fim: j.fim })),
+    ),
+    supabase.from("centros_custo").select("id, papel_rateio").not("papel_rateio", "is", null),
+  ]);
+  if (centros.error || periodos.some((p) => p.error)) {
+    throw new Error("Não foi possível carregar o rateio do indireto");
+  }
+  const porObraCent = new Map<string, number>();
+  let naoRateadoCent = 0;
+  for (const { data } of periodos) {
+    for (const l of data ?? []) {
+      if (l.centro_id) {
+        porObraCent.set(l.centro_id, (porObraCent.get(l.centro_id) ?? 0) + paraCentavos(Number(l.indireto)));
+      } else naoRateadoCent += paraCentavos(Number(l.nao_rateado));
+    }
+  }
+  return {
+    porObra: new Map([...porObraCent].map(([id, c]) => [id, paraReais(c)])),
+    naoRateado: paraReais(naoRateadoCent),
+    indiretos: new Set((centros.data ?? []).filter((c) => c.papel_rateio === "indireto").map((c) => c.id)),
+    // Unidade própria (001 Carretas EMT): não rateia nem recebe, e fica fora da margem por obra.
+    fora: new Set((centros.data ?? []).filter((c) => c.papel_rateio === "fora").map((c) => c.id)),
+  };
 }
