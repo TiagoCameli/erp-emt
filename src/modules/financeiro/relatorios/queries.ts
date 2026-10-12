@@ -1539,7 +1539,7 @@ async function indiretoDasJanelas(
     Promise.all(
       janelas.map((j) => supabase.rpc("fn_rateio_indireto_periodo", { p_inicio: j.inicio, p_fim: j.fim })),
     ),
-    supabase.from("centros_custo").select("id").eq("papel_rateio", "indireto"),
+    supabase.from("centros_custo").select("id, papel_rateio").not("papel_rateio", "is", null),
   ]);
   if (centros.error || periodos.some((p) => p.error)) {
     throw new Error("Não foi possível carregar o rateio do indireto");
@@ -1556,6 +1556,8 @@ async function indiretoDasJanelas(
   return {
     porObra: new Map([...porObraCent].map(([id, c]) => [id, paraReais(c)])),
     naoRateado: paraReais(naoRateadoCent),
-    indiretos: new Set((centros.data ?? []).map((c) => c.id)),
+    indiretos: new Set((centros.data ?? []).filter((c) => c.papel_rateio === "indireto").map((c) => c.id)),
+    // Unidade própria (001 Carretas EMT): não rateia nem recebe, e fica fora da margem por obra.
+    fora: new Set((centros.data ?? []).filter((c) => c.papel_rateio === "fora").map((c) => c.id)),
   };
 }

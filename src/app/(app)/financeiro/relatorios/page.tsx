@@ -1262,7 +1262,7 @@ async function ConteudoCustoReceita({
         new Map(receitas.map((r) => [r.centroCustoId, { nome: r.nome, receita: r.total }])),
         new Map(custos.map((c) => [c.centroCustoId, c.total])),
         indireto.porObra,
-        indireto.indiretos,
+        new Set([...indireto.indiretos, ...(indireto.fora ?? [])]),
         new Map(custos.map((c) => [c.centroCustoId, c.nome])),
       )
     : [];

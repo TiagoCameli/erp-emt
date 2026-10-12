@@ -25,6 +25,8 @@ export interface IndiretoDoPeriodo {
   naoRateado: number;
   /** Os centros marcados `papel_rateio = 'indireto'`. */
   indiretos: Set<string>;
+  /** Os marcados `papel_rateio = 'fora'` (unidade própria: 001 Carretas EMT). */
+  fora?: Set<string>;
 }
 
 export interface CentroParaRateio {
