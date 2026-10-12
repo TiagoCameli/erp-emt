@@ -237,9 +237,21 @@ export interface PainelAplicacoes {
   meses: LinhaMes[];
 }
 
-/** RESGATE AUTOMATICO: a varredura da Caixa que tira do fundo para cobrir a conta. */
+/**
+ * RESGATE AUTOMATICO: a varredura da Caixa que tira do fundo para cobrir a conta.
+ * O texto chega de jeitos diferentes ("Resgate Automático", "RESGATE  AUTOMATICO"),
+ * então compara sem acento, caixa nem espaço. O resgate que a regra da
+ * conciliação lança termina em "(regra)" e também conta.
+ */
 export function ehResgateAutomatico(m: Pick<MovimentoAplicacao, "tipo" | "descricao">): boolean {
-  return m.tipo === "resgate" && (m.descricao ?? "").toUpperCase().includes("RESGATE AUTOMATICO");
+  if (m.tipo !== "resgate") return false;
+  const descricao = m.descricao ?? "";
+  const semAcento = descricao
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  // "AUTO" ou "AUTOMATICO(A)" como palavra: "Resgate autorizado" não entra.
+  return /RESGATE\s*AUTO(MATIC[OA]?)?\b/.test(semAcento) || /\(\s*regra\s*\)\s*$/i.test(descricao);
 }
 
 /**

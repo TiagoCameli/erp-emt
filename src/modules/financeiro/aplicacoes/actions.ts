@@ -45,7 +45,8 @@ async function pode(acao: "ver" | "editar"): Promise<boolean> {
 /**
  * Grava a posição do extrato (cria, ou regrava a do mesmo dia). O rendimento
  * sai da `fn_salvar_posicao_aplicacao`, que é quem barra de verdade: permissão
- * de editar, saldo visível, data não futura e nada antes da abertura.
+ * de editar, saldo visível, data não futura e nada antes da abertura. Fora do
+ * esperado pelo CDI, ela recusa sem `confirmar` e `motivo`.
  */
 export async function salvarPosicao(dados: PosicaoInput): Promise<ResultadoAcao> {
   if (!(await pode("editar"))) {
@@ -66,6 +67,8 @@ export async function salvarPosicao(dados: PosicaoInput): Promise<ResultadoAcao>
     p_ir: v.ir === undefined ? undefined : paraCentavo(v.ir),
     p_iof: v.iof === undefined ? undefined : paraCentavo(v.iof),
     p_observacoes: v.observacoes || undefined,
+    p_confirmar: v.confirmar === true ? true : undefined,
+    p_motivo: v.motivo || undefined,
   });
   if (error) {
     return erroAcao(
@@ -109,6 +112,10 @@ export interface Simulacao {
   resgatado: number;
   rendimento: number;
   eAbertura: boolean;
+  /** Rendimento que o CDI do período daria. Null sem CDI ou sem posição anterior. */
+  rendimentoEsperado: number | null;
+  /** Negativo, ou longe do esperado: gravar pede confirmação com motivo. */
+  foraDoCdi: boolean;
 }
 
 /**
@@ -142,6 +149,8 @@ export async function simularPosicao(
     resgatado: Number(l.resgatado),
     rendimento: Number(l.rendimento),
     eAbertura: l.e_abertura,
+    rendimentoEsperado: l.rendimento_esperado === null ? null : Number(l.rendimento_esperado),
+    foraDoCdi: l.fora_do_cdi === true,
   };
 }
 

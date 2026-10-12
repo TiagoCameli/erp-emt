@@ -173,4 +173,32 @@ describe("ehResgateAutomatico", () => {
     expect(ehResgateAutomatico({ tipo: "resgate", descricao: "RESG CDB 95" })).toBe(false);
     expect(ehResgateAutomatico({ tipo: "aplicacao", descricao: "RESGATE AUTOMATICO" })).toBe(false);
   });
+
+  it("aceita caixa, acento e espaço diferentes", () => {
+    for (const descricao of [
+      "Resgate Automático",
+      "resgate automatico",
+      "RESGATE  AUTOMATICO",
+      "RESGATE AUTOMÁTICO FUNDO",
+      "Resgate Auto CDB",
+      "  resgate\tautomático  ",
+      "RESGATEAUTOMATICO",
+    ]) {
+      expect(ehResgateAutomatico({ tipo: "resgate", descricao })).toBe(true);
+    }
+  });
+
+  it("o resgate lançado pela regra da conciliação (sufixo \"(regra)\") também é automático", () => {
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Cobertura da conta (regra)" })).toBe(true);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Cobertura da conta (Regra) " })).toBe(true);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "(regra) no começo não conta" })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "aplicacao", descricao: "Sobra da conta (regra)" })).toBe(false);
+  });
+
+  it("sem descrição ou com outro texto, não é", () => {
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: null })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate manual" })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate autorizado pelo gerente" })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate automóvel consórcio" })).toBe(false);
+  });
 });

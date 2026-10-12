@@ -498,7 +498,7 @@ export function abaInvestimentos(dados: Investimentos, recorte: string): Escrita
     titulo: `Investimentos · saldo por aplicação · ${recorte}`,
     colunas: COLUNAS_INVESTIMENTOS,
     linhas: dados.aplicacoes,
-    rotuloTotal: `Total (${dados.aplicacoes.length} aplicação(ões); saldo = aplicado menos resgatado)`,
+    rotuloTotal: `Total (${dados.aplicacoes.length} aplicação(ões); saldo = última posição mais os fluxos)`,
   });
 }
 
