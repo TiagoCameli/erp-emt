@@ -62,6 +62,8 @@ import {
   margemPorObra,
   rateioPermitidoNoCustoCc,
   type IndiretoDoPeriodo,
+  margemPorObraPermitida,
+  mesDoRateio,
 } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 import { MargemPorObraTabela } from "@/modules/financeiro/relatorios/components/margem-por-obra-tabela";
 import {
@@ -1240,7 +1242,7 @@ async function ConteudoCustoReceita({
       centrosReceita,
       incluirInvestimento,
     }),
-    semCorteDeCentro ? indiretoDosMeses(meses) : Promise.resolve(null),
+    margemPorObraPermitida({ semCorteDeCentro, incluirInvestimento }) ? indiretoDosMeses(meses) : Promise.resolve(null),
   ]);
 
   if (linhas.length === 0) {
@@ -1745,7 +1747,7 @@ export default async function RelatoriosPage({
           descricao="O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado distribuído nas obras pelo custo direto de cada uma no mês. Quem fecha o mês ajusta os percentuais e confirma. Os lançamentos não mudam: o rateio aparece nos relatórios de custo."
         >
           <ConteudoRateioIndireto
-            mes={/^\d{4}-\d{2}$/.test(primeiro(params.mes_rateio) ?? "") ? (primeiro(params.mes_rateio) as string) : somarMeses(mesCorrente(), -1)}
+            mes={mesDoRateio(primeiro(params.mes_rateio), somarMeses(mesCorrente(), -1))}
             podeAjustar={temPermissao(usuario, "financeiro.competencias", "aprovar")}
           />
         </SecaoRelatorio>

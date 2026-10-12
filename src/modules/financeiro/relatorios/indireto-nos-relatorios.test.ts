@@ -202,3 +202,22 @@ describe("rateioPermitidoNoCustoCc", () => {
     expect(rateioPermitidoNoCustoCc({ ...base, incluirInvestimento: true })).toBe(false);
   });
 });
+
+import { margemPorObraPermitida, mesDoRateio } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
+
+describe("margemPorObraPermitida", () => {
+  it("só sem corte de centro e sem incluir investimentos (o rateio é sempre sem CAPEX)", () => {
+    expect(margemPorObraPermitida({ semCorteDeCentro: true, incluirInvestimento: false })).toBe(true);
+    expect(margemPorObraPermitida({ semCorteDeCentro: true, incluirInvestimento: true })).toBe(false);
+    expect(margemPorObraPermitida({ semCorteDeCentro: false, incluirInvestimento: false })).toBe(false);
+  });
+});
+
+describe("mesDoRateio", () => {
+  it("aceita yyyy-MM válido e cai no padrão com mês inexistente", () => {
+    expect(mesDoRateio("2026-04", "2026-09")).toBe("2026-04");
+    expect(mesDoRateio("2026-13", "2026-09")).toBe("2026-09");
+    expect(mesDoRateio("abc", "2026-09")).toBe("2026-09");
+    expect(mesDoRateio(undefined, "2026-09")).toBe("2026-09");
+  });
+});

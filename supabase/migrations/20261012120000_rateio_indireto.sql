@@ -113,7 +113,11 @@ begin
                 then round(b.custo_direto * 100 / sum(b.custo_direto) over (), 6) else 0 end as sugerido,
            case when v_status is null
                 then case when sum(b.custo_direto) over () > 0 then b.custo_direto / sum(b.custo_direto) over () else 0 end
-                else coalesce(b.pct_gravado, 0) / 100 end as fracao
+                -- Normalizado: percentuais que somam 99,9999 ou 100,0001 (dentro da
+                -- tolerancia do salvar) nao perdem nem criam centavo.
+                when sum(coalesce(b.pct_gravado, 0)) over () > 0
+                then coalesce(b.pct_gravado, 0) / sum(coalesce(b.pct_gravado, 0)) over ()
+                else 0 end as fracao
       from base b
   ),
   bruto as (
@@ -123,7 +127,9 @@ begin
   ),
   dist as (
     select b.*,
-           (case when sum(b.fracao) over () > 0.999999
+           -- Com fracoes normalizadas a sobra e sempre menor que o numero de linhas;
+           -- so nao ha sobra quando nenhuma obra recebe (tudo vai para nao rateado).
+           (case when sum(b.fracao) over () > 0
                  then v_indireto_cent - sum(b.cent) over () else 0 end) as sobra,
            row_number() over (order by b.resto desc, b.id) as ordem
       from bruto b

@@ -69,6 +69,23 @@ begin
   select coalesce(sum(indireto), 0) into v_abr from public.fn_rateio_indireto_mes(date '2026-04-01');
   if v_per <> v_mar + v_abr then raise exception 'FALHOU 10: periodo % x % + %', v_per, v_mar, v_abr; end if;
 
+  -- 7b. Percentuais que somam 100,0001 (dentro da tolerancia): fecha ao centavo,
+  --     sem nao rateado negativo (revisao do PR 3).
+  perform public.fn_rateio_indireto_salvar(date '2026-08-01',
+    jsonb_build_array(jsonb_build_object('centroId', v_a, 'percentual', 50.00005), jsonb_build_object('centroId', v_b, 'percentual', 50.00005)),
+    'prova', false);
+  select sum(indireto), max(nao_rateado), max(custo_indireto_mes) into v_rateado, v_nao, v_custo_ind from public.fn_rateio_indireto_mes(date '2026-08-01');
+  if v_rateado <> v_custo_ind or v_nao <> 0 then
+    raise exception 'FALHOU 10b: soma 100,0001 rateou % de %, nao rateado %', v_rateado, v_custo_ind, v_nao;
+  end if;
+  perform public.fn_rateio_indireto_salvar(date '2026-08-01',
+    jsonb_build_array(jsonb_build_object('centroId', v_a, 'percentual', 49.99995), jsonb_build_object('centroId', v_b, 'percentual', 50)),
+    'prova', false);
+  select sum(indireto), max(nao_rateado) into v_rateado, v_nao from public.fn_rateio_indireto_mes(date '2026-08-01');
+  if v_rateado <> v_custo_ind or v_nao <> 0 then
+    raise exception 'FALHOU 10c: soma 99,99995 rateou % de %, nao rateado %', v_rateado, v_custo_ind, v_nao;
+  end if;
+
   -- 8. Sem permissao de fechar mes: recusa.
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-000000000000","role":"authenticated"}', true);
   begin

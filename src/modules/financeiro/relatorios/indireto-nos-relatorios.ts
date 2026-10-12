@@ -197,3 +197,17 @@ export function margemPorObra(
   }
   return linhas.sort((a, b) => b.receita - a.receita || b.custoDireto - a.custoDireto);
 }
+
+/**
+ * "Margem por obra" só com a mesma base do rateio: sem corte de centro (o
+ * rateio é da empresa inteira) e sem "Incluir investimentos" (o rateio é sempre
+ * sem CAPEX; com ele ligado, o custo direto teria CAPEX e o indireto não).
+ */
+export function margemPorObraPermitida(f: { semCorteDeCentro: boolean; incluirInvestimento: boolean }): boolean {
+  return f.semCorteDeCentro && !f.incluirInvestimento;
+}
+
+/** Mês do rateio vindo da URL (yyyy-MM, mês 01 a 12); inválido cai no padrão. */
+export function mesDoRateio(valor: string | undefined, padrao: string): string {
+  return valor && /^\d{4}-(0[1-9]|1[0-2])$/.test(valor) ? valor : padrao;
+}
