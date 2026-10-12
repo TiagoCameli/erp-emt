@@ -133,11 +133,10 @@ export async function carregarContrato(id: string): Promise<DetalheContrato | nu
       .maybeSingle(),
     supabase
       .from("contrato_divida_cronograma")
-      .select("id, versao, tipo, numero, vencimento, principal, juros, encargos, saldo_apos, substituida_em")
+      .select("id, versao, ordem, tipo, numero, vencimento, principal, juros, encargos, saldo_apos, substituida_em")
       .eq("contrato_id", id)
       .order("versao", { ascending: false })
-      .order("vencimento")
-      .order("numero", { nullsFirst: true }),
+      .order("ordem"),
     supabase
       .from("contrato_divida_eventos")
       .select("id, tipo, data, valor, motivo, versao_anterior, versao_nova, created_at")

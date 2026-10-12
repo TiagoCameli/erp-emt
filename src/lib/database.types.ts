@@ -2327,6 +2327,7 @@ export type Database = {
           id: string;
           juros: number;
           numero: number | null;
+          ordem: number;
           principal: number;
           saldo_apos: number;
           substituida_em: string | null;
@@ -2341,6 +2342,7 @@ export type Database = {
           id?: string;
           juros?: number;
           numero?: number | null;
+          ordem?: number;
           principal: number;
           saldo_apos: number;
           substituida_em?: string | null;
@@ -2355,6 +2357,7 @@ export type Database = {
           id?: string;
           juros?: number;
           numero?: number | null;
+          ordem?: number;
           principal?: number;
           saldo_apos?: number;
           substituida_em?: string | null;

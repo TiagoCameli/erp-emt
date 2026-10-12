@@ -170,9 +170,16 @@ describe("saldoNaData", () => {
     expect(saldoNaData(linhas, "2026-03-12", 100000)).toBe(80000);
     expect(saldoNaData(linhas, "2026-03-15", 100000)).toBe(70000);
   });
-  it("no mesmo dia, a linha do evento (sem número) vale sobre a parcela", () => {
-    const mesmoDia = [...linhas, { vencimento: "2026-03-15", numero: null, saldoApos: 0 }];
-    expect(saldoNaData(mesmoDia, "2026-03-15", 100000)).toBe(0);
+  it("no mesmo dia vale a última linha na ordem do cronograma", () => {
+    const mesmoDia = [...linhas, { vencimento: "2026-03-15", numero: null, saldoApos: 60000 }];
+    expect(saldoNaData(mesmoDia, "2026-03-15", 100000)).toBe(60000);
+  });
+  it("dois eventos no mesmo dia: o segundo vale", () => {
+    const doisEventos = [
+      { vencimento: "2026-06-10", numero: null, saldoApos: 90000 },
+      { vencimento: "2026-06-10", numero: null, saldoApos: 80000 },
+    ];
+    expect(saldoNaData(doisEventos, "2026-06-10", 100000)).toBe(80000);
   });
   it("antes da primeira parcela, o liberado", () => {
     expect(saldoNaData(linhas, "2026-01-30", 100000)).toBe(100000);

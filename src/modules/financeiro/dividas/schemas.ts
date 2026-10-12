@@ -191,7 +191,7 @@ export const eventoSchema = z
     valor: centavos("Valor").optional(),
     motivo: motivo.min(1, { error: "Informe o motivo do evento" }),
     /** Parcelas que ficam depois do evento. Obrigatório na renegociação. */
-    linhas: z.array(linhaCronogramaSchema).optional(),
+    linhas: linhasCronogramaSchema.optional(),
   })
   .refine((v) => v.tipo === "renegociacao" || v.valor !== undefined, {
     error: "Informe o valor do evento",

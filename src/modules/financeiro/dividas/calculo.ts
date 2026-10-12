@@ -61,7 +61,8 @@ export function calcularCet(pontos: readonly PontoFluxo[]): Cet | null {
   const inicio = validos.reduce((menor, p) => (p.data < menor ? p.data : menor), validos[0].data);
   const fluxo = validos.map((p) => ({ t: mesesEntre(inicio, p.data), valor: p.valor }));
 
-  let baixo = -0.99;
+  // -0,9 e nao -0,99: em contrato longo (180+ meses) 0,01^-t estoura.
+  let baixo = -0.9;
   let alto = 10;
   let vpBaixo = valorPresente(fluxo, baixo);
   const vpAlto = valorPresente(fluxo, alto);
@@ -238,20 +239,15 @@ export function centrosImobilizado(centros: readonly CentroOpcao[]): EtapaOpcao[
  * do evento antes de mandar; quem decide é o banco.
  */
 export function saldoNaData(
-  linhas: readonly { vencimento: string; numero: number | null; saldoApos: number }[],
+  linhas: readonly { vencimento: string; saldoApos: number }[],
   data: string,
   liberado: number,
 ): number {
-  let escolhida: (typeof linhas)[number] | null = null;
+  // As linhas chegam na ordem do cronograma (coluna `ordem`): a última vencida
+  // até a data é a que vale, inclusive com dois eventos no mesmo dia.
+  let saldo = liberado;
   for (const l of linhas) {
-    if (l.vencimento > data) continue;
-    if (
-      !escolhida ||
-      l.vencimento > escolhida.vencimento ||
-      (l.vencimento === escolhida.vencimento && (l.numero ?? Infinity) > (escolhida.numero ?? Infinity))
-    ) {
-      escolhida = l;
-    }
+    if (l.vencimento <= data) saldo = l.saldoApos;
   }
-  return escolhida ? escolhida.saldoApos : liberado;
+  return saldo;
 }

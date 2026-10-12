@@ -35,7 +35,7 @@ export const CATEGORIAS_DO_CRONOGRAMA = new Set([
   "Juros de empréstimos",
   "Taxa de administração de consórcio",
 ]);
-export const NOTA_CRONOGRAMA = "Parte vem do cronograma dos contratos (Financeiro > Dívidas)";
+export const NOTA_CRONOGRAMA = "Parte vem do cronograma dos contratos e consórcios (Financeiro > Dívidas)";
 
 interface DreTabelaProps {
   dre: DreGerencial;
@@ -467,8 +467,9 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
           saber, toda vez, onde está o resto do custo do dinheiro emprestado. */}
       <p className="text-legenda text-muted-foreground">
         Prestações de empréstimo não entram no resultado; os juros dos contratos
-        com cronograma em Financeiro &gt; Dívidas entram em Juros de empréstimos no
-        mês do vencimento. Saldo devedor e CET em{" "}
+        ligados ao lançamento das prestações em Financeiro &gt; Dívidas entram em
+        Juros de empréstimos no mês do vencimento (e saem de Pagamento de
+        Empréstimo, que pode ficar negativo no mês). Saldo devedor e CET em{" "}
         <Link
           href={ROTA_CREDITOS}
           className="foco-anel rounded-sm font-medium text-foreground underline underline-offset-2"

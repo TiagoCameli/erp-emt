@@ -695,8 +695,9 @@ async function ConteudoCreditos({
   const [todos, contratos, dividas, cotas] = await Promise.all([
     creditos(),
     emprestimosPorContrato(),
-    relatorioContratos(),
-    relatorioConsorcios(),
+    // Uma falha nas Dívidas não derruba o resto da aba Créditos.
+    relatorioContratos().catch(() => []),
+    relatorioConsorcios().catch(() => []),
   ]);
 
   // O filtro recorta a lista E os totais. Somar a carteira inteira embaixo de
