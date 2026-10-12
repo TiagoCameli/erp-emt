@@ -5,12 +5,27 @@ vi.mock("@/modules/financeiro/relatorios/rateio-indireto-actions", () => ({
   salvarRateioIndireto: vi.fn(async () => ({ ok: true })),
   voltarRateioAutomatico: vi.fn(async () => ({ ok: true })),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+// O DataTable com `idTabela` lê e grava a preferência do usuário por Server
+// Action e usa o router; no teste, os dois ficam no lugar.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/financeiro/relatorios",
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
+}));
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
 import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
 import type { RateioDoMes } from "@/modules/financeiro/relatorios/rateio-indireto";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 const BR = "11111111-1111-4111-8111-111111111111";
 const ESCOLA = "22222222-2222-4222-8222-222222222222";

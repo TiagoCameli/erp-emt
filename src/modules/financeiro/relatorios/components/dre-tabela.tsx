@@ -1,14 +1,10 @@
-import Link from "next/link";
+"use client";
 
-import { MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import * as React from "react";
+import Link from "next/link";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import type { Natureza } from "@/modules/financeiro/relatorios/calculo";
 import {
@@ -50,26 +46,41 @@ interface DreTabelaProps {
   podeVerLancamentos: boolean;
 }
 
-function SecaoDre({
-  titulo,
-  linhas,
-  total,
-  rotuloTotal,
-  tipo,
-  periodo,
-  podeVerLancamentos,
-  natureza,
-  retencao,
-}: {
+/**
+ * Uma linha da tabela do DRE. A tabela é uma lista só (o DataTable não tem
+ * seção), então título de seção, aviso, categoria, total e subtotal viram
+ * linhas com o tipo que decide como cada uma é pintada.
+ */
+type LinhaDre =
+  | { tipo: "titulo"; id: string; titulo: string }
+  | { tipo: "vazia"; id: string }
+  | { tipo: "aviso"; id: string; conteudo: React.ReactNode }
+  | {
+      tipo: "categoria";
+      id: string;
+      linha: DreLinha;
+      /** Receita ou despesa: decide o `tipo` do lançamento no destino do clique. */
+      tipoLancamento: "a_pagar" | "a_receber";
+      /** A natureza do bloco, para o clique cortar a lista pela mesma régua. */
+      natureza: Natureza;
+    }
+  | { tipo: "bruta" | "retencao"; id: string; rotulo: string; valor: number }
+  | {
+      tipo: "total";
+      id: string;
+      rotulo: string;
+      valor: number;
+      /** Fechamento em três linhas: a borda de cima fica na Receita bruta. */
+      comRetencao: boolean;
+    }
+  | { tipo: "subtotal" | "resultado"; id: string; rotulo: string; valor: number };
+
+interface SecaoDre {
   titulo: string;
   linhas: DreLinha[];
   total: number;
   rotuloTotal: string;
-  /** Receita ou despesa: decide o `tipo` do lançamento no destino do clique. */
   tipo: "a_pagar" | "a_receber";
-  periodo: PeriodoCompetencia;
-  podeVerLancamentos: boolean;
-  /** A natureza do bloco, para o clique cortar a lista pela mesma régua. */
   natureza: Natureza;
   /**
    * Retenção na fonte das receitas da seção. Presente, a seção fecha em três
@@ -78,116 +89,50 @@ function SecaoDre({
    * lado quem compara com a nota fiscal acha que falta dinheiro.
    */
   retencao?: number;
-}) {
-  return (
-    <>
-      <TableRow className="bg-surface hover:bg-surface">
-        <TableCell
-          colSpan={2}
-          className="py-2 text-center text-detalhe font-semibold text-foreground uppercase tracking-wide"
-        >
-          {titulo}
-        </TableCell>
-      </TableRow>
-      {linhas.length > 0 ? (
-        linhas.map((linha) => (
-          <TableRow key={`${titulo}-${linha.categoriaId ?? "sem"}`}>
-            <TableCell className="py-2 text-center text-detalhe text-foreground">
-              {/* Linha "sem categoria" não vira link: não há categoria para
-                  filtrar, e um link que abrisse a lista inteira mentiria sobre o
-                  que ele mostra. */}
-              {linha.categoriaId && podeVerLancamentos ? (
-                <LinkDrill
-                  href={drillCategoriaCompetencia({
-                    categoriaId: linha.categoriaId,
-                    periodo,
-                    tipo,
-                    natureza,
-                  })}
-                  titulo={`Ver os lançamentos de ${linha.categoria} neste período`}
-                >
-                  {linha.categoria}
-                </LinkDrill>
-              ) : (
-                linha.categoria
-              )}
-              {CATEGORIAS_DO_CRONOGRAMA.has(linha.categoria) ? (
-                <span className="block text-legenda text-muted-foreground">{NOTA_CRONOGRAMA}</span>
-              ) : null}
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={linha.valor} className="text-detalhe" />
-            </TableCell>
-          </TableRow>
-        ))
-      ) : (
-        <TableRow>
-          <TableCell
-            colSpan={2}
-            className="py-2 text-center text-detalhe text-muted-foreground"
-          >
-            Sem lançamentos no período
-          </TableCell>
-        </TableRow>
-      )}
-      {retencao !== undefined ? (
-        <>
-          <TableRow className="border-t hover:bg-transparent">
-            <TableCell className="py-2 text-center text-detalhe text-foreground">
-              Receita bruta
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total + retencao} className="text-detalhe" />
-            </TableCell>
-          </TableRow>
-          <TableRow className="hover:bg-transparent">
-            <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-              (-) Retenções na fonte
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={-retencao}
-                className="text-detalhe text-muted-foreground"
-              />
-            </TableCell>
-          </TableRow>
-        </>
-      ) : null}
-      <TableRow
-        className={cn(
-          "hover:bg-transparent",
-          retencao === undefined && "border-t",
-        )}
-      >
-        <TableCell className="py-2 text-center text-detalhe font-medium text-foreground">
-          {retencao !== undefined ? "Receita líquida" : rotuloTotal}
-        </TableCell>
-        <TableCell className="py-2 text-right">
-          <MoneyText valor={total} className="text-detalhe font-medium" />
-        </TableCell>
-      </TableRow>
-    </>
-  );
 }
 
-/** Linha de subtotal de um bloco (resultado operacional, resultado financeiro). */
-function SubtotalDre({ rotulo, valor }: { rotulo: string; valor: number }) {
-  return (
-    <TableRow className="border-t bg-surface/60 hover:bg-surface/60">
-      <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
-        {rotulo}
-      </TableCell>
-      <TableCell className="py-2 text-right">
-        <MoneyText
-          valor={valor}
-          className={cn(
-            "text-detalhe font-semibold",
-            classeDoSinal(sinalDoResultado(valor)),
-          )}
-        />
-      </TableCell>
-    </TableRow>
-  );
+function linhasDaSecao({
+  titulo,
+  linhas,
+  total,
+  rotuloTotal,
+  tipo,
+  natureza,
+  retencao,
+}: SecaoDre): LinhaDre[] {
+  const saida: LinhaDre[] = [{ tipo: "titulo", id: `${titulo}-titulo`, titulo }];
+  if (linhas.length > 0) {
+    for (const linha of linhas) {
+      saida.push({
+        tipo: "categoria",
+        id: `${titulo}-${linha.categoriaId ?? "sem"}`,
+        linha,
+        tipoLancamento: tipo,
+        natureza,
+      });
+    }
+  } else {
+    saida.push({ tipo: "vazia", id: `${titulo}-vazia` });
+  }
+  if (retencao !== undefined) {
+    saida.push(
+      { tipo: "bruta", id: `${titulo}-bruta`, rotulo: "Receita bruta", valor: total + retencao },
+      {
+        tipo: "retencao",
+        id: `${titulo}-retencao`,
+        rotulo: "(-) Retenções na fonte",
+        valor: -retencao,
+      },
+    );
+  }
+  saida.push({
+    tipo: "total",
+    id: `${titulo}-total`,
+    rotulo: retencao !== undefined ? "Receita líquida" : rotuloTotal,
+    valor: total,
+    comRetencao: retencao !== undefined,
+  });
+  return saida;
 }
 
 /** Um bloco vazio não vira três linhas dizendo "sem lançamentos" três vezes. */
@@ -195,18 +140,273 @@ function blocoTemLinha(bloco: BlocoDre): boolean {
   return bloco.receitas.length > 0 || bloco.despesas.length > 0;
 }
 
-/** Aviso de linha inteira, antes de um bloco que fica FORA do resultado. */
-function AvisoForaDoResultado({ children }: { children: React.ReactNode }) {
-  return (
-    <TableRow className="hover:bg-transparent">
-      <TableCell
-        colSpan={2}
-        className="pt-4 pb-1 text-center text-detalhe text-muted-foreground"
-      >
-        {children}
-      </TableCell>
-    </TableRow>
-  );
+/** Retenção só vira linha fora do operacional quando existe. */
+function retencaoSeHouver(bloco: BlocoDre): number | undefined {
+  return bloco.retencaoReceitas > 0 ? bloco.retencaoReceitas : undefined;
+}
+
+function montarLinhas(dre: DreGerencial): LinhaDre[] {
+  const temFinanceiro = blocoTemLinha(dre.financeiro);
+  const linhas: LinhaDre[] = [
+    ...linhasDaSecao({
+      titulo: "Receitas",
+      linhas: dre.operacional.receitas,
+      total: dre.operacional.totalReceitas,
+      rotuloTotal: "Total de receitas",
+      tipo: "a_receber",
+      natureza: "operacional",
+      // Sempre, mesmo zerada: é a linha que diz que a receita é líquida.
+      retencao: dre.operacional.retencaoReceitas,
+    }),
+    ...linhasDaSecao({
+      titulo: "Despesas",
+      linhas: dre.operacional.despesas,
+      total: dre.operacional.totalDespesas,
+      rotuloTotal: "Total de despesas",
+      tipo: "a_pagar",
+      natureza: "operacional",
+    }),
+  ];
+
+  // O subtotal operacional só faz sentido se houver um segundo bloco somando com
+  // ele. Sozinho, ele repetiria o resultado do período.
+  if (temFinanceiro) {
+    linhas.push(
+      {
+        tipo: "subtotal",
+        id: "resultado-operacional",
+        rotulo: "Resultado operacional",
+        valor: dre.operacional.resultado,
+      },
+      ...linhasDaSecao({
+        titulo: "Receitas financeiras",
+        linhas: dre.financeiro.receitas,
+        total: dre.financeiro.totalReceitas,
+        rotuloTotal: "Total de receitas financeiras",
+        tipo: "a_receber",
+        natureza: "financeira",
+        retencao: retencaoSeHouver(dre.financeiro),
+      }),
+      ...linhasDaSecao({
+        titulo: "Despesas financeiras",
+        linhas: dre.financeiro.despesas,
+        total: dre.financeiro.totalDespesas,
+        rotuloTotal: "Total de despesas financeiras",
+        tipo: "a_pagar",
+        natureza: "financeira",
+      }),
+      {
+        tipo: "subtotal",
+        id: "resultado-financeiro",
+        rotulo: "Resultado financeiro",
+        valor: dre.financeiro.resultado,
+      },
+    );
+  }
+
+  linhas.push({
+    tipo: "resultado",
+    id: "resultado-periodo",
+    rotulo: "Resultado do período",
+    valor: dre.resultado,
+  });
+
+  if (blocoTemLinha(dre.investimento)) {
+    linhas.push({
+      tipo: "aviso",
+      id: "aviso-investimento",
+      conteudo: (
+        <>
+          Abaixo, investimentos: máquina, equipamento e terreno comprados.
+          Saíram do caixa e viraram patrimônio, então{" "}
+          <strong className="font-medium text-foreground">
+            não entram no resultado
+          </strong>{" "}
+          do período acima.
+        </>
+      ),
+    });
+    if (dre.investimento.receitas.length > 0) {
+      linhas.push(
+        ...linhasDaSecao({
+          titulo: "Entradas de investimentos",
+          linhas: dre.investimento.receitas,
+          total: dre.investimento.totalReceitas,
+          rotuloTotal: "Total de entradas",
+          tipo: "a_receber",
+          natureza: "investimento",
+          retencao: retencaoSeHouver(dre.investimento),
+        }),
+      );
+    }
+    linhas.push(
+      ...linhasDaSecao({
+        titulo: "Investimentos",
+        linhas: dre.investimento.despesas,
+        total: dre.investimento.totalDespesas,
+        rotuloTotal: "Total de investimentos",
+        tipo: "a_pagar",
+        natureza: "investimento",
+      }),
+    );
+  }
+
+  if (blocoTemLinha(dre.movimentacao)) {
+    linhas.push(
+      {
+        tipo: "aviso",
+        id: "aviso-movimentacao",
+        conteudo: (
+          <>
+            Abaixo, dinheiro que passou pela conta e{" "}
+            <strong className="font-medium text-foreground">
+              não é resultado
+            </strong>
+            : principal de aplicação, resgate e empréstimo. Não entra no
+            resultado do período acima.
+          </>
+        ),
+      },
+      ...linhasDaSecao({
+        titulo: "Entradas de movimentação",
+        linhas: dre.movimentacao.receitas,
+        total: dre.movimentacao.totalReceitas,
+        rotuloTotal: "Total de entradas",
+        tipo: "a_receber",
+        natureza: "movimentacao",
+        retencao: retencaoSeHouver(dre.movimentacao),
+      }),
+      ...linhasDaSecao({
+        titulo: "Saídas de movimentação",
+        linhas: dre.movimentacao.despesas,
+        total: dre.movimentacao.totalDespesas,
+        rotuloTotal: "Total de saídas",
+        tipo: "a_pagar",
+        natureza: "movimentacao",
+      }),
+    );
+  }
+
+  if (blocoTemLinha(dre.distribuicao)) {
+    linhas.push(
+      {
+        tipo: "aviso",
+        id: "aviso-distribuicao",
+        conteudo: (
+          <>
+            Abaixo, distribuições a sócios: o que foi para James e Tiago e as
+            despesas pessoais da família pagas pela EMT. É retirada,{" "}
+            <strong className="font-medium text-foreground">
+              não é custo
+            </strong>{" "}
+            e fica fora do resultado do período acima.
+          </>
+        ),
+      },
+      ...linhasDaSecao({
+        titulo: "Distribuições a sócios",
+        linhas: dre.distribuicao.despesas,
+        total: dre.distribuicao.totalDespesas,
+        rotuloTotal: "Total distribuído",
+        tipo: "a_pagar",
+        natureza: "distribuicao",
+      }),
+    );
+    if (dre.distribuicao.receitas.length > 0) {
+      linhas.push(
+        ...linhasDaSecao({
+          titulo: "Devolvido por sócios",
+          linhas: dre.distribuicao.receitas,
+          total: dre.distribuicao.totalReceitas,
+          rotuloTotal: "Total devolvido",
+          tipo: "a_receber",
+          natureza: "distribuicao",
+        }),
+      );
+    }
+  }
+
+  if (blocoTemLinha(dre.mutuo)) {
+    linhas.push(
+      {
+        tipo: "aviso",
+        id: "aviso-mutuo",
+        conteudo: (
+          <>
+            Abaixo, mútuo com empresas ligadas (Amazônia, Juruá FM): o que a EMT
+            pagou por elas é{" "}
+            <strong className="font-medium text-foreground">
+              empréstimo a receber
+            </strong>
+            , e o que voltou abate. Fora do resultado.
+          </>
+        ),
+      },
+      ...linhasDaSecao({
+        titulo: "Mútuo concedido",
+        linhas: dre.mutuo.despesas,
+        total: dre.mutuo.totalDespesas,
+        rotuloTotal: "Total enviado",
+        tipo: "a_pagar",
+        natureza: "mutuo",
+      }),
+      ...linhasDaSecao({
+        titulo: "Mútuo devolvido",
+        linhas: dre.mutuo.receitas,
+        total: dre.mutuo.totalReceitas,
+        rotuloTotal: "Total devolvido",
+        tipo: "a_receber",
+        natureza: "mutuo",
+      }),
+    );
+  }
+
+  return linhas;
+}
+
+/** Título de seção, aviso e "sem lançamentos" ocupam a largura toda. */
+function linhaInteira(registro: LinhaDre): React.ReactNode {
+  switch (registro.tipo) {
+    case "titulo":
+      return (
+        <span className="font-semibold text-foreground uppercase tracking-wide">
+          {registro.titulo}
+        </span>
+      );
+    case "vazia":
+      return (
+        <span className="text-muted-foreground">Sem lançamentos no período</span>
+      );
+    case "aviso":
+      // Aviso de linha inteira, antes de um bloco que fica FORA do resultado.
+      return (
+        <span className="block pt-2 text-muted-foreground">
+          {registro.conteudo}
+        </span>
+      );
+    default:
+      return null;
+  }
+}
+
+function classeDaLinha(registro: LinhaDre): string | undefined {
+  switch (registro.tipo) {
+    case "titulo":
+      return "bg-surface hover:bg-surface";
+    case "bruta":
+      return "border-t hover:bg-transparent";
+    case "retencao":
+      return "hover:bg-transparent";
+    case "total":
+      return cn("hover:bg-transparent", !registro.comRetencao && "border-t");
+    case "subtotal":
+      // Subtotal de um bloco (resultado operacional, resultado financeiro).
+      return "border-t bg-surface/60 hover:bg-surface/60";
+    case "resultado":
+      return "border-t-2 bg-surface hover:bg-surface";
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -225,241 +425,150 @@ function AvisoForaDoResultado({ children }: { children: React.ReactNode }) {
  * A receita operacional fecha em bruta, retenções e líquida: as linhas de
  * categoria somam o líquido (o que o cliente pagou), e a bruta é a da nota.
  *
- * Sem interatividade, renderiza no servidor.
+ * As colunas não ordenam: ordenar embaralharia seções, totais e subtotais.
  */
 export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) {
-  const temFinanceiro = blocoTemLinha(dre.financeiro);
-  const temInvestimento = blocoTemLinha(dre.investimento);
-  const temMovimentacao = blocoTemLinha(dre.movimentacao);
-  const temDistribuicao = blocoTemLinha(dre.distribuicao);
-  const temMutuo = blocoTemLinha(dre.mutuo);
-  const comum = { periodo, podeVerLancamentos };
+  const linhas = React.useMemo(() => montarLinhas(dre), [dre]);
 
-  /** Retenção só vira linha fora do operacional quando existe. */
-  const retencaoSeHouver = (bloco: BlocoDre) =>
-    bloco.retencaoReceitas > 0 ? bloco.retencaoReceitas : undefined;
+  const colunas = React.useMemo<ColumnDef<LinhaDre, unknown>[]>(
+    () => [
+      {
+        id: "categoria",
+        header: "Categoria",
+        size: 420,
+        enableSorting: false,
+        meta: { rotulo: "Categoria", fixa: true, celular: "titulo" },
+        cell: ({ row }) => {
+          const registro = row.original;
+          switch (registro.tipo) {
+            case "categoria": {
+              const { linha } = registro;
+              return (
+                <span className="text-foreground">
+                  {/* Linha "sem categoria" não vira link: não há categoria para
+                      filtrar, e um link que abrisse a lista inteira mentiria sobre
+                      o que ele mostra. */}
+                  {linha.categoriaId && podeVerLancamentos ? (
+                    <LinkDrill
+                      href={drillCategoriaCompetencia({
+                        categoriaId: linha.categoriaId,
+                        periodo,
+                        tipo: registro.tipoLancamento,
+                        natureza: registro.natureza,
+                      })}
+                      titulo={`Ver os lançamentos de ${linha.categoria} neste período`}
+                    >
+                      {linha.categoria}
+                    </LinkDrill>
+                  ) : (
+                    linha.categoria
+                  )}
+                  {CATEGORIAS_DO_CRONOGRAMA.has(linha.categoria) ? (
+                    <span className="block text-legenda text-muted-foreground">
+                      {NOTA_CRONOGRAMA}
+                    </span>
+                  ) : null}
+                </span>
+              );
+            }
+            case "bruta":
+              return <span className="text-foreground">{registro.rotulo}</span>;
+            case "retencao":
+              return (
+                <span className="text-muted-foreground">{registro.rotulo}</span>
+              );
+            case "total":
+              return (
+                <span className="font-medium text-foreground">
+                  {registro.rotulo}
+                </span>
+              );
+            case "subtotal":
+              return (
+                <span className="font-semibold text-foreground">
+                  {registro.rotulo}
+                </span>
+              );
+            case "resultado":
+              return (
+                <span className="text-corpo font-semibold text-foreground">
+                  {registro.rotulo}
+                </span>
+              );
+            default:
+              return null;
+          }
+        },
+      },
+      {
+        id: "valor",
+        header: "Valor",
+        size: 180,
+        enableSorting: false,
+        meta: { rotulo: "Valor", alinharDireita: true, atomico: true, celular: "valor" },
+        cell: ({ row }) => {
+          const registro = row.original;
+          switch (registro.tipo) {
+            case "categoria":
+              return (
+                <MoneyText valor={registro.linha.valor} className="text-detalhe" />
+              );
+            case "bruta":
+              return <MoneyText valor={registro.valor} className="text-detalhe" />;
+            case "retencao":
+              return (
+                <MoneyText
+                  valor={registro.valor}
+                  className="text-detalhe text-muted-foreground"
+                />
+              );
+            case "total":
+              return (
+                <MoneyText
+                  valor={registro.valor}
+                  className="text-detalhe font-medium"
+                />
+              );
+            case "subtotal":
+              return (
+                <MoneyText
+                  valor={registro.valor}
+                  className={cn(
+                    "text-detalhe font-semibold",
+                    classeDoSinal(sinalDoResultado(registro.valor)),
+                  )}
+                />
+              );
+            case "resultado":
+              return (
+                <MoneyText
+                  valor={registro.valor}
+                  className={cn(
+                    "text-corpo font-semibold",
+                    classeDoSinal(sinalDoResultado(registro.valor)),
+                  )}
+                />
+              );
+            default:
+              return null;
+          }
+        },
+      },
+    ],
+    [periodo, podeVerLancamentos],
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="overflow-x-auto rounded-md border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              {/* Centralizado é o padrão de tabela do app (ver DataTable); só
-                  dinheiro, quantidade, total, percentual e horas vão à direita. */}
-              <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
-                Categoria
-              </TableHead>
-              <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-                Valor
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="[&_td]:px-3">
-            <SecaoDre
-              titulo="Receitas"
-              linhas={dre.operacional.receitas}
-              total={dre.operacional.totalReceitas}
-              rotuloTotal="Total de receitas"
-              tipo="a_receber"
-              natureza="operacional"
-              // Sempre, mesmo zerada: é a linha que diz que a receita é líquida.
-              retencao={dre.operacional.retencaoReceitas}
-              {...comum}
-            />
-            <SecaoDre
-              titulo="Despesas"
-              linhas={dre.operacional.despesas}
-              total={dre.operacional.totalDespesas}
-              rotuloTotal="Total de despesas"
-              tipo="a_pagar"
-              natureza="operacional"
-              {...comum}
-            />
-            {/* O subtotal operacional só faz sentido se houver um segundo bloco
-                somando com ele. Sozinho, ele repetiria o resultado do período. */}
-            {temFinanceiro ? (
-              <SubtotalDre
-                rotulo="Resultado operacional"
-                valor={dre.operacional.resultado}
-              />
-            ) : null}
-
-            {temFinanceiro ? (
-              <>
-                <SecaoDre
-                  titulo="Receitas financeiras"
-                  linhas={dre.financeiro.receitas}
-                  total={dre.financeiro.totalReceitas}
-                  rotuloTotal="Total de receitas financeiras"
-                  tipo="a_receber"
-                  natureza="financeira"
-                  retencao={retencaoSeHouver(dre.financeiro)}
-                  {...comum}
-                />
-                <SecaoDre
-                  titulo="Despesas financeiras"
-                  linhas={dre.financeiro.despesas}
-                  total={dre.financeiro.totalDespesas}
-                  rotuloTotal="Total de despesas financeiras"
-                  tipo="a_pagar"
-                  natureza="financeira"
-                  {...comum}
-                />
-                <SubtotalDre
-                  rotulo="Resultado financeiro"
-                  valor={dre.financeiro.resultado}
-                />
-              </>
-            ) : null}
-
-            <TableRow className="border-t-2 bg-surface hover:bg-surface">
-              <TableCell className="py-2.5 text-center text-corpo font-semibold text-foreground">
-                Resultado do período
-              </TableCell>
-              <TableCell className="py-2.5 text-right">
-                <MoneyText
-                  valor={dre.resultado}
-                  className={cn(
-                    "text-corpo font-semibold",
-                    classeDoSinal(sinalDoResultado(dre.resultado)),
-                  )}
-                />
-              </TableCell>
-            </TableRow>
-
-            {temInvestimento ? (
-              <>
-                <AvisoForaDoResultado>
-                  Abaixo, investimentos: máquina, equipamento e terreno
-                  comprados. Saíram do caixa e viraram patrimônio, então{" "}
-                  <strong className="font-medium text-foreground">
-                    não entram no resultado
-                  </strong>{" "}
-                  do período acima.
-                </AvisoForaDoResultado>
-                {dre.investimento.receitas.length > 0 ? (
-                  <SecaoDre
-                    titulo="Entradas de investimentos"
-                    linhas={dre.investimento.receitas}
-                    total={dre.investimento.totalReceitas}
-                    rotuloTotal="Total de entradas"
-                    tipo="a_receber"
-                    natureza="investimento"
-                    retencao={retencaoSeHouver(dre.investimento)}
-                    {...comum}
-                  />
-                ) : null}
-                <SecaoDre
-                  titulo="Investimentos"
-                  linhas={dre.investimento.despesas}
-                  total={dre.investimento.totalDespesas}
-                  rotuloTotal="Total de investimentos"
-                  tipo="a_pagar"
-                  natureza="investimento"
-                  {...comum}
-                />
-              </>
-            ) : null}
-
-            {temMovimentacao ? (
-              <>
-                <AvisoForaDoResultado>
-                  Abaixo, dinheiro que passou pela conta e{" "}
-                  <strong className="font-medium text-foreground">
-                    não é resultado
-                  </strong>
-                  : principal de aplicação, resgate e empréstimo. Não entra no
-                  resultado do período acima.
-                </AvisoForaDoResultado>
-                <SecaoDre
-                  titulo="Entradas de movimentação"
-                  linhas={dre.movimentacao.receitas}
-                  total={dre.movimentacao.totalReceitas}
-                  rotuloTotal="Total de entradas"
-                  tipo="a_receber"
-                  natureza="movimentacao"
-                  retencao={retencaoSeHouver(dre.movimentacao)}
-                  {...comum}
-                />
-                <SecaoDre
-                  titulo="Saídas de movimentação"
-                  linhas={dre.movimentacao.despesas}
-                  total={dre.movimentacao.totalDespesas}
-                  rotuloTotal="Total de saídas"
-                  tipo="a_pagar"
-                  natureza="movimentacao"
-                  {...comum}
-                />
-              </>
-            ) : null}
-
-            {temDistribuicao ? (
-              <>
-                <AvisoForaDoResultado>
-                  Abaixo, distribuições a sócios: o que foi para James e Tiago
-                  e as despesas pessoais da família pagas pela EMT. É retirada,{" "}
-                  <strong className="font-medium text-foreground">
-                    não é custo
-                  </strong>{" "}
-                  e fica fora do resultado do período acima.
-                </AvisoForaDoResultado>
-                <SecaoDre
-                  titulo="Distribuições a sócios"
-                  linhas={dre.distribuicao.despesas}
-                  total={dre.distribuicao.totalDespesas}
-                  rotuloTotal="Total distribuído"
-                  tipo="a_pagar"
-                  natureza="distribuicao"
-                  {...comum}
-                />
-                {dre.distribuicao.receitas.length > 0 ? (
-                  <SecaoDre
-                    titulo="Devolvido por sócios"
-                    linhas={dre.distribuicao.receitas}
-                    total={dre.distribuicao.totalReceitas}
-                    rotuloTotal="Total devolvido"
-                    tipo="a_receber"
-                    natureza="distribuicao"
-                    {...comum}
-                  />
-                ) : null}
-              </>
-            ) : null}
-
-            {temMutuo ? (
-              <>
-                <AvisoForaDoResultado>
-                  Abaixo, mútuo com empresas ligadas (Amazônia, Juruá FM): o
-                  que a EMT pagou por elas é{" "}
-                  <strong className="font-medium text-foreground">
-                    empréstimo a receber
-                  </strong>
-                  , e o que voltou abate. Fora do resultado.
-                </AvisoForaDoResultado>
-                <SecaoDre
-                  titulo="Mútuo concedido"
-                  linhas={dre.mutuo.despesas}
-                  total={dre.mutuo.totalDespesas}
-                  rotuloTotal="Total enviado"
-                  tipo="a_pagar"
-                  natureza="mutuo"
-                  {...comum}
-                />
-                <SecaoDre
-                  titulo="Mútuo devolvido"
-                  linhas={dre.mutuo.receitas}
-                  total={dre.mutuo.totalReceitas}
-                  rotuloTotal="Total devolvido"
-                  tipo="a_receber"
-                  natureza="mutuo"
-                  {...comum}
-                />
-              </>
-            ) : null}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        idTabela="financeiro.relatorios.dre"
+        columns={colunas}
+        data={linhas}
+        idDaLinha={(registro) => registro.id}
+        semPaginacao
+        linhaInteira={linhaInteira}
+        classeDaLinha={classeDaLinha}
+      />
       {/* Nota FIXA, e não condicional ao período ter prestação: a prestação
           inteira fora do resultado é regra do DRE (decisão D2, 03/10/2026), não
           um acidente do mês. Desde o PR 5 (12/10/2026) os juros dos contratos

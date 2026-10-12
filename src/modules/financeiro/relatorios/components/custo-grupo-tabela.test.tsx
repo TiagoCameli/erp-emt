@@ -2,6 +2,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
+
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
 import type { CustoPorGrupo } from "@/modules/financeiro/relatorios/queries";
 
@@ -22,6 +24,20 @@ const acaoDoInsumo = vi.hoisted(() =>
 
 vi.mock("@/modules/financeiro/relatorios/actions", () => ({
   insumosDaSubcategoria: acaoDoInsumo,
+}));
+
+// O DataTable com `idTabela` lê e grava a preferência do usuário por Server
+// Action e usa o router; no teste, os dois ficam no lugar.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/financeiro/relatorios",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
+  buscarPreferenciaTabela: vi.fn(async () => null),
+  salvarPreferenciaTabela: vi.fn(async () => undefined),
+  limparPreferenciaTabela: vi.fn(async () => undefined),
 }));
 
 const CENTRO = "11111111-1111-4111-8111-111111111111";
@@ -72,7 +88,10 @@ function cabecalhos(): string[] {
   return [...document.querySelectorAll("th")].map((th) => th.textContent ?? "");
 }
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  limparEstadosTabelaParaTeste();
+});
 
 describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
   it("o insumo põe a quantidade em Quantidade e o percentual em % do total", async () => {
@@ -201,7 +220,7 @@ describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
     // Era a única das nove feita com `<table>` cru, dentro de um
     // `overflow-hidden`: com o recuo do terceiro nível e nome de insumo
     // comprido, o conteúdo era clipado sem barra para chegar nele. O contêiner
-    // do `Table` canônico é quem traz o `overflow-x-auto`.
+    // da tabela do DataTable é quem traz o `overflow-x-auto`.
     const { container } = render(
       <CustoGrupoTabela
         custo={CUSTO}
@@ -218,7 +237,10 @@ describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
     const contorno = tabela?.parentElement;
     expect(contorno?.getAttribute("data-slot")).toBe("table-container");
     expect(contorno?.className).toContain("overflow-x-auto");
-    // E nenhum ancestral pode voltar a esconder o transbordo.
-    expect(contorno?.parentElement?.className).not.toContain("overflow-hidden");
+    // O contêiner que rola tem a largura do contorno de fora (`w-full`). O
+    // `overflow-hidden` da moldura do DataTable, acima dele, só arredonda o
+    // canto: o que passa da largura fica DENTRO do contêiner que rola, e a
+    // moldura nunca recebe nada para cortar.
+    expect(contorno?.className).toContain("w-full");
   });
 });

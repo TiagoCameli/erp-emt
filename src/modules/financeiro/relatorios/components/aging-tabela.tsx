@@ -1,12 +1,9 @@
-import { MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+"use client";
+
+import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { drillAging } from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { Aging } from "../queries";
@@ -17,6 +14,42 @@ interface AgingTabelaProps {
   podeVerLancamentos: boolean;
 }
 
+/** Uma faixa de vencimento com as duas colunas lado a lado. */
+interface LinhaAging {
+  faixa: Aging["aPagar"][number]["faixa"];
+  rotulo: string;
+  aPagar: number;
+  aReceber: number;
+}
+
+/**
+ * O valor da faixa, que vira link para as parcelas dela.
+ *
+ * Faixa zerada não vira link: abriria uma lista vazia, o que é um clique que
+ * não leva a nada.
+ */
+function ValorDaFaixa({
+  linha,
+  tipo,
+  podeVerLancamentos,
+}: {
+  linha: LinhaAging;
+  tipo: "a_pagar" | "a_receber";
+  podeVerLancamentos: boolean;
+}) {
+  const valor = tipo === "a_pagar" ? linha.aPagar : linha.aReceber;
+  const dinheiro = <MoneyText valor={valor} className="text-detalhe" />;
+  if (valor <= 0 || !podeVerLancamentos) return dinheiro;
+  return (
+    <LinkDrill
+      href={drillAging({ faixa: linha.faixa, tipo })}
+      titulo={`Ver as parcelas ${tipo === "a_pagar" ? "a pagar" : "a receber"} ${linha.rotulo.toLowerCase()}`}
+    >
+      {dinheiro}
+    </LinkDrill>
+  );
+}
+
 /**
  * Aging em tabela: uma linha por faixa, colunas a pagar e a receber.
  *
@@ -25,84 +58,87 @@ interface AgingTabelaProps {
  * parte da identidade do que abre.
  */
 export function AgingTabela({ aging, podeVerLancamentos }: AgingTabelaProps) {
+  const linhas = React.useMemo<LinhaAging[]>(
+    () =>
+      aging.aPagar.map((faixa, indice) => ({
+        faixa: faixa.faixa,
+        rotulo: faixa.rotulo,
+        aPagar: faixa.valor,
+        aReceber: aging.aReceber[indice]?.valor ?? 0,
+      })),
+    [aging],
+  );
+
+  const colunas = React.useMemo<ColumnDef<LinhaAging, unknown>[]>(
+    () => [
+      {
+        accessorKey: "rotulo",
+        header: "Faixa de vencimento",
+        size: 220,
+        // As faixas têm ordem própria (do vencido ao que vence depois); em
+        // ordem alfabética a leitura do aging se perde.
+        enableSorting: false,
+        meta: { celular: "titulo" },
+        cell: ({ row }) => (
+          <span className="text-foreground">{row.original.rotulo}</span>
+        ),
+      },
+      {
+        accessorKey: "aPagar",
+        header: "A pagar",
+        size: 160,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <ValorDaFaixa
+            linha={row.original}
+            tipo="a_pagar"
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        ),
+      },
+      {
+        accessorKey: "aReceber",
+        header: "A receber",
+        size: 160,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <ValorDaFaixa
+            linha={row.original}
+            tipo="a_receber"
+            podeVerLancamentos={podeVerLancamentos}
+          />
+        ),
+      },
+    ],
+    [podeVerLancamentos],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
-                dinheiro, quantidade, total, percentual e horas vão à direita. */}
-            <TableHead className="h-9 px-3 text-center text-detalhe font-medium text-muted-foreground">
-              Faixa de vencimento
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              A pagar
-            </TableHead>
-            <TableHead className="h-9 px-3 text-right text-detalhe font-medium text-muted-foreground">
-              A receber
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {aging.aPagar.map((faixa, indice) => (
-            <TableRow key={faixa.faixa}>
-              <TableCell className="py-2 text-center text-detalhe text-foreground">
-                {faixa.rotulo}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                {/* Faixa zerada não vira link: abriria uma lista vazia, o que é
-                    um clique que não leva a nada. */}
-                {faixa.valor > 0 && podeVerLancamentos ? (
-                  <LinkDrill
-                    href={drillAging({ faixa: faixa.faixa, tipo: "a_pagar" })}
-                    titulo={`Ver as parcelas a pagar ${faixa.rotulo.toLowerCase()}`}
-                  >
-                    <MoneyText valor={faixa.valor} className="text-detalhe" />
-                  </LinkDrill>
-                ) : (
-                  <MoneyText valor={faixa.valor} className="text-detalhe" />
-                )}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                {(aging.aReceber[indice]?.valor ?? 0) > 0 &&
-                podeVerLancamentos ? (
-                  <LinkDrill
-                    href={drillAging({ faixa: faixa.faixa, tipo: "a_receber" })}
-                    titulo={`Ver as parcelas a receber ${faixa.rotulo.toLowerCase()}`}
-                  >
-                    <MoneyText
-                      valor={aging.aReceber[indice]?.valor ?? 0}
-                      className="text-detalhe"
-                    />
-                  </LinkDrill>
-                ) : (
-                  <MoneyText
-                    valor={aging.aReceber[indice]?.valor ?? 0}
-                    className="text-detalhe"
-                  />
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
-              Total
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={aging.totalAPagar}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText
-                valor={aging.totalAReceber}
-                className="text-detalhe font-semibold"
-              />
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.aging"
+      columns={colunas}
+      data={linhas}
+      idDaLinha={(linha) => linha.faixa}
+      semPaginacao
+      rodape={{
+        rotulo: (
+          <span className="text-detalhe font-semibold text-foreground">
+            Total
+          </span>
+        ),
+        aPagar: (
+          <MoneyText
+            valor={aging.totalAPagar}
+            className="text-detalhe font-semibold"
+          />
+        ),
+        aReceber: (
+          <MoneyText
+            valor={aging.totalAReceber}
+            className="text-detalhe font-semibold"
+          />
+        ),
+      }}
+    />
   );
 }

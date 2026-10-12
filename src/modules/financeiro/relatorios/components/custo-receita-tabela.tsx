@@ -1,12 +1,9 @@
-import { CelulaVazia, MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+"use client";
+
+import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { CelulaVazia, DataTable, MoneyText } from "@/components/canonicos";
 import { formatarPercentual } from "@/lib/formatadores";
 import { drillCustoReceita } from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
@@ -25,17 +22,6 @@ interface CustoReceitaTabelaProps {
 }
 
 /**
- * Cabeçalho na densidade do módulo: 36px de altura, `text-detalhe` (13px) e
- * cinza.
- *
- * As duas tabelas deste relatório usavam `TableHead`/`TableCell` sem classe
- * nenhuma, herdando o default do shadcn — `text-sm` (14px), que não existe na
- * escala EMT, e `h-10 px-2 text-left`. Ao lado das outras seis tabelas do
- * relatório, a mesma tela tinha dois tamanhos de letra e dois alinhamentos.
- */
-const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
-
-/**
  * Uma das duas tabelas do relatório: centro, valor e participação no total do
  * SEU lado.
  *
@@ -46,6 +32,9 @@ const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
  * A coluna de retenção só existe na receita, e só aparece quando há retenção em
  * alguma linha. Coluna de zeros ocupa largura e ensina errado (que a EMT retém
  * imposto em toda medição, quando são 9 documentos).
+ *
+ * Cada lado tem o seu `idTabela`: são duas tabelas na mesma tela, e com o mesmo
+ * id uma dividiria a largura e a ordem salvas com a outra.
  */
 export function CustoReceitaTabela({
   linhas,
@@ -59,126 +48,161 @@ export function CustoReceitaTabela({
     lado === "receita" && linhas.some((linha) => linha.retencao > 0);
   const tipo = lado === "custo" ? "a_pagar" : "a_receber";
   const titulo = lado === "custo" ? "Custo por centro" : "Receita por centro";
+  const rotuloValor = lado === "custo" ? "Custo" : "Receita líquida";
+
+  const colunas = React.useMemo<ColumnDef<CentroCustoReceita, unknown>[]>(
+    () => [
+      {
+        id: "codigo",
+        accessorFn: (linha) => linha.codigo ?? "",
+        header: "Código",
+        size: 110,
+        meta: { rotulo: "Código", atomico: true },
+        // `text-detalhe` vem da célula do DataTable, e não do `span`: o
+        // `codigo-doc` já traz o tamanho dele, e é a CelulaVazia que precisa
+        // herdar o tamanho certo da tabela.
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.codigo ? (
+              <span className="codigo-doc">{row.original.codigo}</span>
+            ) : (
+              <CelulaVazia />
+            )}
+          </span>
+        ),
+      },
+      {
+        id: "nome",
+        accessorFn: (linha) => linha.nome,
+        header: "Centro de custo",
+        size: 240,
+        meta: { rotulo: "Centro de custo", fixa: true, celular: "titulo" },
+        cell: ({ row }) => {
+          const linha = row.original;
+          return (
+            <span className="text-foreground">
+              {podeVerLancamentos ? (
+                <LinkDrill
+                  href={drillCustoReceita({
+                    centroCustoId: linha.centroCustoId,
+                    meses,
+                    tipo,
+                    incluirInvestimento,
+                  })}
+                  titulo={`Ver os lançamentos de ${linha.nome} nestes meses`}
+                >
+                  {linha.nome}
+                </LinkDrill>
+              ) : (
+                linha.nome
+              )}
+            </span>
+          );
+        },
+      },
+      ...(temRetencao
+        ? [
+            {
+              id: "retencao",
+              accessorFn: (linha) => linha.retencao,
+              header: "Retido",
+              size: 140,
+              meta: { rotulo: "Retido", alinharDireita: true, atomico: true },
+              cell: ({ row }) =>
+                row.original.retencao > 0 ? (
+                  <MoneyText
+                    valor={row.original.retencao}
+                    className="text-detalhe"
+                  />
+                ) : (
+                  <CelulaVazia />
+                ),
+            } satisfies ColumnDef<CentroCustoReceita, unknown>,
+          ]
+        : []),
+      {
+        id: "total",
+        accessorFn: (linha) => linha.total,
+        header: rotuloValor,
+        size: 150,
+        meta: {
+          rotulo: rotuloValor,
+          alinharDireita: true,
+          atomico: true,
+          celular: "valor",
+        },
+        cell: ({ row }) => (
+          <MoneyText valor={row.original.total} className="text-detalhe" />
+        ),
+      },
+      {
+        id: "participacao",
+        accessorFn: (linha) => linha.total,
+        header: "Participação",
+        size: 120,
+        meta: { rotulo: "Participação", alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums text-muted-foreground">
+            {total === 0
+              ? "—"
+              : formatarPercentual((row.original.total / total) * 100)}
+          </span>
+        ),
+      },
+    ],
+    [
+      temRetencao,
+      rotuloValor,
+      podeVerLancamentos,
+      meses,
+      tipo,
+      incluirInvestimento,
+      total,
+    ],
+  );
+
+  const rodape: Record<string, React.ReactNode> = {
+    nome: (
+      <span className="block text-center text-detalhe font-semibold text-foreground">
+        Total
+      </span>
+    ),
+    total: <MoneyText valor={total} className="text-detalhe font-semibold" />,
+    participacao: (
+      <span className="text-detalhe font-semibold tabular-nums text-muted-foreground">
+        100%
+      </span>
+    ),
+  };
+  if (temRetencao) {
+    rodape.retencao = (
+      <MoneyText
+        valor={linhas.reduce((soma, l) => soma + l.retencao, 0)}
+        className="text-detalhe font-semibold"
+      />
+    );
+  }
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="text-detalhe font-medium text-foreground">{titulo}</h3>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {/* Centralizado é o padrão de tabela do app (ver DataTable); só
-                dinheiro, quantidade, total, percentual e horas vão à direita. */}
-            <TableHead className={`${CABECALHO} text-center`}>Código</TableHead>
-            <TableHead className={`${CABECALHO} text-center`}>
-              Centro de custo
-            </TableHead>
-            {temRetencao ? (
-              <TableHead className={`${CABECALHO} text-right`}>
-                Retido
-              </TableHead>
-            ) : null}
-            <TableHead className={`${CABECALHO} text-right`}>
-              {lado === "custo" ? "Custo" : "Receita líquida"}
-            </TableHead>
-            <TableHead className={`${CABECALHO} text-right`}>
-              Participação
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {linhas.length === 0 ? (
-            <TableRow>
-              <TableCell
-                colSpan={temRetencao ? 5 : 4}
-                className="py-2 text-center text-detalhe text-muted-foreground"
-              >
-                {lado === "custo"
-                  ? "Nenhum custo nos centros e meses escolhidos"
-                  : "Nenhuma receita nos centros e meses escolhidos"}
-              </TableCell>
-            </TableRow>
-          ) : (
-            linhas.map((linha) => (
-              <TableRow key={linha.centroCustoId}>
-                {/* `text-detalhe` fica na célula, e não no `span`: o `codigo-doc`
-                    já traz o tamanho dele, e é a CelulaVazia que precisaria
-                    herdar o tamanho certo da tabela. */}
-                <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-                  {linha.codigo ? (
-                    <span className="codigo-doc">{linha.codigo}</span>
-                  ) : (
-                    <CelulaVazia />
-                  )}
-                </TableCell>
-                <TableCell className="py-2 text-center text-detalhe text-foreground">
-                  {podeVerLancamentos ? (
-                    <LinkDrill
-                      href={drillCustoReceita({
-                        centroCustoId: linha.centroCustoId,
-                        meses,
-                        tipo,
-                        incluirInvestimento,
-                      })}
-                      titulo={`Ver os lançamentos de ${linha.nome} nestes meses`}
-                    >
-                      {linha.nome}
-                    </LinkDrill>
-                  ) : (
-                    linha.nome
-                  )}
-                </TableCell>
-                {temRetencao ? (
-                  <TableCell className="py-2 text-right text-detalhe">
-                    {linha.retencao > 0 ? (
-                      <MoneyText
-                        valor={linha.retencao}
-                        className="text-detalhe"
-                      />
-                    ) : (
-                      <CelulaVazia />
-                    )}
-                  </TableCell>
-                ) : null}
-                <TableCell className="py-2 text-right">
-                  <MoneyText valor={linha.total} className="text-detalhe" />
-                </TableCell>
-                <TableCell className="py-2 text-right text-detalhe tabular-nums text-muted-foreground">
-                  {total === 0
-                    ? "—"
-                    : formatarPercentual((linha.total / total) * 100)}
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-          {linhas.length > 0 ? (
-            <TableRow className="border-t-2 bg-surface hover:bg-surface">
-              <TableCell />
-              <TableCell className="py-2 text-center text-detalhe font-semibold text-foreground">
-                Total
-              </TableCell>
-              {temRetencao ? (
-                <TableCell className="py-2 text-right">
-                  <MoneyText
-                    valor={linhas.reduce((soma, l) => soma + l.retencao, 0)}
-                    className="text-detalhe font-semibold"
-                  />
-                </TableCell>
-              ) : null}
-              <TableCell className="py-2 text-right">
-                <MoneyText
-                  valor={total}
-                  className="text-detalhe font-semibold"
-                />
-              </TableCell>
-              <TableCell className="py-2 text-right text-detalhe font-semibold tabular-nums text-muted-foreground">
-                100%
-              </TableCell>
-            </TableRow>
-          ) : null}
-        </TableBody>
-      </Table>
+    <div className="flex flex-col gap-2">
+      <h3 className="text-detalhe font-medium text-foreground">{titulo}</h3>
+      <DataTable
+        idTabela={
+          lado === "custo"
+            ? "financeiro.relatorios.custo-receita.custo"
+            : "financeiro.relatorios.custo-receita.receita"
+        }
+        columns={colunas}
+        data={linhas}
+        idDaLinha={(linha) => linha.centroCustoId}
+        semPaginacao
+        emptyState={
+          lado === "custo"
+            ? "Nenhum custo nos centros e meses escolhidos"
+            : "Nenhuma receita nos centros e meses escolhidos"
+        }
+        rodape={rodape}
+      />
     </div>
   );
 }

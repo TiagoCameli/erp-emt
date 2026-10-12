@@ -1,30 +1,40 @@
-import { MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+"use client";
+
+import * as React from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
-import type { Investimentos } from "@/modules/financeiro/relatorios/investimentos";
+import type {
+  Investimentos,
+  LinhaAplicacao,
+  MesInvestimento,
+  MovimentoInvestimento,
+} from "@/modules/financeiro/relatorios/investimentos";
 
-const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
+/** Coluna de dinheiro do relatório, com o peso da fonte que a coluna pede. */
+function colunaValor<T>(
+  id: string,
+  header: string,
+  valor: (linha: T) => number,
+  className = "text-detalhe",
+): ColumnDef<T, unknown> {
+  return {
+    id,
+    accessorFn: valor,
+    header,
+    size: 170,
+    // Centralizado é o padrão de tabela do app; só dinheiro vai à direita.
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => (
+      <MoneyText valor={valor(row.original)} className={className} />
+    ),
+  };
+}
 
-function Cabecalho({
-  direita,
-  children,
-}: {
-  direita?: boolean;
-  children: React.ReactNode;
-}) {
-  // Centralizado é o padrão de tabela do app; só dinheiro vai à direita.
-  return (
-    <TableHead className={`${CABECALHO} ${direita ? "text-right" : "text-center"}`}>
-      {children}
-    </TableHead>
-  );
+/** Total do rodapé: o negrito vai no valor, que é quem sabe o que é número. */
+function totalValor(valor: number) {
+  return <MoneyText valor={valor} className="text-detalhe font-semibold" />;
 }
 
 /** Posição por aplicação: o saldo do CDB, do fundo, de cada coisa aplicada. */
@@ -40,158 +50,166 @@ export function AplicacoesTabela({ dados }: { dados: Investimentos }) {
     { aplicado: 0, resgatado: 0, posicao: 0, aplicadoPeriodo: 0, resgatadoPeriodo: 0 },
   );
 
+  const colunas = React.useMemo<ColumnDef<LinhaAplicacao, unknown>[]>(
+    () => [
+      {
+        accessorKey: "nome",
+        header: "Aplicação",
+        size: 200,
+        cell: ({ row }) => (
+          <span className="font-medium text-foreground">{row.original.nome}</span>
+        ),
+      },
+      {
+        accessorKey: "conta",
+        header: "Conta",
+        size: 180,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.conta}</span>
+        ),
+      },
+      colunaValor<LinhaAplicacao>(
+        "aplicadoPeriodo",
+        "Aplicado no período",
+        (a) => a.aplicadoPeriodo,
+      ),
+      colunaValor<LinhaAplicacao>(
+        "resgatadoPeriodo",
+        "Resgatado no período",
+        (a) => a.resgatadoPeriodo,
+      ),
+      colunaValor<LinhaAplicacao>("aplicado", "Aplicado (total)", (a) => a.aplicado),
+      colunaValor<LinhaAplicacao>("resgatado", "Resgatado (total)", (a) => a.resgatado),
+      colunaValor<LinhaAplicacao>(
+        "posicao",
+        "Saldo aplicado",
+        (a) => a.posicao,
+        "text-detalhe font-medium",
+      ),
+    ],
+    [],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <Cabecalho>Aplicação</Cabecalho>
-            <Cabecalho>Conta</Cabecalho>
-            <Cabecalho direita>Aplicado no período</Cabecalho>
-            <Cabecalho direita>Resgatado no período</Cabecalho>
-            <Cabecalho direita>Aplicado (total)</Cabecalho>
-            <Cabecalho direita>Resgatado (total)</Cabecalho>
-            <Cabecalho direita>Saldo aplicado</Cabecalho>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {dados.aplicacoes.map((a) => (
-            <TableRow key={a.aplicacaoId}>
-              <TableCell className="py-2 text-center text-detalhe font-medium text-foreground">
-                {a.nome}
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-                {a.conta}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={a.aplicadoPeriodo} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={a.resgatadoPeriodo} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={a.aplicado} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={a.resgatado} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={a.posicao} className="text-detalhe font-medium" />
-              </TableCell>
-            </TableRow>
-          ))}
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell colSpan={2} className="py-2 text-center text-detalhe font-semibold text-foreground">
-              Total
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total.aplicadoPeriodo / 100} className="text-detalhe font-semibold" />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total.resgatadoPeriodo / 100} className="text-detalhe font-semibold" />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total.aplicado / 100} className="text-detalhe font-semibold" />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total.resgatado / 100} className="text-detalhe font-semibold" />
-            </TableCell>
-            <TableCell className="py-2 text-right">
-              <MoneyText valor={total.posicao / 100} className="text-detalhe font-semibold" />
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.investimentos.aplicacoes"
+      columns={colunas}
+      data={dados.aplicacoes}
+      idDaLinha={(a) => a.aplicacaoId}
+      semPaginacao
+      emptyState="Nenhuma aplicação no centro Investimentos."
+      rodape={{
+        nome: <span className="text-detalhe font-semibold text-foreground">Total</span>,
+        aplicadoPeriodo: totalValor(total.aplicadoPeriodo / 100),
+        resgatadoPeriodo: totalValor(total.resgatadoPeriodo / 100),
+        aplicado: totalValor(total.aplicado / 100),
+        resgatado: totalValor(total.resgatado / 100),
+        posicao: totalValor(total.posicao / 100),
+      }}
+    />
   );
 }
 
 /** Mês a mês: quanto entrou, quanto saiu e onde a posição fechou. */
 export function InvestimentosPorMesTabela({ dados }: { dados: Investimentos }) {
+  const colunas = React.useMemo<ColumnDef<MesInvestimento, unknown>[]>(
+    () => [
+      {
+        accessorKey: "mes",
+        header: "Mês",
+        size: 140,
+        meta: { atomico: true },
+        cell: ({ row }) => (
+          <span className="text-foreground">
+            {formatarMesAno(`${row.original.mes}-01`)}
+          </span>
+        ),
+      },
+      colunaValor<MesInvestimento>("aplicado", "Aplicado", (m) => m.aplicado),
+      colunaValor<MesInvestimento>("resgatado", "Resgatado", (m) => m.resgatado),
+      colunaValor<MesInvestimento>(
+        "liquido",
+        "Líquido do mês",
+        (m) => (Math.round(m.aplicado * 100) - Math.round(m.resgatado * 100)) / 100,
+      ),
+      colunaValor<MesInvestimento>(
+        "posicaoFinal",
+        "Posição no fim do mês",
+        (m) => m.posicaoFinal,
+        "text-detalhe font-medium",
+      ),
+    ],
+    [],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <Cabecalho>Mês</Cabecalho>
-            <Cabecalho direita>Aplicado</Cabecalho>
-            <Cabecalho direita>Resgatado</Cabecalho>
-            <Cabecalho direita>Líquido do mês</Cabecalho>
-            <Cabecalho direita>Posição no fim do mês</Cabecalho>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {dados.meses.map((m) => (
-            <TableRow key={m.mes}>
-              <TableCell className="py-2 text-center text-detalhe text-foreground">
-                {formatarMesAno(`${m.mes}-01`)}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={m.aplicado} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={m.resgatado} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText
-                  valor={(Math.round(m.aplicado * 100) - Math.round(m.resgatado * 100)) / 100}
-                  className="text-detalhe"
-                />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={m.posicaoFinal} className="text-detalhe font-medium" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.investimentos.por-mes"
+      columns={colunas}
+      data={dados.meses}
+      idDaLinha={(m) => m.mes}
+      semPaginacao
+    />
   );
 }
 
 /** As aplicações e resgates do período, um por linha, do mais recente. */
 export function MovimentosInvestimentoTabela({ dados }: { dados: Investimentos }) {
+  const colunas = React.useMemo<ColumnDef<MovimentoInvestimento, unknown>[]>(
+    () => [
+      {
+        accessorKey: "data",
+        header: "Data",
+        size: 116,
+        meta: { atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">{formatarData(row.original.data)}</span>
+        ),
+      },
+      {
+        accessorKey: "numero",
+        header: "Documento",
+        size: 150,
+        cell: ({ row }) => <span className="codigo-doc">{row.original.numero}</span>,
+      },
+      {
+        accessorKey: "sentido",
+        header: "Movimento",
+        size: 120,
+        cell: ({ row }) =>
+          row.original.sentido === "aplicacao" ? "Aplicação" : "Resgate",
+      },
+      {
+        accessorKey: "aplicacaoNome",
+        header: "Aplicação",
+        size: 180,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.aplicacaoNome}</span>
+        ),
+      },
+      {
+        id: "descricao",
+        accessorFn: (m) => m.descricao ?? "",
+        header: "Descrição",
+        size: 240,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.descricao ?? "-"}</span>
+        ),
+      },
+      colunaValor<MovimentoInvestimento>("valor", "Valor", (m) =>
+        m.sentido === "aplicacao" ? m.valor : -m.valor,
+      ),
+    ],
+    [],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <Cabecalho>Data</Cabecalho>
-            <Cabecalho>Documento</Cabecalho>
-            <Cabecalho>Movimento</Cabecalho>
-            <Cabecalho>Aplicação</Cabecalho>
-            <Cabecalho>Descrição</Cabecalho>
-            <Cabecalho direita>Valor</Cabecalho>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {dados.movimentos.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell className="py-2 text-center text-detalhe tabular-nums">
-                {formatarData(m.data)}
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe">
-                <span className="codigo-doc">{m.numero}</span>
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe">
-                {m.sentido === "aplicacao" ? "Aplicação" : "Resgate"}
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-                {m.aplicacaoNome}
-              </TableCell>
-              <TableCell className="py-2 text-center text-detalhe text-muted-foreground">
-                {m.descricao ?? "-"}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText
-                  valor={m.sentido === "aplicacao" ? m.valor : -m.valor}
-                  className="text-detalhe"
-                />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.investimentos.movimentos"
+      columns={colunas}
+      data={dados.movimentos}
+      idDaLinha={(m) => m.id}
+      semPaginacao
+    />
   );
 }

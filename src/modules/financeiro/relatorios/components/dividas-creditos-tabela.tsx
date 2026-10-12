@@ -2,17 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 
-import { MoneyText } from "@/components/canonicos";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { formatarData, formatarPercentual } from "@/lib/formatadores";
 import { SeloContrato, SeloCota } from "@/modules/financeiro/dividas/components/selos";
 import {
@@ -21,7 +13,33 @@ import {
   type ContratoRelatorio,
 } from "@/modules/financeiro/dividas/relatorio";
 
-const CABECALHO = "h-9 px-3 text-detalhe font-medium text-muted-foreground";
+/** Coluna de dinheiro do relatório, com o peso da fonte que a coluna pede. */
+function colunaValor<T>(
+  id: string,
+  header: string,
+  valor: (linha: T) => number,
+  className = "text-detalhe",
+): ColumnDef<T, unknown> {
+  return {
+    id,
+    accessorFn: valor,
+    header,
+    size: 150,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => (
+      <MoneyText valor={valor(row.original)} className={className} />
+    ),
+  };
+}
+
+/** Total do rodapé: o negrito vai no valor, que é quem sabe o que é número. */
+function totalValor(valor: number) {
+  return <MoneyText valor={valor} className="text-detalhe font-semibold" />;
+}
+
+const ROTULO_TOTAL = (
+  <span className="text-detalhe font-semibold text-foreground">Total</span>
+);
 
 /** "2,0000% a.m. · 26,82% a.a.", ou traço sem cronograma. */
 export function textoCet(contrato: ContratoRelatorio): string {
@@ -47,124 +65,122 @@ export function DividasContratosTabela({
   /** Sem a permissão de Dívidas, o credor não vira link (daria 404). */
   podeVerDividas: boolean;
 }) {
-  const [abertos, setAbertos] = React.useState<ReadonlySet<string>>(new Set());
-
-  function alternar(id: string) {
-    setAbertos((atual) => {
-      const novo = new Set(atual);
-      if (novo.has(id)) novo.delete(id);
-      else novo.add(id);
-      return novo;
-    });
-  }
+  const colunas = React.useMemo<ColumnDef<ContratoRelatorio, unknown>[]>(
+    () => [
+      {
+        accessorKey: "credor",
+        header: "Contrato",
+        size: 220,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className="text-left">
+              {podeVerDividas ? (
+                <Link
+                  href={`/financeiro/dividas/contratos/${c.contratoId}`}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  {c.credor}
+                </Link>
+              ) : (
+                <span className="text-foreground">{c.credor}</span>
+              )}
+              <span className="block text-legenda text-muted-foreground">
+                {c.numero}
+                {c.temCronograma ? "" : " · sem cronograma"}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        size: 130,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => <SeloContrato status={row.original.status} />,
+      },
+      colunaValor<ContratoRelatorio>("valorLiberado", "Liberado", (c) => c.valorLiberado),
+      colunaValor<ContratoRelatorio>("principalPago", "Principal pago", (c) => c.principalPago),
+      colunaValor<ContratoRelatorio>(
+        "saldoDevedor",
+        "Saldo devedor",
+        (c) => c.saldoDevedor,
+        "text-detalhe font-medium",
+      ),
+      colunaValor<ContratoRelatorio>("jurosPagos", "Juros pagos", (c) => c.jurosPagos),
+      colunaValor<ContratoRelatorio>("jurosAPagar", "Juros a pagar", (c) => c.jurosAPagar),
+      {
+        id: "cet",
+        // Ordena pela taxa mensal; sem cronograma vai para o fim.
+        accessorFn: (c) => c.cet?.mensal,
+        header: "CET",
+        size: 200,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums text-foreground">{textoCet(row.original)}</span>
+        ),
+      },
+    ],
+    [podeVerDividas],
+  );
 
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead scope="col" className={`${CABECALHO} w-8`} />
-            <TableHead scope="col" className={`${CABECALHO} text-left`}>Contrato</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-center`}>Status</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Liberado</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Principal pago</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Saldo devedor</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Juros pagos</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Juros a pagar</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>CET</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {contratos.map((c) => {
-            const aberto = abertos.has(c.contratoId);
-            return (
-              <React.Fragment key={c.contratoId}>
-                <TableRow>
-                  <TableCell className="py-2">
-                    {c.proximas.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => alternar(c.contratoId)}
-                        aria-expanded={aberto}
-                        aria-label={`${aberto ? "Fechar" : "Abrir"} as próximas parcelas de ${c.credor} ${c.numero}`}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        {aberto ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                      </button>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="py-2 text-left text-detalhe">
-                    {podeVerDividas ? (
-                      <Link
-                        href={`/financeiro/dividas/contratos/${c.contratoId}`}
-                        className="text-primary underline-offset-2 hover:underline"
-                      >
-                        {c.credor}
-                      </Link>
-                    ) : (
-                      <span className="text-foreground">{c.credor}</span>
-                    )}
-                    <span className="block text-legenda text-muted-foreground">
-                      {c.numero}
-                      {c.temCronograma ? "" : " · sem cronograma"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="py-2 text-center">
-                    <SeloContrato status={c.status} />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText valor={c.valorLiberado} className="text-detalhe" />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText valor={c.principalPago} className="text-detalhe" />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText valor={c.saldoDevedor} className="text-detalhe font-medium" />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText valor={c.jurosPagos} className="text-detalhe" />
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    <MoneyText valor={c.jurosAPagar} className="text-detalhe" />
-                  </TableCell>
-                  <TableCell className="py-2 text-right text-detalhe tabular-nums text-foreground">
-                    {textoCet(c)}
-                  </TableCell>
-                </TableRow>
-                {aberto ? (
-                  <TableRow className="bg-surface hover:bg-surface">
-                    <TableCell />
-                    <TableCell colSpan={8} className="py-2">
-                      <ProximasParcelas contrato={c} />
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </React.Fragment>
-            );
-          })}
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell />
-            <TableCell colSpan={2} className="py-2 text-left text-detalhe font-semibold text-foreground">
-              Total
-            </TableCell>
-            {[
-              somar(contratos, (c) => c.valorLiberado),
-              somar(contratos, (c) => c.principalPago),
-              somar(contratos, (c) => c.saldoDevedor),
-              somar(contratos, (c) => c.jurosPagos),
-              somar(contratos, (c) => c.jurosAPagar),
-            ].map((valor, i) => (
-              <TableCell key={i} className="py-2 text-right">
-                <MoneyText valor={valor} className="text-detalhe font-semibold" />
-              </TableCell>
-            ))}
-            <TableCell />
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.creditos.dividas-contratos"
+      columns={colunas}
+      data={contratos}
+      idDaLinha={(c) => c.contratoId}
+      semPaginacao
+      // A seta só aparece em contrato com parcela pela frente.
+      linhaExpandida={(c) => (
+        <div className="py-2 pr-3 pl-12">
+          <ProximasParcelas contrato={c} />
+        </div>
+      )}
+      podeExpandir={(c) => c.proximas.length > 0}
+      rodape={{
+        credor: ROTULO_TOTAL,
+        valorLiberado: totalValor(somar(contratos, (c) => c.valorLiberado)),
+        principalPago: totalValor(somar(contratos, (c) => c.principalPago)),
+        saldoDevedor: totalValor(somar(contratos, (c) => c.saldoDevedor)),
+        jurosPagos: totalValor(somar(contratos, (c) => c.jurosPagos)),
+        jurosAPagar: totalValor(somar(contratos, (c) => c.jurosAPagar)),
+      }}
+    />
   );
 }
+
+type ParcelaProxima = ContratoRelatorio["proximas"][number];
+
+/** As próximas parcelas na ordem do cronograma: a ordem é a informação, não ordena. */
+const COLUNAS_PROXIMAS: ColumnDef<ParcelaProxima, unknown>[] = [
+  {
+    id: "numero",
+    header: "Nº",
+    size: 60,
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <span className="tabular-nums">{row.original.numero ?? "—"}</span>,
+  },
+  {
+    id: "vencimento",
+    header: "Vencimento",
+    size: 110,
+    enableSorting: false,
+    meta: { atomico: true, celular: "titulo" },
+    cell: ({ row }) => <span className="tabular-nums">{formatarData(row.original.vencimento)}</span>,
+  },
+  { ...colunaValor<ParcelaProxima>("principal", "Principal", (p) => p.principal), enableSorting: false },
+  { ...colunaValor<ParcelaProxima>("juros", "Juros", (p) => p.juros), enableSorting: false },
+  { ...colunaValor<ParcelaProxima>("encargos", "Encargos", (p) => p.encargos), enableSorting: false },
+  {
+    ...colunaValor<ParcelaProxima>("total", "Total", (p) => p.total, "text-detalhe font-medium"),
+    enableSorting: false,
+    meta: { alinharDireita: true, atomico: true, celular: "valor" },
+  },
+];
 
 function ProximasParcelas({ contrato }: { contrato: ContratoRelatorio }) {
   return (
@@ -172,38 +188,14 @@ function ProximasParcelas({ contrato }: { contrato: ContratoRelatorio }) {
       <p className="text-legenda text-muted-foreground">
         Próximas {contrato.proximas.length} parcelas (as atrasadas e não pagas entram primeiro)
       </p>
-      <table className="w-full max-w-3xl text-legenda">
-        <thead>
-          <tr className="text-muted-foreground">
-            <th className="px-2 py-1 text-right font-medium">Nº</th>
-            <th className="px-2 py-1 text-center font-medium">Vencimento</th>
-            <th className="px-2 py-1 text-right font-medium">Principal</th>
-            <th className="px-2 py-1 text-right font-medium">Juros</th>
-            <th className="px-2 py-1 text-right font-medium">Encargos</th>
-            <th className="px-2 py-1 text-right font-medium">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {contrato.proximas.map((p, i) => (
-            <tr key={`${p.vencimento}-${i}`}>
-              <td className="px-2 py-0.5 text-right tabular-nums">{p.numero ?? "—"}</td>
-              <td className="px-2 py-0.5 text-center tabular-nums">{formatarData(p.vencimento)}</td>
-              <td className="px-2 py-0.5 text-right">
-                <MoneyText valor={p.principal} />
-              </td>
-              <td className="px-2 py-0.5 text-right">
-                <MoneyText valor={p.juros} />
-              </td>
-              <td className="px-2 py-0.5 text-right">
-                <MoneyText valor={p.encargos} />
-              </td>
-              <td className="px-2 py-0.5 text-right font-medium">
-                <MoneyText valor={p.total} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="max-w-3xl">
+        <DataTable
+          idTabela="financeiro.relatorios.creditos.proximas-parcelas"
+          columns={COLUNAS_PROXIMAS}
+          data={contrato.proximas}
+          semPaginacao
+        />
+      </div>
     </div>
   );
 }
@@ -220,84 +212,88 @@ export function ConsorciosCreditosTabela({
   cotas: ConsorcioRelatorio[];
   podeVerDividas: boolean;
 }) {
+  const colunas = React.useMemo<ColumnDef<ConsorcioRelatorio, unknown>[]>(
+    () => [
+      {
+        accessorKey: "administradora",
+        header: "Cota",
+        size: 240,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => {
+          const q = row.original;
+          return (
+            <div className="text-left">
+              {podeVerDividas ? (
+                <Link
+                  href={`/financeiro/dividas/consorcios/${q.cotaId}`}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  {q.administradora}
+                </Link>
+              ) : (
+                <span className="text-foreground">{q.administradora}</span>
+              )}
+              <span className="block text-legenda text-muted-foreground">
+                Grupo {q.grupo} · cota {q.cota} · {q.bem}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        size: 130,
+        meta: { naoTruncar: true },
+        cell: ({ row }) => <SeloCota status={row.original.status} />,
+      },
+      {
+        id: "pagas",
+        accessorFn: (q) => q.parcelasPagas,
+        header: "Pagas",
+        size: 110,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums text-foreground">
+            {row.original.parcelasPagas} de {row.original.prazo}
+          </span>
+        ),
+      },
+      colunaValor<ConsorcioRelatorio>("fundoComumPago", "Fundo comum pago", (q) => q.fundoComumPago),
+      colunaValor<ConsorcioRelatorio>("taxaPaga", "Taxa paga", (q) => q.taxaPaga),
+      colunaValor<ConsorcioRelatorio>("aPagar", "A pagar", (q) => q.aPagar),
+      colunaValor<ConsorcioRelatorio>("divida", "Dívida", (q) => q.divida, "text-detalhe font-medium"),
+      {
+        id: "valorCarta",
+        accessorFn: (q) => q.valorCarta ?? undefined,
+        header: "Carta",
+        size: 150,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) =>
+          row.original.valorCarta === null ? (
+            <span className="text-detalhe text-muted-foreground">—</span>
+          ) : (
+            <MoneyText valor={row.original.valorCarta} className="text-detalhe" />
+          ),
+      },
+    ],
+    [podeVerDividas],
+  );
+
   return (
-    <div className="overflow-x-auto rounded-md border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead scope="col" className={`${CABECALHO} text-left`}>Cota</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-center`}>Status</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Pagas</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Fundo comum pago</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Taxa paga</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>A pagar</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Dívida</TableHead>
-            <TableHead scope="col" className={`${CABECALHO} text-right`}>Carta</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody className="[&_td]:px-3">
-          {cotas.map((q) => (
-            <TableRow key={q.cotaId}>
-              <TableCell className="py-2 text-left text-detalhe">
-                {podeVerDividas ? (
-                  <Link
-                    href={`/financeiro/dividas/consorcios/${q.cotaId}`}
-                    className="text-primary underline-offset-2 hover:underline"
-                  >
-                    {q.administradora}
-                  </Link>
-                ) : (
-                  <span className="text-foreground">{q.administradora}</span>
-                )}
-                <span className="block text-legenda text-muted-foreground">
-                  Grupo {q.grupo} · cota {q.cota} · {q.bem}
-                </span>
-              </TableCell>
-              <TableCell className="py-2 text-center">
-                <SeloCota status={q.status} />
-              </TableCell>
-              <TableCell className="py-2 text-right text-detalhe tabular-nums text-foreground">
-                {q.parcelasPagas} de {q.prazo}
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={q.fundoComumPago} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={q.taxaPaga} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={q.aPagar} className="text-detalhe" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                <MoneyText valor={q.divida} className="text-detalhe font-medium" />
-              </TableCell>
-              <TableCell className="py-2 text-right">
-                {q.valorCarta === null ? (
-                  <span className="text-detalhe text-muted-foreground">—</span>
-                ) : (
-                  <MoneyText valor={q.valorCarta} className="text-detalhe" />
-                )}
-              </TableCell>
-            </TableRow>
-          ))}
-          <TableRow className="border-t-2 bg-surface hover:bg-surface">
-            <TableCell colSpan={3} className="py-2 text-left text-detalhe font-semibold text-foreground">
-              Total
-            </TableCell>
-            {[
-              somar(cotas, (q) => q.fundoComumPago),
-              somar(cotas, (q) => q.taxaPaga),
-              somar(cotas, (q) => q.aPagar),
-              somar(cotas, (q) => q.divida),
-            ].map((valor, i) => (
-              <TableCell key={i} className="py-2 text-right">
-                <MoneyText valor={valor} className="text-detalhe font-semibold" />
-              </TableCell>
-            ))}
-            <TableCell />
-          </TableRow>
-        </TableBody>
-      </Table>
-    </div>
+    <DataTable
+      idTabela="financeiro.relatorios.creditos.consorcios"
+      columns={colunas}
+      data={cotas}
+      idDaLinha={(q) => q.cotaId}
+      semPaginacao
+      rodape={{
+        administradora: ROTULO_TOTAL,
+        fundoComumPago: totalValor(somar(cotas, (q) => q.fundoComumPago)),
+        taxaPaga: totalValor(somar(cotas, (q) => q.taxaPaga)),
+        aPagar: totalValor(somar(cotas, (q) => q.aPagar)),
+        divida: totalValor(somar(cotas, (q) => q.divida)),
+      }}
+    />
   );
 }

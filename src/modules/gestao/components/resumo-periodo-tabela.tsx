@@ -1,6 +1,27 @@
-import { MoneyText } from "@/components/canonicos";
+"use client";
+
+import type { ColumnDef } from "@tanstack/react-table";
+
+import { DataTable, MoneyText } from "@/components/canonicos";
 import { cn } from "@/lib/utils";
 import type { ResultadoDoPeriodo } from "../calculo";
+
+interface LinhaResumo {
+  nome: string;
+  /** Um valor por mês, na mesma ordem de `resultado.meses`. */
+  valores: number[];
+  total: number;
+  colorir: boolean;
+}
+
+/**
+ * Verde ou vermelho só na linha de resultado, e nunca como única pista: o
+ * número negativo já vem com o sinal do formatador.
+ */
+function corDo(valor: number, colorir: boolean): string {
+  if (!colorir || valor === 0) return "text-foreground";
+  return valor < 0 ? "text-destructive" : "text-primary";
+}
 
 /**
  * O mesmo dinheiro do gráfico acima, em números, mês a mês: receita, despesa e
@@ -14,14 +35,17 @@ import type { ResultadoDoPeriodo } from "../calculo";
  *
  * Rola na horizontal dentro do próprio contêiner: com um período longo escolhido
  * na barra de filtros são muitas colunas, e a página inteira rolando de lado
- * levaria o resto do painel junto.
+ * levaria o resto do painel junto. A DataTable já faz isso, e ainda deixa o
+ * usuário ajustar largura, ordem e quais meses aparecem (pedido do Tiago em
+ * 12/10/2026: toda tabela ajustável). Sem ordenação: são três linhas com
+ * ordem de leitura fixa (receita, despesa, resultado).
  */
 export function ResumoPeriodoTabela({
   resultado,
 }: {
   resultado: ResultadoDoPeriodo;
 }) {
-  const linhas = [
+  const linhas: LinhaResumo[] = [
     {
       nome: "Receita",
       valores: resultado.meses.map((m) => m.receita),
@@ -42,68 +66,67 @@ export function ResumoPeriodoTabela({
     },
   ];
 
-  /**
-   * Verde ou vermelho só na linha de resultado, e nunca como única pista: o
-   * número negativo já vem com o sinal do formatador.
-   */
-  function corDo(valor: number, colorir: boolean): string {
-    if (!colorir || valor === 0) return "text-foreground";
-    return valor < 0 ? "text-destructive" : "text-primary";
-  }
+  const colunas: ColumnDef<LinhaResumo, unknown>[] = [
+    {
+      id: "nome",
+      accessorKey: "nome",
+      header: "Mês",
+      size: 130,
+      enableSorting: false,
+      meta: { fixa: true, celular: "titulo" },
+      cell: ({ row }) => (
+        <span className="text-detalhe text-foreground">
+          {row.original.nome}
+        </span>
+      ),
+    },
+    ...resultado.meses.map(
+      (mes, indice): ColumnDef<LinhaResumo, unknown> => ({
+        // Id pela competência, não pela posição: a largura e a ordem salvas
+        // ficam presas ao mês, e trocar o período não as joga em outro mês.
+        id: mes.mes,
+        header: mes.rotulo,
+        size: 130,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => {
+          const valor = row.original.valores[indice];
+          return (
+            <span
+              className={cn("text-detalhe", corDo(valor, row.original.colorir))}
+            >
+              <MoneyText valor={valor} />
+            </span>
+          );
+        },
+      }),
+    ),
+    {
+      id: "total",
+      header: "Total",
+      size: 150,
+      enableSorting: false,
+      meta: { alinharDireita: true, atomico: true, celular: "valor" },
+      cell: ({ row }) => (
+        <span
+          className={cn(
+            "text-detalhe font-medium",
+            corDo(row.original.total, row.original.colorir),
+          )}
+        >
+          <MoneyText valor={row.original.total} />
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-max border-collapse">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="py-1.5 pr-3 text-left text-legenda font-normal uppercase tracking-wide text-muted-foreground">
-              Mês
-            </th>
-            {resultado.meses.map((mes) => (
-              <th
-                key={mes.mes}
-                className="px-3 py-1.5 text-right text-legenda font-normal uppercase tracking-wide text-muted-foreground"
-              >
-                {mes.rotulo}
-              </th>
-            ))}
-            <th className="py-1.5 pl-3 text-right text-legenda font-normal uppercase tracking-wide text-muted-foreground">
-              Total
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.map((linha) => (
-            <tr key={linha.nome} className="border-b border-border last:border-0">
-              <th
-                scope="row"
-                className="py-2 pr-3 text-left text-detalhe font-normal text-foreground"
-              >
-                {linha.nome}
-              </th>
-              {linha.valores.map((valor, indice) => (
-                <td
-                  key={resultado.meses[indice].mes}
-                  className={cn(
-                    "px-3 py-2 text-right text-detalhe",
-                    corDo(valor, linha.colorir),
-                  )}
-                >
-                  <MoneyText valor={valor} />
-                </td>
-              ))}
-              <td
-                className={cn(
-                  "py-2 pl-3 text-right text-detalhe font-medium",
-                  corDo(linha.total, linha.colorir),
-                )}
-              >
-                <MoneyText valor={linha.total} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      idTabela="gestao.resumo-periodo"
+      columns={colunas}
+      data={linhas}
+      idDaLinha={(linha) => linha.nome}
+      semPaginacao
+    />
   );
 }
