@@ -18,7 +18,8 @@ begin
   if not public.tem_permissao('financeiro.aplicacoes', 'ver') then
     raise exception 'Sem permissao para ver aplicacoes';
   end if;
-  select a.conta_bancaria_id, a.centro_custo_id, coalesce(a.taxa_percentual, 100) into v_conta, v_etapa, v_pct
+  select a.conta_bancaria_id, a.centro_custo_id,
+    case when a.indexador = 'cdi' then coalesce(a.taxa_percentual, 100) end into v_conta, v_etapa, v_pct
   from public.aplicacoes a where a.id = p_aplicacao_id;
   if v_conta is null or not public.fn_pode_ver_saldo(v_conta) then
     return;
@@ -51,10 +52,10 @@ begin
   ),
   -- Esperado pelo CDI (mesma conta do relatorio de aplicacoes): base ponderada
   -- pelo tempo x (fator do CDI diario no periodo - 1) x % contratado. Nulo sem
-  -- posicao anterior ou sem CDI diario cobrindo o periodo.
+  -- posicao anterior, sem CDI diario cobrindo o periodo ou fora do CDI.
   esp as (
     select case
-      when ant.data is null or ant.data >= p_data or v_cdi_ate is null or v_cdi_ate < p_data - 5 then null
+      when v_pct is null or ant.data is null or ant.data >= p_data or v_cdi_ate is null or v_cdi_ate < p_data - 5 then null
       else (
         ant.saldo_liquido + coalesce((
           select sum(
@@ -89,10 +90,10 @@ begin
   select r.d_ant, r.s_ant, r.apl, r.res, r.rend, r.abertura, r.esperado,
     -- Sem alerta contra a abertura virtual (saldo inicial de corte): o primeiro
     -- periodo e calibragem, nao rendimento de CDI.
-    (r.ant_gravada and not r.abertura and (
+    coalesce(r.ant_gravada and not r.abertura and (
       r.rend < 0
       or (r.esperado > 100 and (r.rend < r.esperado * 0.5 or r.rend > r.esperado * 1.5))
-    ))
+    ), false)
   from r;
 end;
 $function$;
@@ -140,13 +141,15 @@ begin
   end if;
 
   -- Rendimento negativo ou fora de 50%-150% do esperado pelo CDI: so grava com
-  -- confirmacao e motivo, que fica nas observacoes da posicao.
+  -- confirmacao e motivo, que fica nas observacoes da posicao. A linha antiga do
+  -- motivo sai a cada gravacao (nao acumula e nao fica depois de corrigido).
+  v_obs := nullif(btrim(regexp_replace(coalesce(v_obs, ''), '^(\[Fora do CDI\][^\n]*(\n|$))+', '')), '');
   select s.rendimento, s.rendimento_esperado, s.fora_do_cdi into v_sim
   from public.fn_simular_posicao_aplicacao(p_aplicacao_id, p_data, p_saldo_liquido) s;
   if coalesce(v_sim.fora_do_cdi, false) then
     if not coalesce(p_confirmar, false) then
       raise exception 'Posicao fora do CDI: rendimento de R$ % (esperado R$ %). Confirme com o motivo',
-        to_char(v_sim.rendimento, 'FM999G999G990D00'), coalesce(to_char(v_sim.rendimento_esperado, 'FM999G999G990D00'), '-');
+        public.fn_conciliacao_brl(v_sim.rendimento), coalesce(public.fn_conciliacao_brl(v_sim.rendimento_esperado), '-');
     end if;
     if nullif(btrim(p_motivo), '') is null then
       raise exception 'Informe o motivo para gravar a posicao fora do CDI';

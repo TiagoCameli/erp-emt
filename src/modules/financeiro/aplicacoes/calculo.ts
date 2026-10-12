@@ -246,12 +246,12 @@ export interface PainelAplicacoes {
 export function ehResgateAutomatico(m: Pick<MovimentoAplicacao, "tipo" | "descricao">): boolean {
   if (m.tipo !== "resgate") return false;
   const descricao = m.descricao ?? "";
-  const compacta = descricao
+  const semAcento = descricao
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "")
     .toUpperCase();
-  return compacta.includes("RESGATEAUTO") || /\(\s*regra\s*\)\s*$/i.test(descricao);
+  // "AUTO" ou "AUTOMATICO(A)" como palavra: "Resgate autorizado" não entra.
+  return /RESGATE\s*AUTO(MATIC[OA]?)?\b/.test(semAcento) || /\(\s*regra\s*\)\s*$/i.test(descricao);
 }
 
 /**

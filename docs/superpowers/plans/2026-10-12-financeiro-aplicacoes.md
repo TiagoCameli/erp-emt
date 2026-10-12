@@ -26,7 +26,7 @@
 ## Review Focus
 - Alinhar a data de uma transferência casada em mês fechado: recusa pela trava (não move o saldo de mês conciliado).
 - Recalcular rendimento cujo lançamento já está conciliado: hoje o sincronizar recusa — o alinhamento não pode deixar o casamento pela metade.
-- Posição de abertura (`e_abertura`) não conta como posição do fim do mês.
+- Posição de abertura (`e_abertura`) anterior ao último dia não conta; a do próprio último dia conta (o índice único por data não deixa gravar outra).
 - Aplicação inativa não bloqueia o fechamento.
 - Simulação com esperado nulo (sem CDI no período) não pode travar o salvar.
 

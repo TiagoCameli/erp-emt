@@ -50,6 +50,25 @@ begin
     raise exception 'FALHOU 7: observacoes %', v_obs;
   end if;
 
+  -- 8. Regravar fora do CDI troca o motivo (nao acumula); voltar para dentro tira.
+  perform public.fn_salvar_posicao_aplicacao(v_apl, v_dia, v_ant + round(v_esp * 2, 2), p_observacoes => v_obs,
+    p_confirmar => true, p_motivo => 'segundo motivo');
+  select p.observacoes into v_obs from public.aplicacao_posicoes p
+   where p.aplicacao_id = v_apl and p.data = v_dia and p.excluido_em is null;
+  if v_obs <> E'[Fora do CDI] segundo motivo\nextrato' then raise exception 'FALHOU 8: observacoes %', v_obs; end if;
+  perform public.fn_salvar_posicao_aplicacao(v_apl, v_dia, v_ant + round(v_esp, 2), p_observacoes => v_obs);
+  select p.observacoes into v_obs from public.aplicacao_posicoes p
+   where p.aplicacao_id = v_apl and p.data = v_dia and p.excluido_em is null;
+  if v_obs <> 'extrato' then raise exception 'FALHOU 9: observacoes %', v_obs; end if;
+
+  -- 10. Mensagem em reais no formato brasileiro.
+  v_msg := 'FALHOU 10: salvou';
+  begin
+    perform public.fn_salvar_posicao_aplicacao(v_apl, v_dia, v_ant - 1000);
+  exception when others then v_msg := sqlerrm;
+  end;
+  if v_msg not like '%R$ -1.000,00%' and v_msg not like '%R$ 1.000,00%' then raise exception 'FALHOU 10: %', v_msg; end if;
+
   raise exception 'PROVA OK';
 end
 $prova$;

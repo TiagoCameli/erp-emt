@@ -182,6 +182,7 @@ describe("ehResgateAutomatico", () => {
       "RESGATE AUTOMÁTICO FUNDO",
       "Resgate Auto CDB",
       "  resgate\tautomático  ",
+      "RESGATEAUTOMATICO",
     ]) {
       expect(ehResgateAutomatico({ tipo: "resgate", descricao })).toBe(true);
     }
@@ -197,5 +198,7 @@ describe("ehResgateAutomatico", () => {
   it("sem descrição ou com outro texto, não é", () => {
     expect(ehResgateAutomatico({ tipo: "resgate", descricao: null })).toBe(false);
     expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate manual" })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate autorizado pelo gerente" })).toBe(false);
+    expect(ehResgateAutomatico({ tipo: "resgate", descricao: "Resgate automóvel consórcio" })).toBe(false);
   });
 });
