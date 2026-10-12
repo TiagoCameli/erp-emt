@@ -475,6 +475,19 @@ export const RECURSOS = [
     rota: "/financeiro/aplicacoes",
     acoes: ["ver", "editar"],
   },
+  /**
+   * Contratos de dívida (cronograma Price/SAC/do banco e eventos) e cotas de
+   * consórcio (cronograma e contemplação). "editar" cadastra, troca o
+   * cronograma, registra evento e contempla. O dinheiro das parcelas continua
+   * no lançamento, com a permissão de Lançamentos.
+   */
+  {
+    id: "financeiro.dividas",
+    nome: "Dívidas",
+    modulo: "financeiro",
+    rota: "/financeiro/dividas",
+    acoes: ["ver", "editar"],
+  },
   {
     id: "financeiro.conciliacao",
     nome: "Conciliação",

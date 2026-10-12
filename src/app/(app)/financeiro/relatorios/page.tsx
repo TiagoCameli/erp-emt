@@ -95,6 +95,14 @@ import {
   CreditosPorMesTabela,
   CreditosTabela,
 } from "@/modules/financeiro/relatorios/components/creditos-tabela";
+import {
+  ConsorciosCreditosTabela,
+  DividasContratosTabela,
+} from "@/modules/financeiro/relatorios/components/dividas-creditos-tabela";
+import {
+  relatorioConsorcios,
+  relatorioContratos,
+} from "@/modules/financeiro/dividas/queries";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
@@ -675,15 +683,20 @@ async function ConteudoPosicaoBancaria({
 async function ConteudoCreditos({
   situacao,
   podeVerLancamentos,
+  podeVerDividas,
 }: {
   situacao: FiltrosCreditos["situacao"];
   podeVerLancamentos: boolean;
+  podeVerDividas: boolean;
 }) {
-  // As duas leituras em paralelo: são independentes, e uma esperar a outra
-  // dobraria o tempo da aba sem motivo.
-  const [todos, contratos] = await Promise.all([
+  // As leituras em paralelo: são independentes, e uma esperar a outra
+  // dobraria o tempo da aba sem motivo. Contratos de dívida e cotas vêm do
+  // cronograma de Financeiro > Dívidas, pela data de hoje.
+  const [todos, contratos, dividas, cotas] = await Promise.all([
     creditos(),
     emprestimosPorContrato(),
+    relatorioContratos(),
+    relatorioConsorcios(),
   ]);
 
   // O filtro recorta a lista E os totais. Somar a carteira inteira embaixo de
@@ -691,7 +704,12 @@ async function ConteudoCreditos({
   // se explicam — a regra do módulo é o cartão acompanhar o filtro da tabela.
   const dados = recortarCreditosPorSituacao(todos, situacao);
 
-  if (todos.contratos.length === 0 && contratos.contratos.length === 0) {
+  if (
+    todos.contratos.length === 0 &&
+    contratos.contratos.length === 0 &&
+    dividas.length === 0 &&
+    cotas.length === 0
+  ) {
     return (
       <EmptyState
         icone={BarChart3}
@@ -738,6 +756,40 @@ async function ConteudoCreditos({
           equipamento, que ficaram no centro do bem), e esta é só o dinheiro
           emprestado. */}
       <GradeKpis id="financeiro.relatorios.creditos.tabela" titulo="Tabelas de créditos" vao="amplo">
+        {/* Pelo cronograma (Financeiro > Dívidas, PR 5 de 12/10/2026): o saldo
+            devedor aqui é de PRINCIPAL, e os juros saem separados, que é o que
+            as tabelas por prestação abaixo não conseguem dizer. CET pelo fluxo
+            de liberação e parcelas (calculado em `dividas/calculo.ts`). */}
+        {dividas.length > 0 ? (
+          <ItemGrade titulo="Contratos" idCard="dividas-contratos" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-corpo font-medium text-foreground">Contratos</h3>
+                <p className="text-legenda text-muted-foreground">
+                  Pelo cronograma de cada contrato em Financeiro &gt; Dívidas. Parcela
+                  paga é a do lançamento com o mesmo número; saldo devedor é o
+                  principal ainda não pago (parcela atrasada continua devida). A seta
+                  abre as próximas 12 parcelas.
+                </p>
+              </div>
+              <DividasContratosTabela contratos={dividas} podeVerDividas={podeVerDividas} />
+            </div>
+          </ItemGrade>
+        ) : null}
+        {cotas.length > 0 ? (
+          <ItemGrade titulo="Consórcios" idCard="dividas-consorcios" larguraPadrao={12}>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-corpo font-medium text-foreground">Consórcios</h3>
+                <p className="text-legenda text-muted-foreground">
+                  Fundo comum e taxa (administração e fundo de reserva) pagos e o que
+                  falta. Depois da contemplação, o que falta pagar é dívida.
+                </p>
+              </div>
+              <ConsorciosCreditosTabela cotas={cotas} podeVerDividas={podeVerDividas} />
+            </div>
+          </ItemGrade>
+        ) : null}
         {contratos.contratos.length > 0 ? (
           <ItemGrade titulo="Contratos do centro de Empréstimos" idCard="contratos" larguraPadrao={12}>
             <div className="flex flex-col gap-3">
@@ -1738,6 +1790,7 @@ export default async function RelatoriosPage({
           <ConteudoCreditos
             situacao={filtrosCreditos.situacao}
             podeVerLancamentos={podeVerLancamentos}
+            podeVerDividas={temPermissao(usuario, "financeiro.dividas", "ver")}
           />
         </SecaoRelatorio>
       ) : null}

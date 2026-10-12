@@ -44,6 +44,9 @@ const RECURSO_POR_ENTIDADE = {
   mc_lancamento: "medicao.lancamentos",
   // Relatório de reajuste (PDF do SIAC). O banco também exige estar na lista do contrato.
   mc_reajuste: "medicao.reajuste",
+  // PDF do contrato de dívida e da cota de consórcio (Financeiro > Dívidas).
+  contrato_divida: "financeiro.dividas",
+  consorcio_cota: "financeiro.dividas",
 } as const satisfies Record<string, RecursoId>;
 
 /** Tipo de documento que aceita anexo. */
@@ -92,6 +95,8 @@ const ROTULO_ENTIDADE: Record<EntidadeAnexo, string> = {
   mc_planilha_versao: "planilha contratual",
   mc_lancamento: "lançamento da medição",
   mc_reajuste: "relatório de reajuste",
+  contrato_divida: "contrato de dívida",
+  consorcio_cota: "cota de consórcio",
 };
 
 export function rotuloDaEntidade(entidade: EntidadeAnexo): string {

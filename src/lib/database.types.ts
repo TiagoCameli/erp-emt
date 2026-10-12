@@ -2128,6 +2128,141 @@ export type Database = {
           },
         ];
       };
+      consorcio_cota_cronograma: {
+        Row: {
+          cota_id: string;
+          fundo_comum: number;
+          fundo_reserva: number;
+          id: string;
+          numero: number;
+          taxa_adm: number;
+          vencimento: string;
+        };
+        Insert: {
+          cota_id: string;
+          fundo_comum: number;
+          fundo_reserva?: number;
+          id?: string;
+          numero: number;
+          taxa_adm?: number;
+          vencimento: string;
+        };
+        Update: {
+          cota_id?: string;
+          fundo_comum?: number;
+          fundo_reserva?: number;
+          id?: string;
+          numero?: number;
+          taxa_adm?: number;
+          vencimento?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_cota_cronograma_cota_id_fkey";
+            columns: ["cota_id"];
+            isOneToOne: false;
+            referencedRelation: "consorcio_cotas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      consorcio_cotas: {
+        Row: {
+          administradora: string;
+          bem: string;
+          bem_centro_id: string | null;
+          centro_custo_id: string | null;
+          contemplacao_data: string | null;
+          contemplacao_forma: string | null;
+          cota: string;
+          created_at: string;
+          created_by: string | null;
+          fundo_reserva_pct: number;
+          grupo: string;
+          id: string;
+          lancamento_id: string | null;
+          observacoes: string | null;
+          prazo: number;
+          primeiro_vencimento: string;
+          status: string;
+          taxa_adm_pct: number;
+          updated_at: string;
+          valor_carta: number | null;
+          valor_credito: number;
+          valor_lance: number | null;
+        };
+        Insert: {
+          administradora: string;
+          bem: string;
+          bem_centro_id?: string | null;
+          centro_custo_id?: string | null;
+          contemplacao_data?: string | null;
+          contemplacao_forma?: string | null;
+          cota: string;
+          created_at?: string;
+          created_by?: string | null;
+          fundo_reserva_pct?: number;
+          grupo: string;
+          id?: string;
+          lancamento_id?: string | null;
+          observacoes?: string | null;
+          prazo: number;
+          primeiro_vencimento: string;
+          status?: string;
+          taxa_adm_pct: number;
+          updated_at?: string;
+          valor_carta?: number | null;
+          valor_credito: number;
+          valor_lance?: number | null;
+        };
+        Update: {
+          administradora?: string;
+          bem?: string;
+          bem_centro_id?: string | null;
+          centro_custo_id?: string | null;
+          contemplacao_data?: string | null;
+          contemplacao_forma?: string | null;
+          cota?: string;
+          created_at?: string;
+          created_by?: string | null;
+          fundo_reserva_pct?: number;
+          grupo?: string;
+          id?: string;
+          lancamento_id?: string | null;
+          observacoes?: string | null;
+          prazo?: number;
+          primeiro_vencimento?: string;
+          status?: string;
+          taxa_adm_pct?: number;
+          updated_at?: string;
+          valor_carta?: number | null;
+          valor_credito?: number;
+          valor_lance?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "consorcio_cotas_bem_centro_id_fkey";
+            columns: ["bem_centro_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consorcio_cotas_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "consorcio_cotas_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       contas_bancarias: {
         Row: {
           agencia: string | null;
@@ -2180,6 +2315,203 @@ export type Database = {
             columns: ["conta_pai_id"];
             isOneToOne: false;
             referencedRelation: "contas_bancarias";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      contrato_divida_cronograma: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          encargos: number;
+          id: string;
+          juros: number;
+          numero: number | null;
+          principal: number;
+          saldo_apos: number;
+          substituida_em: string | null;
+          tipo: string;
+          vencimento: string;
+          versao: number;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          encargos?: number;
+          id?: string;
+          juros?: number;
+          numero?: number | null;
+          principal: number;
+          saldo_apos: number;
+          substituida_em?: string | null;
+          tipo?: string;
+          vencimento: string;
+          versao: number;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          encargos?: number;
+          id?: string;
+          juros?: number;
+          numero?: number | null;
+          principal?: number;
+          saldo_apos?: number;
+          substituida_em?: string | null;
+          tipo?: string;
+          vencimento?: string;
+          versao?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contrato_divida_cronograma_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "contratos_divida";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      contrato_divida_eventos: {
+        Row: {
+          contrato_id: string;
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          id: string;
+          motivo: string;
+          tipo: string;
+          valor: number | null;
+          versao_anterior: number | null;
+          versao_nova: number;
+        };
+        Insert: {
+          contrato_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          id?: string;
+          motivo: string;
+          tipo: string;
+          valor?: number | null;
+          versao_anterior?: number | null;
+          versao_nova: number;
+        };
+        Update: {
+          contrato_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          id?: string;
+          motivo?: string;
+          tipo?: string;
+          valor?: number | null;
+          versao_anterior?: number | null;
+          versao_nova?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contrato_divida_eventos_contrato_id_fkey";
+            columns: ["contrato_id"];
+            isOneToOne: false;
+            referencedRelation: "contratos_divida";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      contratos_divida: {
+        Row: {
+          carencia_meses: number;
+          centro_custo_id: string;
+          created_at: string;
+          created_by: string | null;
+          credor: string;
+          data_liberacao: string;
+          garantia: string | null;
+          id: string;
+          indexador: string;
+          lancamento_id: string | null;
+          lancamento_liberacao_id: string | null;
+          numero: string;
+          observacoes: string | null;
+          parcelas: number;
+          primeiro_vencimento: string;
+          sistema: string;
+          status: string;
+          taxa_am: number;
+          tipo: string;
+          updated_at: string;
+          valor_contratado: number;
+          valor_liberado: number;
+        };
+        Insert: {
+          carencia_meses?: number;
+          centro_custo_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          credor: string;
+          data_liberacao: string;
+          garantia?: string | null;
+          id?: string;
+          indexador?: string;
+          lancamento_id?: string | null;
+          lancamento_liberacao_id?: string | null;
+          numero: string;
+          observacoes?: string | null;
+          parcelas: number;
+          primeiro_vencimento: string;
+          sistema: string;
+          status?: string;
+          taxa_am: number;
+          tipo: string;
+          updated_at?: string;
+          valor_contratado: number;
+          valor_liberado: number;
+        };
+        Update: {
+          carencia_meses?: number;
+          centro_custo_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          credor?: string;
+          data_liberacao?: string;
+          garantia?: string | null;
+          id?: string;
+          indexador?: string;
+          lancamento_id?: string | null;
+          lancamento_liberacao_id?: string | null;
+          numero?: string;
+          observacoes?: string | null;
+          parcelas?: number;
+          primeiro_vencimento?: string;
+          sistema?: string;
+          status?: string;
+          taxa_am?: number;
+          tipo?: string;
+          updated_at?: string;
+          valor_contratado?: number;
+          valor_liberado?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "contratos_divida_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "contratos_divida_lancamento_id_fkey";
+            columns: ["lancamento_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "contratos_divida_lancamento_liberacao_id_fkey";
+            columns: ["lancamento_liberacao_id"];
+            isOneToOne: false;
+            referencedRelation: "lancamentos";
             referencedColumns: ["id"];
           },
         ];
@@ -12282,6 +12614,78 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_contemplar_consorcio: {
+        Args: {
+          p_bem_centro_id?: string;
+          p_cota: string;
+          p_data: string;
+          p_forma: string;
+          p_motivo?: string;
+          p_valor_carta: number;
+          p_valor_lance?: number;
+        };
+        Returns: undefined;
+      };
+      fn_gerar_cronograma_contrato: {
+        Args: { p_contrato: string; p_motivo?: string };
+        Returns: number;
+      };
+      fn_registrar_evento_contrato: {
+        Args: {
+          p_contrato: string;
+          p_data: string;
+          p_linhas?: Json;
+          p_motivo: string;
+          p_tipo: string;
+          p_valor: number | null;
+        };
+        Returns: number;
+      };
+      fn_rel_consorcios: {
+        Args: { p_data: string };
+        Returns: {
+          a_pagar: number;
+          administradora: string;
+          bem: string;
+          contemplacao_data: string | null;
+          contemplacao_forma: string | null;
+          cota: string;
+          cota_id: string;
+          divida: number;
+          fundo_comum_pago: number;
+          grupo: string;
+          parcelas_pagas: number;
+          prazo: number;
+          proximas: Json;
+          status: string;
+          taxa_paga: number;
+          valor_carta: number | null;
+          valor_credito: number;
+        }[];
+      };
+      fn_rel_dividas_contratos: {
+        Args: { p_data: string };
+        Returns: {
+          centro: string | null;
+          centro_custo_id: string;
+          contrato_id: string;
+          credor: string;
+          data_liberacao: string;
+          fluxo: Json;
+          juros_a_pagar: number;
+          juros_pagos: number;
+          numero: string;
+          principal_pago: number;
+          proximas: Json;
+          saldo_devedor: number;
+          sistema: string;
+          status: string;
+          taxa_am: number;
+          tem_cronograma: boolean;
+          tipo: string;
+          valor_liberado: number;
+        }[];
+      };
       fn_rel_dre: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
@@ -12568,6 +12972,22 @@ export type Database = {
       fn_salvar_parcelas_oc: {
         Args: { p_formas?: Json; p_oc_id: string; p_parcelas: Json };
         Returns: undefined;
+      };
+      fn_salvar_consorcio_cota: {
+        Args: { p_dados: Json; p_id: string | null };
+        Returns: string;
+      };
+      fn_salvar_contrato_divida: {
+        Args: { p_dados: Json; p_id: string | null };
+        Returns: string;
+      };
+      fn_salvar_cronograma_consorcio: {
+        Args: { p_cota: string; p_linhas: Json };
+        Returns: undefined;
+      };
+      fn_salvar_cronograma_contrato: {
+        Args: { p_contrato: string; p_linhas: Json; p_motivo?: string };
+        Returns: number;
       };
       fn_salvar_posicao_aplicacao: {
         Args: {
