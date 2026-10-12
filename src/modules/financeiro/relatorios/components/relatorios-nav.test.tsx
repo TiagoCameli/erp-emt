@@ -78,6 +78,14 @@ describe("RelatoriosNav em Relatórios", () => {
 
     expect(navegador.replace).toEqual([`${RELATORIOS}?rel=aging`]);
   });
+
+  it("Equipamentos e consórcios abre rel=aquisicoes", () => {
+    render(<RelatoriosNav ativo="dre" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Equipamentos e consórcios/ }));
+
+    expect(navegador.replace).toEqual([`${RELATORIOS}?rel=aquisicoes`]);
+  });
 });
 
 describe("RelatoriosNav em Aplicações", () => {

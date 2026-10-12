@@ -50,6 +50,7 @@ import {
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
+import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
 import {
   janelasContiguas,
@@ -1503,6 +1504,37 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
     enviado: Number(l.enviado),
     devolvido: Number(l.devolvido),
     saldo: Number(l.saldo),
+  }));
+}
+
+
+// =====================================================================
+// Equipamentos e consórcios (12/10/2026)
+// =====================================================================
+
+/** Bens comprados (por centro) e cotas de consórcio (por lançamento). */
+export async function aquisicoes(): Promise<AquisicaoLinha[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_aquisicoes");
+  if (error) {
+    throw new Error("Não foi possível carregar o relatório de equipamentos e consórcios");
+  }
+  return (data ?? []).map((l) => ({
+    tipo: l.tipo === "consorcio" ? "consorcio" : "equipamento",
+    grupo: l.grupo,
+    centroId: l.centro_id,
+    centro: l.centro,
+    lancamentoId: l.lancamento_id ?? null,
+    numero: l.numero ?? null,
+    descricao: l.descricao ?? null,
+    fornecedor: l.fornecedor ?? null,
+    primeiraCompetencia: l.primeira_competencia ?? null,
+    lancamentos: Number(l.lancamentos),
+    parcelas: l.parcelas === null ? null : Number(l.parcelas),
+    parcelasPagas: l.parcelas_pagas === null ? null : Number(l.parcelas_pagas),
+    valor: Number(l.valor),
+    pago: Number(l.pago),
+    aPagar: Number(l.a_pagar),
   }));
 }
 

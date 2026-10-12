@@ -21,6 +21,11 @@ describe("normalizarRelatorio", () => {
     expect(normalizarRelatorio(undefined)).toBe(RELATORIO_PADRAO);
   });
 
+  it("Equipamentos e consórcios é um relatório da navegação", () => {
+    expect(RELATORIOS).toContain("aquisicoes");
+    expect(normalizarRelatorio("aquisicoes")).toBe("aquisicoes");
+  });
+
   it("o padrão é um relatório que existe", () => {
     expect(RELATORIOS).toContain(RELATORIO_PADRAO);
   });

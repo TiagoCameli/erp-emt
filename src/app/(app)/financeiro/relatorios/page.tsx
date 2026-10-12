@@ -106,6 +106,7 @@ import {
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
+import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
 import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
 import Link from "next/link";
 import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
@@ -133,6 +134,7 @@ import {
   creditos,
   investimentos,
   sociosLigadas,
+  aquisicoes,
   rateioIndiretoDoMes,
   indiretoDoPeriodo,
   indiretoDosMeses,
@@ -893,6 +895,11 @@ async function ConteudoSociosLigadas() {
     );
   }
   return <SociosLigadasTabela ano={ano} doAno={doAno} acumulado={acumulado} />;
+}
+
+async function ConteudoAquisicoes({ podeVerLancamentos }: { podeVerLancamentos: boolean }) {
+  // O estado vazio mora na tabela, junto das duas seções.
+  return <AquisicoesTabela linhas={await aquisicoes()} podeVerLancamentos={podeVerLancamentos} />;
 }
 
 async function ConteudoInvestimentos({
@@ -1814,6 +1821,15 @@ export default async function RelatoriosPage({
           descricao="O que foi para os sócios (James e Tiago) e para as empresas ligadas (Amazônia, Juruá FM). Distribuição a sócio e mútuo ficam fora do resultado e do custo das obras; aqui está quanto saiu, quanto voltou e o saldo."
         >
           <ConteudoSociosLigadas />
+        </SecaoRelatorio>
+      ) : null}
+
+      {relatorio === "aquisicoes" ? (
+        <SecaoRelatorio
+          titulo="Equipamentos e consórcios"
+          descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada."
+        >
+          <ConteudoAquisicoes podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 

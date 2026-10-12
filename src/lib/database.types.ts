@@ -12460,6 +12460,26 @@ export type Database = {
         Args: { p_mes: string; p_motivo: string };
         Returns: undefined;
       };
+      fn_rel_aquisicoes: {
+        Args: never;
+        Returns: {
+          a_pagar: number;
+          centro: string;
+          centro_id: string;
+          descricao: string | null;
+          fornecedor: string | null;
+          grupo: string;
+          lancamento_id: string | null;
+          lancamentos: number;
+          numero: string | null;
+          pago: number;
+          parcelas: number | null;
+          parcelas_pagas: number | null;
+          primeira_competencia: string | null;
+          tipo: string;
+          valor: number;
+        }[];
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
