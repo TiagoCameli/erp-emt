@@ -202,7 +202,7 @@ export function RevisoesMedicao({ revisoes, congelados, rotulos }: RevisoesMedic
                 <Combobox id="comparar-para" ariaLabel="Com" valor={paraId} onValorChange={(v) => setSelecao({ chave, de: deId, para: v })} opcoes={opcoesPara} placeholder="Revisão" />
               </div>
             </div>
-            <DataTable columns={colunas} data={linhas} idDaLinha={(l) => l.itemId} />
+            <DataTable idTabela="medicao.medicoes.revisoes.itens" columns={colunas} data={linhas} idDaLinha={(l) => l.itemId} />
           </>
         )}
       </div>

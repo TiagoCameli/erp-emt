@@ -109,6 +109,7 @@ export function FeriadosTabela({ feriados, anoAtual, podeCriar, podeEditar, pode
         um cronograma só, use uma exceção no calendário dele com as horas do dia.
       </p>
       <DataTable<Feriado>
+        idTabela="execucao.modelos.feriados"
         columns={colunas}
         data={doAno}
         idDaLinha={(f) => f.id}

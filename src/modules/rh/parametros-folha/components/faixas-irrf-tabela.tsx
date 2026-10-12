@@ -122,9 +122,8 @@ export function FaixasIrrfTabela({
 
   return (
     <>
-      {/* Sem `idTabela` de propósito: ver a nota em faixas-inss-tabela. Três
-          colunas fixas não justificam a barra de personalização. */}
       <DataTable
+        idTabela="rh.parametros-folha.faixas-irrf"
         columns={colunas}
         data={faixas}
         emptyState={

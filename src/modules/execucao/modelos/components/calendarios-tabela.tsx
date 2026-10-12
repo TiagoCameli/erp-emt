@@ -97,6 +97,7 @@ export function CalendariosTabela({ calendarios, excecoesPorCalendario, podeCria
         Cada cronograma tem o próprio calendário, criado a partir de um destes. Mudar um modelo recalcula as datas de todos os cronogramas que vêm dele.
       </p>
       <DataTable<Calendario>
+        idTabela="execucao.modelos.calendarios"
         columns={colunas}
         data={calendarios}
         idDaLinha={(c) => c.id}
