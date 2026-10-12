@@ -1,7 +1,7 @@
 -- Prova: o mes de referencia muda mesmo com pagamento aprovado ou pago.
 --
 -- Rodar SEMPRE dentro de begin/rollback (nada fica gravado):
---   begin; <migration 20261012150000>; <esta prova>; rollback;   -> GREEN
+--   begin; <migration 20261012160646>; <esta prova>; rollback;   -> GREEN
 --   begin; <esta prova>; rollback;                               -> RED (antes)
 --
 -- Usa lancamentos reais de OC, em meses abertos:
