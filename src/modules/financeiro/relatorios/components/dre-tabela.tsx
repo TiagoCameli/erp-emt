@@ -25,6 +25,18 @@ import type { BlocoDre, DreGerencial, DreLinha } from "../queries";
 /** A tela de Créditos, para onde a nota do rodapé manda quem procura os juros. */
 const ROTA_CREDITOS = "/financeiro/relatorios?rel=creditos";
 
+/**
+ * Categorias que o `fn_rel_dre` soma também pelo CRONOGRAMA dos contratos e
+ * das cotas (PR 5, 12/10/2026), no mês do vencimento. Essa parte não é
+ * lançamento: o clique abre só o que foi lançado nela, e sem a nota a lista
+ * parece não fechar com a linha.
+ */
+export const CATEGORIAS_DO_CRONOGRAMA = new Set([
+  "Juros de empréstimos",
+  "Taxa de administração de consórcio",
+]);
+export const NOTA_CRONOGRAMA = "Parte vem do cronograma dos contratos e consórcios (Financeiro > Dívidas)";
+
 interface DreTabelaProps {
   dre: DreGerencial;
   /**
@@ -99,6 +111,9 @@ function SecaoDre({
               ) : (
                 linha.categoria
               )}
+              {CATEGORIAS_DO_CRONOGRAMA.has(linha.categoria) ? (
+                <span className="block text-legenda text-muted-foreground">{NOTA_CRONOGRAMA}</span>
+              ) : null}
             </TableCell>
             <TableCell className="py-2 text-right">
               <MoneyText valor={linha.valor} className="text-detalhe" />
@@ -445,13 +460,16 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
           </TableBody>
         </Table>
       </div>
-      {/* Nota FIXA, e não condicional ao período ter prestação: a ausência dos
-          juros embutidos é regra do DRE (decisão D2, 03/10/2026), não um
-          acidente do mês. Quem lê o resultado precisa saber, toda vez, onde
-          está o custo do dinheiro emprestado. */}
+      {/* Nota FIXA, e não condicional ao período ter prestação: a prestação
+          inteira fora do resultado é regra do DRE (decisão D2, 03/10/2026), não
+          um acidente do mês. Desde o PR 5 (12/10/2026) os juros dos contratos
+          com cronograma voltam ao resultado pelo vencimento; quem lê precisa
+          saber, toda vez, onde está o resto do custo do dinheiro emprestado. */}
       <p className="text-legenda text-muted-foreground">
-        Prestações de empréstimo (principal e juros) não entram no resultado;
-        veja{" "}
+        Prestações de empréstimo não entram no resultado; os juros dos contratos
+        ligados ao lançamento das prestações em Financeiro &gt; Dívidas entram em
+        Juros de empréstimos no mês do vencimento (e saem de Pagamento de
+        Empréstimo, que pode ficar negativo no mês). Saldo devedor e CET em{" "}
         <Link
           href={ROTA_CREDITOS}
           className="foco-anel rounded-sm font-medium text-foreground underline underline-offset-2"
