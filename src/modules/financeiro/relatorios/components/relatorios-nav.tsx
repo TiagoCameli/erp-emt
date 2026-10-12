@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarClock,
   Split,
+  Tractor,
   HandCoins,
   Landmark,
   LineChart,
@@ -52,6 +53,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
     "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
     "socios-ligadas": { rotulo: "Sócios e ligadas", icone: HandCoins },
+    aquisicoes: { rotulo: "Equipamentos e consórcios", icone: Tractor },
     "rateio-indireto": { rotulo: "Rateio do indireto", icone: Split },
   };
 

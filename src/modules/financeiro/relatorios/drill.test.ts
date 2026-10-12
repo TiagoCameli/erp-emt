@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  detalheLancamento,
   drillAging,
+  drillAquisicao,
   drillCategoriaCompetencia,
   drillCentroCusto,
   drillCustoReceita,
@@ -681,5 +683,19 @@ describe("corte de resultado nos drills", () => {
     expect(p.sem_movimentacao).toBeUndefined();
     expect(p.sem_investimento).toBeUndefined();
     expect(p.natureza).toBeUndefined();
+  });
+});
+
+describe("drillAquisicao", () => {
+  it("abre o centro do bem com os implícitos da função (a pagar, sem cancelado)", () => {
+    expect(params(drillAquisicao({ centroId: CENTRO }))).toEqual({
+      tipo: "a_pagar",
+      sem_cancelado: "1",
+      centro: CENTRO,
+    });
+  });
+
+  it("o detalhe do lançamento é a rota do id", () => {
+    expect(detalheLancamento(CENTRO)).toBe(`${ROTA_LANCAMENTOS}/${CENTRO}`);
   });
 });

@@ -408,3 +408,24 @@ export function drillContaBancaria({
     recorte: escreverRecorte({ tipo: "conta_paga" }),
   });
 }
+
+/**
+ * Equipamentos e consórcios: o nome do bem abre os lançamentos do centro dele.
+ *
+ * Leva os implícitos de `fn_rel_aquisicoes` (`tipo = 'a_pagar'`,
+ * `status <> 'cancelado'`). No centro de imobilizado a lista fecha com a linha;
+ * no centro de obra (as carretas da 001) a função só conta a categoria
+ * Aquisição de Equipamento, e a lista mostra também o resto do centro.
+ */
+export function drillAquisicao({ centroId }: { centroId: string }): string {
+  return montar({
+    tipo: IMPLICITOS_CUSTO.tipo,
+    sem_cancelado: IMPLICITOS_CUSTO.sem_cancelado,
+    centro: centroId,
+  });
+}
+
+/** O detalhe de um lançamento (a cota de consórcio). */
+export function detalheLancamento(lancamentoId: string): string {
+  return `${ROTA_LANCAMENTOS}/${lancamentoId}`;
+}

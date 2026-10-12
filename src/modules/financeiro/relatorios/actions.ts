@@ -367,6 +367,7 @@ async function abaDoRelatorio(
     }
 
     case "socios-ligadas":
+    case "aquisicoes":
     case "rateio-indireto":
       // Sem botão de exportar na tela (a tabela é curta: um centro por sócio e
       // por empresa ligada). Volta a ter caso próprio se a planilha for pedida.
