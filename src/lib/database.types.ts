@@ -12480,6 +12480,19 @@ export type Database = {
           valor: number;
         }[];
       };
+      fn_rel_custos_indiretos: {
+        Args: { p_ano: number };
+        Returns: {
+          categoria: string;
+          categoria_id: string | null;
+          centro: string;
+          centro_id: string;
+          mes: string;
+          raiz: string;
+          raiz_id: string;
+          total: number;
+        }[];
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {

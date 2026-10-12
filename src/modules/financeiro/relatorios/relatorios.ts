@@ -29,6 +29,7 @@ export type RelatorioId =
   | "extrato-fornecedor"
   | "socios-ligadas"
   | "aquisicoes"
+  | "custos-indiretos"
   | "rateio-indireto";
 
 /** Ordem dos relatórios na navegação. */
@@ -45,6 +46,7 @@ export const RELATORIOS: readonly RelatorioId[] = [
   "extrato-fornecedor",
   "socios-ligadas",
   "aquisicoes",
+  "custos-indiretos",
   "rateio-indireto",
 ];
 

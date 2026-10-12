@@ -86,6 +86,14 @@ describe("RelatoriosNav em Relatórios", () => {
 
     expect(navegador.replace).toEqual([`${RELATORIOS}?rel=aquisicoes`]);
   });
+
+  it("Custos indiretos abre rel=custos-indiretos", () => {
+    render(<RelatoriosNav ativo="dre" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Custos indiretos/ }));
+
+    expect(navegador.replace).toEqual([`${RELATORIOS}?rel=custos-indiretos`]);
+  });
 });
 
 describe("RelatoriosNav em Aplicações", () => {

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Layers,
   Banknote,
+  Briefcase,
   Building2,
   CalendarClock,
   Split,
@@ -54,6 +55,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
     "socios-ligadas": { rotulo: "Sócios e ligadas", icone: HandCoins },
     aquisicoes: { rotulo: "Equipamentos e consórcios", icone: Tractor },
+    "custos-indiretos": { rotulo: "Custos indiretos", icone: Briefcase },
     "rateio-indireto": { rotulo: "Rateio do indireto", icone: Split },
   };
 
