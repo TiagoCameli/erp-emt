@@ -55,7 +55,10 @@ import {
   pontasDaRpc,
   type ModoPeriodo,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
-import { centrosEfetivos } from "@/modules/_shared/centro-custo/filtro";
+import {
+  cadastroComMovimento,
+  centrosEfetivos,
+} from "@/modules/_shared/centro-custo/filtro";
 import {
   aplicarIndireto,
   ID_NAO_RATEADO,
@@ -145,6 +148,7 @@ import {
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
+  centrosComMovimentoNoCustoReceita,
   listarCentrosCustoParaFiltro,
   listarFornecedoresComLancamentos,
   mesCorrente,
@@ -1695,6 +1699,32 @@ export default async function RelatoriosPage({
   const { filtros: filtrosCustoReceita, mesesEfetivos: mesesCustoReceita } =
     lerFiltrosCustoReceita(params, mesesDisponiveis);
 
+  /**
+   * Custo x receita: cada seletor de centro oferece só quem mexe no lado dele.
+   * O cadastro inteiro continua indo para `centrosEfetivos`; só as opções da
+   * barra encolhem. Ver `cadastroComMovimento`.
+   */
+  const cadastrosCustoReceita = centrosParaCustoReceita
+    ? await centrosComMovimentoNoCustoReceita({
+        meses: mesesDisponiveis,
+        centros: centrosParaCustoReceita,
+        incluirInvestimento: filtrosCustoReceita.incluirInvestimento,
+      }).then((movimento) => ({
+        custo: cadastroComMovimento(centrosParaCustoReceita, movimento.custo, [
+          ...filtrosCustoReceita.centrosCusto,
+          ...filtrosCustoReceita.etapasCusto,
+        ]),
+        receita: cadastroComMovimento(
+          centrosParaCustoReceita,
+          movimento.receita,
+          [
+            ...filtrosCustoReceita.centrosReceita,
+            ...filtrosCustoReceita.etapasReceita,
+          ],
+        ),
+      }))
+    : null;
+
   return (
     <div className="flex flex-col gap-6">
       {/* A lista dos relatórios saiu do subtítulo de propósito: ela já tinha
@@ -1921,7 +1951,10 @@ export default async function RelatoriosPage({
         >
           <FiltrosCustoReceitaBarra
             filtros={filtrosCustoReceita}
-            centrosCusto={centrosParaCustoReceita}
+            centrosCusto={cadastrosCustoReceita?.custo ?? centrosParaCustoReceita}
+            centrosReceita={
+              cadastrosCustoReceita?.receita ?? centrosParaCustoReceita
+            }
           />
           <ConteudoCustoReceita
             centrosCusto={centrosEfetivos(

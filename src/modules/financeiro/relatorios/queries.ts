@@ -857,6 +857,43 @@ export async function custoReceita({
   }));
 }
 
+/**
+ * Quem tem custo e quem tem receita no Custo x receita, em qualquer mês.
+ *
+ * É a MESMA RPC do relatório, com todos os meses e todos os centros do filtro
+ * escolhidos: como ela agrupa pelo escolhido mais fundo, cada etapa volta com a
+ * própria linha e a raiz só com o que caiu nela direto. Assim o filtro esconde
+ * exatamente o que o relatório desenharia como R$ 0,00 — inclusive a regra de
+ * natureza e o checkbox de investimento, que mudam o lado do custo.
+ */
+export async function centrosComMovimentoNoCustoReceita({
+  meses,
+  centros,
+  incluirInvestimento,
+}: {
+  meses: readonly string[];
+  centros: readonly { id: string }[];
+  incluirInvestimento: boolean;
+}): Promise<{ custo: Set<string>; receita: Set<string> }> {
+  const ids = centros.map((centro) => centro.id);
+  const linhas =
+    ids.length === 0
+      ? []
+      : await custoReceita({
+          meses,
+          centrosCusto: ids,
+          centrosReceita: ids,
+          incluirInvestimento,
+        });
+  const custo = new Set<string>();
+  const receita = new Set<string>();
+  for (const linha of linhas) {
+    if (linha.total === 0) continue;
+    (linha.tipo === "a_pagar" ? custo : receita).add(linha.centroCustoId);
+  }
+  return { custo, receita };
+}
+
 // =====================================================================
 // 6. Extrato por fornecedor
 // =====================================================================

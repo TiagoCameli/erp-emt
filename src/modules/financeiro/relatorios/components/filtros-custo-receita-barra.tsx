@@ -28,6 +28,12 @@ export interface FiltrosCustoReceitaBarraProps {
   filtros: FiltrosCustoReceita;
   /** Raízes e etapas, numa lista só. Ver `listarCentrosCustoParaFiltro`. */
   centrosCusto: CentroCustoOpcao[];
+  /**
+   * O cadastro do lado da receita, quando ele difere do custo: a página passa só
+   * os centros com receita, e o do custo só os com custo
+   * (ver `cadastroComMovimento`). Sem ele, os dois lados usam `centrosCusto`.
+   */
+  centrosReceita?: CentroCustoOpcao[];
 }
 
 /**
@@ -55,6 +61,7 @@ export interface FiltrosCustoReceitaBarraProps {
 export function FiltrosCustoReceitaBarra({
   filtros,
   centrosCusto,
+  centrosReceita = centrosCusto,
 }: FiltrosCustoReceitaBarraProps) {
   // `naoSaoFiltro` preserva o `rel` no "Limpar filtros": ele diz qual relatório
   // está aberto, e apagá-lo devolvia a pessoa ao Fluxo de caixa.
@@ -62,7 +69,8 @@ export function FiltrosCustoReceitaBarra({
     naoSaoFiltro: PARAMS_DE_NAVEGACAO,
   });
 
-  const opcoesCentro = opcoesDeRaiz(centrosCusto);
+  const opcoesCentroCusto = opcoesDeRaiz(centrosCusto);
+  const opcoesCentroReceita = opcoesDeRaiz(centrosReceita);
 
   /**
    * Troca as raízes de um lado e, na MESMA navegação, apaga as etapas que
@@ -74,6 +82,7 @@ export function FiltrosCustoReceitaBarra({
    * modo do relatório de custo por centro já segue.
    */
   function trocarRaizes(
+    cadastro: readonly CentroCustoOpcao[],
     chaveCentro: string,
     chaveEtapa: string,
     etapasAtuais: string[],
@@ -82,14 +91,14 @@ export function FiltrosCustoReceitaBarra({
     setMuitos({
       [chaveCentro]: escreverListaNaUrl(ids),
       [chaveEtapa]: escreverListaNaUrl(
-        etapasValidas(centrosCusto, ids, etapasAtuais),
+        etapasValidas(cadastro, ids, etapasAtuais),
       ),
     });
   }
 
   const nomesEtapaCusto = rotuloDasEtapas(centrosCusto, filtros.centrosCusto);
   const nomesEtapaReceita = rotuloDasEtapas(
-    centrosCusto,
+    centrosReceita,
     filtros.centrosReceita,
   );
 
@@ -105,6 +114,7 @@ export function FiltrosCustoReceitaBarra({
           valores={filtros.centrosCusto}
           onValoresChange={(ids) =>
             trocarRaizes(
+              centrosCusto,
               "centro_custo",
               "etapa_custo",
               filtros.etapasCusto,
@@ -112,7 +122,7 @@ export function FiltrosCustoReceitaBarra({
             )
           }
           maximo={MAX_ITENS_FILTRO}
-          opcoes={opcoesCentro}
+          opcoes={opcoesCentroCusto}
           todosRotulo="Todos os centros"
         />
       ),
@@ -154,6 +164,7 @@ export function FiltrosCustoReceitaBarra({
         valores={filtros.centrosReceita}
         onValoresChange={(ids) =>
           trocarRaizes(
+            centrosReceita,
             "centro_receita",
             "etapa_receita",
             filtros.etapasReceita,
@@ -161,13 +172,13 @@ export function FiltrosCustoReceitaBarra({
           )
         }
         maximo={MAX_ITENS_FILTRO}
-        opcoes={opcoesCentro}
+        opcoes={opcoesCentroReceita}
         todosRotulo="Todos os centros"
       />
     ),
   });
 
-  if (temEtapasParaEscolher(centrosCusto, filtros.centrosReceita)) {
+  if (temEtapasParaEscolher(centrosReceita, filtros.centrosReceita)) {
     filtrosDaBarra.push({
       id: "etapa_receita",
       rotulo: `${nomesEtapaReceita.rotulo} da receita`,
@@ -181,7 +192,7 @@ export function FiltrosCustoReceitaBarra({
             setMuitos({ etapa_receita: escreverListaNaUrl(ids) })
           }
           maximo={MAX_ITENS_FILTRO}
-          opcoes={opcoesDeEtapa(centrosCusto, filtros.centrosReceita)}
+          opcoes={opcoesDeEtapa(centrosReceita, filtros.centrosReceita)}
           todosRotulo={nomesEtapaReceita.todos}
         />
       ),
