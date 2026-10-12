@@ -38,7 +38,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { alternarAtivo } from "@/modules/cadastros/centros-custo/actions";
+import { alternarAtivo, excluirNo } from "@/modules/cadastros/centros-custo/actions";
 import type {
   AplicacaoDaEtapa,
   ContaParaAplicacao,
@@ -77,6 +77,12 @@ export interface ArvoreCentrosCustoProps {
   nos: NoCentroCusto[];
   podeCriar: boolean;
   podeEditar: boolean;
+  podeExcluir: boolean;
+  /**
+   * Por nó, o código que impede excluí-lo (`em_uso`, `tem_filhos`...). Nó fora
+   * do mapa pode ser excluído: etapa ou item manual sem custo nenhum.
+   */
+  bloqueiosExclusao: Record<string, string>;
   /** Conta e tipo de cada etapa de Investimentos, por id da etapa. */
   aplicacoes: Record<string, AplicacaoDaEtapa>;
   /** Contas que podem receber aplicação (correntes e poupanças ativas). */
@@ -190,6 +196,8 @@ export function ArvoreCentrosCusto({
   nos,
   podeCriar,
   podeEditar,
+  podeExcluir,
+  bloqueiosExclusao,
   aplicacoes,
   contas,
 }: ArvoreCentrosCustoProps) {
@@ -208,6 +216,7 @@ export function ArvoreCentrosCusto({
   const [drawerAberto, setDrawerAberto] = React.useState(false);
   const [modo, setModo] = React.useState<ModoNo | null>(null);
   const [aDesativar, setADesativar] = React.useState<NoCentroCusto | null>(null);
+  const [aExcluir, setAExcluir] = React.useState<NoCentroCusto | null>(null);
 
   const termo = busca.trim().toLowerCase();
 
@@ -311,6 +320,17 @@ export function ArvoreCentrosCusto({
     setADesativar(null);
   }
 
+  async function aoExcluir(motivo?: string) {
+    if (!aExcluir) return false;
+    const resultado = await excluirNo(aExcluir.id, motivo ?? "");
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return false;
+    }
+    toast.success(aExcluir.nivel === 3 ? "Item excluído" : "Etapa excluída");
+    setAExcluir(null);
+  }
+
   async function aoReativar(no: NoCentroCusto) {
     const resultado = await alternarAtivo(no.id, true);
     if ("erro" in resultado) {
@@ -349,12 +369,16 @@ export function ArvoreCentrosCusto({
       motivoParaNaoDesativar({ nivel: no.nivel, gerido }) === null;
     // Ativar: qualquer nó inativo, CENTRO INCLUSIVE.
     const mostrarAtivar = !no.ativo && podeEditar;
+    // Excluir: o banco diz quem pode (etapa ou item manual, sem filhos e sem
+    // custo nenhum ligado); fora do mapa de bloqueios é exclusão liberada.
+    const mostrarExcluir = podeExcluir && !(no.id in bloqueiosExclusao);
     const temAcoes =
       podeAdicionarEtapa ||
       podeAdicionarItem ||
       podeAbrirEditar ||
       mostrarDesativar ||
-      mostrarAtivar;
+      mostrarAtivar ||
+      mostrarExcluir;
 
     return (
       <React.Fragment key={no.id}>
@@ -487,7 +511,7 @@ export function ArvoreCentrosCusto({
                     {gerido ? "Editar orçamento" : "Editar"}
                   </DropdownMenuItem>
                 ) : null}
-                {mostrarDesativar || mostrarAtivar ? (
+                {mostrarDesativar || mostrarAtivar || mostrarExcluir ? (
                   <>
                     <DropdownMenuSeparator />
                     {mostrarDesativar ? (
@@ -501,6 +525,14 @@ export function ArvoreCentrosCusto({
                     {mostrarAtivar ? (
                       <DropdownMenuItem onSelect={() => aoReativar(no)}>
                         Ativar
+                      </DropdownMenuItem>
+                    ) : null}
+                    {mostrarExcluir ? (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onSelect={() => setAExcluir(no)}
+                      >
+                        Excluir
                       </DropdownMenuItem>
                     ) : null}
                   </>
@@ -658,6 +690,25 @@ export function ArvoreCentrosCusto({
           textoConfirmar="Desativar nó"
           variante="destrutivo"
           onConfirmar={aoDesativar}
+        />
+      ) : null}
+
+      {podeExcluir ? (
+        <ConfirmDialog
+          aberto={aExcluir !== null}
+          onAbertoChange={(aberto) => {
+            if (!aberto) setAExcluir(null);
+          }}
+          titulo={aExcluir?.nivel === 3 ? "Excluir item" : "Excluir etapa"}
+          descricao={
+            aExcluir
+              ? `${aExcluir.nome} não tem custo nenhum ligado e vai para a lixeira. Dá para restaurar depois.`
+              : ""
+          }
+          textoConfirmar="Excluir"
+          variante="destrutivo"
+          exigeMotivo
+          onConfirmar={aoExcluir}
         />
       ) : null}
     </>

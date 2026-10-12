@@ -112,3 +112,23 @@ export async function listarContasParaAplicacao(): Promise<ContaParaAplicacao[]>
   }
   return data ?? [];
 }
+
+/**
+ * Por nó, o código que impede a exclusão (`em_uso`, `tem_filhos`, `gerido`...).
+ * Nó ausente do mapa pode ser excluído. Sai de `fn_centros_custo_bloqueios`
+ * porque "em uso" olha toda tabela que aponta para o centro, inclusive as que o
+ * usuário não lê por RLS: pela tabela, a lista sairia vazia e a árvore ofereceria
+ * uma exclusão que o banco recusa.
+ */
+export async function listarBloqueiosDeExclusao(): Promise<Record<string, string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_centros_custo_bloqueios");
+  if (error) {
+    throw new Error("Não foi possível carregar quais centros podem ser excluídos");
+  }
+  const porNo: Record<string, string> = {};
+  for (const linha of data ?? []) {
+    if (linha.bloqueio) porNo[linha.centro_custo_id] = linha.bloqueio;
+  }
+  return porNo;
+}

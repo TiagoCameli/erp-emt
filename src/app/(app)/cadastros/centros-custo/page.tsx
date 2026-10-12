@@ -10,6 +10,7 @@ import { ArvoreCentrosCusto } from "@/modules/cadastros/centros-custo/components
 import {
   listarAplicacoesDasEtapas,
   listarArvore,
+  listarBloqueiosDeExclusao,
   listarContasParaAplicacao,
 } from "@/modules/cadastros/centros-custo/queries";
 import { ImportarCadastro } from "@/modules/cadastros/_shared/importar-cadastro";
@@ -20,14 +21,16 @@ export default async function PaginaCentrosCusto() {
     notFound();
   }
 
-  const [nos, aplicacoes, contas] = await Promise.all([
+  const podeCriar = temPermissao(usuario, "cadastros.centros-custo", "criar");
+  const podeEditar = temPermissao(usuario, "cadastros.centros-custo", "editar");
+  const podeExcluir = temPermissao(usuario, "cadastros.centros-custo", "excluir");
+
+  const [nos, aplicacoes, contas, bloqueiosExclusao] = await Promise.all([
     listarArvore(),
     listarAplicacoesDasEtapas(),
     listarContasParaAplicacao(),
+    podeExcluir ? listarBloqueiosDeExclusao() : Promise.resolve({}),
   ]);
-
-  const podeCriar = temPermissao(usuario, "cadastros.centros-custo", "criar");
-  const podeEditar = temPermissao(usuario, "cadastros.centros-custo", "editar");
 
   return (
     <>
@@ -50,6 +53,8 @@ export default async function PaginaCentrosCusto() {
         nos={nos}
         podeCriar={podeCriar}
         podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+        bloqueiosExclusao={bloqueiosExclusao}
         aplicacoes={aplicacoes}
         contas={contas}
       />
