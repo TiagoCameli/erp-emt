@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   motivoParaNaoAlternar,
   motivoParaNaoDesativar,
+  motivoParaNaoExcluir,
 } from "@/modules/cadastros/centros-custo/travas-de-status";
 
 /**
@@ -63,6 +64,31 @@ describe("motivoParaNaoAlternar", () => {
     // divergirem, o menu passa a oferecer o que o servidor recusa.
     for (const no of [CENTRO, ETAPA_DE_EQUIPAMENTO, ETAPA, ITEM]) {
       expect(motivoParaNaoAlternar(no, false)).toBe(motivoParaNaoDesativar(no));
+    }
+  });
+});
+
+describe("motivoParaNaoExcluir", () => {
+  it("sem código de bloqueio, exclui", () => {
+    expect(motivoParaNaoExcluir(null)).toBeNull();
+  });
+
+  it("com custo ligado, manda desativar no lugar", () => {
+    expect(motivoParaNaoExcluir("em_uso")).toMatch(/Desative-o no lugar/);
+  });
+
+  it("todo código do banco vira frase, inclusive um que ainda não existe", () => {
+    for (const codigo of [
+      "em_uso",
+      "tem_filhos",
+      "nivel_1",
+      "raiz_de_obra",
+      "sistema",
+      "gerido",
+      "nao_encontrado",
+      "codigo_novo",
+    ]) {
+      expect(motivoParaNaoExcluir(codigo)).toBeTruthy();
     }
   });
 });

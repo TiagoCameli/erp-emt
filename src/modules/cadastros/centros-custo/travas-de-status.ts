@@ -56,3 +56,33 @@ export function motivoParaNaoAlternar(
 ): string | null {
   return paraAtivo ? null : motivoParaNaoDesativar(no);
 }
+
+/**
+ * Por que este nó não pode ser EXCLUÍDO? `null` quando pode.
+ *
+ * Diferente de desativar, a regra de excluir mora no banco
+ * (`fn_centro_custo_bloqueio`), porque "tem custo" é olhar toda tabela que
+ * aponta para o centro, e só o banco enxerga todas. A árvore recebe o código de
+ * cada nó por `fn_centros_custo_bloqueios` e a action recebe o mesmo código no
+ * erro da RPC; aqui ele vira a frase que o usuário lê.
+ */
+export function motivoParaNaoExcluir(bloqueio: string | null): string | null {
+  switch (bloqueio) {
+    case null:
+      return null;
+    case "em_uso":
+      return "Este nó tem custos ligados e não pode ser excluído. Desative-o no lugar";
+    case "tem_filhos":
+      return "Exclua ou mova os itens desta etapa antes de excluí-la";
+    case "nivel_1":
+    case "raiz_de_obra":
+      return "Centros não podem ser excluídos aqui. São geridos pelo sistema";
+    case "sistema":
+    case "gerido":
+      return "Este nó é gerido pelo sistema e não pode ser excluído";
+    case "nao_encontrado":
+      return "Centro de custo não encontrado";
+    default:
+      return "Este nó não pode ser excluído";
+  }
+}

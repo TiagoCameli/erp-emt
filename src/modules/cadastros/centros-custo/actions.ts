@@ -9,7 +9,11 @@ import {
   type ColunaImportacao,
 } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
-import { motivoParaNaoAlternar } from "@/modules/cadastros/centros-custo/travas-de-status";
+import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
+import {
+  motivoParaNaoAlternar,
+  motivoParaNaoExcluir,
+} from "@/modules/cadastros/centros-custo/travas-de-status";
 import { createClient } from "@/lib/supabase/server";
 import {
   aplicacaoDaEtapaSchema,
@@ -267,8 +271,8 @@ export async function editarNo(
 
 /**
  * Ativa ou desativa um nó manual (etapa ou item criado à mão). Centro de obra,
- * de sistema ou gerado por equipamento não pode ser desativado. Sem exclusão
- * física: a baixa é sempre soft (campo ativo).
+ * de sistema ou gerado por equipamento não pode ser desativado. Etapa ou item
+ * sem custo nenhum também pode ser excluído de vez: ver `excluirNo`.
  */
 export async function alternarAtivo(
   id: string,
@@ -303,6 +307,46 @@ export async function alternarAtivo(
       error,
       "Não foi possível alterar o status. Tente novamente",
     );
+  }
+
+  revalidatePath(ROTA);
+  return { ok: true };
+}
+
+/**
+ * Exclui de vez uma etapa ou item manual SEM custo nenhum ligado (pedido do
+ * Tiago em 12/10/2026: "itens de etapas que não têm custos podem ser deletados
+ * e não só inativados"). Vai para a lixeira, com motivo, e pode ser restaurado.
+ *
+ * Quem decide é `fn_excluir_centro_custo`, pela `fn_centro_custo_bloqueio`:
+ * centro, nó gerido, etapa com itens e nó referenciado por qualquer tabela
+ * (lançamento, rateio, frete, combustível, folha...) são recusados. O código do
+ * impedimento volta no erro e vira frase em `motivoParaNaoExcluir`.
+ */
+export async function excluirNo(
+  id: string,
+  motivo: string,
+): Promise<ResultadoAcao> {
+  await exigirPermissao(RECURSO, "excluir");
+
+  const idValido = idSchema.safeParse(id);
+  if (!idValido.success) return { erro: "Centro de custo inválido" };
+  const motivoLimpo = motivo.trim();
+  if (!motivoLimpo) return { erro: "Informe o motivo da exclusão" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_excluir_centro_custo", {
+    p_id: idValido.data,
+    p_motivo: motivoLimpo,
+  });
+
+  if (error) {
+    const codigo = /nao pode ser excluido \((\w+)\)/.exec(error.message ?? "")?.[1];
+    const mensagem =
+      (codigo ? motivoParaNaoExcluir(codigo) : null) ??
+      traduzErroExclusao(error) ??
+      "Não foi possível excluir. Tente novamente";
+    return erroAcao("cadastros.centros-custo.excluirNo", error, mensagem);
   }
 
   revalidatePath(ROTA);
