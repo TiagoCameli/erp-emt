@@ -1,6 +1,6 @@
--- Prova da migration 20261013214158 (revoke das funcoes internas).
+-- Prova das migrations 20261013214158 e 20261013215254 (revoke das funcoes internas).
 --
---   A) nenhuma das 21 executa como anon nem como authenticated;
+--   A) nenhuma das 25 executa como anon nem como authenticated;
 --   B) a RPC que o app chama continua funcionando por dentro: fn_obras_bloqueios
 --      (definer, chamada pela tela de Obras) usa a fn_obra_bloqueio revogada;
 --   C) chamar a revogada direto pela API, como usuario logado, e recusado;
@@ -18,7 +18,7 @@ begin
     select p.oid::regprocedure::text from pg_proc p
      where p.pronamespace = 'public'::regnamespace
        and p.proname = any (string_to_array(
-         'fn_aprovar_decimo_terceiro fn_aprovar_recibo_ferias fn_cdi_mensal_manual fn_centro_custo_dependencias fn_competencia_fechada fn_conciliacao_exigir_data_aberta fn_conciliacao_exigir_mes_aberto fn_conciliacao_fechar_mes fn_conciliacao_saldo_app fn_conciliacao_saldo_banco fn_conciliar_transferencia fn_janela_pagamento fn_mc_exigir fn_obra_bloqueio fn_obra_dependencias fn_rateios_da_linha fn_reclassificar_rateios_lote fn_salvar_aplicacao fn_trava_saldo_inicial nomes_usuarios_compras salvar_condicao_parcelas', ' '))
+         'fn_aprovar_decimo_terceiro fn_aprovar_recibo_ferias fn_cdi_mensal_manual fn_centro_custo_dependencias fn_competencia_fechada fn_conciliacao_exigir_data_aberta fn_conciliacao_exigir_mes_aberto fn_conciliacao_fechar_mes fn_conciliacao_saldo_app fn_conciliacao_saldo_banco fn_conciliar_transferencia fn_janela_pagamento fn_mc_exigir fn_obra_bloqueio fn_obra_dependencias fn_rateios_da_linha fn_reclassificar_rateios_lote fn_salvar_aplicacao fn_trava_saldo_inicial nomes_usuarios_compras salvar_condicao_parcelas fn_aplicar_regra_pagamento fn_centro_custo_bloqueio fn_total_da_oc fn_editar_diaria', ' '))
        and (has_function_privilege('authenticated', p.oid, 'execute')
          or has_function_privilege('anon', p.oid, 'execute'))
   loop
