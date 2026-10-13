@@ -14,6 +14,7 @@ import {
   SecaoFormulario,
   SeletorCentroCusto,
 } from "@/components/canonicos";
+import { FilaAnexos, subirFilaDeAnexos } from "@/components/canonicos/fila-anexos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,13 +76,16 @@ function adivinharPeloNome(
 
 /**
  * Lança no app o que saiu (ou entrou) no banco e não estava lançado. Nasce
- * pago nesta conta e já conciliado, sem passar pela aprovação: o dinheiro já
- * se moveu. O que o extrato não sabe, a pessoa completa: centro de custo (com
- * a etapa, quando o centro tem), mês de referência, categoria e favorecido.
+ * como um lançamento comum, com a conta do extrato já escolhida, e NÃO
+ * concilia: passa pela Aprovação de pagamentos e por Pagamentos (recebimento:
+ * baixa em Recebimentos) e só depois casa com o movimento (Tiago,
+ * 13/10/2026). O que o extrato não sabe, a pessoa completa: centro de custo
+ * (com a etapa, quando o centro tem), mês de referência, categoria,
+ * favorecido e os anexos, como no lançamento comum.
  *
  * Com vários movimentos (as tarifas do mês, os PIX de uma obra) os mesmos
  * dados valem para todos, e cada lançamento leva o histórico do banco como
- * descrição.
+ * descrição e os mesmos anexos.
  */
 export function LancarDrawer({
   aberto,
@@ -109,6 +113,7 @@ export function LancarDrawer({
   );
   const [numeroDocumento, setNumeroDocumento] = React.useState("");
   const [observacoes, setObservacoes] = React.useState("");
+  const [filaAnexos, setFilaAnexos] = React.useState<File[]>([]);
   const [erros, setErros] = React.useState<{ centro?: string; mes?: string }>({});
   const [enviando, setEnviando] = React.useState(false);
 
@@ -153,19 +158,29 @@ export function LancarDrawer({
       numeroDocumento: numeroDocumento || undefined,
       observacoes: observacoes || undefined,
     });
-    setEnviando(false);
 
     if ("erro" in resposta) {
+      setEnviando(false);
       toast.error(resposta.erro);
       return;
     }
+    // A fila de anexos sobe agora que os lançamentos existem. Cada falha já
+    // avisa pelo nome do arquivo.
+    if (filaAnexos.length > 0) {
+      for (const id of resposta.lancamentoIds ?? []) {
+        await subirFilaDeAnexos("lancamento", id, filaAnexos);
+      }
+    }
+    setEnviando(false);
     if (resposta.falhas.length > 0) {
       toast.error(
         `${resposta.feitos} lançado(s), ${resposta.falhas.length} com erro: ${resposta.falhas[0]?.erro}`,
       );
     } else {
       toast.success(
-        resposta.feitos === 1 ? "Lançado e conciliado" : `${resposta.feitos} lançados e conciliados`,
+        resposta.feitos === 1
+          ? "Lançado. Aprove e pague para depois conciliar"
+          : `${resposta.feitos} lançados. Aprove e pague para depois conciliar`,
       );
     }
     onAbertoChange(false);
@@ -187,7 +202,7 @@ export function LancarDrawer({
             ? "Lançar recebimento do extrato"
             : "Lançar pagamento do extrato"
       }
-      descricao="Entra no app já pago nesta conta e conciliado. Complete o que o extrato não diz."
+      descricao="Entra no app com a conta do extrato e segue para a aprovação e o pagamento. Só depois de pago ele casa com o movimento."
       rodape={
         <div className="flex w-full items-center justify-end gap-2">
           <Button
@@ -200,7 +215,7 @@ export function LancarDrawer({
           </Button>
           <Button type="submit" form={ID_FORM} disabled={enviando || transacoes.length === 0}>
             {enviando ? <LoaderCircle className="animate-spin" /> : null}
-            {transacoes.length > 1 ? `Lançar ${transacoes.length}` : "Lançar e conciliar"}
+            {transacoes.length > 1 ? `Lançar ${transacoes.length}` : "Lançar"}
           </Button>
         </div>
       }
@@ -328,6 +343,19 @@ export function LancarDrawer({
               disabled={enviando}
             />
           </CampoFormulario>
+        </SecaoFormulario>
+
+        <SecaoFormulario titulo="Anexos">
+          <FilaAnexos
+            arquivos={filaAnexos}
+            onMudar={setFilaAnexos}
+            ocupado={enviando}
+            legenda={
+              transacoes.length > 1
+                ? "Sobem em cada lançamento quando você lançar"
+                : "Sobem junto quando você lançar"
+            }
+          />
         </SecaoFormulario>
       </form>
     </FormDrawer>

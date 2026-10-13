@@ -67,6 +67,8 @@ export type ResultadoLote =
       falhas: { id: string; erro: string }[];
       /** Quantos as regras automáticas lançaram antes do casamento. */
       regras?: number;
+      /** Lançamentos criados (o "Lançar" sobe os anexos neles). */
+      lancamentoIds?: string[];
     }
   | { erro: string };
 
@@ -578,10 +580,12 @@ export type LancarEntrada = z.input<typeof lancarSchema>;
 
 /**
  * Lança o que está no banco e falta no app: cada movimento vira um lançamento
- * já pago nesta conta e já conciliado, com o centro de custo (ou etapa) e o
- * mês de referência que a pessoa informou. Em lote, os mesmos dados valem
- * para todos (as tarifas do mês, por exemplo) e cada um leva o histórico do
- * banco como descrição.
+ * comum, com a conta do extrato, o centro de custo (ou etapa) e o mês de
+ * referência que a pessoa informou. NÃO concilia: o lançamento passa pela
+ * Aprovação de pagamentos e por Pagamentos (recebimento: baixa em
+ * Recebimentos) e só depois casa com o movimento (Tiago, 13/10/2026). Em
+ * lote, os mesmos dados valem para todos (as tarifas do mês, por exemplo) e
+ * cada um leva o histórico do banco como descrição.
  */
 export async function lancarMovimentos(
   entrada: LancarEntrada,
@@ -607,9 +611,10 @@ export async function lancarMovimentos(
   const { transacaoIds, descricao, ...comuns } = dados.data;
   const supabase = await createClient();
   const falhas: { id: string; erro: string }[] = [];
+  const lancamentoIds: string[] = [];
   let feitos = 0;
   for (const transacaoId of transacaoIds) {
-    const { error } = await supabase.rpc("fn_conciliacao_lancar", {
+    const { data, error } = await supabase.rpc("fn_conciliacao_lancar", {
       p_transacao_id: transacaoId,
       p_dados: {
         ...comuns,
@@ -623,11 +628,12 @@ export async function lancarMovimentos(
       });
     } else {
       feitos += 1;
+      if (data) lancamentoIds.push(data);
     }
   }
 
   revalidatePath(ROTA);
-  return { ok: true, feitos, falhas };
+  return { ok: true, feitos, falhas, lancamentoIds };
 }
 
 const transferirSchema = z.object({

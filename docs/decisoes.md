@@ -5281,3 +5281,15 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Relatórios que leem a view:** custo por centro (tabela, série, vida), custo por mês, custo x receita (e por ele o rateio do indireto), custos indiretos, DRE e maiores custos da Gestão. A troca foi por texto com checagem: se um trecho não fosse achado, a migration parava.
 - **Efeitos para saber:** o 13º de 2026 (1ª parcela, R$ 27.883,43, antes inteiro em 12/2026 nas obras) agora aparece 1/12 por mês de jan a dez/2026 no indireto, inclusive em meses já confirmados no rateio (o percentual salvo vale, o valor a ratear sobe). O drill de um mês ainda lista o lançamento pelo mês dele, então o 13º não aparece no drill dos outros meses. As guias do 13º e das férias continuam sem rateio, logo fora do custo, como antes.
 - Prova: `supabase/provas/decimo_ferias_indireto.sql` (16 checagens), RED antes e GREEN no banco vivo. Rateio do ano passou de 187 ms para 309 ms.
+
+## 2026-10-13 - Conciliação: o "Lançar" passa pela aprovação e pelo pagamento
+
+**Pedido do Tiago:** "os lançamentos que são feitos através da conciliação só podem ser conciliados depois que forem aprovados na aprovação de pagamento e quitados na aba de pagamentos, antes disso eles podem ser lançados por lá mas não conciliados. Quando eu estiver fazendo um lançamento pela conciliação eu posso adicionar anexos igual quando estou criando um lançamento comum."
+- **Antes:** `fn_conciliacao_lancar` criava o lançamento já pago e casado com o movimento, sem aprovação.
+- **Agora:** cria um lançamento comum (status `a_pagar`, parcela `pendente`, vencimento no dia do movimento) com a conta do extrato já escolhida, que é o que marca o a pagar como revisado. Vai para Aprovação de pagamentos e para Pagamentos; recebimento, para a baixa em Recebimentos. `lancamentos.extrato_transacao_id` liga ao movimento (some se o extrato for excluído) e `lancamentos.lancado_na_conciliacao` guarda a marca de vez. Lançar duas vezes o mesmo movimento é recusado.
+- **Casar:** `fn_conciliacao_casar` recusa parcela de lançamento feito pela conciliação enquanto ela não estiver paga (antes, parcela aprovada levava baixa pelo extrato). Os outros lançamentos continuam como estavam.
+- **Painel:** cada movimento traz o `lancado` (número e situação da parcela); a coluna "O app tem" mostra "aguardando aprovação", "aprovado: falta pagar" ou "pago: case", e o Lançar e a Transferência somem dele. As abertas deixam de oferecer esses lançamentos. Depois de pago nesta conta, ele aparece nas pagas e casa pelo caminho normal.
+- **Regras de "lançar":** seguem o mesmo caminho; a aplicação automática pula o movimento que já tem lançamento esperando, e a marca de automática só fica quando concilia.
+- **Anexos:** o drawer do Lançar ganhou a fila de anexos do lançamento comum; em lote, os arquivos sobem em cada lançamento criado.
+- Os lançamentos que o Lançar antigo criou (pagos e casados) não mudam.
+- Prova: `supabase/provas/conciliacao_lancar_passa_pela_aprovacao.sql`, RED com a função antiga ("parcela pago") e GREEN no banco vivo em begin/rollback.

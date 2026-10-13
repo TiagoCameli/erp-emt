@@ -83,6 +83,7 @@ import {
   montarVisoes,
   movimentosLivres,
   precisaConferir,
+  situacaoDoLancado,
   somar,
   statusDoMes,
   TODOS_OS_MESES,
@@ -184,8 +185,9 @@ function vinculoDe(transacao: TransacaoPainel): string {
  * topo:
  *
  * - **Faltam no app**: está no extrato e não no app. Casa com o que já existe
- *   (inclusive pago em outra conta ou ainda em aberto), lança já pago com
- *   centro de custo e mês de referência, ou lança como transferência.
+ *   (inclusive pago em outra conta ou ainda em aberto), lança com centro de
+ *   custo e mês de referência (o lançamento passa pela aprovação e pelo
+ *   pagamento e só casa depois de pago), ou lança como transferência.
  * - **No app, fora do banco**: pago nesta conta no mês e o extrato não mostra.
  *   Muda para a conta certa ou exclui.
  * - **Casados**: o que já bateu. O automático fica marcado, e o que casou sem
@@ -1015,7 +1017,7 @@ function TabelaFaltam({
         tipo: { selecionados: selecao(tipo), chave: (t) => t.tipo },
         noApp: {
           selecionados: selecao(noApp),
-          chave: (t) => (sugestoes.get(t.id) ? "tem" : "nao"),
+          chave: (t) => (t.lancado || sugestoes.get(t.id) ? "tem" : "nao"),
         },
       },
       [
@@ -1034,6 +1036,8 @@ function TabelaFaltam({
   const marcadas = transacoes.filter((t) => validos.includes(t.id));
   const sentidos = new Set(marcadas.map((t) => t.tipo));
   const misturado = sentidos.size > 1;
+  // Os já lançados daqui ficam de fora: esperam aprovação e pagamento.
+  const paraLancar = marcadas.filter((t) => !t.lancado).map((t) => t.id);
 
   const colunas = React.useMemo<ColumnDef<TransacaoPainel, unknown>[]>(
     () => [
@@ -1066,6 +1070,18 @@ function TabelaFaltam({
         header: "O app tem",
         size: 300,
         cell: ({ row }) => {
+          // Lançado daqui: espera aprovação e pagamento antes de casar.
+          if (row.original.lancado) {
+            const situacao = situacaoDoLancado(row.original.lancado);
+            return (
+              <span
+                className={situacao.podeCasar ? "text-status-pendente" : "text-muted-foreground"}
+                title={situacao.texto}
+              >
+                {situacao.texto}
+              </span>
+            );
+          }
           const grupo = grupoPorMovimento.get(row.original.id);
           if (grupo) {
             return (
@@ -1127,6 +1143,8 @@ function TabelaFaltam({
           const devolucao = pareceEstorno(t.memo);
           const regra = regraPorMovimento.get(t.id);
           const grupo = grupoPorMovimento.get(t.id);
+          // Já lançado daqui: lançar de novo duplicaria o lançamento.
+          const jaLancado = t.lancado !== null;
           return (
             <div className="flex flex-wrap justify-end gap-1">
               {permissoes.conciliar && grupo ? (
@@ -1177,7 +1195,7 @@ function TabelaFaltam({
                   <span className="max-md:sr-only">Casar</span>
                 </Button>
               ) : null}
-              {permissoes.conciliar && permissoes.lancar && !aplicacao && !devolucao ? (
+              {permissoes.conciliar && permissoes.lancar && !aplicacao && !devolucao && !jaLancado ? (
                 <Button
                   type="button"
                   size="sm"
@@ -1189,7 +1207,7 @@ function TabelaFaltam({
                   <span className="max-md:sr-only">Lançar</span>
                 </Button>
               ) : null}
-              {permissoes.conciliar && permissoes.transferir ? (
+              {permissoes.conciliar && permissoes.transferir && !jaLancado ? (
                 <Button
                   type="button"
                   size="sm"
@@ -1424,11 +1442,11 @@ function TabelaFaltam({
             <Button
               type="button"
               size="sm"
-              disabled={misturado}
-              onClick={() => onLancar(validos)}
+              disabled={misturado || paraLancar.length === 0}
+              onClick={() => onLancar(paraLancar)}
             >
               <FilePlus2 />
-              Lançar {validos.length}
+              Lançar {paraLancar.length}
             </Button>
           ) : null}
           {permissoes.transferir ? (
