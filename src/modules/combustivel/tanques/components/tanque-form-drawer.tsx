@@ -31,11 +31,17 @@ import { litrosParaTexto } from "@/modules/combustivel/transferencias/schemas";
 
 const ID_FORM = "form-tanque";
 
+const OPCOES_USO = [
+  { valor: "combustivel", rotulo: "Combustível" },
+  { valor: "material", rotulo: "Material (CAP, emulsão...)" },
+];
+
 function valoresIniciais(tanque: TanqueLinha | null | undefined): TanqueFormInput {
   return {
     nome: tanque?.nome ?? "",
     apelido: tanque?.apelido ?? "",
     capacidade: tanque ? litrosParaTexto(tanque.capacidade) || "0" : "",
+    uso: tanque?.uso ?? "combustivel",
     ehExterno: tanque?.ehExterno ?? false,
     proprietarioId: tanque?.proprietarioId ?? "",
     observacoes: tanque?.observacoes ?? "",
@@ -70,9 +76,9 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
     if (aberto) form.reset(valoresIniciais(tanque));
   }, [aberto, tanque, form]);
 
-  const [ehExterno, proprietarioId, capacidade, ativo] = useWatch({
+  const [ehExterno, proprietarioId, capacidade, ativo, uso] = useWatch({
     control: form.control,
-    name: ["ehExterno", "proprietarioId", "capacidade", "ativo"],
+    name: ["ehExterno", "proprietarioId", "capacidade", "ativo", "uso"],
   });
 
   const opcoesFornecedores = React.useMemo(
@@ -168,6 +174,34 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
           />
         </CampoFormulario>
 
+        <CampoFormulario
+          id="tanque-uso"
+          rotulo="Uso"
+          obrigatorio
+          ajuda={
+            uso === "material"
+              ? "CAP, emulsão e outros materiais: entrada e saída pelo Estoque"
+              : "Diesel, gasolina, Arla: entrada e saída pelo módulo Combustível"
+          }
+          erro={erros.uso?.message}
+        >
+          <Combobox
+            id="tanque-uso"
+            valor={uso ?? "combustivel"}
+            onValorChange={(valor) => {
+              const novo = valor === "material" ? "material" : "combustivel";
+              form.setValue("uso", novo, { shouldDirty: true });
+              if (novo === "material") {
+                form.setValue("ehExterno", false, { shouldDirty: true });
+                form.setValue("proprietarioId", "", { shouldDirty: true });
+              }
+            }}
+            opcoes={OPCOES_USO}
+            disabled={salvando}
+          />
+        </CampoFormulario>
+
+        {uso === "material" ? null : (
         <SelectAtivo
           id="tanque-externo"
           rotulo="Tanque de terceiro"
@@ -182,6 +216,7 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
             "Tanque de outra empresa (posto ou transportadora) onde as carretas abastecem. Não tem estoque nem PEPS."
           }
         />
+        )}
 
         {ehExterno ? (
           <CampoFormulario

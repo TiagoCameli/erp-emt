@@ -63,10 +63,11 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
 
     const supabase = await createClient();
     // Os tipos gerados não aceitam null nos argumentos; a RPC aceita (p_id nulo = criar,
-    // item de OC nulo = avulsa, insumo e valor nulos = os da OC).
+    // item de OC nulo = avulsa, insumo e valor nulos = os da OC; depósito OU tanque).
     const { error } = await supabase.rpc("fn_estoque_salvar_entrada", {
       p_id: id as unknown as string,
-      p_deposito: d.depositoId,
+      p_deposito: d.depositoId as unknown as string,
+      p_tanque: d.tanqueId as unknown as string,
       p_insumo: d.insumoId as unknown as string,
       p_quantidade: d.quantidade,
       p_valor_unitario: d.valorUnitario as unknown as number,
@@ -105,7 +106,8 @@ export async function salvarSaida(id: string | null, dados: SaidaInput): Promise
     const supabase = await createClient();
     const { error } = await supabase.rpc("fn_estoque_salvar_saida", {
       p_id: id as unknown as string,
-      p_deposito: d.depositoId,
+      p_deposito: d.depositoId as unknown as string,
+      p_tanque: d.tanqueId as unknown as string,
       p_insumo: d.insumoId,
       p_quantidade: d.quantidade,
       p_data: d.data,

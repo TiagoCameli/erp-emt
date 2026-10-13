@@ -195,6 +195,7 @@ export async function listarTanquesCampo(): Promise<TanqueCampo[]> {
     .from("tanques")
     .select("id, nome, eh_externo, nivel_atual_litros, combustivel_atual_id, insumos:combustivel_atual_id (nome)")
     .eq("ativo", true)
+    .eq("uso", "combustivel")
     .order("nome");
   if (error) throw new Error("Não foi possível carregar os tanques");
   return (data ?? []).map((t) => ({

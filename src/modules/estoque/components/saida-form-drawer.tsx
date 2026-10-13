@@ -32,10 +32,10 @@ const ID_FORM = "form-saida-estoque";
 
 function valoresIniciais(saida: SaidaLinha | null): SaidaFormInput {
   if (!saida) {
-    return { depositoId: "", insumoId: "", quantidade: "", data: "", centroCustoId: "", observacoes: "" };
+    return { local: "", insumoId: "", quantidade: "", data: "", centroCustoId: "", observacoes: "" };
   }
   return {
-    depositoId: saida.depositoId,
+    local: saida.local,
     insumoId: saida.insumoId,
     quantidade: numeroParaTexto(saida.quantidade),
     data: saida.data,
@@ -48,10 +48,11 @@ export interface SaidaFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   saida: SaidaLinha | null;
-  depositos: Opcao[];
+  /** Depósitos e tanques de material. */
+  locais: Opcao[];
   /** Só o que já entrou pelo Estoque: combustível e peças saem pelos módulos deles. */
   materiais: InsumoOpcao[];
-  /** Saldo por `chaveSaldo(deposito, insumo)`, sem a própria saída na edição. */
+  /** Saldo por `chaveSaldo(local, insumo)`, sem a própria saída na edição. */
   saldos: Map<string, number>;
   centros: CentroCustoOpcao[];
 }
@@ -65,7 +66,7 @@ export function SaidaFormDrawer({
   aberto,
   onAbertoChange,
   saida,
-  depositos,
+  locais,
   materiais,
   saldos,
   centros,
@@ -81,27 +82,27 @@ export function SaidaFormDrawer({
     if (aberto) form.reset(valoresIniciais(saida));
   }, [aberto, saida, form]);
 
-  const [depositoId, insumoId, quantidade, centroCustoId] = useWatch({
+  const [local, insumoId, quantidade, centroCustoId] = useWatch({
     control: form.control,
-    name: ["depositoId", "insumoId", "quantidade", "centroCustoId"],
+    name: ["local", "insumoId", "quantidade", "centroCustoId"],
   });
 
-  const opcoesDepositos = React.useMemo(() => depositos.map((d) => ({ valor: d.id, rotulo: d.nome })), [depositos]);
+  const opcoesLocais = React.useMemo(() => locais.map((l) => ({ valor: l.id, rotulo: l.nome })), [locais]);
 
-  // O material só aparece com saldo no depósito escolhido (ou o da própria saída, na edição).
+  // O material só aparece com saldo no local escolhido (ou o da própria saída, na edição).
   const opcoesMateriais = React.useMemo(
     () =>
       materiais
-        .filter((m) => (saldos.get(chaveSaldo(depositoId ?? "", m.id)) ?? 0) > 0 || m.id === saida?.insumoId)
+        .filter((m) => (saldos.get(chaveSaldo(local ?? "", m.id)) ?? 0) > 0 || m.id === saida?.insumoId)
         .map((m) => {
-          const saldo = saldos.get(chaveSaldo(depositoId ?? "", m.id)) ?? 0;
+          const saldo = saldos.get(chaveSaldo(local ?? "", m.id)) ?? 0;
           return { valor: m.id, rotulo: `${m.nome} · ${formatarQuantidade(saldo)}${m.unidade ? ` ${m.unidade}` : ""}` };
         }),
-    [materiais, saldos, depositoId, saida],
+    [materiais, saldos, local, saida],
   );
 
   const material = materiais.find((m) => m.id === insumoId) ?? null;
-  const saldo = depositoId && insumoId ? (saldos.get(chaveSaldo(depositoId, insumoId)) ?? 0) : null;
+  const saldo = local && insumoId ? (saldos.get(chaveSaldo(local, insumoId)) ?? 0) : null;
 
   async function aoEnviar(dados: SaidaFormInput) {
     const resultado = await salvarSaida(saida?.id ?? null, saidaDoForm(dados));
@@ -143,17 +144,17 @@ export function SaidaFormDrawer({
       }
     >
       <form id={ID_FORM} onSubmit={submeterComAviso(form, aoEnviar)} className={classesFormulario} noValidate>
-        <CampoFormulario id="saida-deposito" rotulo="Depósito" obrigatorio erro={erros.depositoId?.message}>
+        <CampoFormulario id="saida-local" rotulo="Depósito ou tanque" obrigatorio erro={erros.local?.message}>
           <Combobox
-            id="saida-deposito"
-            valor={depositoId ?? ""}
-            rotuloDoValor={saida?.depositoNome}
+            id="saida-local"
+            valor={local ?? ""}
+            rotuloDoValor={saida?.localNome}
             onValorChange={(valor) => {
-              form.setValue("depositoId", valor, { shouldDirty: true, shouldValidate: true });
-              if (valor !== depositoId) form.setValue("insumoId", "", { shouldDirty: true });
+              form.setValue("local", valor, { shouldDirty: true, shouldValidate: true });
+              if (valor !== local) form.setValue("insumoId", "", { shouldDirty: true });
             }}
-            opcoes={opcoesDepositos}
-            placeholder="Selecione o depósito"
+            opcoes={opcoesLocais}
+            placeholder="Selecione o depósito ou o tanque"
             disabled={salvando}
           />
         </CampoFormulario>
@@ -162,7 +163,7 @@ export function SaidaFormDrawer({
           id="saida-material"
           rotulo="Material"
           obrigatorio
-          ajuda={depositoId ? undefined : "Escolha o depósito primeiro"}
+          ajuda={local ? undefined : "Escolha o depósito ou o tanque primeiro"}
           erro={erros.insumoId?.message}
         >
           <Combobox
@@ -173,8 +174,8 @@ export function SaidaFormDrawer({
             opcoes={opcoesMateriais}
             placeholder="Selecione o material"
             buscaPlaceholder="Buscar material"
-            vazioTexto="Nenhum material com saldo neste depósito"
-            disabled={salvando || !depositoId}
+            vazioTexto="Nenhum material com saldo neste local"
+            disabled={salvando || !local}
           />
         </CampoFormulario>
 

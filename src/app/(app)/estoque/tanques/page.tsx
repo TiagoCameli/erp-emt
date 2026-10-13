@@ -26,7 +26,7 @@ export default async function PaginaTanquesEstoque() {
 
   // O dono só aparece no formulário: quem não cria nem edita não paga a leitura dos fornecedores.
   const [tanques, fornecedores] = await Promise.all([
-    listarTanques(),
+    listarTanques("todos"),
     podeCriar || podeEditar ? listarFornecedoresAtivos() : Promise.resolve<FornecedorOpcao[]>([]),
   ]);
 

@@ -3084,7 +3084,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           data: string;
-          deposito_id: string;
+          deposito_id: string | null;
           excluido_em: string | null;
           excluido_por: string | null;
           fornecedor_id: string | null;
@@ -3097,6 +3097,7 @@ export type Database = {
           oc_numero: string | null;
           ordem_compra_id: string | null;
           quantidade: number;
+          tanque_id: string | null;
           updated_at: string;
           valor_total: number | null;
           valor_unitario: number;
@@ -3105,7 +3106,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data: string;
-          deposito_id: string;
+          deposito_id?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           fornecedor_id?: string | null;
@@ -3118,6 +3119,7 @@ export type Database = {
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
           quantidade: number;
+          tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number | null;
           valor_unitario: number;
@@ -3126,7 +3128,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data?: string;
-          deposito_id?: string;
+          deposito_id?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           fornecedor_id?: string | null;
@@ -3139,11 +3141,19 @@ export type Database = {
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
           quantidade?: number;
+          tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number | null;
           valor_unitario?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_entradas_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_entradas_created_by_fkey";
             columns: ["created_by"];
@@ -3251,7 +3261,7 @@ export type Database = {
           created_by: string | null;
           custo_unitario: number;
           data: string;
-          deposito_id: string;
+          deposito_id: string | null;
           excluido_em: string | null;
           excluido_por: string | null;
           id: string;
@@ -3259,6 +3269,7 @@ export type Database = {
           motivo_exclusao: string | null;
           observacoes: string | null;
           quantidade: number;
+          tanque_id: string | null;
           updated_at: string;
           valor_total: number;
         };
@@ -3268,7 +3279,7 @@ export type Database = {
           created_by?: string | null;
           custo_unitario?: number;
           data: string;
-          deposito_id: string;
+          deposito_id?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           id?: string;
@@ -3276,6 +3287,7 @@ export type Database = {
           motivo_exclusao?: string | null;
           observacoes?: string | null;
           quantidade: number;
+          tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
@@ -3285,7 +3297,7 @@ export type Database = {
           created_by?: string | null;
           custo_unitario?: number;
           data?: string;
-          deposito_id?: string;
+          deposito_id?: string | null;
           excluido_em?: string | null;
           excluido_por?: string | null;
           id?: string;
@@ -3293,10 +3305,18 @@ export type Database = {
           motivo_exclusao?: string | null;
           observacoes?: string | null;
           quantidade?: number;
+          tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_saidas_tanque_id_fkey";
+            columns: ["tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_saidas_centro_custo_id_fkey";
             columns: ["centro_custo_id"];
@@ -3333,7 +3353,8 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
-      };      extrato_transacoes: {
+      };
+      extrato_transacoes: {
         Row: {
           chave_dedup: string | null;
           conciliada: boolean;
@@ -9100,6 +9121,7 @@ export type Database = {
           observacoes: string | null;
           proprietario_id: string | null;
           updated_at: string;
+          uso: string;
         };
         Insert: {
           apelido?: string | null;
@@ -9115,6 +9137,7 @@ export type Database = {
           observacoes?: string | null;
           proprietario_id?: string | null;
           updated_at?: string;
+          uso?: string;
         };
         Update: {
           apelido?: string | null;
@@ -9130,6 +9153,7 @@ export type Database = {
           observacoes?: string | null;
           proprietario_id?: string | null;
           updated_at?: string;
+          uso?: string;
         };
         Relationships: [
           {
@@ -10439,6 +10463,7 @@ export type Database = {
           p_observacoes?: string;
           p_oc_item?: string;
           p_quantidade: number;
+          p_tanque: string;
           p_valor_unitario: number;
         };
         Returns: string;
@@ -10452,9 +10477,11 @@ export type Database = {
           p_insumo: string;
           p_observacoes?: string;
           p_quantidade: number;
+          p_tanque: string;
         };
         Returns: string;
-      };      fn_fornecedor_apelido_remover: {
+      };
+      fn_fornecedor_apelido_remover: {
         Args: { p_id: string };
         Returns: undefined;
       };

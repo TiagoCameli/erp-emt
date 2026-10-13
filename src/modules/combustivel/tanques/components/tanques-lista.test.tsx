@@ -37,6 +37,8 @@ function tanque(troca: Partial<TanqueLinha> = {}): TanqueLinha {
     nivel: 2168.5,
     combustivelId: "22222222-2222-4222-8222-222222222222",
     combustivelNome: "Diesel S500",
+    uso: "combustivel",
+    unidade: "L",
     ehExterno: false,
     proprietarioId: null,
     proprietarioNome: null,

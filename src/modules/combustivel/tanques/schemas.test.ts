@@ -12,11 +12,22 @@ import {
 
 const DONO = "44444444-4444-4444-8444-444444444444";
 
+describe("uso do tanque", () => {
+  it("tanque de material não pode ser de terceiro", () => {
+    expect(tanqueFormSchema.safeParse(form({ uso: "material", ehExterno: true, proprietarioId: DONO })).success).toBe(false);
+    expect(tanqueFormSchema.safeParse(form({ uso: "material" })).success).toBe(true);
+  });
+  it("o uso vai para a action", () => {
+    expect(tanqueDoForm(form({ uso: "material" })).uso).toBe("material");
+  });
+});
+
 function form(troca: Partial<TanqueFormInput> = {}): TanqueFormInput {
   return {
     nome: "Tanque Comboio 01",
     apelido: "",
     capacidade: "15000",
+    uso: "combustivel",
     ehExterno: false,
     proprietarioId: "",
     observacoes: "",

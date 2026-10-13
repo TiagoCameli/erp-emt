@@ -44,7 +44,7 @@ function nomeFornecedor(f: { razao_social: string; nome_fantasia: string | null 
   return f.nome_fantasia?.trim() || f.razao_social;
 }
 
-/** Todos os tanques, ativos e inativos, externos inclusive. Quem usa filtra. */
+/** Todos os tanques de combustível, ativos e inativos, externos inclusive. Quem usa filtra. O de material é do Estoque. */
 export async function listarTanques(): Promise<TanqueOpcao[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -52,6 +52,7 @@ export async function listarTanques(): Promise<TanqueOpcao[]> {
     .select(
       "id, nome, apelido, eh_externo, ativo, capacidade_litros, nivel_atual_litros, combustivel_atual_id, proprietario_id, fornecedores(razao_social, nome_fantasia, taxa_litro_padrao)",
     )
+    .eq("uso", "combustivel")
     .order("nome")
     .order("id");
   if (error) throw new Error("Não foi possível carregar os tanques");
@@ -89,7 +90,8 @@ export async function listarInsumosCombustivel(): Promise<InsumoCombustivel[]> {
 
   const [categorias, tanques] = await Promise.all([
     supabase.from("categorias_insumo").select("id").ilike("nome", "%combust%"),
-    supabase.from("tanques").select("combustivel_atual_id").not("combustivel_atual_id", "is", null),
+    // Só tanque de combustível: o de material guarda CAP ou emulsão no mesmo campo.
+    supabase.from("tanques").select("combustivel_atual_id").eq("uso", "combustivel").not("combustivel_atual_id", "is", null),
   ]);
   if (categorias.error || tanques.error) {
     throw new Error("Não foi possível carregar os combustíveis");
