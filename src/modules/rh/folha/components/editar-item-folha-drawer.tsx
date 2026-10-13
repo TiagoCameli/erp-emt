@@ -420,6 +420,10 @@ export function EditarItemFolhaDrawer({
             }
             rotuloDoValor={item?.centroCustoNome ?? undefined}
           />
+          <p className="text-legenda text-muted-foreground">
+            Se esta for a folha mais recente do colaborador, o cadastro dele
+            passa a usar este centro de custo.
+          </p>
         </SecaoFormulario>
 
         <SecaoFormulario titulo="Remuneração do mês">
