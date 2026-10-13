@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
+import { decodificarLocal } from "@/modules/estoque/calculo";
 import { paraNumero } from "@/modules/manutencao/almoxarifado/calculo";
 
 /**
@@ -33,6 +34,19 @@ function idObrigatorio(mensagem: string) {
     .string()
     .trim()
     .refine((valor) => z.guid().safeParse(valor).success, { error: mensagem });
+}
+
+/** O campo "Local": depósito ou tanque de material, codificado por `codificarLocal`. */
+const localFormSchema = z
+  .string()
+  .trim()
+  .refine((valor) => decodificarLocal(valor) !== null, { error: "Escolha o depósito ou o tanque" });
+
+/** Na action: um dos dois, nunca os dois nem nenhum. */
+function umLocal(dados: { depositoId: string | null; tanqueId: string | null }, ctx: z.RefinementCtx) {
+  if ((dados.depositoId === null) === (dados.tanqueId === null)) {
+    ctx.addIssue({ code: "custom", path: ["depositoId"], message: "Escolha o depósito ou o tanque" });
+  }
 }
 
 function idOpcional(mensagem: string) {
@@ -83,7 +97,7 @@ export const entradaFormSchema = z
   .object({
     origem: z.enum(ORIGENS_ENTRADA),
     ocItemId: idOpcional("Item da OC inválido"),
-    depositoId: idObrigatorio("Escolha o depósito"),
+    local: localFormSchema,
     insumoId: idOpcional("Insumo inválido"),
     quantidade: quantidadeTexto(),
     valorUnitario: z.string().trim(),
@@ -112,7 +126,8 @@ export type EntradaFormInput = z.infer<typeof entradaFormSchema>;
 export const entradaSchema = z
   .object({
     ocItemId: idSchemaCom("Item da OC inválido").nullable(),
-    depositoId: idSchemaCom("Escolha o depósito"),
+    depositoId: idSchemaCom("Escolha o depósito").nullable(),
+    tanqueId: idSchemaCom("Escolha o tanque").nullable(),
     insumoId: idSchemaCom("Insumo inválido").nullable(),
     quantidade: quantidadeNumero(),
     valorUnitario: z.number().nullable(),
@@ -121,6 +136,7 @@ export const entradaSchema = z
     observacoes: z.string().trim().max(500).nullable(),
   })
   .superRefine((dados, ctx) => {
+    umLocal(dados, ctx);
     if (dados.ocItemId !== null) return;
     if (dados.insumoId === null) ctx.addIssue({ code: "custom", path: ["insumoId"], message: "Escolha o insumo" });
     if (dados.valorUnitario === null || !Number.isFinite(dados.valorUnitario) || dados.valorUnitario < 0) {
@@ -144,9 +160,11 @@ function textoOuNulo(texto: string): string | null {
 /** Formulário para a action. Na OC, insumo e valor seguem nulos: quem manda é a OC. */
 export function entradaDoForm(dados: EntradaFormInput): EntradaInput {
   const daOc = dados.origem === "oc";
+  const local = decodificarLocal(dados.local) ?? { depositoId: null, tanqueId: null };
   return {
     ocItemId: daOc ? dados.ocItemId : null,
-    depositoId: dados.depositoId,
+    depositoId: local.depositoId,
+    tanqueId: local.tanqueId,
     insumoId: daOc ? null : dados.insumoId,
     quantidade: paraNumero(dados.quantidade, CASAS_TAXA) ?? 0,
     valorUnitario: daOc ? null : paraNumero(dados.valorUnitario, CASAS_TAXA),
@@ -161,7 +179,7 @@ export function entradaDoForm(dados: EntradaFormInput): EntradaInput {
 // ---------------------------------------------------------------------------
 
 export const saidaFormSchema = z.object({
-  depositoId: idObrigatorio("Escolha o depósito"),
+  local: localFormSchema,
   insumoId: idObrigatorio("Escolha o material"),
   quantidade: quantidadeTexto(),
   data: dataSchema,
@@ -171,20 +189,25 @@ export const saidaFormSchema = z.object({
 
 export type SaidaFormInput = z.infer<typeof saidaFormSchema>;
 
-export const saidaSchema = z.object({
-  depositoId: idSchemaCom("Escolha o depósito"),
-  insumoId: idSchemaCom("Escolha o material"),
-  quantidade: quantidadeNumero(),
-  data: dataSchema,
-  centroCustoId: idSchemaCom("Escolha o centro de custo"),
-  observacoes: z.string().trim().max(500).nullable(),
-});
+export const saidaSchema = z
+  .object({
+    depositoId: idSchemaCom("Escolha o depósito").nullable(),
+    tanqueId: idSchemaCom("Escolha o tanque").nullable(),
+    insumoId: idSchemaCom("Escolha o material"),
+    quantidade: quantidadeNumero(),
+    data: dataSchema,
+    centroCustoId: idSchemaCom("Escolha o centro de custo"),
+    observacoes: z.string().trim().max(500).nullable(),
+  })
+  .superRefine(umLocal);
 
 export type SaidaInput = z.infer<typeof saidaSchema>;
 
 export function saidaDoForm(dados: SaidaFormInput): SaidaInput {
+  const local = decodificarLocal(dados.local) ?? { depositoId: null, tanqueId: null };
   return {
-    depositoId: dados.depositoId,
+    depositoId: local.depositoId,
+    tanqueId: local.tanqueId,
     insumoId: dados.insumoId,
     quantidade: paraNumero(dados.quantidade, CASAS_TAXA) ?? 0,
     data: dados.data,

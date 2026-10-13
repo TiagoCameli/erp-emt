@@ -103,7 +103,7 @@ export function TanquesLista({
 
   const esvaziaveis = React.useMemo(
     () =>
-      tanques.filter(temCombustivelParaEsvaziar).map((t) => ({
+      tanques.filter((t) => t.uso === "combustivel" && temCombustivelParaEsvaziar(t)).map((t) => ({
         id: t.id,
         nome: t.nome,
         nivel: t.nivel,
@@ -213,14 +213,15 @@ export function TanquesLista({
           {proprios.length > 0 ? (
             <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {proprios.map((tanque) => {
-                const esvaziavel = podeAbrirEsvaziar && temCombustivelParaEsvaziar(tanque);
+                const esvaziavel =
+                  podeAbrirEsvaziar && tanque.uso === "combustivel" && temCombustivelParaEsvaziar(tanque);
                 return (
                   <li
                     key={tanque.id}
                     className="relative rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary focus-within:border-primary"
                   >
                     {/* O card inteiro leva ao detalhe; o rodapé fica por cima do link. */}
-                    {abreDetalhe ? (
+                    {abreDetalhe && tanque.uso === "combustivel" ? (
                       <Link
                         href={`/combustivel/tanques/${tanque.id}`}
                         aria-label={`Abrir o tanque ${tanque.nome}`}
@@ -234,13 +235,17 @@ export function TanquesLista({
                       capacidade={tanque.capacidade}
                       nivel={tanque.nivel}
                       combustivelNome={tanque.combustivelNome}
+                      unidade={tanque.unidade}
                     />
                     <div className="relative z-10 mt-3 flex items-center justify-between gap-2 border-t pt-3">
-                      {tanque.ativo ? (
-                        <StatusBadge status="aprovado" rotulo="Ativo" />
-                      ) : (
-                        <StatusBadge status="rascunho" rotulo="Inativo" />
-                      )}
+                      <div className="flex items-center gap-1">
+                        {tanque.ativo ? (
+                          <StatusBadge status="aprovado" rotulo="Ativo" />
+                        ) : (
+                          <StatusBadge status="rascunho" rotulo="Inativo" />
+                        )}
+                        {tanque.uso === "material" ? <StatusBadge status="rascunho" rotulo="Material" /> : null}
+                      </div>
                       <div className="flex flex-wrap items-center justify-end gap-1">
                         {esvaziavel ? (
                           <Button

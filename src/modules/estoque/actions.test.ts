@@ -26,6 +26,7 @@ const CENTRO = "44444444-4444-4444-8444-444444444444";
 const AVULSA: EntradaInput = {
   ocItemId: null,
   depositoId: DEPOSITO,
+  tanqueId: null,
   insumoId: INSUMO,
   quantidade: 10,
   valorUnitario: 6.3947,
@@ -36,6 +37,7 @@ const AVULSA: EntradaInput = {
 
 const SAIDA: SaidaInput = {
   depositoId: DEPOSITO,
+  tanqueId: null,
   insumoId: INSUMO,
   quantidade: 3,
   data: "2026-10-13",
@@ -72,6 +74,7 @@ describe("actions do estoque", () => {
     expect(rpc).toHaveBeenCalledWith("fn_estoque_salvar_entrada", {
       p_id: null,
       p_deposito: DEPOSITO,
+      p_tanque: null,
       p_insumo: INSUMO,
       p_quantidade: 10,
       p_valor_unitario: 6.3947,
@@ -113,12 +116,30 @@ describe("actions do estoque", () => {
     expect(rpc).toHaveBeenCalledWith("fn_estoque_salvar_saida", {
       p_id: null,
       p_deposito: DEPOSITO,
+      p_tanque: null,
       p_insumo: INSUMO,
       p_quantidade: 3,
       p_data: "2026-10-13",
       p_centro_custo: CENTRO,
       p_observacoes: undefined,
     });
+  });
+
+  it("saída de tanque de material vai sem depósito", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    rpc.mockResolvedValue({ data: ID, error: null });
+    await salvarSaida(null, { ...SAIDA, depositoId: null, tanqueId: OC_ITEM });
+    expect(rpc).toHaveBeenCalledWith(
+      "fn_estoque_salvar_saida",
+      expect.objectContaining({ p_deposito: null, p_tanque: OC_ITEM }),
+    );
+  });
+
+  it("depósito e tanque juntos (ou nenhum) não chegam à RPC", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    expect("erro" in (await salvarSaida(null, { ...SAIDA, tanqueId: OC_ITEM }))).toBe(true);
+    expect("erro" in (await salvarEntrada(null, { ...AVULSA, depositoId: null }))).toBe(true);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("saldo insuficiente chega à tela com o texto do banco", async () => {

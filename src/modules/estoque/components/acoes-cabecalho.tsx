@@ -12,13 +12,13 @@ import { SaidaFormDrawer } from "./saida-form-drawer";
 
 export interface EntradasAcoesCabecalhoProps {
   podeCriar: boolean;
-  depositos: Opcao[];
+  locais: Opcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
 }
 
 /** Botão "Registrar entrada" do cabeçalho, com o drawer (avulsa ou de OC). */
-export function EntradasAcoesCabecalho({ podeCriar, depositos, insumos, itensOc }: EntradasAcoesCabecalhoProps) {
+export function EntradasAcoesCabecalho({ podeCriar, locais, insumos, itensOc }: EntradasAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
   if (!podeCriar) return null;
   return (
@@ -31,7 +31,7 @@ export function EntradasAcoesCabecalho({ podeCriar, depositos, insumos, itensOc 
         aberto={aberto}
         onAbertoChange={setAberto}
         entrada={null}
-        depositos={depositos}
+        locais={locais}
         insumos={insumos}
         itensOc={itensOc}
       />
@@ -41,15 +41,15 @@ export function EntradasAcoesCabecalho({ podeCriar, depositos, insumos, itensOc 
 
 export interface SaidasAcoesCabecalhoProps {
   podeCriar: boolean;
-  depositos: Opcao[];
+  locais: Opcao[];
   materiais: InsumoOpcao[];
-  /** Pares depósito × insumo com saldo, já como entradas (o mapa não atravessa a fronteira do servidor). */
+  /** Pares local × insumo com saldo, já como entradas (o mapa não atravessa a fronteira do servidor). */
   saldos: { chave: string; saldo: number }[];
   centros: CentroCustoOpcao[];
 }
 
 /** Botão "Registrar saída" do cabeçalho, com o drawer. */
-export function SaidasAcoesCabecalho({ podeCriar, depositos, materiais, saldos, centros }: SaidasAcoesCabecalhoProps) {
+export function SaidasAcoesCabecalho({ podeCriar, locais, materiais, saldos, centros }: SaidasAcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
   const mapa = React.useMemo(() => new Map(saldos.map((s) => [s.chave, s.saldo])), [saldos]);
   if (!podeCriar) return null;
@@ -63,7 +63,7 @@ export function SaidasAcoesCabecalho({ podeCriar, depositos, materiais, saldos, 
         aberto={aberto}
         onAbertoChange={setAberto}
         saida={null}
-        depositos={depositos}
+        locais={locais}
         materiais={materiais}
         saldos={mapa}
         centros={centros}

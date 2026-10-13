@@ -34,7 +34,7 @@ export interface SaidasTabelaProps {
   saidas: SaidaLinha[];
   /** Entradas não excluídas, para o saldo do formulário de edição. */
   entradas: EntradaLinha[];
-  depositos: Opcao[];
+  locais: Opcao[];
   materiais: InsumoOpcao[];
   centros: CentroCustoOpcao[];
   /** Raízes de centro de custo que aparecem nas saídas, para o filtro. */
@@ -47,7 +47,7 @@ export interface SaidasTabelaProps {
 export function SaidasTabela({
   saidas,
   entradas,
-  depositos,
+  locais,
   materiais,
   centros,
   raizes,
@@ -55,7 +55,7 @@ export function SaidasTabela({
   podeExcluir,
 }: SaidasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
-  const [deposito, setDeposito] = useFiltroSessao("deposito", "");
+  const [local, setLocal] = useFiltroSessao("local", "");
   const [centro, setCentro] = useFiltroSessao("centro", "");
   const [situacao, setSituacao] = useFiltroSessao<Situacao>("situacao", "ativas", SITUACOES);
   const [editando, setEditando] = React.useState<SaidaLinha | null>(null);
@@ -76,7 +76,7 @@ export function SaidasTabela({
     return filtrarFacetado(
       saidas,
       {
-        deposito: { selecionados: selecao(deposito), chave: (saida) => saida.depositoId },
+        local: { selecionados: selecao(local), chave: (saida) => saida.local },
         centro: { selecionados: selecao(centro), chave: (saida) => saida.centroCustoRaiz },
       },
       [
@@ -88,7 +88,7 @@ export function SaidasTabela({
           (saida.observacoes ?? "").toLowerCase().includes(termo),
       ],
     );
-  }, [saidas, busca, deposito, centro, situacao]);
+  }, [saidas, busca, local, centro, situacao]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -147,7 +147,7 @@ export function SaidasTabela({
         cell: ({ row }) => <MoneyText valor={row.original.valorTotal} />,
       },
       { accessorKey: "centroCustoRotulo", header: "Centro de custo", size: 260 },
-      { accessorKey: "depositoNome", header: "Depósito", size: 170 },
+      { accessorKey: "localNome", header: "Local", size: 190 },
       {
         id: "situacao",
         header: "Situação",
@@ -198,17 +198,17 @@ export function SaidasTabela({
             ),
           },
           {
-            id: "deposito",
-            rotulo: "Depósito",
-            temValor: deposito !== "",
-            onLimpar: () => setDeposito(""),
+            id: "local",
+            rotulo: "Local",
+            temValor: local !== "",
+            onLimpar: () => setLocal(""),
             elemento: (
               <FiltroSelect
-                valor={deposito}
-                onValorChange={setDeposito}
-                opcoes={opcoes("deposito", depositos.map((d) => ({ valor: d.id, rotulo: d.nome })))}
-                placeholder="Depósito"
-                todosRotulo="Todos os depósitos"
+                valor={local}
+                onValorChange={setLocal}
+                opcoes={opcoes("local", locais.map((l) => ({ valor: l.id, rotulo: l.nome })))}
+                placeholder="Local"
+                todosRotulo="Todos os locais"
               />
             ),
           },
@@ -280,7 +280,7 @@ export function SaidasTabela({
             if (!aberto) setEditando(null);
           }}
           saida={editando}
-          depositos={depositos}
+          locais={locais}
           materiais={materiais}
           saldos={saldosEdicao}
           centros={centros}
@@ -295,7 +295,7 @@ export function SaidasTabela({
         titulo="Excluir saída"
         descricao={
           excluindo
-            ? `A saída de ${formatarQuantidade(excluindo.quantidade)}${excluindo.unidade ? ` ${excluindo.unidade}` : ""} de ${excluindo.insumoNome} volta para o saldo do depósito ${excluindo.depositoNome}, e o custo das saídas seguintes é refeito.`
+            ? `A saída de ${formatarQuantidade(excluindo.quantidade)}${excluindo.unidade ? ` ${excluindo.unidade}` : ""} de ${excluindo.insumoNome} volta para o saldo de ${excluindo.localNome}, e o custo das saídas seguintes é refeito.`
             : ""
         }
         textoConfirmar="Excluir saída"

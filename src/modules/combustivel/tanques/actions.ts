@@ -68,6 +68,7 @@ function paraLinha(dados: TanqueInput) {
     nome: dados.nome,
     apelido: dados.apelido === "" ? null : dados.apelido,
     capacidade_litros: dados.capacidade,
+    uso: dados.uso,
     eh_externo: dados.ehExterno,
     proprietario_id: dados.ehExterno ? dados.proprietarioId : null,
     observacoes: dados.observacoes === "" ? null : dados.observacoes,

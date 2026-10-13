@@ -31,8 +31,9 @@ type Situacao = (typeof SITUACOES)[number];
 
 export interface EntradasTabelaProps {
   entradas: EntradaLinha[];
-  depositos: Opcao[];
-  depositosAtivos: Opcao[];
+  /** Todos os locais (depósitos e tanques de material), para o filtro. */
+  locais: Opcao[];
+  locaisAtivos: Opcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
   podeEditar: boolean;
@@ -42,15 +43,15 @@ export interface EntradasTabelaProps {
 /** Entradas do estoque, avulsas e de OC. A página traz todas e a tabela filtra em memória. */
 export function EntradasTabela({
   entradas,
-  depositos,
-  depositosAtivos,
+  locais,
+  locaisAtivos,
   insumos,
   itensOc,
   podeEditar,
   podeExcluir,
 }: EntradasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
-  const [deposito, setDeposito] = useFiltroSessao("deposito", "");
+  const [local, setLocal] = useFiltroSessao("local", "");
   const [situacao, setSituacao] = useFiltroSessao<Situacao>("situacao", "ativas", SITUACOES);
   const [editando, setEditando] = React.useState<EntradaLinha | null>(null);
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
@@ -59,7 +60,7 @@ export function EntradasTabela({
     const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       entradas,
-      { deposito: { selecionados: selecao(deposito), chave: (entrada) => entrada.depositoId } },
+      { local: { selecionados: selecao(local), chave: (entrada) => entrada.local } },
       [
         (entrada) => entrada.excluida === (situacao === "excluidas"),
         (entrada) =>
@@ -70,7 +71,7 @@ export function EntradasTabela({
           (entrada.notaFiscal ?? "").toLowerCase().includes(termo),
       ],
     );
-  }, [entradas, busca, deposito, situacao]);
+  }, [entradas, busca, local, situacao]);
 
   async function aoConfirmarExclusao(motivo?: string) {
     if (!excluindo) return;
@@ -128,7 +129,7 @@ export function EntradasTabela({
         meta: { alinharDireita: true, atomico: true, celular: "valor" },
         cell: ({ row }) => <MoneyText valor={row.original.valorTotal} />,
       },
-      { accessorKey: "depositoNome", header: "Depósito", size: 170 },
+      { accessorKey: "localNome", header: "Local", size: 190 },
       {
         accessorKey: "ocNumero",
         header: "Origem",
@@ -188,17 +189,17 @@ export function EntradasTabela({
             ),
           },
           {
-            id: "deposito",
-            rotulo: "Depósito",
-            temValor: deposito !== "",
-            onLimpar: () => setDeposito(""),
+            id: "local",
+            rotulo: "Local",
+            temValor: local !== "",
+            onLimpar: () => setLocal(""),
             elemento: (
               <FiltroSelect
-                valor={deposito}
-                onValorChange={setDeposito}
-                opcoes={opcoes("deposito", depositos.map((d) => ({ valor: d.id, rotulo: d.nome })))}
-                placeholder="Depósito"
-                todosRotulo="Todos os depósitos"
+                valor={local}
+                onValorChange={setLocal}
+                opcoes={opcoes("local", locais.map((l) => ({ valor: l.id, rotulo: l.nome })))}
+                placeholder="Local"
+                todosRotulo="Todos os locais"
               />
             ),
           },
@@ -255,7 +256,7 @@ export function EntradasTabela({
             descricao={
               entradas.length === 0
                 ? "Registre a entrada avulsa ou puxe um item de OC aprovada"
-                : "Ajuste a busca, o depósito ou a situação"
+                : "Ajuste a busca, o local ou a situação"
             }
             className="border-none bg-transparent"
           />
@@ -270,7 +271,7 @@ export function EntradasTabela({
             if (!aberto) setEditando(null);
           }}
           entrada={editando}
-          depositos={depositosAtivos}
+          locais={locaisAtivos}
           insumos={insumos}
           itensOc={itensOc}
         />
@@ -284,7 +285,7 @@ export function EntradasTabela({
         titulo="Excluir entrada"
         descricao={
           excluindo
-            ? `A entrada de ${formatarQuantidade(excluindo.quantidade)}${excluindo.unidade ? ` ${excluindo.unidade}` : ""} de ${excluindo.insumoNome} sai do saldo do depósito ${excluindo.depositoNome}. Se alguma saída já usou esta entrada, a exclusão é recusada.`
+            ? `A entrada de ${formatarQuantidade(excluindo.quantidade)}${excluindo.unidade ? ` ${excluindo.unidade}` : ""} de ${excluindo.insumoNome} sai do saldo de ${excluindo.localNome}. Se alguma saída já usou esta entrada, a exclusão é recusada.`
             : ""
         }
         textoConfirmar="Excluir entrada"

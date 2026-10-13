@@ -5281,3 +5281,14 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Relatórios que leem a view:** custo por centro (tabela, série, vida), custo por mês, custo x receita (e por ele o rateio do indireto), custos indiretos, DRE e maiores custos da Gestão. A troca foi por texto com checagem: se um trecho não fosse achado, a migration parava.
 - **Efeitos para saber:** o 13º de 2026 (1ª parcela, R$ 27.883,43, antes inteiro em 12/2026 nas obras) agora aparece 1/12 por mês de jan a dez/2026 no indireto, inclusive em meses já confirmados no rateio (o percentual salvo vale, o valor a ratear sobe). O drill de um mês ainda lista o lançamento pelo mês dele, então o 13º não aparece no drill dos outros meses. As guias do 13º e das férias continuam sem rateio, logo fora do custo, como antes.
 - Prova: `supabase/provas/decimo_ferias_indireto.sql` (16 checagens), RED antes e GREEN no banco vivo. Rateio do ano passou de 187 ms para 309 ms.
+
+## 2026-10-13 - Estoque: tanque de material
+
+**Resposta do Tiago:** "os tanques não são somente para combustível" (CAP, emulsão...), e importação de depósitos por planilha não precisa.
+
+- **Uso do tanque** (`tanques.uso`): `combustivel` (como sempre, movimentado só pelo módulo Combustível) ou `material` (movimentado só pelo Estoque, com o mesmo PEPS dos depósitos). Escolhido no cadastro do tanque, no Estoque. Tanque de terceiro é sempre de combustível (CHECK).
+- **Os dois módulos não se misturam:** gatilhos nas tabelas do Combustível recusam movimento em tanque de material; as RPCs do Estoque recusam tanque de combustível; trocar o uso de um tanque com movimento do outro módulo é recusado. As listas de tanque do Combustível (cadastro, entradas, abastecimento, transferência, esvaziamento, celular) filtram `uso = 'combustivel'`, e o insumo guardado num tanque de material não vira "combustível" na lista de insumos do Combustível nem na trava do Estoque.
+- **Entrada e saída do Estoque** vão para um depósito OU um tanque de material (`deposito_id` ou `tanque_id`, CHECK de um só). O PEPS é por local × insumo. No formulário o campo é "Depósito ou tanque".
+- **Tanque de material:** um material por vez (o banco recusa o segundo enquanto houver saldo do primeiro); a capacidade (em litros) só trava quando o material é medido em litro. O cache do tanque (`nivel_atual_litros`, `combustivel_atual_id`) passa a ser o saldo e o material atual, gravados pelo Estoque; o card mostra o saldo na unidade do material.
+- Migration `estoque_tanque_material` (troca a assinatura de `fn_estoque_salvar_entrada`/`_saida`, por isso aplicada logo antes do merge). Prova: casos 13 a 17 de `supabase/provas/estoque_modulo.sql`.
+- De passagem: a resolução do conflito do #447 tinha colado duas linhas de `database.types.ts` (`};      extrato_transacoes: {`); separadas.

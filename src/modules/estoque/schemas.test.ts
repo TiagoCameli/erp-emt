@@ -4,18 +4,28 @@ import { entradaDoForm, entradaFormSchema, saidaDoForm, saidaFormSchema } from "
 
 const DEPOSITO = "11111111-1111-4111-8111-111111111111";
 const INSUMO = "22222222-2222-4222-8222-222222222222";
+// Id real da carga (md5): o schema tem de aceitar.
 const OC_ITEM = "38673fc5-c55a-c7be-8687-e9b1d3589ef1";
 
 const FORM_AVULSA = {
   origem: "avulsa" as const,
   ocItemId: "",
-  depositoId: DEPOSITO,
+  local: `deposito:${DEPOSITO}`,
   insumoId: INSUMO,
   quantidade: "1.234,5",
   valorUnitario: "6,3947",
   data: "2026-10-13",
   notaFiscal: " ",
   observacoes: "",
+};
+
+const FORM_SAIDA = {
+  local: `tanque:${DEPOSITO}`,
+  insumoId: INSUMO,
+  quantidade: "2,5",
+  data: "2026-10-13",
+  centroCustoId: OC_ITEM,
+  observacoes: " para a base ",
 };
 
 describe("schemas do estoque", () => {
@@ -35,10 +45,17 @@ describe("schemas do estoque", () => {
     expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, data: "" }).success).toBe(false);
   });
 
+  it("o local é depósito ou tanque; outra coisa é recusada", () => {
+    expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: "" }).success).toBe(false);
+    expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: DEPOSITO }).success).toBe(false);
+    expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: `tanque:${DEPOSITO}` }).success).toBe(true);
+  });
+
   it("converte o formulário avulso para números e nulos", () => {
     expect(entradaDoForm(FORM_AVULSA)).toEqual({
       ocItemId: null,
       depositoId: DEPOSITO,
+      tanqueId: null,
       insumoId: INSUMO,
       quantidade: 1234.5,
       valorUnitario: 6.3947,
@@ -56,29 +73,13 @@ describe("schemas do estoque", () => {
   });
 
   it("saída exige centro de custo", () => {
-    const r = saidaFormSchema.safeParse({
-      depositoId: DEPOSITO,
-      insumoId: INSUMO,
-      quantidade: "2",
-      data: "2026-10-13",
-      centroCustoId: "",
-      observacoes: "",
-    });
-    expect(r.success).toBe(false);
+    expect(saidaFormSchema.safeParse({ ...FORM_SAIDA, centroCustoId: "" }).success).toBe(false);
   });
 
-  it("converte a saída", () => {
-    expect(
-      saidaDoForm({
-        depositoId: DEPOSITO,
-        insumoId: INSUMO,
-        quantidade: "2,5",
-        data: "2026-10-13",
-        centroCustoId: OC_ITEM,
-        observacoes: " para a base ",
-      }),
-    ).toEqual({
-      depositoId: DEPOSITO,
+  it("converte a saída de um tanque de material", () => {
+    expect(saidaDoForm(FORM_SAIDA)).toEqual({
+      depositoId: null,
+      tanqueId: DEPOSITO,
       insumoId: INSUMO,
       quantidade: 2.5,
       data: "2026-10-13",
