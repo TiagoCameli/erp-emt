@@ -5249,6 +5249,15 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Policy `unidades_medida_select` estendida:** mantém cadastros, manutenção, combustível e frete e acrescenta a Execução (`fn_ve_execucao`).
 - **Aplicação das migrations:** pelo MCP; quando deu "Invalid or expired requestState", por `supabase db query --linked -f` com registro manual em `schema_migrations`. Trabalho na branch `execucao-f1a`.
 
+## 2026-10-13 - Execução de Obras removida
+
+**Pedido do Tiago:** apagar o módulo Execução inteiro (app, permissões e banco).
+
+- **Banco:** migration `20261013180000_remover_execucao` derruba as 12 tabelas `ex_`, as 3 views `ex_v_*`, as funções `fn_ex_*` e `fn_ve_execucao`, e as 45 permissões `execucao.*` (36 de usuário, 9 de perfil). Tinha só o teste de 13/10 (cronograma "Fundação" com 2 atividades), 2 calendários e 79 feriados; backup em JSON no personal-os (`outputs/erp-emt-remover-execucao-backup`).
+- **Policy `unidades_medida_select`:** volta sem a Execução e mantém o Estoque, que entrou depois.
+- **Código:** saem `src/app/(app)/execucao`, `src/modules/execucao`, o guia para agentes, o módulo do catálogo e do menu, e os tipos `ex_` de `database.types.ts` (tirados à mão: regenerar arrastaria tipos de outras sessões). Spec e plano da Fase 1a ficam como histórico.
+- **Efeito no Estoque:** a "F5 da Execução" (`execucao.estoque`) deixa de existir.
+
 ## 2026-10-13 - Folha: CC do cadastro segue a folha; 13º e férias viram indireto diluído no ano
 
 **Pedido do Tiago:** trocar o CC de um funcionário na folha gerencial tem de atualizar o cadastro, e o cadastro fica igual ao da última folha dele. O 13º e as férias têm o mês de referência dividido entre os meses do ano e funcionam como custo indireto, rateado como os outros indiretos mês a mês.
