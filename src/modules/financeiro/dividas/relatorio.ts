@@ -1,4 +1,4 @@
-import { calcularCet, lerFluxo, type Cet } from "@/modules/financeiro/dividas/calculo";
+import { calcularCet, lerFluxo, valorQuitacaoHoje, type Cet } from "@/modules/financeiro/dividas/calculo";
 
 /**
  * As linhas de `fn_rel_dividas_contratos` e `fn_rel_consorcios` em camelCase,
@@ -33,6 +33,12 @@ export interface ContratoRelatorio {
   saldoDevedor: number;
   jurosPagos: number;
   jurosAPagar: number;
+  /** Soma das parcelas em aberto (principal, juros e encargos): o caixa que ainda sai. */
+  aPagar: number;
+  /** O que o contrato custa pagando tudo no prazo: o já pago mais `aPagar`. */
+  totalNoPrazo: number;
+  /** Parcelas em aberto a valor presente na taxa do contrato (ver `valorQuitacaoHoje`). */
+  quitacaoHoje: number;
   proximas: ParcelaProxima[];
   /** Null sem cronograma (só a liberação no fluxo). */
   cet: Cet | null;
@@ -97,9 +103,14 @@ export interface LinhaRpcContrato {
   juros_a_pagar: number | string;
   proximas: unknown;
   fluxo: unknown;
+  restantes: unknown;
 }
 
-export function lerContratoRelatorio(l: LinhaRpcContrato): ContratoRelatorio {
+/** `hoje` é a data em que a RPC foi lida: a base do valor de quitação. */
+export function lerContratoRelatorio(l: LinhaRpcContrato, hoje: string): ContratoRelatorio {
+  const restantes = lerFluxo(l.restantes);
+  const aPagar = Math.round(restantes.reduce((soma, p) => soma + p.valor, 0) * 100) / 100;
+  const pago = numero(l.principal_pago) + numero(l.juros_pagos);
   return {
     contratoId: l.contrato_id,
     credor: l.credor,
@@ -117,6 +128,9 @@ export function lerContratoRelatorio(l: LinhaRpcContrato): ContratoRelatorio {
     saldoDevedor: numero(l.saldo_devedor),
     jurosPagos: numero(l.juros_pagos),
     jurosAPagar: numero(l.juros_a_pagar),
+    aPagar,
+    totalNoPrazo: Math.round((pago + aPagar) * 100) / 100,
+    quitacaoHoje: valorQuitacaoHoje(restantes, numero(l.taxa_am), hoje),
     proximas: objetos(l.proximas).map((p) => ({
       numero: p.numero === null || p.numero === undefined ? null : numero(p.numero),
       vencimento: String(p.vencimento ?? ""),

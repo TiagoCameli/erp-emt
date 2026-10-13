@@ -53,6 +53,27 @@ export const colunasContratos: ColumnDef<ContratoRelatorio, unknown>[] = [
     cell: ({ row }) => <MoneyText valor={row.original.saldoDevedor} />,
   },
   {
+    accessorKey: "aPagar",
+    header: "A pagar",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={row.original.aPagar} />,
+  },
+  {
+    accessorKey: "totalNoPrazo",
+    header: "Total no prazo",
+    size: 150,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={row.original.totalNoPrazo} />,
+  },
+  {
+    accessorKey: "quitacaoHoje",
+    header: "Quitar hoje",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={row.original.quitacaoHoje} />,
+  },
+  {
     id: "taxa",
     header: "Taxa",
     size: 140,

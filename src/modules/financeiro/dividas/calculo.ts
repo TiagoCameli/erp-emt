@@ -100,6 +100,26 @@ export function lerFluxo(json: unknown): PontoFluxo[] {
   });
 }
 
+/**
+ * Quanto custa quitar hoje: cada parcela em aberto trazida a valor presente na
+ * taxa do contrato (`taxaAm` em %, 1,5 = 1,5% a.m.), com os meses de
+ * `mesesEntre`. É a conta do banco na liquidação antecipada: tira os juros
+ * ainda não corridos. Parcela vencida e não paga entra cheia (sem desconto e
+ * sem mora). Sem taxa, é a soma. Em centavos.
+ *
+ * Pós-fixado (FINAME, CDI): a taxa cadastrada é só o spread, então o valor
+ * sai como estimativa.
+ */
+export function valorQuitacaoHoje(restantes: readonly PontoFluxo[], taxaAm: number, hoje: string): number {
+  const i = taxaAm / 100;
+  const total = restantes.reduce((soma, p) => {
+    const t = mesesEntre(hoje, p.data);
+    if (!Number.isFinite(t) || t <= 0 || !(i > 0)) return soma + p.valor;
+    return soma + p.valor / Math.pow(1 + i, t);
+  }, 0);
+  return Math.round(total * 100) / 100;
+}
+
 // ---------- cronograma colado do PDF do banco ----------
 
 /** Uma linha do cronograma digitado, como vai para `fn_salvar_cronograma_contrato`. */
