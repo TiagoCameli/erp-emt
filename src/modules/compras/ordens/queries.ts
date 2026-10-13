@@ -196,6 +196,25 @@ export interface LancamentoVinculado {
    * que R$ 9,8 milhões de dívida estavam resolvidos.
    */
   aberto: number;
+  /**
+   * O rateio do lançamento, quando alguém o refez depois da aprovação.
+   *
+   * `fn_definir_rateio_lancamento` reparte o custo entre outras obras e não
+   * encosta nos itens da OC, que guardam o centro da compra. Os relatórios leem
+   * o rateio do lançamento, então a OC precisa mostrar os dois. Null quando o
+   * rateio nunca foi alterado (os itens dizem a verdade) ou quando quem olha não
+   * tem permissão de ver a trilha.
+   */
+  rateioAlterado: RateioAlteradoNoLancamento | null;
+}
+
+export interface RateioAlteradoNoLancamento {
+  /** Quando foi a última alteração. */
+  em: string;
+  porNome: string | null;
+  motivo: string;
+  /** O rateio de agora, maior valor primeiro. */
+  linhas: { centroCustoId: string; centroCustoNome: string; valor: number }[];
 }
 
 /** Parcela definida na OC (tabela oc_parcelas). */
@@ -841,6 +860,10 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
     .limit(1)
     .maybeSingle();
 
+  const rateioAlterado = lancamento
+    ? await rateioAlteradoDoLancamento(supabase, lancamento.id)
+    : null;
+
   const itens: OrdemItem[] = (ordem.oc_itens ?? []).map((item) => ({
     id: item.id,
     insumoId: item.insumo_id,
@@ -932,8 +955,71 @@ export async function buscarOrdem(id: string): Promise<OrdemDetalhe | null> {
           aberto: (lancamento.lancamento_parcelas ?? [])
             .filter((parcela) => ehParcelaAberta(parcela.status))
             .reduce((soma, parcela) => soma + parcela.valor, 0),
+          rateioAlterado,
         }
       : null,
+  };
+}
+
+/**
+ * O rateio atual do lançamento da OC, se ele foi refeito depois da aprovação.
+ *
+ * A existência de uma linha em `rateio_eventos` é o sinal: a aprovação grava o
+ * rateio a partir dos itens sem gerar evento, então sem evento o rateio é o dos
+ * itens. Comparar valores não serviria, porque frete e desconto entram
+ * proporcionais no rateio e o valor por centro nunca bate com o subtotal.
+ *
+ * `rateio_eventos` só é visível para quem vê lançamentos ou aprova pagamentos;
+ * para os outros a leitura volta vazia e a tela segue como antes.
+ */
+async function rateioAlteradoDoLancamento(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lancamentoId: string,
+): Promise<RateioAlteradoNoLancamento | null> {
+  const { data: evento } = await supabase
+    .from("rateio_eventos")
+    .select("motivo, created_at, created_by")
+    .eq("lancamento_id", lancamentoId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!evento) return null;
+
+  const [{ data: rateios }, { data: usuarios }] = await Promise.all([
+    supabase
+      .from("lancamento_rateios")
+      .select("centro_custo_id, valor, centros_custo(nome)")
+      .eq("lancamento_id", lancamentoId),
+    evento.created_by
+      ? supabase.rpc("nomes_usuarios_financeiro", {
+          p_ids: [evento.created_by],
+        })
+      : Promise.resolve({ data: [] as { id: string; nome: string }[] }),
+  ]);
+
+  // Um centro pode aparecer em mais de uma linha (uma por categoria): a OC fala
+  // de obra, então soma por centro.
+  const porCentro = new Map<string, { nome: string; valor: number }>();
+  for (const linha of rateios ?? []) {
+    const atual = porCentro.get(linha.centro_custo_id);
+    porCentro.set(linha.centro_custo_id, {
+      nome: linha.centros_custo?.nome ?? "-",
+      valor: (atual?.valor ?? 0) + linha.valor,
+    });
+  }
+
+  return {
+    em: evento.created_at,
+    porNome: usuarios?.[0]?.nome ?? null,
+    motivo: evento.motivo,
+    linhas: [...porCentro.entries()]
+      .map(([centroCustoId, { nome, valor }]) => ({
+        centroCustoId,
+        centroCustoNome: nome,
+        valor,
+      }))
+      .sort((a, b) => b.valor - a.valor),
   };
 }
 

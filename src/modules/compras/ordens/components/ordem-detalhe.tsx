@@ -787,7 +787,55 @@ export function OrdemDetalheView({
                   ) : null}
                 </div>
               </div>
-            ) : (
+            ) : null}
+            {/*
+              O rateio refeito no lançamento não volta para os itens: eles
+              guardam o centro da compra, e o custo nos relatórios sai daqui.
+              Sem este bloco a tabela de itens contradizia o lançamento calada.
+            */}
+            {ordem.lancamento?.rateioAlterado ? (
+              <div className="mt-3 rounded-md border border-status-pendente/30 bg-status-pendente/5 px-3 py-3">
+                <div className="flex items-start gap-2">
+                  <TriangleAlert
+                    className="mt-0.5 size-4 shrink-0 text-status-pendente"
+                    aria-hidden="true"
+                  />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <p className="text-detalhe font-medium">
+                      Rateio alterado no lançamento
+                    </p>
+                    <p className="text-legenda text-muted-foreground">
+                      {formatarData(ordem.lancamento.rateioAlterado.em)}
+                      {ordem.lancamento.rateioAlterado.porNome
+                        ? ` · ${ordem.lancamento.rateioAlterado.porNome}`
+                        : ""}
+                      {` · "${ordem.lancamento.rateioAlterado.motivo}"`}
+                    </p>
+                    <p className="text-legenda text-muted-foreground">
+                      Os relatórios de custo usam o rateio abaixo. Os itens
+                      continuam mostrando o centro de custo da compra.
+                    </p>
+                    <ul
+                      aria-label="Rateio atual"
+                      className="mt-1 flex flex-col gap-0.5"
+                    >
+                      {ordem.lancamento.rateioAlterado.linhas.map((linha) => (
+                        <li
+                          key={linha.centroCustoId}
+                          className="flex justify-between gap-3 text-legenda"
+                        >
+                          <span className="min-w-0">{linha.centroCustoNome}</span>
+                          <span className="shrink-0 tabular-nums">
+                            {formatarBRL(linha.valor)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {ordem.lancamento ? null : (
               <p className="text-detalhe text-muted-foreground">
                 Nenhum lançamento ainda. A aprovação da ordem gera o lançamento
                 previsto.
