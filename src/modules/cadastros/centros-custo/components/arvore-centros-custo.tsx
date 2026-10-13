@@ -192,6 +192,18 @@ function filtrarRaizes(
 
 const INDENTACAO_PX = 24;
 
+/** Centro raiz de sócio ou empresa ligada também sai pela árvore, quando vazio. */
+const TITULO_EXCLUIR_DO_NIVEL: Record<1 | 2 | 3, string> = {
+  1: "Excluir centro",
+  2: "Excluir etapa",
+  3: "Excluir item",
+};
+const EXCLUIDO_DO_NIVEL: Record<1 | 2 | 3, string> = {
+  1: "Centro excluído",
+  2: "Etapa excluída",
+  3: "Item excluído",
+};
+
 export function ArvoreCentrosCusto({
   nos,
   podeCriar,
@@ -327,7 +339,7 @@ export function ArvoreCentrosCusto({
       toast.error(resultado.erro);
       return false;
     }
-    toast.success(aExcluir.nivel === 3 ? "Item excluído" : "Etapa excluída");
+    toast.success(EXCLUIDO_DO_NIVEL[aExcluir.nivel]);
     setAExcluir(null);
   }
 
@@ -699,7 +711,7 @@ export function ArvoreCentrosCusto({
           onAbertoChange={(aberto) => {
             if (!aberto) setAExcluir(null);
           }}
-          titulo={aExcluir?.nivel === 3 ? "Excluir item" : "Excluir etapa"}
+          titulo={aExcluir ? TITULO_EXCLUIR_DO_NIVEL[aExcluir.nivel] : ""}
           descricao={
             aExcluir
               ? `${aExcluir.nome} não tem custo nenhum ligado e vai para a lixeira. Dá para restaurar depois.`

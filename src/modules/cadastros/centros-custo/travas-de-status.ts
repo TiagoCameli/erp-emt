@@ -74,9 +74,10 @@ export function motivoParaNaoExcluir(bloqueio: string | null): string | null {
       return "Este nó tem custos ligados e não pode ser excluído. Desative-o no lugar";
     case "tem_filhos":
       return "Exclua ou mova os itens desta etapa antes de excluí-la";
-    case "nivel_1":
     case "raiz_de_obra":
-      return "Centros não podem ser excluídos aqui. São geridos pelo sistema";
+      return "Centro de obra não se exclui aqui. Ele pertence à Obra";
+    case "nivel_1":
+      return "Só centros de sócio ou empresa ligada podem ser excluídos aqui";
     case "sistema":
     case "gerido":
       return "Este nó é gerido pelo sistema e não pode ser excluído";
