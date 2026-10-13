@@ -23,8 +23,13 @@ export interface TanqueLinha {
   capacidade: number;
   /** Cache do gatilho (fn_comb_recalcular_nivel). */
   nivel: number;
+  /** No tanque de material é o material atual (o cache é o mesmo). */
   combustivelId: string | null;
   combustivelNome: string | null;
+  /** Combustível (módulo Combustível) ou material (Estoque). */
+  uso: "combustivel" | "material";
+  /** Unidade do conteúdo: litro no combustível; a do insumo no material. */
+  unidade: string | null;
   ehExterno: boolean;
   proprietarioId: string | null;
   proprietarioNome: string | null;
@@ -33,8 +38,8 @@ export interface TanqueLinha {
 }
 
 const SELECT_TANQUE = `id, nome, apelido, capacidade_litros, nivel_atual_litros, combustivel_atual_id,
-  eh_externo, proprietario_id, observacoes, ativo,
-  insumos(nome),
+  uso, eh_externo, proprietario_id, observacoes, ativo,
+  insumos(nome, unidades_medida(sigla)),
   fornecedores(razao_social, nome_fantasia)`;
 
 interface TanqueBruto {
@@ -44,11 +49,12 @@ interface TanqueBruto {
   capacidade_litros: number;
   nivel_atual_litros: number;
   combustivel_atual_id: string | null;
+  uso: string;
   eh_externo: boolean;
   proprietario_id: string | null;
   observacoes: string | null;
   ativo: boolean;
-  insumos: { nome: string } | null;
+  insumos: { nome: string; unidades_medida: { sigla: string } | null } | null;
   fornecedores: { razao_social: string; nome_fantasia: string | null } | null;
 }
 
@@ -61,6 +67,8 @@ function paraTanque(linha: TanqueBruto): TanqueLinha {
     nivel: Number(linha.nivel_atual_litros),
     combustivelId: linha.combustivel_atual_id,
     combustivelNome: linha.insumos?.nome ?? null,
+    uso: linha.uso === "material" ? "material" : "combustivel",
+    unidade: linha.uso === "material" ? (linha.insumos?.unidades_medida?.sigla ?? null) : "L",
     ehExterno: linha.eh_externo,
     proprietarioId: linha.proprietario_id,
     proprietarioNome: linha.fornecedores ? nomeFornecedor(linha.fornecedores) : null,
@@ -69,13 +77,17 @@ function paraTanque(linha: TanqueBruto): TanqueLinha {
   };
 }
 
-/** Todos os tanques (ativos e inativos), por nome. */
-export async function listarTanques(): Promise<TanqueLinha[]> {
+/**
+ * Tanques (ativos e inativos), por nome. O Combustível só enxerga os de combustível; o
+ * Estoque, onde o tanque é criado, pede todos.
+ */
+export async function listarTanques(uso: "combustivel" | "todos" = "combustivel"): Promise<TanqueLinha[]> {
   const supabase = await createClient();
 
-  const { linhas, erro } = await todasAsLinhas((de, ate) =>
-    supabase.from("tanques").select(SELECT_TANQUE).order("nome").order("id").range(de, ate),
-  );
+  const { linhas, erro } = await todasAsLinhas((de, ate) => {
+    const consulta = supabase.from("tanques").select(SELECT_TANQUE);
+    return (uso === "todos" ? consulta : consulta.eq("uso", "combustivel")).order("nome").order("id").range(de, ate);
+  });
 
   if (erro) {
     throw new Error("Não foi possível carregar os tanques");

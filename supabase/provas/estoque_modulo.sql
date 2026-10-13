@@ -17,12 +17,20 @@
 --  10 excluir S1 libera E2, restaurar S1 volta o custo 91,0000
 --  11 peça do almoxarifado como entrada avulsa: recusou
 --  12 apagar o item da OC que teve entrada (edição/exclusão da OC): recusou
+--  13 tanque de material: entrada 5, saída 2 -> cache nível 3 com o material; posição mostra o tanque com 3
+--  14 segundo material no tanque com saldo: recusou
+--  15 entrada do Estoque em tanque de combustível: recusou
+--  16 entrada do Combustível em tanque de material: recusou
+--  17 trocar o uso do tanque que tem movimento: recusou
 do $prova$
 declare
   v_admin constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := gen_random_uuid();
   v_insumo uuid;
   v_peca uuid;
+  v_insumo2 uuid;
+  v_tq uuid;
+  v_tq_comb uuid;
   v_cc constant uuid := '026a70b7-640c-459d-9c10-f11ccba5d4c1';
   v_oc_item uuid;
   v_oc_qtd numeric;
@@ -32,6 +40,8 @@ begin
   -- Insumo e item de OC que o Estoque pode movimentar (nem peça, nem combustível).
   select id into v_insumo from public.insumos where ativo and public.fn_estoque_insumo_de_outro_modulo(id) is null order by nome limit 1;
   select insumo_id into v_peca from public.almoxarifado_itens limit 1;
+  select id into v_insumo2 from public.insumos where ativo and id <> v_insumo and public.fn_estoque_insumo_de_outro_modulo(id) is null order by nome limit 1;
+  select id into v_tq_comb from public.tanques where uso = 'combustivel' and not eh_externo and ativo limit 1;
   select i.id, i.quantidade into v_oc_item, v_oc_qtd from public.oc_itens i join public.ordens_compra o on o.id = i.ordem_compra_id
    where o.status = 'aprovado' and public.fn_estoque_insumo_de_outro_modulo(i.insumo_id) is null order by o.numero limit 1;
   select count(*) into v_n from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -51,14 +61,14 @@ begin
   insert into public.almoxarifado_depositos (nome) values ('Depósito prova estoque') returning id into v_dep;
 
   -- 2. PEPS
-  v_e1 := public.fn_estoque_salvar_entrada(null, v_dep, v_insumo, 10, 5, '2026-10-01');
-  v_e2 := public.fn_estoque_salvar_entrada(null, v_dep, v_insumo, 10, 7, '2026-10-05');
-  v_s1 := public.fn_estoque_salvar_saida(null, v_dep, v_insumo, 15, '2026-10-06', v_cc);
+  v_e1 := public.fn_estoque_salvar_entrada(null, v_dep, null, v_insumo, 10, 5, '2026-10-01');
+  v_e2 := public.fn_estoque_salvar_entrada(null, v_dep, null, v_insumo, 10, 7, '2026-10-05');
+  v_s1 := public.fn_estoque_salvar_saida(null, v_dep, null, v_insumo, 15, '2026-10-06', v_cc);
   select jsonb_build_object('valor', valor_total, 'unit', custo_unitario) into v_j from public.estoque_saidas where id = v_s1;
   r := r || jsonb_build_object('2_s1', v_j);
 
   -- 3. Retroativa
-  v_s2 := public.fn_estoque_salvar_saida(null, v_dep, v_insumo, 3, '2026-10-02', v_cc);
+  v_s2 := public.fn_estoque_salvar_saida(null, v_dep, null, v_insumo, 3, '2026-10-02', v_cc);
   select jsonb_build_object('s2', (select jsonb_build_object('valor', valor_total, 'unit', custo_unitario) from public.estoque_saidas where id = v_s2),
                             's1', (select jsonb_build_object('valor', valor_total, 'unit', custo_unitario) from public.estoque_saidas where id = v_s1))
     into v_j;
@@ -67,7 +77,7 @@ begin
   -- 4. Saldo insuficiente
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_saida(null, v_dep, v_insumo, 5, '2026-10-06', v_cc);
+    perform public.fn_estoque_salvar_saida(null, v_dep, null, v_insumo, 5, '2026-10-06', v_cc);
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('4_insuficiente', v_txt);
@@ -75,7 +85,7 @@ begin
   -- 5. Antes da primeira entrada
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_saida(null, v_dep, v_insumo, 1, '2026-09-30', v_cc);
+    perform public.fn_estoque_salvar_saida(null, v_dep, null, v_insumo, 1, '2026-09-30', v_cc);
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('5_antes_da_entrada', v_txt);
@@ -98,11 +108,11 @@ begin
   -- 8. OC
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_entrada(null, v_dep, null, v_oc_qtd + 1, null, '2026-10-10', v_oc_item);
+    perform public.fn_estoque_salvar_entrada(null, v_dep, null, null, v_oc_qtd + 1, null, '2026-10-10', v_oc_item);
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('8a_oc_acima', v_txt);
-  v_eoc := public.fn_estoque_salvar_entrada(null, v_dep, v_insumo, v_oc_qtd, 1, '2026-10-10', v_oc_item);
+  v_eoc := public.fn_estoque_salvar_entrada(null, v_dep, null, v_insumo, v_oc_qtd, 1, '2026-10-10', v_oc_item);
   select jsonb_build_object('insumo_da_oc', e.insumo_id = i.insumo_id, 'preco_da_oc', e.valor_unitario = i.preco_unitario, 'oc_numero', e.oc_numero,
                             'restante', (select quantidade_restante from public.fn_estoque_oc_itens_disponiveis() where oc_item_id = v_oc_item))
     into v_j from public.estoque_entradas e join public.oc_itens i on i.id = e.oc_item_id where e.id = v_eoc;
@@ -111,7 +121,7 @@ begin
   -- 11. Peça do almoxarifado não entra pelo Estoque
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_entrada(null, v_dep, v_peca, 1, 1, '2026-10-10');
+    perform public.fn_estoque_salvar_entrada(null, v_dep, null, v_peca, 1, 1, '2026-10-10');
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('11_peca', v_txt);
@@ -124,6 +134,42 @@ begin
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('12_apagar_item_oc', v_txt);
+  set local role authenticated;
+
+  -- 13 a 17. Tanque de material
+  insert into public.tanques (nome, capacidade_litros, uso) values ('Tanque prova CAP', 0, 'material') returning id into v_tq;
+  perform public.fn_estoque_salvar_entrada(null, null, v_tq, v_insumo2, 5, 10, '2026-10-01');
+  perform public.fn_estoque_salvar_saida(null, null, v_tq, v_insumo2, 2, '2026-10-02', v_cc);
+  select jsonb_build_object('nivel', nivel_atual_litros, 'material_certo', combustivel_atual_id = v_insumo2) into v_j from public.tanques where id = v_tq;
+  r := r || jsonb_build_object('13_cache_tanque', v_j);
+  v_txt := 'PASSOU (errado)';
+  begin
+    perform public.fn_estoque_salvar_entrada(null, null, v_tq, v_insumo, 1, 1, '2026-10-03');
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('14_segundo_material', v_txt);
+  v_txt := 'PASSOU (errado)';
+  begin
+    perform public.fn_estoque_salvar_entrada(null, null, v_tq_comb, v_insumo, 1, 1, '2026-10-03');
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('15_estoque_em_tanque_de_combustivel', v_txt);
+  v_txt := 'PASSOU (errado)';
+  begin
+    update public.tanques set uso = 'combustivel' where id = v_tq;
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('17_trocar_uso', v_txt);
+  select jsonb_build_object('q', quantidade, 'tipo', local_tipo) into v_j from public.fn_estoque_posicao() where local_id = v_tq;
+  r := r || jsonb_build_object('13_posicao_tanque', v_j);
+  reset role;
+  v_txt := 'PASSOU (errado)';
+  begin
+    insert into public.combustivel_entradas (tanque_id, insumo_id, quantidade, litros, valor_total, data_hora)
+    values (v_tq, v_insumo2, 1, 1, 1, now());
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('16_combustivel_em_tanque_de_material', v_txt);
   set local role authenticated;
 
   -- 10. Excluir e restaurar saída
@@ -146,7 +192,7 @@ begin
   set local role authenticated;
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_saida(null, v_dep, v_insumo, 1, '2026-10-06', v_cc);
+    perform public.fn_estoque_salvar_saida(null, v_dep, null, v_insumo, 1, '2026-10-06', v_cc);
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('9a_salvar', v_txt);

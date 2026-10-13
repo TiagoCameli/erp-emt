@@ -51,6 +51,14 @@ export function capacidadeParaNumero(texto: string): number | null {
   return numero;
 }
 
+/**
+ * Uso do tanque (13/10/2026): combustível, movimentado pelo módulo Combustível, ou material
+ * (CAP, emulsão etc.), movimentado pelo Estoque. O banco recusa misturar os dois.
+ */
+export const USOS_TANQUE = ["combustivel", "material"] as const;
+export type UsoTanque = (typeof USOS_TANQUE)[number];
+const MENSAGEM_MATERIAL_EXTERNO = "Tanque de material é da EMT: tanque de terceiro é só de combustível";
+
 export const tanqueFormSchema = z
   .object({
     nome: nomeSchema,
@@ -58,12 +66,16 @@ export const tanqueFormSchema = z
     capacidade: z.string().trim().refine((valor) => capacidadeParaNumero(valor) !== null, {
       error: MENSAGEM_CAPACIDADE,
     }),
+    uso: z.enum(USOS_TANQUE),
     ehExterno: z.boolean(),
     proprietarioId: z.string().trim(),
     observacoes: observacoesSchema,
     ativo: z.boolean(),
   })
   .superRefine((dados, contexto) => {
+    if (dados.uso === "material" && dados.ehExterno) {
+      contexto.addIssue({ code: "custom", path: ["ehExterno"], message: MENSAGEM_MATERIAL_EXTERNO });
+    }
     if (!dados.ehExterno) return;
     if (!z.guid().safeParse(dados.proprietarioId).success) {
       contexto.addIssue({ code: "custom", path: ["proprietarioId"], message: MENSAGEM_DONO });
@@ -78,6 +90,7 @@ export const tanqueSchema = z
     nome: nomeSchema,
     apelido: apelidoSchema,
     capacidade: capacidadeNumero,
+    uso: z.enum(USOS_TANQUE),
     ehExterno: z.boolean(),
     proprietarioId: z.guid({ error: MENSAGEM_DONO }).nullable(),
     observacoes: observacoesSchema,
@@ -86,6 +99,10 @@ export const tanqueSchema = z
   .refine((dados) => dados.ehExterno === (dados.proprietarioId !== null), {
     error: MENSAGEM_DONO,
     path: ["proprietarioId"],
+  })
+  .refine((dados) => !(dados.uso === "material" && dados.ehExterno), {
+    error: MENSAGEM_MATERIAL_EXTERNO,
+    path: ["ehExterno"],
   });
 
 export type TanqueInput = z.infer<typeof tanqueSchema>;
@@ -96,6 +113,7 @@ export function tanqueDoForm(form: TanqueFormInput): TanqueInput {
     nome: form.nome.trim(),
     apelido: form.apelido.trim(),
     capacidade: capacidadeParaNumero(form.capacidade) ?? Number.NaN,
+    uso: form.uso,
     ehExterno: form.ehExterno,
     proprietarioId: form.ehExterno && form.proprietarioId !== "" ? form.proprietarioId : null,
     observacoes: form.observacoes.trim(),

@@ -46,7 +46,7 @@ function valoresIniciais(entrada: EntradaLinha | null): EntradaFormInput {
     return {
       origem: "avulsa",
       ocItemId: "",
-      depositoId: "",
+      local: "",
       insumoId: "",
       quantidade: "",
       valorUnitario: "",
@@ -59,7 +59,7 @@ function valoresIniciais(entrada: EntradaLinha | null): EntradaFormInput {
   return {
     origem: entrada.ocItemId ? "oc" : "avulsa",
     ocItemId: entrada.ocItemId ?? "",
-    depositoId: entrada.depositoId,
+    local: entrada.local,
     insumoId: entrada.insumoId,
     quantidade: numeroParaTexto(entrada.quantidade),
     valorUnitario: numeroParaTexto(entrada.valorUnitario),
@@ -79,7 +79,8 @@ export interface EntradaFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Nula para registrar; a linha para editar. */
   entrada: EntradaLinha | null;
-  depositos: Opcao[];
+  /** Depósitos e tanques de material ativos (`listarLocais`). */
+  locais: Opcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
 }
@@ -96,7 +97,7 @@ export function EntradaFormDrawer({
   aberto,
   onAbertoChange,
   entrada,
-  depositos,
+  locais,
   insumos,
   itensOc,
 }: EntradaFormDrawerProps) {
@@ -111,16 +112,16 @@ export function EntradaFormDrawer({
     if (aberto) form.reset(valoresIniciais(entrada));
   }, [aberto, entrada, form]);
 
-  const [origem, ocItemId, depositoId, insumoId, quantidade, valorUnitario] = useWatch({
+  const [origem, ocItemId, local, insumoId, quantidade, valorUnitario] = useWatch({
     control: form.control,
-    name: ["origem", "ocItemId", "depositoId", "insumoId", "quantidade", "valorUnitario"],
+    name: ["origem", "ocItemId", "local", "insumoId", "quantidade", "valorUnitario"],
   });
 
   const itemOc = React.useMemo(() => itensOc.find((item) => item.ocItemId === ocItemId) ?? null, [itensOc, ocItemId]);
   const insumo = React.useMemo(() => insumos.find((opcao) => opcao.id === insumoId) ?? null, [insumos, insumoId]);
   const unidade = origem === "oc" ? (itemOc?.unidade ?? entrada?.unidade ?? null) : (insumo?.unidade ?? entrada?.unidade ?? null);
 
-  const opcoesDepositos = React.useMemo(() => depositos.map((d) => ({ valor: d.id, rotulo: d.nome })), [depositos]);
+  const opcoesLocais = React.useMemo(() => locais.map((l) => ({ valor: l.id, rotulo: l.nome })), [locais]);
   const opcoesInsumos = React.useMemo(
     () => insumos.map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} (${i.unidade})` : i.nome })),
     [insumos],
@@ -252,15 +253,15 @@ export function EntradaFormDrawer({
           </div>
         ) : null}
 
-        <CampoFormulario id="entrada-deposito" rotulo="Depósito" obrigatorio erro={erros.depositoId?.message}>
+        <CampoFormulario id="entrada-local" rotulo="Depósito ou tanque" obrigatorio erro={erros.local?.message}>
           <Combobox
-            id="entrada-deposito"
-            valor={depositoId ?? ""}
-            rotuloDoValor={entrada?.depositoNome}
-            onValorChange={(valor) => form.setValue("depositoId", valor, { shouldDirty: true, shouldValidate: true })}
-            opcoes={opcoesDepositos}
-            placeholder="Selecione o depósito"
-            vazioTexto="Nenhum depósito ativo. Crie um na aba Depósitos"
+            id="entrada-local"
+            valor={local ?? ""}
+            rotuloDoValor={entrada?.localNome}
+            onValorChange={(valor) => form.setValue("local", valor, { shouldDirty: true, shouldValidate: true })}
+            opcoes={opcoesLocais}
+            placeholder="Selecione o depósito ou o tanque"
+            vazioTexto="Nenhum depósito ou tanque de material ativo. Crie nas abas Depósitos e Tanques"
             disabled={salvando}
           />
         </CampoFormulario>

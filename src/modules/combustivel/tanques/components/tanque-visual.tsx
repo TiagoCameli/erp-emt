@@ -1,5 +1,6 @@
 import { Droplet, Fuel } from "lucide-react";
 
+import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { percentualDoNivel } from "@/modules/combustivel/tanques/calculo";
@@ -14,6 +15,11 @@ export interface TanqueVisualProps {
   nivel: number;
   /** Combustível corrente. Null = vazio. */
   combustivelNome?: string | null;
+  /**
+   * Unidade do conteúdo. No tanque de material vem a do insumo (t, kg...); fora de litro
+   * o percentual da capacidade (em litros) não se compara e o nível sai na unidade dele.
+   */
+  unidade?: string | null;
   /** Nome, apelido e selo do combustível acima da cápsula. O detalhe já tem título. */
   comCabecalho?: boolean;
   className?: string;
@@ -49,10 +55,12 @@ export function TanqueVisual({
   capacidade,
   nivel,
   combustivelNome,
+  unidade = "L",
   comCabecalho = true,
   className,
 }: TanqueVisualProps) {
-  const cap = Math.max(capacidade, 0);
+  const emLitros = !unidade || unidade.toLowerCase() === "l";
+  const cap = emLitros ? Math.max(capacidade, 0) : 0;
   const temCapacidade = cap > 0;
   const percentual = percentualDoNivel(nivel, cap) ?? 0;
   const vazio = nivel <= 0;
@@ -67,10 +75,12 @@ export function TanqueVisual({
   const idCasco = `${idBase}-casco`;
   const idLiquido = `${idBase}-liquido`;
 
-  const textoNivel = formatarLitros(nivel);
+  const textoNivel = emLitros ? formatarLitros(nivel) : `${formatarQuantidade(nivel)} ${unidade}`;
   const textoPercentual = temCapacidade
     ? `${Math.round(percentual).toLocaleString("pt-BR")}% de ${formatarCapacidade(cap)} L`
-    : "sem capacidade cadastrada";
+    : emLitros
+      ? "sem capacidade cadastrada"
+      : "capacidade em litros, saldo em outra unidade";
 
   const textos = (claro: boolean) => (
     <g fontFamily="ui-sans-serif, system-ui" textAnchor="middle">
