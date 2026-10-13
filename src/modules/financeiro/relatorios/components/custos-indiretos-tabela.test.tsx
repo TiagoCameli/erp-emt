@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { limparEstadosTabelaParaTeste } from "@/components/canonicos/data-table";
@@ -74,10 +74,38 @@ describe("CustosIndiretosTabela", () => {
     expect(within(porCentro).getAllByRole("columnheader")).toHaveLength(14);
   });
 
+  it("cada centro raiz começa fechado, só com o subtotal", () => {
+    render(<CustosIndiretosTabela ano={2026} linhas={LINHAS} mesCorrente="2026-04" />);
+    const [porCentro] = screen.getAllByRole("table");
+    const abrir = within(porCentro).getByRole("button", { name: "Abrir Escritório Central" });
+    expect(abrir.getAttribute("aria-expanded")).toBe("false");
+    expect(within(porCentro).queryByRole("row", { name: /Administrativo/ })).toBeNull();
+    expect(within(porCentro).getAllByRole("row", { name: /Escritório Central/ })).toHaveLength(1);
+  });
+
+  it("abre e fecha as etapas pelo botão da raiz", () => {
+    render(<CustosIndiretosTabela ano={2026} linhas={LINHAS} mesCorrente="2026-04" />);
+    const [porCentro] = screen.getAllByRole("table");
+    fireEvent.click(within(porCentro).getByRole("button", { name: "Abrir Escritório Central" }));
+    expect(within(porCentro).getByRole("row", { name: /Administrativo/ })).toBeTruthy();
+    const fechar = within(porCentro).getByRole("button", { name: "Fechar Escritório Central" });
+    expect(fechar.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(fechar);
+    expect(within(porCentro).queryByRole("row", { name: /Administrativo/ })).toBeNull();
+  });
+
+  it("raiz sem etapa além dela mesma não tem o que abrir", () => {
+    render(<CustosIndiretosTabela ano={2026} linhas={LINHAS} mesCorrente="2026-04" />);
+    const [porCentro] = screen.getAllByRole("table");
+    expect(within(porCentro).queryByRole("button", { name: /Equipamentos Colorado/ })).toBeNull();
+    expect(within(porCentro).getAllByRole("row", { name: /Equipamentos Colorado/ })).toHaveLength(1);
+  });
+
   it("agrupa pela raiz com subtotal e mostra zero como traço", () => {
     render(<CustosIndiretosTabela ano={2026} linhas={LINHAS} mesCorrente="2026-04" />);
     const [porCentro] = screen.getAllByRole("table");
-    const raiz = within(porCentro).getAllByRole("row", { name: /^Escritório Central/ })[0];
+    fireEvent.click(within(porCentro).getByRole("button", { name: "Abrir Escritório Central" }));
+    const raiz = within(porCentro).getAllByRole("row", { name: /Escritório Central/ })[0];
     expect(texto(raiz)).toContain("R$ 1.000,00");
     expect(texto(raiz)).toContain("R$ 2.000,00");
     expect(texto(raiz)).toContain("R$ 3.000,00");
