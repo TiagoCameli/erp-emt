@@ -211,7 +211,7 @@ export function CustoGrupoTabela({
     () => [
       {
         id: "nome",
-        // A ÚNICA coluna do app que continua à esquerda, e é de propósito:
+        // Continua à esquerda de propósito (como o Centro dos custos indiretos):
         // aqui o recuo (pl-12 na subcategoria, pl-24 no insumo) é o que diz
         // de quem a linha é filha. Centralizar centraliza dentro do recuo e
         // a hierarquia do drill-down desaparece. As colunas de quantidade,
