@@ -66,9 +66,10 @@ begin
   end;
   if v_msg like 'FALHOU%' then raise exception '%', v_msg; end if;
 
+  -- 6 e 7 chamam a trava como dono: ela e interna desde 20261013214158.
   -- 6. Subconta herda o fechamento da conta pai.
   begin
-    perform public.fn_conciliacao_exigir_data_aberta(v_sub102, date '2026-09-10');
+    reset role; perform public.fn_conciliacao_exigir_data_aberta(v_sub102, date '2026-09-10'); set local role authenticated;
     v_msg := 'FALHOU 6: subconta nao herdou a trava';
   exception when others then
     get stacked diagnostics v_msg = message_text;
@@ -77,7 +78,7 @@ begin
   if v_msg like 'FALHOU%' then raise exception '%', v_msg; end if;
 
   -- 7. Conta sem fechamento nao trava.
-  perform public.fn_conciliacao_exigir_data_aberta(v_caixinha, date '2025-03-10');
+  reset role; perform public.fn_conciliacao_exigir_data_aberta(v_caixinha, date '2025-03-10'); set local role authenticated;
 
   -- 8. Excluir transferencia conciliada da mensagem clara (nao o erro da FK).
   select t.transferencia_id into v_conciliada from public.extrato_transacoes t

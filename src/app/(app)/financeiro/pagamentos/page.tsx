@@ -40,8 +40,6 @@ export const maxDuration = 60;
 const TAMANHO_PAGINA = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
 const VALOR_MAXIMO = 999999999999.99;
 /** Tamanho máximo do termo de busca aceito (o mesmo da action). */
@@ -75,11 +73,6 @@ const ORIGENS = new Set([
 
 function parametroOrigem(valor: Parametro): string | undefined {
   return typeof valor === "string" && ORIGENS.has(valor) ? valor : undefined;
-}
-
-/** Uuid vindo da URL, ou undefined. Evita mandar lixo pro filtro do PostgREST. */
-function parametroUuid(valor: Parametro): string | undefined {
-  return typeof valor === "string" && UUID.test(valor) ? valor : undefined;
 }
 
 /** Data yyyy-MM-dd vinda da URL, ou undefined se não for uma data. */

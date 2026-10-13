@@ -1254,7 +1254,7 @@ export function PagamentosCliente({
           ]
         : []),
     ],
-    [podePagar],
+    [podePagar, hoje],
   );
 
   // Mesma régua de largura da aba "A pagar": a soma cabe na tela, então a

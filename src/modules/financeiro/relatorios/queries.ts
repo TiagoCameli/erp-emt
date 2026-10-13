@@ -39,14 +39,10 @@ import {
   agruparDrePorNatureza,
   paraCentavos,
   paraReais,
-  somarPorCategoria,
   totalAging,
-  totalCategorias,
   vencidoAging,
   type AgingFaixa,
   type BlocoDre,
-  type DreLinha,
-  type LancamentoCategoria,
   type LinhaFaixaAging,
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";

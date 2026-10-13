@@ -14,7 +14,6 @@ import {
   submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { salvarFaixaInss } from "@/modules/rh/parametros-folha/actions";
 import type { FaixaInssLista } from "@/modules/rh/parametros-folha/queries";
 import {

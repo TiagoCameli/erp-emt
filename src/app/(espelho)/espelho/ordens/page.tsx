@@ -7,7 +7,6 @@ import {
   EspelhoDinheiro,
   EspelhoFaixaResumo,
   EspelhoImpresso,
-  EspelhoLinhas,
   EspelhoNota,
   EspelhoSecao,
   EspelhoTabela,

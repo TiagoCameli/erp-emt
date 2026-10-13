@@ -11,6 +11,22 @@ const eslintConfig = defineConfig([
     rules: {
       "no-console": ["error", { allow: ["error"] }],
       "@typescript-eslint/no-explicit-any": "error",
+      // `_` na frente = ignorado de proposito (tirar um campo com rest, argumento
+      // posicional que nao se usa). Sem isto o lint acusava a propria convencao.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+          ignoreRestSiblings: true,
+        },
+      ],
+      // So vale com o React Compiler ligado (ele pula o componente que usa o
+      // `watch()` do react-hook-form). O projeto nao usa o compilador: eram 58
+      // avisos de ruido. Religar junto se o compilador entrar.
+      "react-hooks/incompatible-library": "off",
     },
   },
   // Override default ignores of eslint-config-next.

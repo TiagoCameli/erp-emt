@@ -99,7 +99,7 @@ begin
   values ('M1 le a transferencia', 'a TRF-2026-0168 e visivel para quem so tem Conciliacao');
 
   -- M2: o lado de SAIDA, que e o movimento do print.
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   perform public.fn_conciliar_transferencia(v_mov_saida, v_trf);
   reset role;
 
@@ -114,7 +114,7 @@ begin
 
   -- M3: o MESMO lancamento no outro extrato. Se a unicidade fosse so por
   -- transferencia, conciliar a saida na Caixa deixaria a entrada no BB orfa.
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   perform public.fn_conciliar_transferencia(v_mov_entrada, v_trf);
   reset role;
 
@@ -126,7 +126,7 @@ begin
 
   -- C1: lado repetido.
   v_erro := null;
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   begin perform public.fn_conciliar_transferencia(v_mov_sobra, v_trf);
   exception when others then v_erro := sqlerrm; end;
   reset role;
@@ -136,7 +136,7 @@ begin
 
   -- C2: sentido errado (credito na conta de ORIGEM).
   v_erro := null;
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   begin perform public.fn_conciliar_transferencia(v_mov_sentido, v_trf);
   exception when others then v_erro := sqlerrm; end;
   reset role;
@@ -146,7 +146,7 @@ begin
 
   -- C3: valor divergente por um real.
   v_erro := null;
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   begin perform public.fn_conciliar_transferencia(v_mov_valor, v_trf);
   exception when others then v_erro := sqlerrm; end;
   reset role;
@@ -164,7 +164,7 @@ begin
     raise exception 'FALHA (C4): desconciliar deixou transferencia_id preenchido';
   end if;
 
-  set local role authenticated;
+  -- Como dono: fn_conciliar_transferencia e interna (20261013214158); a permissao vem do JWT.
   perform public.fn_conciliar_transferencia(v_mov_sobra, v_trf);
   reset role;
   if (select transferencia_id from public.extrato_transacoes where id = v_mov_sobra) is distinct from v_trf then

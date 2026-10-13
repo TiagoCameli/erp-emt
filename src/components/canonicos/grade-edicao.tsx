@@ -70,7 +70,6 @@ export function GradeEdicao<T>(props: GradeEdicaoProps<T>) {
     setEdicaoEstado(valor);
   };
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- o React Compiler pula este componente (o Combobox convive com o mesmo aviso); a grade não depende de memoização
   const virtual = useVirtualizer({
     count: linhas.length,
     getScrollElement: () => rolagem.current,
