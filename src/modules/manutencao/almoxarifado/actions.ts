@@ -36,6 +36,9 @@ import {
  *
  * Entradas só por RPC (a tabela não tem grant de escrita). Depósito e peça são
  * cadastro com RLS, gravados direto na tabela.
+ *
+ * Desde 13/10/2026 o depósito é criado no Estoque (`estoque.depositos`): o mesmo
+ * depósito guarda peças e materiais. As actions continuam aqui; a permissão é a do Estoque.
  */
 
 const RECURSO = "manutencao.almoxarifado" as const;
@@ -43,6 +46,8 @@ const ROTA = "/manutencao/almoxarifado";
 const ROTA_ENTRADAS = `${ROTA}/entradas`;
 const ROTA_DEPOSITOS = `${ROTA}/depositos`;
 const ROTA_PECAS = `${ROTA}/pecas`;
+const RECURSO_DEPOSITOS = "estoque.depositos" as const;
+const ROTAS_ESTOQUE = ["/estoque/depositos", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
@@ -56,9 +61,10 @@ function primeiraMensagem(erro: z.ZodError): string {
 /** Garante a permissão sem deixar o throw do `exigirPermissao` escapar. */
 async function temAcao(
   acao: "criar" | "editar" | "excluir",
+  recurso: typeof RECURSO | typeof RECURSO_DEPOSITOS = RECURSO,
 ): Promise<boolean> {
   try {
-    await exigirPermissao(RECURSO, acao);
+    await exigirPermissao(recurso, acao);
     return true;
   } catch {
     return false;
@@ -94,7 +100,7 @@ function linhaDeposito(dados: DepositoInput) {
 
 export async function criarDeposito(dados: DepositoInput): Promise<ResultadoAcao> {
   return semLancar("manutencao.almoxarifado.criarDeposito", async () => {
-    if (!(await temAcao("criar"))) return { erro: "Sem permissão para criar depósitos" };
+    if (!(await temAcao("criar", RECURSO_DEPOSITOS))) return { erro: "Sem permissão para criar depósitos" };
 
     const validado = depositoSchema.safeParse(dados);
     if (!validado.success) return { erro: primeiraMensagem(validado.error) };
@@ -113,7 +119,7 @@ export async function criarDeposito(dados: DepositoInput): Promise<ResultadoAcao
       );
     }
 
-    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS);
+    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS, ...ROTAS_ESTOQUE);
     return { ok: true };
   });
 }
@@ -123,7 +129,7 @@ export async function editarDeposito(
   dados: DepositoInput,
 ): Promise<ResultadoAcao> {
   return semLancar("manutencao.almoxarifado.editarDeposito", async () => {
-    if (!(await temAcao("editar"))) return { erro: "Sem permissão para editar depósitos" };
+    if (!(await temAcao("editar", RECURSO_DEPOSITOS))) return { erro: "Sem permissão para editar depósitos" };
 
     const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Depósito inválido" };
@@ -148,7 +154,7 @@ export async function editarDeposito(
     }
     if (!data || data.length === 0) return { erro: "Depósito não encontrado" };
 
-    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS);
+    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS, ...ROTAS_ESTOQUE);
     return { ok: true };
   });
 }
@@ -158,7 +164,7 @@ export async function alternarAtivoDeposito(
   ativo: boolean,
 ): Promise<ResultadoAcao> {
   return semLancar("manutencao.almoxarifado.alternarAtivoDeposito", async () => {
-    if (!(await temAcao("editar"))) return { erro: "Sem permissão para editar depósitos" };
+    if (!(await temAcao("editar", RECURSO_DEPOSITOS))) return { erro: "Sem permissão para editar depósitos" };
 
     const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Depósito inválido" };
@@ -179,7 +185,7 @@ export async function alternarAtivoDeposito(
     }
     if (!data || data.length === 0) return { erro: "Depósito não encontrado" };
 
-    revalidar(ROTA_DEPOSITOS, ROTA_ENTRADAS);
+    revalidar(ROTA_DEPOSITOS, ROTA_ENTRADAS, ...ROTAS_ESTOQUE);
     return { ok: true };
   });
 }
@@ -190,7 +196,7 @@ export async function excluirDeposito(
   motivo: string,
 ): Promise<ResultadoAcao> {
   return semLancar("manutencao.almoxarifado.excluirDeposito", async () => {
-    if (!(await temAcao("excluir"))) return { erro: "Sem permissão para excluir depósitos" };
+    if (!(await temAcao("excluir", RECURSO_DEPOSITOS))) return { erro: "Sem permissão para excluir depósitos" };
 
     const idValido = idSchema.safeParse(id);
     if (!idValido.success) return { erro: "Depósito inválido" };
@@ -217,7 +223,7 @@ export async function excluirDeposito(
       );
     }
 
-    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS);
+    revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS, ...ROTAS_ESTOQUE);
     return { ok: true };
   });
 }

@@ -3079,6 +3079,261 @@ export type Database = {
         };
         Relationships: [];
       };
+      estoque_entradas: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          data: string;
+          deposito_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          fornecedor_id: string | null;
+          id: string;
+          insumo_id: string;
+          motivo_exclusao: string | null;
+          nota_fiscal: string | null;
+          observacoes: string | null;
+          oc_item_id: string | null;
+          oc_numero: string | null;
+          ordem_compra_id: string | null;
+          quantidade: number;
+          updated_at: string;
+          valor_total: number | null;
+          valor_unitario: number;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          data: string;
+          deposito_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          insumo_id: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          oc_item_id?: string | null;
+          oc_numero?: string | null;
+          ordem_compra_id?: string | null;
+          quantidade: number;
+          updated_at?: string;
+          valor_total?: number | null;
+          valor_unitario: number;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          data?: string;
+          deposito_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          fornecedor_id?: string | null;
+          id?: string;
+          insumo_id?: string;
+          motivo_exclusao?: string | null;
+          nota_fiscal?: string | null;
+          observacoes?: string | null;
+          oc_item_id?: string | null;
+          oc_numero?: string | null;
+          ordem_compra_id?: string | null;
+          quantidade?: number;
+          updated_at?: string;
+          valor_total?: number | null;
+          valor_unitario?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_entradas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "fornecedores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_fornecedor_id_fkey";
+            columns: ["fornecedor_id"];
+            isOneToOne: false;
+            referencedRelation: "transportadora_saldos";
+            referencedColumns: ["transportadora_id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_oc_item_id_fkey";
+            columns: ["oc_item_id"];
+            isOneToOne: false;
+            referencedRelation: "oc_itens";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_ordem_compra_id_fkey";
+            columns: ["ordem_compra_id"];
+            isOneToOne: false;
+            referencedRelation: "ordens_compra";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      estoque_saida_camadas: {
+        Row: {
+          created_at: string;
+          entrada_id: string;
+          id: string;
+          quantidade: number;
+          saida_id: string;
+          valor_unitario: number;
+        };
+        Insert: {
+          created_at?: string;
+          entrada_id: string;
+          id?: string;
+          quantidade: number;
+          saida_id: string;
+          valor_unitario: number;
+        };
+        Update: {
+          created_at?: string;
+          entrada_id?: string;
+          id?: string;
+          quantidade?: number;
+          saida_id?: string;
+          valor_unitario?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_saida_camadas_entrada_id_fkey";
+            columns: ["entrada_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_entradas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_saida_camadas_saida_id_fkey";
+            columns: ["saida_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_saidas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      estoque_saidas: {
+        Row: {
+          centro_custo_id: string;
+          created_at: string;
+          created_by: string | null;
+          custo_unitario: number;
+          data: string;
+          deposito_id: string;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          id: string;
+          insumo_id: string;
+          motivo_exclusao: string | null;
+          observacoes: string | null;
+          quantidade: number;
+          updated_at: string;
+          valor_total: number;
+        };
+        Insert: {
+          centro_custo_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          custo_unitario?: number;
+          data: string;
+          deposito_id: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          quantidade: number;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Update: {
+          centro_custo_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          custo_unitario?: number;
+          data?: string;
+          deposito_id?: string;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          id?: string;
+          insumo_id?: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          quantidade?: number;
+          updated_at?: string;
+          valor_total?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_saidas_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_saidas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_saidas_deposito_id_fkey";
+            columns: ["deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_saidas_excluido_por_fkey";
+            columns: ["excluido_por"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_saidas_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       ex_atividade_datas: {
         Row: {
           atividade_id: string;
@@ -11224,6 +11479,80 @@ export type Database = {
         Args: { p_confira_ids: string[]; p_conta_id: string; p_mes: string };
         Returns: string;
       };
+      fn_estoque_excluir: {
+        Args: { p_id: string; p_motivo: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_estoque_oc_itens_disponiveis: {
+        Args: never;
+        Returns: {
+          centro_custo_nome: string;
+          data_compra: string;
+          fornecedor_nome: string;
+          insumo_id: string;
+          insumo_nome: string;
+          oc_item_id: string;
+          oc_numero: string;
+          oc_status: string;
+          ordem_compra_id: string;
+          preco_unitario: number;
+          quantidade: number;
+          quantidade_restante: number;
+          unidade: string;
+        }[];
+      };
+      fn_estoque_posicao: {
+        Args: never;
+        Returns: {
+          insumo_id: string;
+          insumo_nome: string;
+          local_id: string;
+          local_nome: string;
+          local_tipo: string;
+          origem: string;
+          quantidade: number;
+          unidade: string;
+          valor: number;
+        }[];
+      };
+      fn_estoque_recalcular_peps: {
+        Args: { p_deposito: string; p_insumo: string };
+        Returns: undefined;
+      };
+      fn_estoque_restante_oc_item: {
+        Args: { p_ignorar?: string; p_oc_item: string };
+        Returns: number;
+      };
+      fn_estoque_restaurar: {
+        Args: { p_id: string; p_tabela: string };
+        Returns: undefined;
+      };
+      fn_estoque_salvar_entrada: {
+        Args: {
+          p_data: string;
+          p_deposito: string;
+          p_id: string;
+          p_insumo: string;
+          p_nota_fiscal?: string;
+          p_observacoes?: string;
+          p_oc_item?: string;
+          p_quantidade: number;
+          p_valor_unitario: number;
+        };
+        Returns: string;
+      };
+      fn_estoque_salvar_saida: {
+        Args: {
+          p_centro_custo: string;
+          p_data: string;
+          p_deposito: string;
+          p_id: string;
+          p_insumo: string;
+          p_observacoes?: string;
+          p_quantidade: number;
+        };
+        Returns: string;
+      };
       fn_ex_acessa_obra: { Args: { p_obra: string }; Returns: boolean };
       fn_ex_acesso_definir: {
         Args: { p_obra: string; p_tem: boolean; p_usuario: string };
@@ -13091,6 +13420,7 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_ve_estoque: { Args: never; Returns: boolean };
       fn_vincular_aplicacao_da_etapa: {
         Args: { p_conta: string; p_etapa: string; p_produto: string };
         Returns: string;

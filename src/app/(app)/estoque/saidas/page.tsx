@@ -1,0 +1,77 @@
+import { notFound } from "next/navigation";
+
+import { PageHeader } from "@/components/canonicos";
+import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarCentrosCusto, type CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import { saldosPorDepositoInsumo } from "@/modules/estoque/calculo";
+import { SaidasAcoesCabecalho } from "@/modules/estoque/components/acoes-cabecalho";
+import { SaidasTabela } from "@/modules/estoque/components/saidas-tabela";
+import { listarEntradas, listarSaidas } from "@/modules/estoque/queries";
+import { listarDepositos } from "@/modules/manutencao/almoxarifado/queries";
+
+const RECURSO = "estoque.saidas" as const;
+
+export default async function PaginaSaidasEstoque() {
+  const usuario = await getUsuarioLogado();
+  if (!usuario || !temPermissao(usuario, RECURSO, "ver")) {
+    notFound();
+  }
+
+  const podeCriar = temPermissao(usuario, RECURSO, "criar");
+  const podeEditar = temPermissao(usuario, RECURSO, "editar");
+  const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+
+  const [saidas, entradas, depositos, centros] = await Promise.all([
+    listarSaidas(),
+    listarEntradas(),
+    listarDepositos(),
+    podeCriar || podeEditar ? listarCentrosCusto() : Promise.resolve<CentroCustoOpcao[]>([]),
+  ]);
+
+  const entradasAtivas = entradas.filter((e) => !e.excluida);
+  const saidasAtivas = saidas.filter((s) => !s.excluida);
+
+  // Material que pode sair: o que já entrou pelo Estoque. Combustível e peças saem pelos módulos deles.
+  const materiais = [
+    ...new Map(entradasAtivas.map((e) => [e.insumoId, { id: e.insumoId, nome: e.insumoNome, unidade: e.unidade }])).values(),
+  ].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const saldos = [...saldosPorDepositoInsumo(entradasAtivas, saidasAtivas)].map(([chave, saldo]) => ({ chave, saldo }));
+
+  // Saída pode ir para depósito inativo? Não: só sai de onde há saldo, e o saldo está nos depósitos que receberam.
+  const todosDepositos = depositos.map((d) => ({ id: d.id, nome: d.nome }));
+
+  const nomesRaiz = new Map<string, string>();
+  for (const saida of saidas) {
+    nomesRaiz.set(saida.centroCustoRaiz, saida.centroCustoRotulo.split(" › ")[0] ?? "");
+  }
+  const raizes = [...nomesRaiz].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+  return (
+    <>
+      <PageHeader
+        modulo="Estoque"
+        titulo="Saídas"
+        descricao="Material que saiu do depósito para um centro de custo, com o valor das entradas mais antigas (PEPS)"
+        acoes={
+          <SaidasAcoesCabecalho
+            podeCriar={podeCriar}
+            depositos={todosDepositos}
+            materiais={materiais}
+            saldos={saldos}
+            centros={centros}
+          />
+        }
+      />
+      <SaidasTabela
+        saidas={saidas}
+        entradas={entradas}
+        depositos={todosDepositos}
+        materiais={materiais}
+        centros={centros}
+        raizes={raizes}
+        podeEditar={podeEditar}
+        podeExcluir={podeExcluir}
+      />
+    </>
+  );
+}

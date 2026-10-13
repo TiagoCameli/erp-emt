@@ -21,6 +21,7 @@ import {
   Truck,
   Ruler,
   HardHat,
+  Warehouse,
   type LucideIcon,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -50,6 +51,7 @@ export const MAPA_ICONES: Record<string, LucideIcon> = {
   administracao: Settings,
   cadastros: FolderOpen,
   compras: ShoppingCart,
+  estoque: Warehouse,
   frete: Truck,
   financeiro: Wallet,
   combustivel: Fuel,
