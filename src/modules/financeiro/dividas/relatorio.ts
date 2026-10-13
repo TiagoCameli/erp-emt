@@ -72,6 +72,19 @@ export interface ConsorcioRelatorio {
   proximas: ParcelaConsorcioProxima[];
 }
 
+/** Filtro de status da lista de contratos. "ativos" inclui o renegociado (ainda há o que pagar). */
+export type FiltroStatusContrato = "ativos" | "quitados" | "todos";
+
+export const FILTROS_STATUS_CONTRATO: readonly FiltroStatusContrato[] = ["ativos", "quitados", "todos"];
+
+export function filtrarContratosPorStatus<T extends { status: string }>(
+  contratos: readonly T[],
+  filtro: FiltroStatusContrato,
+): T[] {
+  if (filtro === "todos") return [...contratos];
+  return contratos.filter((c) => (c.status === "quitado") === (filtro === "quitados"));
+}
+
 /** NUMERIC chega do PostgREST como string em algumas rotas. */
 export function numero(valor: unknown): number {
   const n = typeof valor === "string" ? Number(valor) : typeof valor === "number" ? valor : 0;

@@ -5,7 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Landmark, Plus } from "lucide-react";
 
-import { DataTable, EmptyState, MoneyText } from "@/components/canonicos";
+import { DataTable, EmptyState, FiltroSelect, MoneyText } from "@/components/canonicos";
+import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatarPercentual } from "@/lib/formatadores";
@@ -14,10 +15,22 @@ import type { EtapaOpcao } from "@/modules/financeiro/dividas/calculo";
 import { ContratoFormDrawer } from "@/modules/financeiro/dividas/components/contrato-form-drawer";
 import { CotaFormDrawer } from "@/modules/financeiro/dividas/components/cota-form-drawer";
 import { SeloContrato, SeloCota } from "@/modules/financeiro/dividas/components/selos";
-import type { ConsorcioRelatorio, ContratoRelatorio } from "@/modules/financeiro/dividas/relatorio";
+import {
+  FILTROS_STATUS_CONTRATO,
+  filtrarContratosPorStatus,
+  type ConsorcioRelatorio,
+  type ContratoRelatorio,
+  type FiltroStatusContrato,
+} from "@/modules/financeiro/dividas/relatorio";
 import { ROTULO_SISTEMA, ROTULO_TIPO_CONTRATO, rotulo } from "@/modules/financeiro/dividas/schemas";
 
 export type AbaDividas = "contratos" | "consorcios";
+
+/** Opções explícitas do filtro; "todos" é o valor vazio do FiltroSelect. */
+const OPCOES_STATUS_CONTRATO = [
+  { valor: "ativos", rotulo: "Ativos" },
+  { valor: "quitados", rotulo: "Quitados" },
+];
 
 export const colunasContratos: ColumnDef<ContratoRelatorio, unknown>[] = [
   {
@@ -150,6 +163,8 @@ export function DividasPainel({ abaInicial, contratos, cotas, etapas, centros, p
   const [aba, setAba] = React.useState<AbaDividas>(abaInicial);
   const [novoContrato, setNovoContrato] = React.useState(false);
   const [novaCota, setNovaCota] = React.useState(false);
+  const [status, setStatus] = useFiltroSessao<FiltroStatusContrato>("status", "ativos", FILTROS_STATUS_CONTRATO);
+  const contratosFiltrados = React.useMemo(() => filtrarContratosPorStatus(contratos, status), [contratos, status]);
 
   function trocarAba(valor: string) {
     const nova: AbaDividas = valor === "consorcios" ? "consorcios" : "contratos";
@@ -177,7 +192,25 @@ export function DividasPainel({ abaInicial, contratos, cotas, etapas, centros, p
           <DataTable
             idTabela="financeiro.dividas.contratos"
             columns={colunasContratos}
-            data={contratos}
+            data={contratosFiltrados}
+            filtros={[
+              {
+                id: "status",
+                rotulo: "Status",
+                fixo: true,
+                temValor: status !== "ativos",
+                onLimpar: () => setStatus("ativos"),
+                elemento: (
+                  <FiltroSelect
+                    valor={status === "todos" ? "" : status}
+                    onValorChange={(valor) => setStatus(valor === "" ? "todos" : (valor as FiltroStatusContrato))}
+                    opcoes={OPCOES_STATUS_CONTRATO}
+                    placeholder="Status"
+                    todosRotulo="Todos"
+                  />
+                ),
+              },
+            ]}
             onRowClick={(c) => router.push(`/financeiro/dividas/contratos/${c.contratoId}`)}
             emptyState={
               <EmptyState
