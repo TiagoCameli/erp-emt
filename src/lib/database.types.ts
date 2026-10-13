@@ -11834,6 +11834,7 @@ export type Database = {
           numero: string;
           principal_pago: number;
           proximas: Json;
+          restantes: Json;
           saldo_devedor: number;
           sistema: string;
           status: string;

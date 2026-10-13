@@ -31,6 +31,9 @@ function contrato(parcial: Partial<ContratoRelatorio> = {}): ContratoRelatorio {
     saldoDevedor: 92544.04,
     jurosPagos: 2000,
     jurosAPagar: 11471.52,
+    aPagar: 104015.56,
+    totalNoPrazo: 113471.52,
+    quitacaoHoje: 92544.04,
     proximas: [
       { numero: 2, vencimento: "2026-03-15", principal: 7605.08, juros: 1850.88, encargos: 0, total: 9455.96 },
       { numero: 3, vencimento: "2026-04-15", principal: 7757.18, juros: 1698.78, encargos: 0, total: 9455.96 },

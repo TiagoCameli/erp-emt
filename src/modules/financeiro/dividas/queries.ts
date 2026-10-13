@@ -20,7 +20,7 @@ export async function relatorioContratos(data: string = dataHojeISO()): Promise<
   const supabase = await createClient();
   const { data: linhas, error } = await supabase.rpc("fn_rel_dividas_contratos", { p_data: data });
   if (error) throw new Error("Não foi possível carregar os contratos de dívida");
-  return (linhas ?? []).map(lerContratoRelatorio);
+  return (linhas ?? []).map((l) => lerContratoRelatorio(l, data));
 }
 
 export async function relatorioConsorcios(data: string = dataHojeISO()): Promise<ConsorcioRelatorio[]> {

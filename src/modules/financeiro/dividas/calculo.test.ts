@@ -11,6 +11,7 @@ import {
   mesesEntre,
   saldoNaData,
   somarCentavos,
+  valorQuitacaoHoje,
   type PontoFluxo,
 } from "@/modules/financeiro/dividas/calculo";
 
@@ -79,6 +80,28 @@ describe("calcularCet", () => {
   it("ignora data inválida e valor zero", () => {
     const fluxo = [...fluxoPrice(10000, 1, 6), { data: "lixo", valor: -999 }, { data: mes(3), valor: 0 }];
     expect(calcularCet(fluxo)!.mensal * 100).toBeCloseTo(1, 3);
+  });
+});
+
+describe("valorQuitacaoHoje", () => {
+  const parcelas = () => fluxoPrice(100000, 2, 12).filter((p) => p.valor < 0).map((p) => ({ ...p, valor: -p.valor }));
+
+  it("na data da liberação, as 12 parcelas do Price a valor presente voltam ao valor liberado", () => {
+    expect(valorQuitacaoHoje(parcelas(), 2, mes(0))).toBeCloseTo(100000, 0);
+  });
+
+  it("logo depois de pagar a 3ª, é o saldo do Price; meio mês depois, o saldo com meio mês de juros", () => {
+    const resto = parcelas().slice(3);
+    const saldo = valorQuitacaoHoje(resto, 2, mes(3));
+    expect(valorQuitacaoHoje(resto, 2, "2026-04-30")).toBeCloseTo(saldo * Math.pow(1.02, 0.5), 0);
+    expect(saldo).toBeLessThan(resto.reduce((s, p) => s + p.valor, 0));
+  });
+
+  it("parcela vencida entra cheia; sem taxa é a soma; sem parcela é zero", () => {
+    const vencida = [{ data: "2026-01-15", valor: 1000 }];
+    expect(valorQuitacaoHoje(vencida, 2, "2026-03-01")).toBe(1000);
+    expect(valorQuitacaoHoje([{ data: "2027-01-15", valor: 1000 }, ...vencida], 0, "2026-03-01")).toBe(2000);
+    expect(valorQuitacaoHoje([], 2, "2026-03-01")).toBe(0);
   });
 });
 
