@@ -255,12 +255,16 @@ begin
 
   -- C) CONTROLE: aprovar em rascunho
   begin
-    perform public.fn_aprovar_recibo_ferias(v_ferias);
+    -- A original perdeu o EXECUTE do authenticated (20261013214158): o app
+    -- aprova pelo *_com_pagamento. Aqui chama como dono, com o JWT do Tiago.
+    reset role; perform public.fn_aprovar_recibo_ferias(v_ferias); execute 'set local role authenticated';
   exception when others then c_erro := sqlerrm; end;
   if c_erro = '(NAO RECUSOU)' then raise exception 'FALHOU: aprovou recibo em rascunho'; end if;
 
   perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
-  perform public.fn_aprovar_recibo_ferias(v_ferias);
+  -- A original perdeu o EXECUTE do authenticated (20261013214158): o app
+  -- aprova pelo *_com_pagamento. Aqui chama como dono, com o JWT do Tiago.
+  reset role; perform public.fn_aprovar_recibo_ferias(v_ferias); execute 'set local role authenticated';
 
   -- A) uma conta a pagar, no centro certo, na competencia do GOZO.
   -- Contagem e soma primeiro, atributos depois num select de UMA linha: com
@@ -459,7 +463,9 @@ begin
   if g_abriu <> 'rascunho' then raise exception 'FALHOU: digitar valor nao abriu o recibo (%)', g_abriu; end if;
 
   perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
-  perform public.fn_aprovar_recibo_ferias(v_ferias);
+  -- A original perdeu o EXECUTE do authenticated (20261013214158): o app
+  -- aprova pelo *_com_pagamento. Aqui chama como dono, com o JWT do Tiago.
+  reset role; perform public.fn_aprovar_recibo_ferias(v_ferias); execute 'set local role authenticated';
 
   -- D) CONTROLE: a data de inicio do gozo define a competencia e o vencimento
   -- da conta a pagar. Mudar a data com o recibo aprovado deixaria o lancamento
@@ -576,7 +582,9 @@ begin
   select status_recibo into g_status from public.rh_ferias where id = v_ferias;
 
   perform public.fn_enviar_recibo_ferias_aprovacao(v_ferias);
-  perform public.fn_aprovar_recibo_ferias(v_ferias);
+  -- A original perdeu o EXECUTE do authenticated (20261013214158): o app
+  -- aprova pelo *_com_pagamento. Aqui chama como dono, com o JWT do Tiago.
+  reset role; perform public.fn_aprovar_recibo_ferias(v_ferias); execute 'set local role authenticated';
 
   select count(*), coalesce(sum(valor),0) into a_qtd, a_valor
     from public.lancamentos where origem = 'ferias' and origem_id = v_ferias;

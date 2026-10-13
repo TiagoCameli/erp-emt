@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type ExcelJS from "exceljs";
 
 import { EMPRESA } from "@/config/marca";
 import type { Acao } from "@/config/recursos";

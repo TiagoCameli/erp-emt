@@ -111,7 +111,9 @@ begin
   -- Das linhas do lote, uma unica foi preenchida. Se a aprovacao gerasse
   -- lancamento para as outras, sairiam contas a pagar de R$ 0,00 na fila.
   perform public.fn_enviar_decimo_terceiro_aprovacao(v_lote);
-  perform public.fn_aprovar_decimo_terceiro(v_lote);
+  -- A original perdeu o EXECUTE do authenticated (20261013214158): o app
+  -- aprova pelo *_com_pagamento. Aqui chama como dono, com o JWT do Tiago.
+  reset role; perform public.fn_aprovar_decimo_terceiro(v_lote); execute 'set local role authenticated';
   select count(*), coalesce(sum(l.valor),0) into g_lanc, g_soma
     from public.lancamentos l
    where l.origem = 'decimo_terceiro'

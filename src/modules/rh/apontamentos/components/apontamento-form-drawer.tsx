@@ -18,7 +18,6 @@ import {
   submeterComAviso,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ROTULO_TIPO_APONTAMENTO } from "@/modules/rh/_shared/formato";
 import type { TipoApontamento } from "@/modules/rh/_shared/formato";

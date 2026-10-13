@@ -5,12 +5,10 @@ import { useFieldArray, useForm, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   LoaderCircle,
-  Paperclip,
   Plus,
   Sparkles,
   Trash2,
   TriangleAlert,
-  Upload,
 } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 import { cn } from "@/lib/utils";
@@ -78,7 +76,6 @@ import {
 import {
   paraNumero,
   LINHAS_DE_AJUSTE,
-  SEM_AJUSTES,
   subtotalItem,
   temAjuste,
   totalComAjustes,
