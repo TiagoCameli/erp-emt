@@ -7,7 +7,7 @@ import { COLUNAS_MODELO } from "@/modules/combustivel/tanques/schemas";
 /** GET: baixa o modelo .xlsx para importação de tanques. */
 export async function GET() {
   const usuario = await getUsuarioLogado();
-  if (!usuario || !temPermissao(usuario, "combustivel.tanques", "criar")) {
+  if (!usuario || !temPermissao(usuario, "estoque.tanques", "criar")) {
     notFound();
   }
 

@@ -21,7 +21,8 @@ import {
 } from "@/modules/combustivel/tanques/schemas";
 
 /**
- * Mutações do cadastro de tanques (`combustivel.tanques`).
+ * Mutações do cadastro de tanques (`estoque.tanques`). Desde 13/10/2026 o tanque é criado
+ * no Estoque; o Combustível só lista e movimenta.
  *
  * Cadastro com RLS: grava direto na tabela, só nas colunas que o grant libera
  * (nome, apelido, capacidade, externo, dono, observações, ativo). Exclusão pela
@@ -29,7 +30,7 @@ import {
  * aviso de desativar). Nenhuma action lança: tudo volta `{ erro }`.
  */
 
-const RECURSO = "combustivel.tanques" as const;
+const RECURSO = "estoque.tanques" as const;
 const ROTA = "/combustivel/tanques";
 const TABELA = "tanques" as const;
 const ERRO_NOME_REPETIDO = "Já existe um tanque com este nome";
@@ -49,7 +50,7 @@ async function temAcao(acao: "criar" | "editar" | "excluir"): Promise<boolean> {
 
 /** Depois do commit nada vira falha. */
 function revalidar(...extras: string[]) {
-  for (const rota of [ROTA, "/combustivel", ...extras]) {
+  for (const rota of [ROTA, "/combustivel", "/estoque/tanques", "/estoque/posicao", ...extras]) {
     try {
       revalidatePath(rota);
     } catch {

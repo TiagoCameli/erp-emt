@@ -20,20 +20,19 @@ export default async function PaginaDepositosAlmoxarifado() {
       <PageHeader
         modulo="Manutenção"
         titulo="Depósitos de peças"
-        descricao="Onde as peças e os óleos da manutenção ficam guardados"
+        descricao="Onde as peças e os óleos ficam guardados. Os depósitos são criados e editados no módulo Estoque"
         acoes={
           <>
             <NavegacaoAlmoxarifado atual="depositos" />
-            <DepositosAcoesCabecalho
-              podeCriar={temPermissao(usuario, "manutencao.almoxarifado", "criar")}
-            />
+            {/* Desde 13/10/2026 o depósito é criado no Estoque (`estoque.depositos`). */}
+            <DepositosAcoesCabecalho podeCriar={false} />
           </>
         }
       />
       <DepositosTabela
         depositos={depositos}
-        podeEditar={temPermissao(usuario, "manutencao.almoxarifado", "editar")}
-        podeExcluir={temPermissao(usuario, "manutencao.almoxarifado", "excluir")}
+        podeEditar={false}
+        podeExcluir={false}
       />
     </>
   );

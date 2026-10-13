@@ -33,6 +33,14 @@ export interface TanquesListaProps {
   podeExcluir: boolean;
   /** `combustivel.esvaziamentos`/criar: o "Esvaziar" do card (origem: TanqueList). */
   podeEsvaziar?: boolean;
+  /** Título da aba: o Estoque, onde o tanque é criado, chama só de "Tanques". */
+  titulo?: string;
+  descricao?: string;
+  /**
+   * O card leva ao detalhe do Combustível (`combustivel.tanques`/ver). No Estoque, quem
+   * não vê o Combustível recebe o card sem link, em vez de um link que dá 404.
+   */
+  abreDetalhe?: boolean;
 }
 
 /**
@@ -78,6 +86,9 @@ export function TanquesLista({
   podeEditar,
   podeExcluir,
   podeEsvaziar = false,
+  titulo = "Tanques de Combustível",
+  descricao,
+  abreDetalhe = true,
 }: TanquesListaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
@@ -153,7 +164,8 @@ export function TanquesLista({
   return (
     <>
       <TituloAba
-        titulo="Tanques de Combustível"
+        titulo={titulo}
+        descricao={descricao}
         contagem={filtrados.length}
         acoes={<TanquesAcoesCabecalho podeCriar={podeCriar} fornecedores={fornecedores} />}
       />
@@ -208,11 +220,13 @@ export function TanquesLista({
                     className="relative rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary focus-within:border-primary"
                   >
                     {/* O card inteiro leva ao detalhe; o rodapé fica por cima do link. */}
-                    <Link
-                      href={`/combustivel/tanques/${tanque.id}`}
-                      aria-label={`Abrir o tanque ${tanque.nome}`}
-                      className="absolute inset-0 rounded-xl foco-anel-dentro"
-                    />
+                    {abreDetalhe ? (
+                      <Link
+                        href={`/combustivel/tanques/${tanque.id}`}
+                        aria-label={`Abrir o tanque ${tanque.nome}`}
+                        className="absolute inset-0 rounded-xl foco-anel-dentro"
+                      />
+                    ) : null}
                     <TanqueVisual
                       id={tanque.id}
                       nome={tanque.nome}
@@ -264,11 +278,13 @@ export function TanquesLista({
                     key={tanque.id}
                     className="relative flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
                   >
-                    <Link
-                      href={`/combustivel/tanques/${tanque.id}`}
-                      aria-label={`Abrir o tanque ${tanque.nome}`}
-                      className="absolute inset-0 foco-anel-dentro"
-                    />
+                    {abreDetalhe ? (
+                      <Link
+                        href={`/combustivel/tanques/${tanque.id}`}
+                        aria-label={`Abrir o tanque ${tanque.nome}`}
+                        className="absolute inset-0 foco-anel-dentro"
+                      />
+                    ) : null}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{tanque.nome}</p>
                       <p className="truncate text-legenda text-muted-foreground">

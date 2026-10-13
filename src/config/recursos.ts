@@ -35,11 +35,13 @@ export interface RecursoDef {
  * Módulos na ordem de exibição da sidebar. Frete, Combustível e Manutenção ficam
  * entre RH e Administração (pedido do Tiago em 24/09/2026). Medição de Contratos
  * fica depois da Manutenção (25/09/2026).
+ * Estoque fica logo depois de Compras, que é de onde vêm as entradas (13/10/2026).
  */
 export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
+  { id: "estoque", nome: "Estoque", rota: "/estoque" },
   { id: "financeiro", nome: "Financeiro", rota: "/financeiro" },
   { id: "rh", nome: "RH", rota: "/rh" },
   { id: "frete", nome: "Frete", rota: "/frete" },
@@ -285,6 +287,44 @@ export const RECURSOS = [
     modulo: "frete",
     rota: "/frete/carretas-emt",
     acoes: ["ver", "editar"],
+  },
+  // Estoque (13/10/2026). Sem ligação com o Financeiro: a entrada pode puxar um item
+  // de OC, a saída vai para um centro de custo com o custo PEPS das entradas. Depósitos
+  // e tanques são criados aqui; combustível e peças só aparecem na posição.
+  {
+    id: "estoque.posicao",
+    nome: "Posição",
+    modulo: "estoque",
+    rota: "/estoque/posicao",
+    acoes: ["ver"],
+  },
+  {
+    id: "estoque.entradas",
+    nome: "Entradas",
+    modulo: "estoque",
+    rota: "/estoque/entradas",
+    acoes: CRUD,
+  },
+  {
+    id: "estoque.saidas",
+    nome: "Saídas",
+    modulo: "estoque",
+    rota: "/estoque/saidas",
+    acoes: CRUD,
+  },
+  {
+    id: "estoque.depositos",
+    nome: "Depósitos",
+    modulo: "estoque",
+    rota: "/estoque/depositos",
+    acoes: CRUD,
+  },
+  {
+    id: "estoque.tanques",
+    nome: "Tanques",
+    modulo: "estoque",
+    rota: "/estoque/tanques",
+    acoes: CRUD,
   },
   // Combustível (Fase 3 da migração do Gestão Obras, plano seção 4.1). Não gera
   // lançamento, parcela nem rateio: o abastecimento de carreta vira débito na conta
