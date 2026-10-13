@@ -66,9 +66,13 @@ export function recursoDaEntidade(entidade: EntidadeAnexo): RecursoId {
   return RECURSO_POR_ENTIDADE[entidade];
 }
 
-/** Ação exigida para anexar ou remover: sempre 'editar'. */
-export function acaoDoAnexo(): Acao {
-  return "editar";
+/**
+ * Ação exigida para remover um anexo: "editar" do recurso do documento. Exceção:
+ * Pagamentos não tem "editar" no catálogo, então pede "criar", a de quem
+ * registra o pagamento e sobe o comprovante. Espelha fn_desvincular_arquivo.
+ */
+export function acaoParaRemover(entidade: EntidadeAnexo): Acao {
+  return entidade === "pagamento" ? "criar" : "editar";
 }
 
 /** Rótulo do tipo de documento, para o badge de origem do anexo propagado. */

@@ -16,6 +16,7 @@ import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import {
+  acaoParaRemover,
   ehEntidadeAnexo,
   recursoDaEntidade,
   type EntidadeAnexo,
@@ -49,7 +50,9 @@ async function podeMexer(
 ): Promise<boolean> {
   const usuario = await getUsuarioLogado();
   const recurso = recursoDaEntidade(entidade);
-  if (acao === "remover") return temPermissao(usuario, recurso, "editar");
+  if (acao === "remover") {
+    return temPermissao(usuario, recurso, acaoParaRemover(entidade));
+  }
   return (
     temPermissao(usuario, recurso, "editar") ||
     temPermissao(usuario, recurso, "criar")
