@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ENTIDADES_ANEXO,
+  acaoParaRemover,
   ehEntidadeAnexo,
   recursoDaEntidade,
   rotuloDaEntidade,
@@ -84,5 +85,18 @@ describe("entidades de anexo", () => {
     );
     expect(doBanco["equipamento_documento"]).toBe("cadastros.equipamentos");
     expect(doTs).toEqual(doBanco);
+  });
+});
+
+describe("acaoParaRemover", () => {
+  // Pagamentos não tem a ação "editar" no catálogo: exigir editar deixava
+  // ninguém tirar um comprovante errado (13/10/2026, LAN-2026-6778).
+  it("pagamento pede criar, a ação de quem registra o pagamento", () => {
+    expect(acaoParaRemover("pagamento")).toBe("criar");
+  });
+
+  it("os demais documentos pedem editar", () => {
+    expect(acaoParaRemover("lancamento")).toBe("editar");
+    expect(acaoParaRemover("cotacao")).toBe("editar");
   });
 });
