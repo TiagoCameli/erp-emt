@@ -188,7 +188,6 @@ describe("módulo Gestão", () => {
       "combustivel",
       "manutencao",
       "medicao",
-      "execucao",
       "administracao",
     ]);
   });

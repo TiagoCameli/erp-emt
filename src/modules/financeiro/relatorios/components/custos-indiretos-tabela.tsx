@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ChevronDown, ChevronRight } from "lucide-react";
 
 import { DataTable, EmptyState, MoneyText } from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { formatarPercentual } from "@/lib/formatadores";
 import {
   ROTULOS_MESES,
@@ -44,27 +45,58 @@ function Valor({ valor, className }: { valor: number; className?: string }) {
 interface LinhaCentro {
   tipo: "raiz" | "centro";
   id: string;
+  /** A raiz da linha; na própria raiz, o id dela. */
+  raizId: string;
   nome: string;
   porMes: number[];
   total: number;
+  /** Só na raiz: se tem etapa para abrir e se está aberta. */
+  abrivel?: boolean;
+  aberta?: boolean;
 }
 
 function TabelaPorCentro({ ano, linhas, mesCorrente }: CustosIndiretosTabelaProps) {
   const dados = React.useMemo(() => custosPorCentro(linhas), [linhas]);
   const meses = mesesVisiveis(ano, mesCorrente, dados.porMes);
+  // Cada raiz começa fechada, só com o subtotal; o botão abre as etapas.
+  const [abertas, setAbertas] = React.useState<ReadonlySet<string>>(() => new Set());
+  const alternar = React.useCallback((raizId: string) => {
+    setAbertas((atual) => {
+      const nova = new Set(atual);
+      if (!nova.delete(raizId)) nova.add(raizId);
+      return nova;
+    });
+  }, []);
   const registros = React.useMemo<LinhaCentro[]>(
     () =>
-      dados.raizes.flatMap((r) => [
-        { tipo: "raiz" as const, id: `raiz:${r.raizId}`, nome: r.raiz, porMes: r.porMes, total: r.total },
-        ...r.centros.map((c) => ({
-          tipo: "centro" as const,
-          id: `centro:${r.raizId}:${c.centroId}`,
-          nome: c.centro,
-          porMes: c.porMes,
-          total: c.total,
-        })),
-      ]),
-    [dados],
+      dados.raizes.flatMap((r) => {
+        // Raiz cuja única etapa é ela mesma repetiria o subtotal: nada a abrir.
+        const abrivel = r.centros.some((c) => c.centroId !== r.raizId);
+        const aberta = abrivel && abertas.has(r.raizId);
+        return [
+          {
+            tipo: "raiz" as const,
+            id: `raiz:${r.raizId}`,
+            raizId: r.raizId,
+            nome: r.raiz,
+            porMes: r.porMes,
+            total: r.total,
+            abrivel,
+            aberta,
+          },
+          ...(aberta
+            ? r.centros.map((c) => ({
+                tipo: "centro" as const,
+                id: `centro:${r.raizId}:${c.centroId}`,
+                raizId: r.raizId,
+                nome: c.centro,
+                porMes: c.porMes,
+                total: c.total,
+              }))
+            : []),
+        ];
+      }),
+    [dados, abertas],
   );
 
   // Raiz com subtotal e as etapas logo abaixo: ordenar por coluna misturaria
@@ -74,16 +106,35 @@ function TabelaPorCentro({ ano, linhas, mesCorrente }: CustosIndiretosTabelaProp
     return [
       {
         id: "centro",
-        header: "Centro",
-        size: 260,
+        // À esquerda, como no custo por grupo de insumo: o recuo da etapa é o
+        // que diz de qual raiz ela é.
+        header: () => <span className="block text-left">Centro</span>,
+        size: 300,
         enableSorting: false,
-        meta: { celular: "titulo" },
-        cell: ({ row }) =>
-          row.original.tipo === "raiz" ? (
-            <span className="font-medium">{row.original.nome}</span>
-          ) : (
-            row.original.nome
-          ),
+        meta: { rotulo: "Centro", celular: "titulo" },
+        cell: ({ row }) => {
+          const l = row.original;
+          if (l.tipo === "centro") return <div className="pl-9 text-left">{l.nome}</div>;
+          return (
+            <div className="flex items-center gap-1.5 text-left">
+              {l.abrivel ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={l.aberta ? `Fechar ${l.nome}` : `Abrir ${l.nome}`}
+                  aria-expanded={l.aberta}
+                  onClick={() => alternar(l.raizId)}
+                >
+                  {l.aberta ? <ChevronDown /> : <ChevronRight />}
+                </Button>
+              ) : (
+                <span className="inline-block w-8 shrink-0" />
+              )}
+              <span className="font-medium">{l.nome}</span>
+            </div>
+          );
+        },
       },
       ...ROTULOS_MESES.slice(0, meses).map<ColumnDef<LinhaCentro, unknown>>((rotulo, i) => ({
         id: `mes${i + 1}`,
@@ -102,7 +153,7 @@ function TabelaPorCentro({ ano, linhas, mesCorrente }: CustosIndiretosTabelaProp
         cell: ({ row }) => <Valor valor={row.original.total} className="font-medium" />,
       },
     ];
-  }, [meses]);
+  }, [meses, alternar]);
 
   const rodape: Record<string, React.ReactNode> = {
     centro: <span className="font-semibold">Total</span>,
@@ -168,8 +219,8 @@ function TabelaPorCategoria({ linhas }: { linhas: CustoIndiretoLinha[] }) {
 }
 
 /**
- * Duas tabelas: o custo indireto por centro (raiz com subtotal e cada etapa)
- * mês a mês, e por categoria no ano.
+ * Duas tabelas: o custo indireto por centro (raiz com subtotal, que abre nas
+ * etapas) mês a mês, e por categoria no ano.
  */
 export function CustosIndiretosTabela({ ano, linhas, mesCorrente }: CustosIndiretosTabelaProps) {
   if (linhas.length === 0) {

@@ -20,7 +20,6 @@ import {
   Fuel,
   Truck,
   Ruler,
-  HardHat,
   Warehouse,
   type LucideIcon,
 } from "lucide-react";
@@ -57,7 +56,6 @@ export const MAPA_ICONES: Record<string, LucideIcon> = {
   combustivel: Fuel,
   manutencao: Wrench,
   medicao: Ruler,
-  execucao: HardHat,
   rh: Users,
 };
 
