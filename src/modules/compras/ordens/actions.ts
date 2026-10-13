@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { Acao } from "@/config/recursos";
 import { erroAcao } from "@/lib/erros";
+import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
@@ -278,10 +279,11 @@ export async function editarOrdem(
     .eq("ordem_compra_id", idValido.data);
 
   if (erroDelete) {
+    // O banco recusa apagar item que já teve entrada no Estoque, com a frase de por quê.
     return erroAcao(
       "compras.ordens.editarOrdem",
       erroDelete,
-      "Não foi possível atualizar os itens. Tente novamente",
+      mensagemDeNegocio(erroDelete, "Não foi possível atualizar os itens. Tente novamente"),
     );
   }
 

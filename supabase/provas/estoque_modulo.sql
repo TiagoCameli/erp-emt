@@ -1,7 +1,8 @@
 -- Prova do módulo Estoque (migration 20261013164803_estoque_modulo, aplicada pelo CLI linkado: o MCP deu
 -- "Invalid or expired requestState" por causa do delete na função PEPS). Resultado em 13/10/2026, banco vivo: todos
 -- os casos como o esperado; 8b restante null (o item da OC esgotou e saiu da lista); 7_posicao_origens
--- {"estoque": 1, "combustivel": 8, "pecas": 27}. NÃO GRAVA: termina em raise exception com o resultado.
+-- {"estoque": 1, "combustivel": 8, "pecas": 27}. Depois de 20261013171345_estoque_revisao (mesmo dia): 11 e 12
+-- recusados como o esperado, demais iguais. NÃO GRAVA: termina em raise exception com o resultado.
 -- Cada caso vira uma chave em r. "recusou: ..." é o esperado nas travas; "PASSOU (errado)" é falha.
 -- Esperado:
 --   1 estrutura: 3 tabelas com RLS, 0 grant de escrita, 2 auditadas
@@ -14,16 +15,25 @@
 --   8 OC: entrada acima do saldo do item recusou; dentro do saldo usa insumo e preço da OC
 --   9 sem permissão: salvar recusou, select vê 0, posição recusou
 --  10 excluir S1 libera E2, restaurar S1 volta o custo 91,0000
+--  11 peça do almoxarifado como entrada avulsa: recusou
+--  12 apagar o item da OC que teve entrada (edição/exclusão da OC): recusou
 do $prova$
 declare
   v_admin constant uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   v_zero constant uuid := gen_random_uuid();
-  v_insumo constant uuid := '273145e1-80dc-451f-8a81-d25af1b81350';
+  v_insumo uuid;
+  v_peca uuid;
   v_cc constant uuid := '026a70b7-640c-459d-9c10-f11ccba5d4c1';
-  v_oc_item constant uuid := '713416f4-ad0b-4c2b-966c-a85b973ed355';
+  v_oc_item uuid;
+  v_oc_qtd numeric;
   v_dep uuid; v_e1 uuid; v_e2 uuid; v_s1 uuid; v_s2 uuid; v_eoc uuid;
   v_n bigint; v_txt text; v_j jsonb; r jsonb := '{}'::jsonb;
 begin
+  -- Insumo e item de OC que o Estoque pode movimentar (nem peça, nem combustível).
+  select id into v_insumo from public.insumos where ativo and public.fn_estoque_insumo_de_outro_modulo(id) is null order by nome limit 1;
+  select insumo_id into v_peca from public.almoxarifado_itens limit 1;
+  select i.id, i.quantidade into v_oc_item, v_oc_qtd from public.oc_itens i join public.ordens_compra o on o.id = i.ordem_compra_id
+   where o.status = 'aprovado' and public.fn_estoque_insumo_de_outro_modulo(i.insumo_id) is null order by o.numero limit 1;
   select count(*) into v_n from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'public' and c.relkind = 'r' and c.relname like 'estoque\_%' and c.relrowsecurity;
   r := r || jsonb_build_object('1a_tabelas_com_rls', v_n);
@@ -88,15 +98,33 @@ begin
   -- 8. OC
   v_txt := 'PASSOU (errado)';
   begin
-    perform public.fn_estoque_salvar_entrada(null, v_dep, null, 1000, null, '2026-10-10', v_oc_item);
+    perform public.fn_estoque_salvar_entrada(null, v_dep, null, v_oc_qtd + 1, null, '2026-10-10', v_oc_item);
   exception when others then v_txt := 'recusou: ' || sqlerrm;
   end;
   r := r || jsonb_build_object('8a_oc_acima', v_txt);
-  v_eoc := public.fn_estoque_salvar_entrada(null, v_dep, v_insumo, 1, 1, '2026-10-10', v_oc_item);
+  v_eoc := public.fn_estoque_salvar_entrada(null, v_dep, v_insumo, v_oc_qtd, 1, '2026-10-10', v_oc_item);
   select jsonb_build_object('insumo_da_oc', e.insumo_id = i.insumo_id, 'preco_da_oc', e.valor_unitario = i.preco_unitario, 'oc_numero', e.oc_numero,
                             'restante', (select quantidade_restante from public.fn_estoque_oc_itens_disponiveis() where oc_item_id = v_oc_item))
     into v_j from public.estoque_entradas e join public.oc_itens i on i.id = e.oc_item_id where e.id = v_eoc;
   r := r || jsonb_build_object('8b_oc', v_j);
+
+  -- 11. Peça do almoxarifado não entra pelo Estoque
+  v_txt := 'PASSOU (errado)';
+  begin
+    perform public.fn_estoque_salvar_entrada(null, v_dep, v_peca, 1, 1, '2026-10-10');
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('11_peca', v_txt);
+
+  -- 12. Item de OC com entrada não some na edição da OC
+  reset role;
+  v_txt := 'PASSOU (errado)';
+  begin
+    delete from public.oc_itens where id = v_oc_item;
+  exception when others then v_txt := 'recusou: ' || sqlerrm;
+  end;
+  r := r || jsonb_build_object('12_apagar_item_oc', v_txt);
+  set local role authenticated;
 
   -- 10. Excluir e restaurar saída
   perform public.fn_estoque_excluir('estoque_saidas', v_s1, 'teste');
