@@ -34,6 +34,7 @@ const debito: TransacaoPainel = {
   transferencia: null,
   estorno: null,
   fatura: null,
+  lancado: null,
 };
 
 const compra = (parcelaId: string, valor: number, vencimento = "2026-09-28") => ({

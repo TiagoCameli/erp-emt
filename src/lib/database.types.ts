@@ -5058,6 +5058,8 @@ export type Database = {
           data_vencimento: string | null;
           descricao: string;
           e_divida: boolean;
+          extrato_transacao_id: string | null;
+          lancado_na_conciliacao: boolean;
           forma_pagamento_id: string | null;
           fornecedor_id: string | null;
           id: string;
@@ -5092,6 +5094,8 @@ export type Database = {
           data_vencimento?: string | null;
           descricao: string;
           e_divida?: boolean;
+          extrato_transacao_id?: string | null;
+          lancado_na_conciliacao?: boolean;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;
@@ -5126,6 +5130,8 @@ export type Database = {
           data_vencimento?: string | null;
           descricao?: string;
           e_divida?: boolean;
+          extrato_transacao_id?: string | null;
+          lancado_na_conciliacao?: boolean;
           forma_pagamento_id?: string | null;
           fornecedor_id?: string | null;
           id?: string;

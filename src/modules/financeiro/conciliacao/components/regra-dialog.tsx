@@ -221,7 +221,7 @@ export function RegraDialog({ regra, onFechar, opcoes }: RegraDialogProps) {
                 setCentroCustoId("");
               }}
               opcoes={[
-                { valor: "lancar", rotulo: "Lançar já pago (despesa ou receita)" },
+                { valor: "lancar", rotulo: "Lançar para aprovar e pagar (despesa ou receita)" },
                 { valor: "transferencia", rotulo: "Transferência com outra conta" },
               ]}
               disabled={enviando}

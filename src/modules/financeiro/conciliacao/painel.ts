@@ -87,6 +87,22 @@ const transacaoSchema = z.object({
     .nullable()
     .optional()
     .transform((e) => e ?? null),
+  /**
+   * Lançamento que o "Lançar" criou a partir deste movimento e que ainda não
+   * casou: passa pela aprovação e pelo pagamento antes (Tiago, 13/10/2026).
+   */
+  lancado: z
+    .object({
+      lancamentoId: z.string(),
+      lancamentoNumero: texto,
+      tipo: z.enum(["a_pagar", "a_receber"]),
+      parcelaId: texto,
+      parcelaStatus: texto,
+      pagaNestaConta: z.boolean().nullable(),
+    })
+    .nullable()
+    .optional()
+    .transform((l) => l ?? null),
   /** Fatura do cartão paga por este débito (várias compras num movimento). */
   fatura: z
     .object({
@@ -302,6 +318,34 @@ export function candidatosDoPainel(
     ...painel.pagasEmOutraConta.map((p) => daParcela(p, "paga_outra_conta")),
     ...painel.abertas.map((p) => daParcela(p, "aberta")),
   ];
+}
+
+/**
+ * Onde está o lançamento que o "Lançar" criou deste movimento. Lançado pela
+ * conciliação segue o caminho de qualquer lançamento: aprovação, pagamento (ou
+ * baixa do recebimento) e só então casa. `podeCasar` só quando a parcela já
+ * está paga nesta conta.
+ */
+export function situacaoDoLancado(
+  lancado: NonNullable<TransacaoPainel["lancado"]>,
+): { texto: string; podeCasar: boolean } {
+  const numero = lancado.lancamentoNumero ?? "Lançado";
+  const receber = lancado.tipo === "a_receber";
+  if (lancado.parcelaStatus === "pago") {
+    return lancado.pagaNestaConta
+      ? { texto: `${numero} ${receber ? "recebido" : "pago"}: case`, podeCasar: true }
+      : {
+          texto: `${numero} ${receber ? "recebido" : "pago"} em outra conta`,
+          podeCasar: false,
+        };
+  }
+  if (receber) {
+    return { texto: `${numero}: falta a baixa em Recebimentos`, podeCasar: false };
+  }
+  if (lancado.parcelaStatus === "aprovado") {
+    return { texto: `${numero} aprovado: falta pagar em Pagamentos`, podeCasar: false };
+  }
+  return { texto: `${numero}: aguardando aprovação do pagamento`, podeCasar: false };
 }
 
 /**

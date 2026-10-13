@@ -6,6 +6,7 @@ import {
   mesCurto,
   montarVisoes,
   resumoUltimosMeses,
+  situacaoDoLancado,
   statusDoMes,
   painelSchema,
   periodoDoMes,
@@ -58,6 +59,7 @@ const painel: PainelConciliacao = {
       transferencia: null,
       estorno: null,
       fatura: null,
+      lancado: null,
     },
     {
       id: "t2",
@@ -73,6 +75,7 @@ const painel: PainelConciliacao = {
       transferencia: null,
       estorno: null,
       fatura: null,
+      lancado: null,
     },
   ],
   pagasNaConta: [
@@ -255,5 +258,86 @@ describe("periodoDosExtratos (todos os meses)", () => {
   it("sem extrato com período devolve null", () => {
     expect(periodoDosExtratos([])).toBeNull();
     expect(periodoDosExtratos([{ periodoInicio: null, periodoFim: null }])).toBeNull();
+  });
+});
+
+describe("situacaoDoLancado", () => {
+  const base = {
+    lancamentoId: "l",
+    lancamentoNumero: "LAN-2026-0100",
+    tipo: "a_pagar" as const,
+    parcelaId: "p",
+    parcelaStatus: "pendente",
+    pagaNestaConta: true,
+  };
+
+  it("pendente espera a aprovação e não casa", () => {
+    expect(situacaoDoLancado(base)).toEqual({
+      texto: "LAN-2026-0100: aguardando aprovação do pagamento",
+      podeCasar: false,
+    });
+  });
+
+  it("aprovado ainda não casa: falta pagar", () => {
+    expect(situacaoDoLancado({ ...base, parcelaStatus: "aprovado" })).toEqual({
+      texto: "LAN-2026-0100 aprovado: falta pagar em Pagamentos",
+      podeCasar: false,
+    });
+  });
+
+  it("pago nesta conta casa", () => {
+    expect(situacaoDoLancado({ ...base, parcelaStatus: "pago" }).podeCasar).toBe(true);
+  });
+
+  it("pago em outra conta não casa", () => {
+    expect(
+      situacaoDoLancado({ ...base, parcelaStatus: "pago", pagaNestaConta: false }),
+    ).toEqual({ texto: "LAN-2026-0100 pago em outra conta", podeCasar: false });
+  });
+
+  it("recebimento espera a baixa em Recebimentos", () => {
+    expect(
+      situacaoDoLancado({ ...base, tipo: "a_receber", parcelaStatus: "aprovado" }).texto,
+    ).toBe("LAN-2026-0100: falta a baixa em Recebimentos");
+  });
+});
+
+describe("painelSchema com lançado", () => {
+  it("aceita o movimento sem a chave e com o lançado", () => {
+    const movimento = {
+      id: "t",
+      extratoId: "e",
+      dataMovimento: "2026-10-09",
+      valor: -8.05,
+      tipo: "debito",
+      memo: "TARIFA",
+      conciliada: false,
+      automatica: false,
+      parcela: null,
+      transferencia: null,
+    };
+    const painel = painelSchema.parse({
+      transacoes: [
+        movimento,
+        {
+          ...movimento,
+          id: "t2",
+          lancado: {
+            lancamentoId: "l",
+            lancamentoNumero: "LAN-2026-0100",
+            tipo: "a_pagar",
+            parcelaId: "p",
+            parcelaStatus: "pendente",
+            pagaNestaConta: true,
+          },
+        },
+      ],
+      pagasNaConta: [],
+      pagasEmOutraConta: [],
+      abertas: [],
+      transferencias: [],
+    });
+    expect(painel.transacoes[0].lancado).toBeNull();
+    expect(painel.transacoes[1].lancado?.parcelaStatus).toBe("pendente");
   });
 });

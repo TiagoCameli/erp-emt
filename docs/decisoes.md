@@ -5292,3 +5292,15 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Tanque de material:** um material por vez (o banco recusa o segundo enquanto houver saldo do primeiro); a capacidade (em litros) só trava quando o material é medido em litro. O cache do tanque (`nivel_atual_litros`, `combustivel_atual_id`) passa a ser o saldo e o material atual, gravados pelo Estoque; o card mostra o saldo na unidade do material.
 - Migration `20261013215648_estoque_tanque_material` (troca a assinatura de `fn_estoque_salvar_entrada`/`_saida`, por isso aplicada logo antes do merge). Prova: casos 13 a 17 de `supabase/provas/estoque_modulo.sql`.
 - De passagem: a resolução do conflito do #447 tinha colado duas linhas de `database.types.ts` (`};      extrato_transacoes: {`); separadas.
+
+## 2026-10-13 - Conciliação: o "Lançar" passa pela aprovação e pelo pagamento
+
+**Pedido do Tiago:** "os lançamentos que são feitos através da conciliação só podem ser conciliados depois que forem aprovados na aprovação de pagamento e quitados na aba de pagamentos, antes disso eles podem ser lançados por lá mas não conciliados. Quando eu estiver fazendo um lançamento pela conciliação eu posso adicionar anexos igual quando estou criando um lançamento comum."
+- **Antes:** `fn_conciliacao_lancar` criava o lançamento já pago e casado com o movimento, sem aprovação.
+- **Agora:** cria um lançamento comum (status `a_pagar`, parcela `pendente`, vencimento no dia do movimento) com a conta do extrato já escolhida, que é o que marca o a pagar como revisado. Vai para Aprovação de pagamentos e para Pagamentos; recebimento, para a baixa em Recebimentos. `lancamentos.extrato_transacao_id` liga ao movimento (some se o extrato for excluído) e `lancamentos.lancado_na_conciliacao` guarda a marca de vez. Lançar duas vezes o mesmo movimento é recusado.
+- **Casar:** `fn_conciliacao_casar` recusa parcela de lançamento feito pela conciliação enquanto ela não estiver paga (antes, parcela aprovada levava baixa pelo extrato). Os outros lançamentos continuam como estavam.
+- **Painel:** cada movimento traz o `lancado` (número e situação da parcela); a coluna "O app tem" mostra "aguardando aprovação", "aprovado: falta pagar" ou "pago: case", e o Lançar e a Transferência somem dele. As abertas deixam de oferecer esses lançamentos. Depois de pago nesta conta, ele aparece nas pagas e casa pelo caminho normal.
+- **Regras de "lançar":** seguem o mesmo caminho; a aplicação automática pula o movimento que já tem lançamento esperando, e a marca de automática só fica quando concilia.
+- **Anexos:** o drawer do Lançar ganhou a fila de anexos do lançamento comum; em lote, os arquivos sobem em cada lançamento criado.
+- Os lançamentos que o Lançar antigo criou (pagos e casados) não mudam.
+- Prova: `supabase/provas/conciliacao_lancar_passa_pela_aprovacao.sql`, RED com a função antiga ("parcela pago") e GREEN no banco vivo em begin/rollback.
