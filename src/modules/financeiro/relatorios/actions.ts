@@ -32,7 +32,6 @@ import {
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import {
   abaAging,
-  abaCreditos,
   abaInvestimentos,
   abaCustoCc,
   abaCustoGrupo,
@@ -49,7 +48,6 @@ import {
 } from "@/modules/financeiro/relatorios/planilha-relatorio";
 import {
   aging,
-  creditos,
   investimentos,
   custoPorCentroCusto,
   custoPorGrupo,
@@ -263,9 +261,6 @@ async function abaDoRelatorio(
 
     case "posicao-bancaria":
       return abaPosicaoBancaria(await posicaoBancaria());
-
-    case "creditos":
-      return abaCreditos(await creditos(), "todos os contratos");
 
     case "investimentos": {
       const periodo = lerPeriodoInvestimentos(params);

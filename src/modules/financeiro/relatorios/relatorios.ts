@@ -21,7 +21,6 @@ export type RelatorioId =
   | "dre"
   | "aging"
   | "posicao-bancaria"
-  | "creditos"
   | "investimentos"
   | "custo-cc"
   | "custo-receita"
@@ -38,7 +37,6 @@ export const RELATORIOS: readonly RelatorioId[] = [
   "dre",
   "aging",
   "posicao-bancaria",
-  "creditos",
   "investimentos",
   "custo-cc",
   "custo-receita",
@@ -106,7 +104,7 @@ export type SinalDeValor = "favoravel" | "desfavoravel" | "neutro";
  * total verde pareceria clicável). Inventar um terceiro verde fora da paleta
  * seria pior que ficar sem. O lado desfavorável usa `text-destructive`, que é o
  * vermelho de "este número é ruim" e já é usado assim no módulo (o vencimento
- * atrasado, em Créditos).
+ * atrasado, em Dívidas).
  *
  * Quando existirem os tokens `--valor-positivo` e `--valor-negativo` no
  * `globals.css`, é AQUI que eles entram, e as duas tabelas seguem junto sem

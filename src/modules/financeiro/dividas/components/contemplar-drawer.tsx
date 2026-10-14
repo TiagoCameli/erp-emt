@@ -85,7 +85,7 @@ export function ContemplarDrawer({ aberto, onAbertoChange, cotaId, valorCredito,
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo="Contemplar cota"
-      descricao="Depois de contemplada, o que falta pagar da cota é dívida (aparece em Créditos)."
+      descricao="Depois de contemplada, o que falta pagar da cota é dívida (aparece no painel de Dívidas)."
       rodape={
         <>
           <Button type="button" variant="outline" onClick={() => onAbertoChange(false)} disabled={salvando}>

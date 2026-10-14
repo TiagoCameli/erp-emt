@@ -18,7 +18,7 @@ export default async function PaginaContratoDivida({ params }: { params: Promise
   if (!idSchema.safeParse(id).success) notFound();
 
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
-  // O resumo (saldo, juros, CET) vem da mesma RPC da aba Créditos: um número só nas duas telas.
+  // O resumo (saldo, juros, CET) vem da mesma RPC da lista e do painel de Dívidas: um número só nas duas telas.
   const [detalhe, relatorio, anexos, centros] = await Promise.all([
     carregarContrato(id),
     relatorioContratos(),
