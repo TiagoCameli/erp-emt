@@ -16,6 +16,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { alternarAtivoDeposito, excluirDeposito } from "@/modules/manutencao/almoxarifado/actions";
 import type { DepositoLinha } from "@/modules/manutencao/almoxarifado/queries";
@@ -53,7 +54,6 @@ export function DepositosTabela({ depositos, podeEditar, podeExcluir }: Deposito
   // Facetado: o status só oferece o que existe entre os que passam na busca
   // (ver `_shared/filtros-facetados`).
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       depositos,
       {
@@ -63,10 +63,12 @@ export function DepositosTabela({ depositos, podeEditar, podeExcluir }: Deposito
         },
       },
       [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (deposito) =>
-          !termo ||
-          deposito.nome.toLowerCase().includes(termo) ||
-          (deposito.endereco ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(deposito.nome, deposito.endereco, deposito.ativo ? "ativo" : "inativo"),
+            busca,
+          ),
       ],
     );
   }, [depositos, busca, status]);
@@ -134,7 +136,7 @@ export function DepositosTabela({ depositos, podeEditar, podeExcluir }: Deposito
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por nome ou endereço" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome ou endereço" />
             ),
           },
           {

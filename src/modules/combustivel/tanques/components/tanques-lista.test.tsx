@@ -129,6 +129,13 @@ describe("filtrarTanques", () => {
     expect(filtrarTanques(lista, "comboio", "todos").map((t) => t.nome)).toEqual(["Tanque Comboio 01"]);
   });
 
+  it("busca universal: combustível, sem acento e por palavra", () => {
+    const lista = [tanque(), EXTERNO];
+    expect(filtrarTanques(lista, "diesel s500", "todos").map((t) => t.nome)).toEqual(["Tanque Comboio 01"]);
+    expect(filtrarTanques(lista, "COMBÓIO diesel", "todos").map((t) => t.nome)).toEqual(["Tanque Comboio 01"]);
+    expect(filtrarTanques(lista, "comboio gasolina", "todos")).toEqual([]);
+  });
+
   it("facetado: a busca corta o status; o escolhido não some", () => {
     const lista = [tanque(), inativo];
     const opcoesStatus = [

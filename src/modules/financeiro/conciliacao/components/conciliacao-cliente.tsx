@@ -1026,7 +1026,7 @@ function TabelaFaltam({
           casaBusca(
             textoPesquisavel(
               t.memo,
-              t.tipo === "credito" ? "credito" : "debito",
+              t.tipo,
               t.lancado?.lancamentoNumero,
               t.fatura?.cartaoNome,
               { valor: t.valor },

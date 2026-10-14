@@ -36,6 +36,18 @@ describe("facetarTransferencias", () => {
     expect(opcoes("combustivel", base(DIESEL, GASOLINA)).map((o) => o.valor)).toEqual([DIESEL, GASOLINA]);
   });
 
+  it("busca universal: combustível, data e valor também acham", () => {
+    const lista = [
+      transferencia({ insumoNome: "Diesel S10", valorTotal: 1500 }),
+      transferencia({ origemNome: "Comboio", insumoNome: "Gasolina", dataHora: "2026-09-25T12:00:00Z", valorTotal: 80 }),
+    ];
+    const nomes = (busca: string) => facetarTransferencias(lista, { ...vazio, busca }).linhas.map((t) => t.origemNome);
+    expect(nomes("diesel")).toEqual(["Tanque A"]);
+    expect(nomes("25/09")).toEqual(["Comboio"]);
+    expect(nomes("1.500")).toEqual(["Tanque A"]);
+    expect(nomes("comboio diesel")).toEqual([]);
+  });
+
   it("excluída escondida não oferece opção", () => {
     const lista = [transferencia(), transferencia({ insumoId: GASOLINA, excluidoEm: "2026-09-21T00:00:00Z" })];
     expect(facetarTransferencias(lista, vazio).opcoes("combustivel", base(DIESEL, GASOLINA)).map((o) => o.valor)).toEqual([
