@@ -202,6 +202,15 @@ export function lerConsorcioRelatorio(l: LinhaRpcConsorcio): ConsorcioRelatorio 
   };
 }
 
+/**
+ * O que a cota já pagou: fundo comum + taxa (adm e reserva) das parcelas
+ * pagas. É o complemento do `aPagar` (as mesmas linhas do cronograma, do
+ * outro lado do `pago`); somado em centavos.
+ */
+export function valorPagoDaCota(c: Pick<ConsorcioRelatorio, "fundoComumPago" | "taxaPaga">): number {
+  return (Math.round(c.fundoComumPago * 100) + Math.round(c.taxaPaga * 100)) / 100;
+}
+
 /** Soma em centavos inteiros, para o total da tabela bater com as linhas. */
 export function somar<T>(linhas: readonly T[], campo: (l: T) => number): number {
   return linhas.reduce((s, l) => s + Math.round(campo(l) * 100), 0) / 100;

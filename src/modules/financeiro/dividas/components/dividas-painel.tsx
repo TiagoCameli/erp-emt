@@ -18,6 +18,7 @@ import { SeloContrato, SeloCota } from "@/modules/financeiro/dividas/components/
 import {
   FILTROS_STATUS_CONTRATO,
   filtrarContratosPorStatus,
+  valorPagoDaCota,
   type ConsorcioRelatorio,
   type ContratoRelatorio,
   type FiltroStatusContrato,
@@ -132,6 +133,16 @@ export const colunasCotas: ColumnDef<ConsorcioRelatorio, unknown>[] = [
     size: 100,
     meta: { alinharDireita: true, atomico: true },
     cell: ({ row }) => `${row.original.parcelasPagas} de ${row.original.prazo}`,
+  },
+  {
+    // Fundo comum + taxa de administração + fundo de reserva das parcelas pagas:
+    // as mesmas linhas do cronograma que ficam de fora do "A pagar".
+    id: "pago",
+    accessorFn: (c) => valorPagoDaCota(c),
+    header: "Pago",
+    size: 140,
+    meta: { alinharDireita: true, atomico: true },
+    cell: ({ row }) => <MoneyText valor={valorPagoDaCota(row.original)} />,
   },
   {
     accessorKey: "aPagar",
