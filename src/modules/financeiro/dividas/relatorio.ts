@@ -1,4 +1,10 @@
-import { calcularCet, lerFluxo, valorQuitacaoHoje, type Cet } from "@/modules/financeiro/dividas/calculo";
+import {
+  calcularCet,
+  lerFluxo,
+  valorQuitacaoHoje,
+  type Cet,
+  type PontoFluxo,
+} from "@/modules/financeiro/dividas/calculo";
 
 /**
  * As linhas de `fn_rel_dividas_contratos` e `fn_rel_consorcios` em camelCase,
@@ -39,6 +45,8 @@ export interface ContratoRelatorio {
   totalNoPrazo: number;
   /** Parcelas em aberto a valor presente na taxa do contrato (ver `valorQuitacaoHoje`). */
   quitacaoHoje: number;
+  /** Todas as parcelas em aberto (data e valor cheio), inclusive as vencidas: a base do painel. */
+  restantes: PontoFluxo[];
   proximas: ParcelaProxima[];
   /** Null sem cronograma (só a liberação no fluxo). */
   cet: Cet | null;
@@ -144,6 +152,7 @@ export function lerContratoRelatorio(l: LinhaRpcContrato, hoje: string): Contrat
     aPagar,
     totalNoPrazo: Math.round((pago + aPagar) * 100) / 100,
     quitacaoHoje: valorQuitacaoHoje(restantes, numero(l.taxa_am), hoje),
+    restantes,
     proximas: objetos(l.proximas).map((p) => ({
       numero: p.numero === null || p.numero === undefined ? null : numero(p.numero),
       vencimento: String(p.vencimento ?? ""),

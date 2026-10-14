@@ -18,8 +18,8 @@ import {
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { BlocoDre, DreGerencial, DreLinha } from "../queries";
 
-/** A tela de Créditos, para onde a nota do rodapé manda quem procura os juros. */
-const ROTA_CREDITOS = "/financeiro/relatorios?rel=creditos";
+/** A tela de Dívidas, para onde a nota do rodapé manda quem procura os juros. */
+const ROTA_DIVIDAS = "/financeiro/dividas";
 
 /**
  * Categorias que o `fn_rel_dre` soma também pelo CRONOGRAMA dos contratos e
@@ -580,10 +580,10 @@ export function DreTabela({ dre, periodo, podeVerLancamentos }: DreTabelaProps) 
         Juros de empréstimos no mês do vencimento (e saem de Pagamento de
         Empréstimo, que pode ficar negativo no mês). Saldo devedor e CET em{" "}
         <Link
-          href={ROTA_CREDITOS}
+          href={ROTA_DIVIDAS}
           className="foco-anel rounded-sm font-medium text-foreground underline underline-offset-2"
         >
-          Créditos
+          Dívidas
         </Link>
         .
       </p>

@@ -1,5 +1,4 @@
 import { formatarMesAno } from "@/lib/formatadores";
-import type { CreditoContrato, Creditos } from "@/modules/financeiro/relatorios/creditos";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import type {
   Investimentos,
@@ -367,84 +366,6 @@ export function abaPosicaoBancaria(dados: PosicaoBancaria): EscritaDeAba {
     // pontas, então o total delas não é o que a empresa recebeu nem o que
     // pagou: é movimento, e parte dele só mudou de bolso.
     rotuloTotal: `Total (${dados.contas.length} conta(s); entradas e saídas incluem transferência entre contas)`,
-  });
-}
-
-/* ------------------------------------------------------------------ */
-/* Créditos                                                           */
-/* ------------------------------------------------------------------ */
-
-const COLUNAS_CREDITOS: ColunaRelatorio<CreditoContrato>[] = [
-  { cabecalho: "Credor", largura: 30, tipo: "texto", celula: (c) => c.credor },
-  {
-    cabecalho: "Documento",
-    largura: 16,
-    tipo: "texto",
-    celula: (c) => c.numero,
-  },
-  {
-    cabecalho: "Contrato",
-    largura: 44,
-    tipo: "texto",
-    celula: (c) => c.descricao,
-  },
-  {
-    cabecalho: "Categoria",
-    largura: 24,
-    tipo: "texto",
-    celula: (c) => c.categoria,
-  },
-  {
-    // Soma de prestação, com juros futuros: não é o principal (D2, 03/10/2026).
-    cabecalho: "Total das prestações",
-    largura: 18,
-    tipo: "dinheiro",
-    celula: (c) => c.valorContratado,
-    somar: true,
-  },
-  {
-    cabecalho: "Pago",
-    largura: 18,
-    tipo: "dinheiro",
-    celula: (c) => c.totalPago,
-    somar: true,
-  },
-  {
-    cabecalho: "Prestações a vencer",
-    largura: 18,
-    tipo: "dinheiro",
-    celula: (c) => c.saldoDevedor,
-    somar: true,
-  },
-  {
-    cabecalho: "Parcelas",
-    largura: 12,
-    tipo: "texto",
-    celula: (c) => `${c.parcelasPagas} de ${c.parcelas}`,
-  },
-  {
-    cabecalho: "Próximo vencimento",
-    largura: 18,
-    tipo: "data",
-    celula: (c) => dataDeRelatorioParaCelula(c.proximoVencimento),
-  },
-  {
-    cabecalho: "Situação",
-    largura: 12,
-    tipo: "texto",
-    // Quitado é NÃO TER próxima parcela, e não "saldo zero": é a mesma
-    // definição que a tela usa para escrever a palavra na linha.
-    celula: (c) => (c.proximoVencimento === null ? "Quitado" : "Em aberto"),
-  },
-];
-
-export function abaCreditos(dados: Creditos, recorte: string): EscritaDeAba {
-  return aba({
-    nome: "Créditos",
-    titulo: `Créditos · empréstimos e financiamentos · ${recorte}`,
-    colunas: COLUNAS_CREDITOS,
-    linhas: dados.contratos,
-    rotuloTotal: `Total (${dados.contratos.length} contrato(s))`,
   });
 }
 

@@ -5,7 +5,7 @@ import { render } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AgingGrafico } from "./aging-grafico-impl";
-import { CreditosGrafico } from "./creditos-grafico-impl";
+import { VencimentosGrafico } from "@/modules/financeiro/dividas/components/vencimentos-grafico-impl";
 import { CustoCcGrafico } from "./custo-cc-grafico-impl";
 import { CustoCcSerie } from "./custo-cc-serie-impl";
 import { CustoReceitaGrafico } from "./custo-receita-grafico-impl";
@@ -217,18 +217,19 @@ describe("a série nasce com forma no primeiro quadro", () => {
     esperarLinhaInteira(container.querySelector(".recharts-line-curve"));
   });
 
-  it("créditos: uma barra por mês que vence", () => {
+  it("dívidas: contratos e consórcios empilhados, um pedaço por valor", () => {
     const { container } = render(
-      <CreditosGrafico
+      <VencimentosGrafico
         meses={[
-          { mes: "2026-09-01", rotulo: "09/2026", valor: 74_512.9, parcelas: 3 },
-          { mes: "2026-10-01", rotulo: "10/2026", valor: 74_512.9, parcelas: 3 },
-          { mes: "2026-11-01", rotulo: "11/2026", valor: 51_000, parcelas: 2 },
+          { chave: "atraso", rotulo: "Em atraso", contratos: 74_512.9, consorcios: 0, total: 74_512.9, parcelas: 3 },
+          { chave: "2026-10", rotulo: "out/26", contratos: 74_512.9, consorcios: 9_000, total: 83_512.9, parcelas: 4 },
+          { chave: "2026-11", rotulo: "nov/26", contratos: 51_000, consorcios: 9_000, total: 60_000, parcelas: 3 },
         ]}
       />,
     );
 
-    expect(barrasComForma(container)).toBe(3);
+    // 3 de contrato + 2 de consórcio (o zero do atraso não desenha).
+    expect(barrasComForma(container)).toBe(5);
   });
 
   it("custo por centro de custo: uma barra deitada por centro", () => {
@@ -420,7 +421,7 @@ describe("nenhum gráfico do módulo escapa da regra", () => {
   const GRAFICOS = [
     "aging-grafico-impl.tsx",
     "fluxo-caixa-grafico-impl.tsx",
-    "creditos-grafico-impl.tsx",
+    "../../dividas/components/vencimentos-grafico-impl.tsx",
     "custo-cc-grafico-impl.tsx",
     "custo-cc-serie-impl.tsx",
     "custo-receita-grafico-impl.tsx",

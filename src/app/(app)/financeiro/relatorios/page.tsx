@@ -33,11 +33,6 @@ import {
   periodoDoModo,
   type FiltrosCustoCc,
 } from "@/modules/financeiro/relatorios/filtros-custo-cc";
-import {
-  lerFiltrosCreditos,
-  recortarCreditosPorSituacao,
-  type FiltrosCreditos,
-} from "@/modules/financeiro/relatorios/filtros-creditos";
 import { lerFiltrosCustoGrupo } from "@/modules/financeiro/relatorios/filtros-custo-grupo";
 import { lerFiltrosCustoReceita } from "@/modules/financeiro/relatorios/filtros-custo-receita";
 import {
@@ -92,20 +87,6 @@ import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/compone
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
 import type { SaldoProjetado } from "@/modules/financeiro/relatorios/fluxo-caixa";
-import { CreditosGrafico } from "@/modules/financeiro/relatorios/components/creditos-grafico";
-import {
-  ContratosEmprestimoTabela,
-  CreditosPorMesTabela,
-  CreditosTabela,
-} from "@/modules/financeiro/relatorios/components/creditos-tabela";
-import {
-  ConsorciosCreditosTabela,
-  DividasContratosTabela,
-} from "@/modules/financeiro/relatorios/components/dividas-creditos-tabela";
-import {
-  relatorioConsorcios,
-  relatorioContratos,
-} from "@/modules/financeiro/dividas/queries";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
@@ -114,7 +95,6 @@ import { CustosIndiretosTabela } from "@/modules/financeiro/relatorios/component
 import { anoDoIndireto } from "@/modules/financeiro/relatorios/custos-indiretos";
 import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
 import Link from "next/link";
-import { FiltrosCreditosBarra } from "@/modules/financeiro/relatorios/components/filtros-creditos-barra";
 import { FiltrosInvestimentosBarra } from "@/modules/financeiro/relatorios/components/filtros-investimentos-barra";
 import {
   AplicacoesTabela,
@@ -136,7 +116,6 @@ import {
   custoPorCentroCusto,
   custoPorGrupo,
   custoReceita,
-  creditos,
   investimentos,
   sociosLigadas,
   aquisicoes,
@@ -144,7 +123,6 @@ import {
   rateioIndiretoDoMes,
   indiretoDoPeriodo,
   indiretoDosMeses,
-  emprestimosPorContrato,
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
@@ -686,168 +664,6 @@ async function ConteudoPosicaoBancaria({
           />
         </ItemGrade>
       </GradeKpis>
-    </>
-  );
-}
-
-async function ConteudoCreditos({
-  situacao,
-  podeVerLancamentos,
-  podeVerDividas,
-}: {
-  situacao: FiltrosCreditos["situacao"];
-  podeVerLancamentos: boolean;
-  podeVerDividas: boolean;
-}) {
-  // As leituras em paralelo: são independentes, e uma esperar a outra
-  // dobraria o tempo da aba sem motivo. Contratos de dívida e cotas vêm do
-  // cronograma de Financeiro > Dívidas, pela data de hoje.
-  const [todos, contratos, dividas, cotas] = await Promise.all([
-    creditos(),
-    emprestimosPorContrato(),
-    // Uma falha nas Dívidas não derruba o resto da aba Créditos.
-    relatorioContratos().catch(() => []),
-    relatorioConsorcios().catch(() => []),
-  ]);
-
-  // O filtro recorta a lista E os totais. Somar a carteira inteira embaixo de
-  // uma tabela que mostra só os contratos em aberto seria dois números que não
-  // se explicam — a regra do módulo é o cartão acompanhar o filtro da tabela.
-  const dados = recortarCreditosPorSituacao(todos, situacao);
-
-  if (
-    todos.contratos.length === 0 &&
-    contratos.contratos.length === 0 &&
-    dividas.length === 0 &&
-    cotas.length === 0
-  ) {
-    return (
-      <EmptyState
-        icone={BarChart3}
-        titulo="Nenhum crédito marcado"
-        descricao="Marque a caixinha “É empréstimo, financiamento ou consórcio” no lançamento para ele aparecer aqui."
-      />
-    );
-  }
-  const emAberto = dados.contratos.filter(
-    (contrato) => contrato.proximoVencimento !== null,
-  ).length;
-  return (
-    <>
-      <GradeKpis id="financeiro.relatorios.creditos" titulo="Créditos">
-        <KPICard
-          titulo="Prestações a vencer"
-          valor={<MoneyText valor={dados.totalSaldo} />}
-          detalhe="Soma das prestações ainda não pagas, com os juros dentro"
-        />
-        <KPICard
-          titulo="Vence em 12 meses"
-          valor={<MoneyText valor={dados.totalProximosMeses} />}
-          detalhe="O compromisso do próximo ano"
-        />
-        <KPICard
-          titulo="Já pago"
-          valor={<MoneyText valor={dados.totalPago} />}
-          detalhe="Pelo líquido: o que saiu da conta"
-        />
-        <KPICard
-          titulo="Contratos"
-          valor={`${emAberto} de ${dados.contratos.length}`}
-          detalhe="Em aberto, do total marcado como crédito"
-        />
-      </GradeKpis>
-
-      {/* A análise do centro de custo de Empréstimos, um contrato por etapa.
-          Vive AQUI por decisão dele em 27/08/2026: empréstimo não é receita de
-          obra nem custo de obra, então saiu de todos os outros relatórios e a
-          análise inteira passou a morar em Créditos.
-
-          Vem antes da tabela por lançamento porque é a leitura mais alta: a de
-          baixo lista TODO crédito marcado (inclusive os 10 financiamentos de
-          equipamento, que ficaram no centro do bem), e esta é só o dinheiro
-          emprestado. */}
-      <GradeKpis id="financeiro.relatorios.creditos.tabela" titulo="Tabelas de créditos" vao="amplo">
-        {/* Pelo cronograma (Financeiro > Dívidas, PR 5 de 12/10/2026): o saldo
-            devedor aqui é de PRINCIPAL, e os juros saem separados, que é o que
-            as tabelas por prestação abaixo não conseguem dizer. CET pelo fluxo
-            de liberação e parcelas (calculado em `dividas/calculo.ts`). */}
-        {dividas.length > 0 ? (
-          <ItemGrade titulo="Contratos" idCard="dividas-contratos" larguraPadrao={12}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-corpo font-medium text-foreground">Contratos</h3>
-                <p className="text-legenda text-muted-foreground">
-                  Pelo cronograma de cada contrato em Financeiro &gt; Dívidas. Parcela
-                  paga é a do lançamento com o mesmo número; saldo devedor é o
-                  principal ainda não pago (parcela atrasada continua devida). A seta
-                  abre as próximas 12 parcelas.
-                </p>
-              </div>
-              <DividasContratosTabela contratos={dividas} podeVerDividas={podeVerDividas} />
-            </div>
-          </ItemGrade>
-        ) : null}
-        {cotas.length > 0 ? (
-          <ItemGrade titulo="Consórcios" idCard="dividas-consorcios" larguraPadrao={12}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-corpo font-medium text-foreground">Consórcios</h3>
-                <p className="text-legenda text-muted-foreground">
-                  Fundo comum e taxa (administração e fundo de reserva) pagos e o que
-                  falta. Depois da contemplação, o que falta pagar é dívida.
-                </p>
-              </div>
-              <ConsorciosCreditosTabela cotas={cotas} podeVerDividas={podeVerDividas} />
-            </div>
-          </ItemGrade>
-        ) : null}
-        {contratos.contratos.length > 0 ? (
-          <ItemGrade titulo="Contratos do centro de Empréstimos" idCard="contratos" larguraPadrao={12}>
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-0.5">
-                <h3 className="text-corpo font-medium text-foreground">
-                  Contratos do centro de Empréstimos
-                </h3>
-                <p className="text-legenda text-muted-foreground">
-                  Tomado e pago de cada contrato. As duas colunas ficam lado a lado
-                  porque não se comparam ainda: parte das prestações antigas está nos
-                  extratos e não foi lançada. Juros embutidos é o que as prestações
-                  somam acima do tomado (pago mais a pagar, menos tomado); contrato
-                  com prestação antiga fora do ERP mostra juros menor do que é.
-                </p>
-              </div>
-              <ContratosEmprestimoTabela contratos={contratos} />
-            </div>
-          </ItemGrade>
-        ) : null}
-
-        <ItemGrade titulo="Créditos por lançamento" idCard="creditos" larguraPadrao={12}>
-          <CreditosTabela
-            creditos={dados}
-            podeVerLancamentos={podeVerLancamentos}
-          />
-        </ItemGrade>
-      </GradeKpis>
-
-      <div className="flex flex-col gap-3">
-        <h3 className="text-corpo font-medium text-foreground">
-          O que vence pela frente
-        </h3>
-        <PainelGrafico
-          id="financeiro.relatorios.creditos.grafico"
-          titulo="O que vence pela frente"
-          depois={
-            <ItemGrade titulo="Tabela do que vence pela frente" idCard="tabela" larguraPadrao={12}>
-              <CreditosPorMesTabela
-                meses={dados.proximosMeses}
-                total={dados.totalProximosMeses}
-              />
-            </ItemGrade>
-          }
-        >
-          <CreditosGrafico meses={dados.proximosMeses} />
-        </PainelGrafico>
-      </div>
     </>
   );
 }
@@ -1399,7 +1215,8 @@ async function ConteudoCustoReceita({
       {/* SEM faixa de movimentação de dívida aqui, e é decisão, não esquecimento.
           Ela existiu por um dia (26/08/2026) para o empréstimo aparecer sem somar
           na receita. Em 27/08 o Tiago decidiu que a análise inteira do centro de
-          Empréstimos vive no relatório de Créditos, e a faixa passou a mostrar só
+          Empréstimos vive no relatório de Créditos (hoje o painel de Dívidas, desde
+          14/10/2026), e a faixa passou a mostrar só
           resíduo: um pagamento de empréstimo de R$ 37.300,00 parado no Escritório
           Central, que o corte por centro financeiro não pegava. Hoje a RPC só
           devolve categoria operacional, então não há o que mostrar. */}
@@ -1632,9 +1449,6 @@ export default async function RelatoriosPage({
   // `de`, `ate`) do custo por centro de custo: os três recortam o mês de
   // referência do lançamento, então trocar de relatório na barra de cima mantém o
   // recorte em vez de jogá-lo fora.
-  // Créditos: a situação do contrato (em aberto x quitado). Leitura pura, feita
-  // sempre, e o recorte é aplicado dentro de `ConteudoCreditos`.
-  const filtrosCreditos = lerFiltrosCreditos(params);
   const periodoInvestimentos = lerPeriodoInvestimentos(params);
 
   const periodoDre = lerPeriodoDaUrl(params, mesCorrente());
@@ -1838,21 +1652,6 @@ export default async function RelatoriosPage({
           descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
         >
           <ConteudoPosicaoBancaria podeVerLancamentos={podeVerLancamentos} />
-        </SecaoRelatorio>
-      ) : null}
-
-      {relatorio === "creditos" ? (
-        <SecaoRelatorio
-          exportar={relatorio}
-          titulo="Créditos"
-          descricao="Empréstimos, financiamentos e consórcios tomados pela empresa: quanto se deve hoje e quanto vence pela frente. É uma dimensão à parte da categoria e do centro de custo — o financiamento de uma máquina continua sendo custo de equipamento."
-        >
-          <FiltrosCreditosBarra filtros={filtrosCreditos} />
-          <ConteudoCreditos
-            situacao={filtrosCreditos.situacao}
-            podeVerLancamentos={podeVerLancamentos}
-            podeVerDividas={temPermissao(usuario, "financeiro.dividas", "ver")}
-          />
         </SecaoRelatorio>
       ) : null}
 

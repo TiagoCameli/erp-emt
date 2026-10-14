@@ -18,6 +18,8 @@ export type EntidadeGrafico =
   | "saldo_acumulado"
   | "emprestimo_tomado"
   | "amortizacao"
+  | "juros_divida"
+  | "parcela_consorcio"
   | "agregado";
 
 /**
@@ -60,6 +62,14 @@ export const COR_ENTIDADE: Record<EntidadeGrafico, string> = {
    */
   emprestimo_tomado: "var(--viz-financiamento)",
   amortizacao: "var(--viz-custo)",
+  /**
+   * O painel de Dívidas (14/10/2026). Juros em aberto no laranja da prestação
+   * que volta (é o custo do dinheiro); a parcela da cota de consórcio no roxo
+   * do financiamento, porque a cota é o financiamento de um bem. O principal e a
+   * prestação de contrato são `a_pagar`: dinheiro que ainda sai.
+   */
+  juros_divida: "var(--viz-custo)",
+  parcela_consorcio: "var(--viz-financiamento)",
   /** "Outros" e afins: um agregado não é uma entidade, e não clica. */
   agregado: "var(--color-status-rascunho)",
 };
