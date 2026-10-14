@@ -5304,3 +5304,14 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Anexos:** o drawer do Lançar ganhou a fila de anexos do lançamento comum; em lote, os arquivos sobem em cada lançamento criado.
 - Os lançamentos que o Lançar antigo criou (pagos e casados) não mudam.
 - Prova: `supabase/provas/conciliacao_lancar_passa_pela_aprovacao.sql`, RED com a função antiga ("parcela pago") e GREEN no banco vivo em begin/rollback.
+
+## 2026-10-14 - Busca universal
+
+**Pedido do Tiago:** a caixa de busca "deve servir para buscar qualquer coisa desde fornecedor a mês a valor, insumo, tudo, e em todos os módulos".
+- **Contrato único** em `src/lib/busca.ts`: cada linha vira um texto minúsculo e sem acento; cada palavra digitada tem que aparecer nele (E, não OU). Valor entra como `1500,00 1.500,00`; data como `15/03/2026 2026-03-15` mais as formas do mês (`03/2026 2026-03 marco/2026 mar/26 03/26`). Assim "1.500", "R$ 1500", "1500.50", "março", "mar/26" e "15/03" casam por "contém", sem adivinhar o que a pessoa quis.
+- **Telas que filtram em memória** usam `filtrarPorBusca(linhas, busca, campos)` e listam em `campos` tudo o que a linha mostra.
+- **Telas paginadas no banco** filtram `busca=ilike.%palavra%` (um por palavra, `aplicarBusca`) na coluna computada `busca(<tabela>)`. O texto fica gravado em `busca_indice` (tabela, registro_id, texto) e é mantido por trigger: a própria linha, as filhas (itens, participantes) e os cadastros cujo nome entra no texto (fornecedor, insumo, centro e pai, categorias, forma, condição). Em tabela à parte de propósito: gravar na própria OC dispararia auditoria, `updated_at` e a trava de status de aprovado.
+- **Por que gravado e não calculado:** calculado na hora custava 0,7 ms por OC por palavra (241 ms em 232 OCs com duas palavras); Lançamentos, com ~6 mil linhas, passaria de segundos. Gravado e lido por função SECURITY DEFINER: 7 ms. Com a função INVOKER eram 67 ms, porque a policy do índice reavaliava `tem_permissao` a cada chamada.
+- **Segurança:** a RLS da tabela de origem filtra antes da função (security barrier); `busca(...)` tem parâmetro sem nome e o PostgREST não a resolve por `/rpc` (provado: PGRST202 em todas as formas de corpo). `busca_indice` não tem grant nem policy (o advisor avisa "RLS sem policy", intencional), e o lint "definer chamável por /rpc" para `busca` é falso positivo pelo mesmo motivo.
+- **Bloco 1:** Ordens de compra e Cotações. Saíram `idsFornecedoresPorNome`/`padraoBusca` de Compras (a busca por nome de fornecedor virou parte do texto). Os próximos blocos acrescentam um `fn_busca_texto_<tabela>`, um ramo no `fn_busca_indexar` e nos triggers de cadastro, e a função `busca(<tabela>)`.
+- Migrations `20261014180000_busca_universal_compras`, `20261014183000_busca_universal_indice`, `20261014184500_busca_universal_leitura_definer`; rollback único em `20261014180000_busca_universal_compras.rollback.sql`.

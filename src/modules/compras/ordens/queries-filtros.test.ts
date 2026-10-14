@@ -35,7 +35,6 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
         formaPagamentoIds: [A],
         condicaoPagamentoIds: [A, B],
       },
-      [],
     );
     expect(chamadas).toContainEqual(["in", "status", ["aprovado", "rascunho"]]);
     expect(chamadas).toContainEqual(["in", "fornecedor_id", [A, B]]);
@@ -45,7 +44,7 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
 
   it("categoria casa a OC que tem QUALQUER uma das escolhidas em algum item", () => {
     const { consulta, chamadas } = consultaGravada();
-    aplicarFiltrosOrdens(consulta, { categoriaIds: [A, B] }, []);
+    aplicarFiltrosOrdens(consulta, { categoriaIds: [A, B] });
     expect(chamadas).toContainEqual(["overlaps", "categoria_ids", [A, B]]);
   });
 
@@ -54,7 +53,6 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
     aplicarFiltrosOrdens(
       consulta,
       { centroCustoIds: [A, B], insumoIds: [B] },
-      [],
     );
     expect(chamadas).toContainEqual(["in", "oc_itens.centro_custo_id", [A, B]]);
     expect(chamadas).toContainEqual(["in", "oc_itens.insumo_id", [B]]);
@@ -66,7 +64,6 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
     aplicarFiltrosOrdens(
       consulta,
       { status: [], fornecedorIds: [], nota: [], origem: [], autoria: [] },
-      [],
     );
     expect(chamadas).toEqual([]);
   });
@@ -76,14 +73,13 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
     aplicarFiltrosOrdens(
       consulta,
       { nota: ["com", "sem"], origem: ["cotacao", "direta"] },
-      [],
     );
     expect(chamadas).toEqual([]);
   });
 
   it("nota e origem com uma opção só recortam como antes", () => {
     const { consulta, chamadas } = consultaGravada();
-    aplicarFiltrosOrdens(consulta, { nota: ["sem"], origem: ["cotacao"] }, []);
+    aplicarFiltrosOrdens(consulta, { nota: ["sem"], origem: ["cotacao"] });
     expect(chamadas).toContainEqual(["is", "recebimentos", null]);
     expect(chamadas).toContainEqual(["not", "cotacao_id", "is", null]);
   });
@@ -93,8 +89,17 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
     aplicarFiltrosOrdens(
       consulta,
       { autoria: ["minhas"], usuarioLogadoId: A },
-      [],
     );
     expect(chamadas).toContainEqual(["eq", "created_by", A]);
+  });
+
+  it("busca é universal: um ilike por palavra na coluna computada", () => {
+    const { consulta, chamadas } = consultaGravada();
+    aplicarFiltrosOrdens(consulta, { busca: "Ipiranga março R$ 1.500" });
+    expect(chamadas).toEqual([
+      ["ilike", "busca", "%ipiranga%"],
+      ["ilike", "busca", "%marco%"],
+      ["ilike", "busca", "%1.500%"],
+    ]);
   });
 });
