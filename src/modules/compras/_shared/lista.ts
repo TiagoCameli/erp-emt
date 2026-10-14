@@ -3,7 +3,6 @@ import "server-only";
 import { TZDate } from "@date-fns/tz";
 
 import { mesParaCompetencia, TIMEZONE } from "@/lib/formatadores";
-import type { createClient } from "@/lib/supabase/server";
 
 /** Paginação, busca e filtros lidos dos searchParams de uma listagem de Compras. */
 export interface ParametrosLista {
@@ -159,36 +158,4 @@ function parametroMesDia1(
 ): string | undefined {
   if (typeof valor !== "string") return undefined;
   return /^\d{4}-\d{2}-01$/.test(valor) ? valor : undefined;
-}
-
-/**
- * Padrão ilike (%termo%) do termo de busca. Remove caracteres que quebram a
- * sintaxe dos filtros or() do PostgREST (vírgula, parênteses, aspas, barra).
- */
-export function padraoBusca(termo: string): string {
-  return `%${termo.replace(/[,()"'\\]/g, "").trim()}%`;
-}
-
-/** Máximo de fornecedores resolvidos por nome numa busca (limite do filtro in). */
-const MAX_FORNECEDORES_BUSCA = 50;
-
-/**
- * Ids de fornecedores cujo nome (razão social ou fantasia) bate com o padrão.
- * Permite busca server-side por fornecedor em listagens cuja tabela só guarda
- * o fornecedor_id (o or() do PostgREST não mistura colunas do pai com joins).
- */
-export async function idsFornecedoresPorNome(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  padrao: string,
-): Promise<string[]> {
-  const { data, error } = await supabase
-    .from("fornecedores")
-    .select("id")
-    .or(`razao_social.ilike.${padrao},nome_fantasia.ilike.${padrao}`)
-    .limit(MAX_FORNECEDORES_BUSCA);
-
-  if (error) {
-    throw new Error("Não foi possível aplicar a busca por fornecedor");
-  }
-  return (data ?? []).map((fornecedor) => fornecedor.id);
 }

@@ -489,7 +489,7 @@ export function OrdensTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por número ou fornecedor"
+                placeholder="Número, fornecedor, insumo, valor ou mês"
               />
             ),
           },

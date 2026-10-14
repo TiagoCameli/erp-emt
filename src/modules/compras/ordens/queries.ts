@@ -5,6 +5,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import { aplicarBusca } from "@/lib/busca";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
@@ -19,11 +20,7 @@ import type { StatusOC } from "@/modules/compras/_shared/formato";
 import type { AjustesDaOrdem } from "@/modules/compras/ordens/calculo";
 import { rotuloDoCartao } from "@/modules/cadastros/cartoes/schemas";
 import { ehParcelaAberta } from "@/modules/financeiro/_shared/formato";
-import {
-  idsFornecedoresPorNome,
-  inicioDoDiaISO,
-  padraoBusca,
-} from "@/modules/compras/_shared/lista";
+import { inicioDoDiaISO } from "@/modules/compras/_shared/lista";
 import type {
   FiltroAutoriaOC,
   FiltroNotaOC,
@@ -448,6 +445,7 @@ interface ConsultaFiltravelOrdens<T> {
   not: (coluna: string, operador: string, valor: null) => T;
   is: (coluna: string, valor: null) => T;
   or: (filtro: string) => T;
+  ilike: (coluna: string, padrao: string) => T;
 }
 
 /**
@@ -455,16 +453,14 @@ interface ConsultaFiltravelOrdens<T> {
  * facetas (`facetasOrdens`), que precisam do MESMO recorte: filtro montado de
  * um jeito na lista e de outro nas opções ofereceria opção que devolve vazio.
  *
- * Síncrona, com os ids de fornecedor da busca já resolvidos: o builder é
- * "thenable", e uma função async o dispararia no return (ver
- * `aplicarFiltrosPagas`).
+ * Síncrona: o builder é "thenable", e uma função async o dispararia no
+ * return (ver `aplicarFiltrosPagas`).
  *
  * Exportada só para o teste olhar a consulta montada sem banco.
  */
 export function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
   consultaInicial: T,
   filtros: FiltrosOrdens,
-  idsFornecedoresBusca: string[],
 ): T {
   let consulta = consultaInicial;
   if (temItens(filtros.status)) consulta = consulta.in("status", filtros.status);
@@ -539,19 +535,11 @@ export function aplicarFiltrosOrdens<T extends ConsultaFiltravelOrdens<T>>(
     consulta = consulta.eq("created_by", filtros.usuarioLogadoId);
   }
 
-  if (filtros.busca) {
-    // O número do documento entra na busca junto com o da OC: quem tem a nota
-    // na mão procura pelo número dela, não pelo número que o sistema deu.
-    const padrao = padraoBusca(filtros.busca);
-    const clausulas = [
-      `numero.ilike.${padrao}`,
-      `numero_documento.ilike.${padrao}`,
-    ];
-    if (idsFornecedoresBusca.length > 0) {
-      clausulas.push(`fornecedor_id.in.(${idsFornecedoresBusca.join(",")})`);
-    }
-    consulta = consulta.or(clausulas.join(","));
-  }
+  // Busca universal (src/lib/busca.ts): cada palavra tem que aparecer no texto
+  // pesquisável da OC — número, nota, fornecedor, insumos, centros, valor, data
+  // da compra e mês de competência. O texto é gravado em `busca_indice` e lido
+  // pela coluna computada `busca(ordens_compra)`.
+  consulta = aplicarBusca(consulta, filtros.busca);
   return consulta;
 }
 
@@ -605,10 +593,6 @@ export async function facetasOrdens(
   params: FiltrosOrdens,
 ): Promise<FacetasPresentes<FacetaOrdens>> {
   const supabase = await createClient();
-  const idsFornecedoresBusca = params.busca
-    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
-    : [];
-
   return facetasNoServidor<LinhaFacetaOrdens, FacetaOrdens>(
     {
       status: { ativo: temItens(params.status), chave: (o) => o.status },
@@ -665,7 +649,6 @@ export async function facetasOrdens(
                recebimentos(id), oc_itens(centro_custo_id, insumo_id)`,
           ),
           filtros,
-          idsFornecedoresBusca,
         )
           .order("id")
           .range(de, ate),
@@ -749,10 +732,7 @@ export async function listarOrdens(
     .order("id")
     .range(de, ate);
 
-  const idsFornecedoresBusca = params.busca
-    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
-    : [];
-  consulta = aplicarFiltrosOrdens(consulta, params, idsFornecedoresBusca);
+  consulta = aplicarFiltrosOrdens(consulta, params);
 
   const { data, error, count } = await consulta;
 

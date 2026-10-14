@@ -12,11 +12,8 @@ import {
   facetasNoServidor,
   type FacetasPresentes,
 } from "@/modules/_shared/filtros-facetados";
-import {
-  idsFornecedoresPorNome,
-  inicioDoDiaISO,
-  padraoBusca,
-} from "@/modules/compras/_shared/lista";
+import { aplicarBusca } from "@/lib/busca";
+import { inicioDoDiaISO } from "@/modules/compras/_shared/lista";
 import type {
   AutoriaCotacao,
   OcGeradaCotacao,
@@ -213,19 +210,17 @@ interface ConsultaFiltravelCotacoes<T> {
   gte: (coluna: string, valor: string) => T;
   lt: (coluna: string, valor: string) => T;
   is: (coluna: string, valor: null) => T;
-  or: (filtro: string) => T;
+  ilike: (coluna: string, padrao: string) => T;
 }
 
 /**
  * Aplica os filtros na consulta: serve a página e as facetas, que precisam do
- * MESMO recorte. O select tem que trazer os `embedsDosFiltros`. Síncrona, com
- * os ids de vencedor da busca já resolvidos: o builder é thenable (ver
- * `aplicarFiltrosPagas`).
+ * MESMO recorte. O select tem que trazer os `embedsDosFiltros`. Síncrona: o
+ * builder é thenable (ver `aplicarFiltrosPagas`).
  */
 function aplicarFiltrosCotacoes<T extends ConsultaFiltravelCotacoes<T>>(
   consultaInicial: T,
   filtros: FiltrosCotacoes,
-  idsVencedoresBusca: string[],
 ): T {
   let consulta = consultaInicial;
   if (filtros.status) consulta = consulta.eq("status", filtros.status);
@@ -262,16 +257,10 @@ function aplicarFiltrosCotacoes<T extends ConsultaFiltravelCotacoes<T>>(
     consulta = consulta.lt("created_at", inicioDoDiaISO(filtros.ate, 1));
   }
 
-  if (filtros.busca) {
-    const padrao = padraoBusca(filtros.busca);
-    const clausulas = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
-    if (idsVencedoresBusca.length > 0) {
-      clausulas.push(
-        `vencedor_fornecedor_id.in.(${idsVencedoresBusca.join(",")})`,
-      );
-    }
-    consulta = consulta.or(clausulas.join(","));
-  }
+  // Busca universal (src/lib/busca.ts): número, descrição, categoria, vencedor,
+  // participantes, insumos cotados e o dia da criação, pela coluna computada
+  // `busca(cotacoes)`.
+  consulta = aplicarBusca(consulta, filtros.busca);
   return consulta;
 }
 
@@ -322,9 +311,6 @@ export async function facetasCotacoes(
   { podeVerOrdens }: { podeVerOrdens: boolean },
 ): Promise<FacetasPresentes<FacetaCotacoes>> {
   const supabase = await createClient();
-  const idsVencedores = filtros.busca
-    ? await idsFornecedoresPorNome(supabase, padraoBusca(filtros.busca))
-    : [];
   const usuarioId = filtros.usuarioId;
 
   return facetasNoServidor<LinhaFacetaCotacao, FacetaCotacoes>(
@@ -374,7 +360,6 @@ export async function facetasCotacoes(
         aplicarFiltrosCotacoes(
           supabase.from("cotacoes").select(partesSelect.join(", ")),
           recorte,
-          idsVencedores,
         )
           .order("id")
           .range(de, ate)
@@ -409,16 +394,11 @@ export async function listarCotacoes(
 
   const partesSelect = [SELECT_LISTA_COTACAO, ...embedsDosFiltros(params)];
 
-  const idsVencedores = params.busca
-    ? await idsFornecedoresPorNome(supabase, padraoBusca(params.busca))
-    : [];
-
   const consulta = aplicarFiltrosCotacoes(
     supabase
       .from("cotacoes")
       .select(partesSelect.join(", "), { count: "exact" }),
     params,
-    idsVencedores,
   )
     .order("created_at", { ascending: false })
     .range(de, ate);

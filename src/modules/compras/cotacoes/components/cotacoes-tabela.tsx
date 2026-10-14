@@ -205,7 +205,7 @@ export interface CotacoesTabelaProps {
 
 /**
  * Listagem de cotações com paginação e filtros server-side, todos persistidos
- * na URL: busca (número, descrição ou vencedor), status, período de criação,
+ * na URL: busca universal (src/lib/busca.ts), status, período de criação,
  * categoria do custo, fornecedor participante, fornecedor vencedor, insumo
  * cotado, existência de OC gerada e autoria. Só os três primeiros nascem
  * visíveis; o resto o usuário liga no menu "Filtros" e a escolha fica salva.
@@ -302,7 +302,7 @@ export function CotacoesTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
-          placeholder="Buscar por número, descrição ou vencedor"
+          placeholder="Número, fornecedor, insumo ou data"
         />
       ),
     },
