@@ -13,6 +13,7 @@
 
 import { z } from "zod";
 
+import { aplicarBusca } from "@/lib/busca";
 import { idSchema } from "@/lib/id";
 import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
 import {
@@ -21,14 +22,6 @@ import {
 } from "@/modules/financeiro/lancamentos/schemas";
 
 import type { FiltrosParcelasPagas } from "@/modules/financeiro/pagamentos/queries";
-
-/**
- * Padrão ilike (%termo%) do termo de busca. Remove os caracteres que quebram a
- * sintaxe do or() do PostgREST (vírgula, parênteses, aspas, barra).
- */
-export function padraoBusca(termo: string): string {
-  return `%${termo.replace(/[,()"'\\]/g, "").trim()}%`;
-}
 
 /** O pedaço do builder do PostgREST que este módulo usa. */
 export interface ConsultaFiltravel<T> {
@@ -43,12 +36,13 @@ export interface ConsultaFiltravel<T> {
    */
   not: (coluna: string, operador: string, valor: null) => T;
   in: (coluna: string, valores: readonly string[]) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
  * Aplica os filtros do histórico de pagas na consulta recebida.
  *
- * SÍNCRONA de propósito, com os ids de fornecedor já resolvidos por quem chama.
+ * SÍNCRONA de propósito.
  * O builder do PostgREST é "thenable": uma função `async` que devolvesse o
  * builder o AWAITARIA no return — ou seja, dispararia a consulta ali dentro e
  * devolveria a resposta no lugar do builder. Foi o que aconteceu na primeira
@@ -57,7 +51,6 @@ export interface ConsultaFiltravel<T> {
 export function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   consultaInicial: T,
   filtros: FiltrosParcelasPagas,
-  idsFornecedoresDaBusca: string[],
 ): T {
   // Rendimento negativo e ajuste de abertura de aplicação são `a_pagar` pagos,
   // mas não são pagamento: ninguém recebeu esse dinheiro. Ficam na aba
@@ -127,17 +120,10 @@ export function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   if (filtros.compraAte) {
     consulta = consulta.lte("lancamentos.data_compra", filtros.compraAte);
   }
-  const termo = filtros.busca?.trim() ?? "";
-  if (termo !== "") {
-    const padrao = padraoBusca(termo);
-    const partes = [`numero.ilike.${padrao}`, `descricao.ilike.${padrao}`];
-    if (idsFornecedoresDaBusca.length > 0) {
-      partes.push(`fornecedor_id.in.(${idsFornecedoresDaBusca.join(",")})`);
-    }
-    consulta = consulta.or(partes.join(","), {
-      referencedTable: "lancamentos",
-    });
-  }
+  // Busca universal (src/lib/busca.ts) na coluna computada da PARCELA: o valor,
+  // o líquido, as datas e a conta dela, mais o lançamento sem as irmãs (número,
+  // nota, descrição, fornecedor, categorias, centros, OC, competência).
+  consulta = aplicarBusca(consulta, filtros.busca);
 
   return consulta;
 }

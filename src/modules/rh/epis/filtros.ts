@@ -1,3 +1,4 @@
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import {
   filtrarFacetado,
   selecao,
@@ -32,7 +33,6 @@ export function filtrarEpis(
   epis: readonly EpiLista[],
   f: FiltrosTelaEpis,
 ): ResultadoFacetado<EpiLista, FacetaEpis> {
-  const termo = f.busca.trim().toLowerCase();
   return filtrarFacetado<EpiLista, FacetaEpis>(
     epis,
     {
@@ -54,15 +54,22 @@ export function filtrarEpis(
       // EPI ainda em uso (sem devolução) sai da lista quando o usuário pede uma
       // janela de devolução: sem data, não é resposta.
       (item) => noPeriodo(item.dataDevolucao, f.devolucaoDe, f.devolucaoAte),
-      (item) => {
-        if (!termo) return true;
-        // A busca cobre quem recebeu e o que recebeu: o nome do EPI e o CA são
-        // o jeito natural de achar "quem está com bota" ou um CA específico.
-        const alvo = [item.colaboradorNome, item.descricao, item.ca ?? ""]
-          .join(" ")
-          .toLowerCase();
-        return alvo.includes(termo);
-      },
+      // Busca universal (src/lib/busca.ts): quem recebeu, o que recebeu (nome do
+      // EPI e CA), situação e as datas.
+      (item) =>
+        casaBusca(
+          textoPesquisavel(
+            item.colaboradorNome,
+            item.descricao,
+            item.ca,
+            item.observacao,
+            item.dataDevolucao === null ? "em uso" : "devolvido",
+            item.assinado ? "assinado" : "sem termo",
+            { data: item.dataEntrega },
+            { data: item.dataDevolucao },
+          ),
+          f.busca,
+        ),
     ],
   );
 }

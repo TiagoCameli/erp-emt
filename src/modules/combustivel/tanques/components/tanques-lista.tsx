@@ -8,6 +8,7 @@ import { BlocoFiltros, ConfirmDialog, EmptyState, FiltroBusca, FiltroSelect, Sta
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { Button } from "@/components/ui/button";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { TituloAba } from "@/modules/combustivel/_shared/components/titulo-aba";
 import { EsvaziamentoFormDrawer } from "@/modules/combustivel/esvaziamentos/components/esvaziamento-form-drawer";
 import { podeEsvaziar as temCombustivelParaEsvaziar } from "@/modules/combustivel/esvaziamentos/schemas";
@@ -49,7 +50,6 @@ export interface TanquesListaProps {
  * entre os tanques que passam na busca.
  */
 export function facetarTanques(tanques: readonly TanqueLinha[], busca: string, status: FiltroStatus) {
-  const termo = busca.trim().toLowerCase();
   return filtrarFacetado(
     tanques,
     {
@@ -59,11 +59,23 @@ export function facetarTanques(tanques: readonly TanqueLinha[], busca: string, s
       },
     },
     [
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
       (tanque) =>
-        !termo ||
-        tanque.nome.toLowerCase().includes(termo) ||
-        (tanque.apelido ?? "").toLowerCase().includes(termo) ||
-        (tanque.proprietarioNome ?? "").toLowerCase().includes(termo),
+        casaBusca(
+          textoPesquisavel(
+            tanque.nome,
+            tanque.apelido,
+            tanque.proprietarioNome,
+            tanque.combustivelNome,
+            tanque.capacidade,
+            tanque.nivel,
+            tanque.unidade,
+            tanque.observacoes,
+            tanque.ehExterno ? "externo" : null,
+            tanque.uso === "material" ? "material" : null,
+          ),
+          busca,
+        ),
     ],
   );
 }
@@ -178,7 +190,7 @@ export function TanquesLista({
               id: "busca",
               rotulo: "Busca",
               elemento: (
-                <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por nome, apelido ou dono" />
+                <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, apelido, dono ou combustível" />
               ),
             },
             {

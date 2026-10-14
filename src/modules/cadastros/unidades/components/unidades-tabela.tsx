@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Ruler } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -72,14 +73,13 @@ export function UnidadesTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       unidades,
       {
         status: facetaAtivo<UnidadeLista>(status),
         tipo: { selecionados: selecao(tipo), chave: (unidade) => unidade.tipo },
       },
-      [(unidade) => !termo || unidade.nome.toLowerCase().includes(termo)],
+      [(unidade) => casaBusca(textoPesquisavel(unidade.nome, unidade.sigla, unidade.tipo), busca)],
     );
   }, [unidades, busca, status, tipo]);
 

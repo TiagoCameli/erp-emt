@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData } from "@/lib/formatadores";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
 import { removerDocumento } from "@/modules/rh/documentos/actions";
@@ -146,7 +147,6 @@ export function DocumentosTabela({
   // tipo, situação e colaborador só oferecem o que existe na lista filtrada
   // pelos outros (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       documentos,
       {
@@ -165,7 +165,20 @@ export function DocumentosTabela({
         // de vencimento: sem data, não é resposta.
         (item) => noPeriodo(item.dataVencimento, vencimentoDe, vencimentoAte),
         (item) => noPeriodo(item.dataEmissao, emissaoDe, emissaoAte),
-        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (item) =>
+          casaBusca(
+            textoPesquisavel(
+              item.colaboradorNome,
+              ROTULO_TIPO_DOCUMENTO[item.tipo],
+              item.descricao,
+              item.observacao,
+              OPCOES_SITUACAO.find((o) => o.valor === item.situacao)?.rotulo,
+              { data: item.dataEmissao },
+              { data: item.dataVencimento },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -285,7 +298,7 @@ export function DocumentosTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -295,7 +308,7 @@ export function DocumentosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Colaborador, tipo, descrição ou data"
               />
             ),
           },

@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { casar } from "@/modules/financeiro/conciliacao/actions";
@@ -139,13 +140,27 @@ export function CasarDialog({
       return sugerirParaMovimento(movimento, candidatos);
     }
     // Buscando, vale qualquer valor e data: a pessoa sabe o que procura.
-    const texto = busca.trim().toLowerCase();
+    // Busca universal (src/lib/busca.ts): tudo o que o candidato carrega.
     return sugerirParaMovimento(
       movimento,
-      candidatos.filter((c) => {
-        const alvo = `${tituloCandidato(c)} ${detalheCandidato(c)} ${formatarBRL(c.valor)}`.toLowerCase();
-        return alvo.includes(texto);
-      }),
+      candidatos.filter((c) =>
+        casaBusca(
+          textoPesquisavel(
+            tituloCandidato(c),
+            detalheCandidato(c),
+            c.registro?.razaoSocial,
+            c.registro?.numeroDocumento,
+            c.registro?.contaNome,
+            c.registro?.apelidos,
+            c.transferencia?.origemNome,
+            c.transferencia?.destinoNome,
+            EFEITO[c.grupo],
+            { valor: c.valor },
+            { data: c.data },
+          ),
+          busca,
+        ),
+      ),
       // A diferença continua limitada a R$ 1,00: o banco recusa mais que isso.
       { janelaDias: 400, janelaAbertaDias: 400 },
     ).slice(0, 50);
@@ -220,7 +235,7 @@ export function CasarDialog({
           <Input
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por favorecido, número, descrição ou valor"
+            placeholder="Favorecido, número, valor ou data"
             className="pl-8"
             aria-label="Buscar candidato"
           />

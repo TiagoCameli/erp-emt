@@ -7,7 +7,6 @@ import {
   aplicarFiltrosPagas,
   facetasDasPagas,
   filtrosPagasSemFaceta,
-  padraoBusca,
   type ConsultaFiltravel,
   type FacetaPagas,
   type LinhaFacetaPagas,
@@ -421,26 +420,6 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
   }));
 }
 
-/** Máximo de fornecedores resolvidos por nome numa busca (limite do filtro in). */
-const MAX_FORNECEDORES_BUSCA = 50;
-
-/**
- * Ids de fornecedores cujo nome bate com o padrão. A busca do histórico precisa
- * achar por fornecedor, e o or() do PostgREST não mistura colunas de tabelas
- * diferentes: os ids entram como mais um termo do or() em cima de lancamentos.
- */
-async function idsFornecedoresPorNome(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  padrao: string,
-): Promise<string[]> {
-  const { data } = await supabase
-    .from("fornecedores")
-    .select("id")
-    .or(`razao_social.ilike.${padrao},nome_fantasia.ilike.${padrao}`)
-    .limit(MAX_FORNECEDORES_BUSCA);
-  return (data ?? []).map((fornecedor) => fornecedor.id);
-}
-
 /**
  * O mínimo que uma consulta precisa expor para receber os filtros do histórico.
  *
@@ -551,16 +530,6 @@ async function rateiosDosLancamentos(
   return porLancamento;
 }
 
-/** Ids de fornecedor que a busca do filtro alcança. Vazio quando não há busca. */
-async function fornecedoresDaBusca(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  filtros: FiltrosParcelasPagas,
-): Promise<string[]> {
-  const termo = filtros.busca?.trim() ?? "";
-  if (termo === "") return [];
-  return idsFornecedoresPorNome(supabase, padraoBusca(termo));
-}
-
 /**
  * A linha da soma, com o lançamento.
  *
@@ -595,7 +564,6 @@ export async function somaDasParcelasPagas(
 ): Promise<ResumoPagas> {
   const supabase = await createClient();
 
-  const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
 
   // Os embeds de forma e de rateio entram no select porque FILTRAR um embed
   // exige que ele esteja no select. Ninguém lê estes campos aqui, eles existem
@@ -619,7 +587,6 @@ export async function somaDasParcelasPagas(
         .eq("lancamentos.tipo", "a_pagar")
         .neq("lancamentos.status", "cancelado"),
       filtros,
-      idsFornecedores,
     ),
     filtros.centroCustoIds,
   );
@@ -721,7 +688,6 @@ export async function facetasParcelasPagas(
   filtros: FiltrosParcelasPagas = {},
 ): Promise<FacetasPresentes<FacetaPagas>> {
   const supabase = await createClient();
-  const idsFornecedores = await fornecedoresDaBusca(supabase, filtros);
 
   // As raízes escolhidas saem da lista efetiva com o cadastro: é delas que a
   // faceta de etapa precisa (ela solta as etapas, não a raiz).
@@ -753,7 +719,6 @@ export async function facetasParcelasPagas(
             .eq("lancamentos.tipo", "a_pagar")
             .neq("lancamentos.status", "cancelado"),
           recorte,
-          idsFornecedores,
         ),
         recorte.centroCustoIds,
       );
@@ -832,11 +797,7 @@ export async function listarParcelasPagas({
     .order("id", { ascending: true })
     .range(de, ate);
 
-  consulta = aplicarFiltrosPagas(
-    consulta,
-    filtros,
-    await fornecedoresDaBusca(supabase, filtros),
-  );
+  consulta = aplicarFiltrosPagas(consulta, filtros);
 
   const comCentro = await aplicarCentroCusto(
     supabase,

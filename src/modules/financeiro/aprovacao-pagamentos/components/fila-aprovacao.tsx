@@ -16,6 +16,7 @@ import {
   Paperclip,
   PenLine,
 } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 
@@ -305,7 +306,6 @@ export function FilaAprovacao({
    * que a pessoa não está vendo.
    */
   const { linhas: visiveis, opcoes } = React.useMemo(() => {
-    const termo = filtroBusca.trim().toLowerCase();
     // O link é recorte, não filtro: vem antes de tudo e não aparece na barra de
     // filtros. Quem abriu um link não quer aprovar por engano a parcela vizinha.
     const doLink = parcelasDoLink.length > 0 ? new Set(parcelasDoLink) : null;
@@ -347,11 +347,28 @@ export function FilaAprovacao({
               mesmoMesReferencia(parcela.mesCompetencia, filtroMes) &&
               dentroDaFaixaValor(parcela.valor, filtroValorDe, filtroValorAte) &&
               dentroDoPeriodo(parcela.dataVencimento, filtroVencDe, filtroVencAte),
+            // Busca universal (src/lib/busca.ts): tudo o que a parcela carrega.
             (parcela) =>
-              termo === "" ||
-              `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome} ${parcela.origemNumero ?? ""}`
-                .toLowerCase()
-                .includes(termo),
+              casaBusca(
+                textoPesquisavel(
+                  parcela.lancamentoNumero,
+                  parcela.lancamentoDescricao,
+                  parcela.observacoes,
+                  parcela.fornecedorNome,
+                  parcela.origem,
+                  parcela.origemNumero,
+                  parcela.categoriaNome,
+                  parcela.formaPagamentoNome,
+                  parcela.contaBancariaNome,
+                  parcela.rateios.map((rateio) => rateio.nome),
+                  { valor: parcela.valor },
+                  { data: parcela.dataVencimento },
+                  { data: parcela.dataProgramada },
+                  { data: parcela.dataCompra },
+                  { mes: parcela.mesCompetencia },
+                ),
+                filtroBusca,
+              ),
           ],
     );
   }, [
@@ -999,7 +1016,7 @@ export function FilaAprovacao({
         <FiltroBusca
           valor={filtroBusca}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroBusca(valor))}
-          placeholder="Buscar por lançamento, descrição, fornecedor ou OC"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },

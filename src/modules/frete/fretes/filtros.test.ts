@@ -110,9 +110,14 @@ describe("filtrarFretes (FreteListV2)", () => {
   ];
   const ids = (f: Partial<typeof FILTROS_VAZIOS>) => filtrarFretes(lista, { ...FILTROS_VAZIOS, ...f }).map((x) => x.id);
 
-  it("busca só na NF 1, sem diferenciar maiúscula", () => {
-    expect(ids({ busca: "nf-1" })).toEqual(["a"]);
-    expect(ids({ busca: "100" })).toEqual(["a"]);
+  it("busca universal: NF, tipo, motorista, data e várias palavras ao mesmo tempo", () => {
+    expect(ids({ busca: "NF-1" })).toEqual(["a"]);
+    expect(ids({ busca: "200" })).toEqual(["c"]);
+    expect(ids({ busca: "transferência" })).toEqual(["b"]);
+    expect(ids({ busca: "carlos" })).toEqual(["a"]);
+    expect(ids({ busca: "05/09/2026" })).toEqual(["b"]);
+    expect(ids({ busca: "brita pedreira R$ 370,00" })).toEqual(["a", "b", "c"]);
+    expect(ids({ busca: "brita cascalho" })).toEqual([]);
   });
 
   it("período inclusivo na data de saída", () => {

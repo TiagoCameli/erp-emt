@@ -267,7 +267,7 @@ export function EpisTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador ou EPI",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -277,7 +277,7 @@ export function EpisTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador, EPI ou CA"
+                placeholder="Colaborador, EPI, CA ou data"
               />
             ),
           },

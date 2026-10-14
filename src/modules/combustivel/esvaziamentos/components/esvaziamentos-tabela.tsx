@@ -18,6 +18,8 @@ import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
+import { dataLocalISO } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { formatarDataHoraRioBranco, formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { excluirEsvaziamento, restaurarEsvaziamento } from "@/modules/combustivel/esvaziamentos/actions";
@@ -94,13 +96,23 @@ export function EsvaziamentosTabela({
   // Facetado: o tanque só oferece o que existe na lista filtrada pelos outros
   // (ver `_shared/filtros-facetados`).
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       esvaziamentos,
       { tanque: { selecionados: selecao(tanque), chave: (e) => e.tanqueId } },
       [
         (e) => !e.excluidoEm || mostrarExcluidos,
-        (e) => !termo || e.tanqueNome.toLowerCase().includes(termo) || e.motivo.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (e) =>
+          casaBusca(
+            textoPesquisavel(
+              e.tanqueNome,
+              e.motivo,
+              e.litros,
+              { valor: e.valorPerda },
+              { data: dataLocalISO(e.dataHora) },
+            ),
+            busca,
+          ),
       ],
     );
   }, [esvaziamentos, busca, tanque, mostrarExcluidos]);
@@ -138,7 +150,7 @@ export function EsvaziamentosTabela({
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por tanque ou motivo" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Tanque, motivo, litros, valor ou data" />,
           },
           {
             id: "tanque",

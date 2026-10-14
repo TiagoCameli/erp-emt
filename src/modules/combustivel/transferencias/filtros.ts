@@ -1,3 +1,4 @@
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { dataLocalISO } from "@/lib/formatadores";
 import { diaValido, type Periodo } from "@/modules/combustivel/relatorios/periodo";
 import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
@@ -53,6 +54,11 @@ export interface TransferenciaFiltravel {
   insumoId: string | null;
   observacoes: string | null;
   excluidoEm: string | null;
+  /** Só para a busca: a linha da tela tem, o teste pode omitir. */
+  insumoNome?: string | null;
+  litros?: number;
+  valorTotal?: number;
+  motivoExclusao?: string | null;
 }
 
 /**
@@ -65,7 +71,6 @@ export function facetarTransferencias<T extends TransferenciaFiltravel>(
   transferencias: readonly T[],
   filtros: FiltrosTransferencias,
 ) {
-  const termo = filtros.busca.trim().toLowerCase();
   return filtrarFacetado(
     transferencias,
     {
@@ -81,11 +86,21 @@ export function facetarTransferencias<T extends TransferenciaFiltravel>(
         if (filtros.ate && dia > filtros.ate) return false;
         return true;
       },
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
       (t) =>
-        !termo ||
-        t.origemNome.toLowerCase().includes(termo) ||
-        t.destinoNome.toLowerCase().includes(termo) ||
-        (t.observacoes ?? "").toLowerCase().includes(termo),
+        casaBusca(
+          textoPesquisavel(
+            t.origemNome,
+            t.destinoNome,
+            t.observacoes,
+            t.insumoNome,
+            t.litros,
+            t.motivoExclusao,
+            { valor: t.valorTotal },
+            { data: dataLocalISO(t.dataHora) },
+          ),
+          filtros.busca,
+        ),
     ],
   );
 }

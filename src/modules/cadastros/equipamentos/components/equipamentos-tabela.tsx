@@ -26,6 +26,7 @@ import {
   ROTULO_PROPRIEDADE,
 } from "@/modules/cadastros/equipamentos/schemas";
 import { EquipamentosFormDrawer } from "./equipamentos-form-drawer";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -165,7 +166,6 @@ export function EquipamentosTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       equipamentos,
       {
@@ -180,16 +180,25 @@ export function EquipamentosTabela({
         ano: { selecionados: selecao(ano), chave: (e) => String(e.ano ?? "") },
       },
       [
-        (equipamento) => {
-          if (termo === "") return true;
-          // Código, descrição e placa: os três jeitos de alguém apontar para uma
-          // máquina no pátio.
-          const alvo = [equipamento.codigo, equipamento.descricao, equipamento.placa]
-            .filter((valor): valor is string => valor !== null)
-            .join(" ")
-            .toLowerCase();
-          return alvo.includes(termo);
-        },
+        // Busca universal (src/lib/busca.ts): código, descrição e placa (os três
+        // jeitos de alguém apontar uma máquina no pátio) e o resto do cadastro.
+        (equipamento) =>
+          casaBusca(
+            textoPesquisavel(
+              equipamento.codigo,
+              equipamento.descricao,
+              equipamento.placa,
+              equipamento.tipo,
+              equipamento.marca,
+              equipamento.modelo,
+              equipamento.ano,
+              equipamento.numeroSerie,
+              equipamento.status,
+              equipamento.propriedade,
+              { data: equipamento.dataAquisicao },
+            ),
+            busca,
+          ),
       ],
     );
   }, [equipamentos, busca, status, tipo, marca, controle, propriedade, ano]);
@@ -219,7 +228,7 @@ export function EquipamentosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por código, descrição ou placa"
+                placeholder="Código, placa, marca, modelo ou ano"
               />
             ),
           },

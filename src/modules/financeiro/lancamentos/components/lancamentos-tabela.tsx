@@ -839,7 +839,7 @@ export function LancamentosTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={setBusca}
-          placeholder="Buscar por número ou descrição"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },

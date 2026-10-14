@@ -14,6 +14,7 @@ import {
   MoneyText,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { OrigemPosicao, PosicaoLinha } from "@/modules/estoque/queries";
@@ -46,14 +47,28 @@ export function PosicaoTabela({ linhas }: PosicaoTabelaProps) {
   const [local, setLocal] = useFiltroSessao("local", "");
 
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       linhas,
       {
         origem: { selecionados: selecao(origem), chave: (linha) => linha.origem },
         local: { selecionados: selecao(local), chave: (linha) => linha.localId },
       },
-      [(linha) => !termo || linha.insumoNome.toLowerCase().includes(termo) || linha.localNome.toLowerCase().includes(termo)],
+      [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (linha) =>
+          casaBusca(
+            textoPesquisavel(
+              linha.insumoNome,
+              linha.localNome,
+              linha.localTipo === "tanque" ? "tanque" : "deposito",
+              ROTULO_ORIGEM[linha.origem],
+              linha.quantidade,
+              linha.unidade,
+              { valor: linha.valor },
+            ),
+            busca,
+          ),
+      ],
     );
   }, [linhas, busca, origem, local]);
 
@@ -152,7 +167,7 @@ export function PosicaoTabela({ linhas }: PosicaoTabelaProps) {
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por insumo ou local" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Insumo, local, tipo ou valor" />,
           },
           {
             id: "origem",

@@ -16,6 +16,7 @@ import {
   selecao,
   type ResultadoFacetado,
 } from "@/modules/_shared/filtros-facetados";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import type { ParcelaAReceber } from "@/modules/financeiro/recebimentos/queries";
 
 /** Valores dos filtros da aba "A receber", como vivem na URL. */
@@ -91,7 +92,6 @@ export function facetarFilaAReceber(
   subarvoreDe: (centroId: string) => ReadonlySet<string> = (id) =>
     new Set([id]),
 ): ResultadoFacetado<ParcelaAReceber, FacetaAReceber> {
-  const termo = valores.busca.trim().toLowerCase();
   const valorDe = valores.valorDe === "" ? null : Number(valores.valorDe);
   const valorAte = valores.valorAte === "" ? null : Number(valores.valorAte);
   const centrosEscolhidos = new Set(valores.centroIds);
@@ -131,11 +131,24 @@ export function facetarFilaAReceber(
       },
     },
     [
+      // Busca universal (src/lib/busca.ts): tudo o que a parcela carrega.
       (parcela) =>
-        termo === "" ||
-        `${parcela.lancamentoNumero ?? ""} ${parcela.numeroDocumento ?? ""} ${parcela.descricao} ${parcela.clienteNome}`
-          .toLowerCase()
-          .includes(termo),
+        casaBusca(
+          textoPesquisavel(
+            parcela.lancamentoNumero,
+            parcela.numeroDocumento,
+            parcela.descricao,
+            parcela.clienteNome,
+            parcela.categoriaNome,
+            parcela.contaBancariaNome,
+            parcela.centroCustoNomes,
+            parcela.centroCustoRotulo,
+            { valor: parcela.valor },
+            { data: parcela.dataVencimento },
+            { mes: parcela.mesCompetencia },
+          ),
+          valores.busca,
+        ),
       (parcela) => {
         if (valorDe !== null && parcela.valor < valorDe) return false;
         if (valorAte !== null && parcela.valor > valorAte) return false;

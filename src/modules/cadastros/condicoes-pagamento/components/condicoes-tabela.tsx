@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { CalendarClock, MoreHorizontal, Plus } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -110,7 +111,6 @@ export function CondicoesTabela({
   // outros (ver `_shared/filtros-facetados`). O prazo é faixa: restringe os
   // outros sem ser restringido.
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     const minimo = prazoDe === "" ? null : Number(prazoDe);
     const maximo = prazoAte === "" ? null : Number(prazoAte);
     return filtrarFacetado(
@@ -134,7 +134,8 @@ export function CondicoesTabela({
           }
           return true;
         },
-        (condicao) => !termo || condicao.descricao.toLowerCase().includes(termo),
+        (condicao) =>
+          casaBusca(textoPesquisavel(condicao.descricao, condicao.resumoParcelas), busca),
       ],
     );
   }, [condicoes, busca, status, qtdParcelas, prazoDe, prazoAte]);

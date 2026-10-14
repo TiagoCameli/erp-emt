@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import type { MovimentoLista } from "@/modules/rh/banco-horas/queries";
 import {
@@ -94,7 +95,6 @@ export function MovimentosTabela({
   // tipo e colaborador só oferecem o que existe na lista filtrada pelos outros
   // (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       movimentos,
       {
@@ -107,7 +107,19 @@ export function MovimentosTabela({
       [
         (item) => noPeriodo(item.data, dataDe, dataAte),
         (item) => naFaixa(item.horas, horasDe, horasAte),
-        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (item) =>
+          casaBusca(
+            textoPesquisavel(
+              item.colaboradorNome,
+              ROTULO_TIPO_MOVIMENTO[item.tipo],
+              item.motivo,
+              item.observacao,
+              formatarQuantidade(item.horas),
+              { data: item.data },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -209,7 +221,7 @@ export function MovimentosTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -219,7 +231,7 @@ export function MovimentosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Colaborador, tipo, motivo ou data"
               />
             ),
           },

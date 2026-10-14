@@ -222,6 +222,13 @@ describe("abas", () => {
     expect(filtrarFretes(todos, "999")).toEqual([]);
   });
 
+  it("a busca é universal: valor, data e mês de referência também acham", () => {
+    expect(filtrarTodos(todos, [], "R$ 40,00").map((m) => m.id)).toEqual([pag.id]);
+    expect(filtrarTodos(todos, [], "05/06/2026").map((m) => m.id)).toEqual([pag.id]);
+    expect(filtrarFretes(todos, "junho/2026 aaa1a")).toEqual([frete]);
+    expect(filtrarFretes(todos, "julho/2026")).toEqual([]);
+  });
+
   it("Abastecimentos: categoria e preço base (médio do tanque só na EMT)", () => {
     expect(filtrarAbastecimentos(todos, "", "").map((m) => m.id)).toEqual([emt.id, extDeb.id]);
     expect(filtrarAbastecimentos(todos, "emt", "")).toEqual([emt]);

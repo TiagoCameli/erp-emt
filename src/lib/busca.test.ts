@@ -25,7 +25,7 @@ describe("palavrasDaBusca", () => {
     expect(palavrasDaBusca("R$1.500")).toEqual(["1.500"]);
   });
 
-  it("tira os curingas do ilike para a palavra ser literal", () => {
+  it("tira os curingas do like para a palavra ser literal", () => {
     expect(palavrasDaBusca("100% _a*")).toEqual(["100", "a"]);
   });
 
@@ -55,6 +55,15 @@ describe("formas de valor, data e mês", () => {
       "12/2026 2026-12 dezembro/2026 dez/26 12/26",
     );
     expect(textoDeMes("2026-12")).toBe(textoDeMes("2026-12-01"));
+  });
+});
+
+describe("documento", () => {
+  it("CNPJ entra com e sem pontuação", () => {
+    const texto = textoPesquisavel({ documento: "34.274.233/0097-46" });
+    expect(casaBusca(texto, "34274233")).toBe(true);
+    expect(casaBusca(texto, "34.274.233")).toBe(true);
+    expect(textoPesquisavel({ documento: "12345" })).toBe("12345");
   });
 });
 
@@ -117,10 +126,10 @@ describe("filtrarPorBusca", () => {
 });
 
 describe("aplicarBusca", () => {
-  it("um ilike por palavra, na coluna computada", () => {
+  it("um like por palavra, na coluna computada", () => {
     const chamadas: [string, string][] = [];
     const consulta = {
-      ilike(coluna: string, padrao: string) {
+      like(coluna: string, padrao: string) {
         chamadas.push([coluna, padrao]);
         return consulta;
       },
@@ -135,7 +144,7 @@ describe("aplicarBusca", () => {
   it("busca vazia não toca a consulta", () => {
     let tocou = false;
     const consulta = {
-      ilike() {
+      like() {
         tocou = true;
         return consulta;
       },

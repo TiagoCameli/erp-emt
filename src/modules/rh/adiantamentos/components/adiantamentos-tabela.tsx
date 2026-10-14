@@ -33,6 +33,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData } from "@/lib/formatadores";
 import { removerAdiantamento } from "@/modules/rh/adiantamentos/actions";
 import { dividirEmParcelas } from "@/modules/rh/adiantamentos/parcelamento";
@@ -180,7 +181,6 @@ export function AdiantamentosTabela({
   // outros (ver `_shared/filtros-facetados`). A competência é filtro de data:
   // restringe os outros, mas mantém a lista de meses inteira.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       adiantamentos,
       {
@@ -197,7 +197,21 @@ export function AdiantamentosTabela({
         (item) => !competencia || item.competencia === competencia,
         (item) => noPeriodo(item.data, dataDe, dataAte),
         (item) => naFaixa(item.valor, valorDe, valorAte),
-        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (item) =>
+          casaBusca(
+            textoPesquisavel(
+              item.colaboradorNome,
+              item.descricao,
+              item.lancamentoNumero,
+              item.naFolha ? "na folha" : "em aberto",
+              { valor: item.valor },
+              { valor: item.saldo },
+              { data: item.data },
+              { mes: item.competencia },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -375,7 +389,7 @@ export function AdiantamentosTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -385,7 +399,7 @@ export function AdiantamentosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Colaborador, valor, data ou mês"
               />
             ),
           },

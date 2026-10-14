@@ -18,6 +18,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { excluirMovimento, restaurarMovimento } from "@/modules/estoque/actions";
@@ -57,18 +58,30 @@ export function EntradasTabela({
   const [excluindo, setExcluindo] = React.useState<EntradaLinha | null>(null);
 
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       entradas,
       { local: { selecionados: selecao(local), chave: (entrada) => entrada.local } },
       [
         (entrada) => entrada.excluida === (situacao === "excluidas"),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (entrada) =>
-          !termo ||
-          entrada.insumoNome.toLowerCase().includes(termo) ||
-          entrada.fornecedorNome.toLowerCase().includes(termo) ||
-          (entrada.ocNumero ?? "").toLowerCase().includes(termo) ||
-          (entrada.notaFiscal ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              entrada.insumoNome,
+              entrada.fornecedorNome,
+              entrada.ocNumero ?? "avulsa",
+              entrada.notaFiscal,
+              entrada.localNome,
+              entrada.quantidade,
+              entrada.unidade,
+              entrada.valorUnitario,
+              entrada.observacoes,
+              entrada.motivoExclusao,
+              { valor: entrada.valorTotal },
+              { data: entrada.data },
+            ),
+            busca,
+          ),
       ],
     );
   }, [entradas, busca, local, situacao]);
@@ -185,7 +198,7 @@ export function EntradasTabela({
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por insumo, OC, fornecedor ou NF" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Insumo, OC, fornecedor, NF ou valor" />
             ),
           },
           {

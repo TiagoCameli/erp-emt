@@ -22,6 +22,7 @@ import {
   type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
@@ -333,7 +334,6 @@ export function ExtratoContaTabela({
   // outros (ver `_shared/filtros-facetados`). Busca, data e valor entram
   // livres; o escopo vai ao servidor e não é faceta.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       movimentos,
       {
@@ -348,13 +348,22 @@ export function ExtratoContaTabela({
         (movimento) =>
           dentroDoPeriodo(movimento.data, dataDe, dataAte) &&
           dentroDaFaixaValor(movimento.valor, valorDe, valorAte),
+        // Busca universal (src/lib/busca.ts): tudo o que o movimento carrega.
         (movimento) =>
-          termo === "" ||
-          `${movimento.numero ?? ""} ${movimento.numeroDocumento ?? ""} ${
-            movimento.descricao ?? ""
-          } ${movimento.contraparte ?? ""} ${movimento.categoriaNome ?? ""}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              movimento.numero,
+              movimento.numeroDocumento,
+              movimento.descricao,
+              movimento.contraparte,
+              movimento.categoriaNome,
+              movimento.entrada ? "entrada" : "saida",
+              ROTULO_TIPO[movimento.tipo],
+              { valor: movimento.valor },
+              { data: movimento.data },
+            ),
+            busca,
+          ),
       ],
     );
   }, [movimentos, busca, sentido, dataDe, dataAte, valorDe, valorAte]);
@@ -402,7 +411,7 @@ export function ExtratoContaTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={mudarBusca}
-          placeholder="Buscar por documento, descrição ou quem"
+          placeholder="Documento, quem, valor ou data"
         />
       ),
     },

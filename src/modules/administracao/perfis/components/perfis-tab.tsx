@@ -13,6 +13,7 @@ import {
   PageHeader,
 } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import type {
   PerfilResumo,
   PermissaoPerfil,
@@ -94,7 +95,6 @@ export function PerfisTab({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     const comOuSem = (total: number, valor: string) =>
       valor === "com" ? total > 0 : valor === "sem" ? total === 0 : true;
     return filtrarFacetado(
@@ -110,11 +110,9 @@ export function PerfisTab({
         },
       },
       [
-        (perfil) => {
-          if (!termo) return true;
-          const alvo = `${perfil.nome} ${perfil.descricao ?? ""}`.toLowerCase();
-          return alvo.includes(termo);
-        },
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (perfil) =>
+          casaBusca(textoPesquisavel(perfil.nome, perfil.descricao), busca),
       ],
     );
   }, [perfis, busca, comUsuarios, comPermissoes]);
@@ -153,7 +151,7 @@ export function PerfisTab({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome ou descrição"
+                placeholder="Nome ou descrição do perfil"
               />
             ),
           },

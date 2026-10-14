@@ -21,6 +21,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -126,7 +127,6 @@ export function OcorrenciasTabela({
   // tipo e colaborador só oferecem o que existe na lista filtrada pelos outros
   // (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       ocorrencias,
       {
@@ -147,7 +147,19 @@ export function OcorrenciasTabela({
           if (dataAte !== "" && inicio > dataAte) return false;
           return true;
         },
-        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (item) =>
+          casaBusca(
+            textoPesquisavel(
+              item.colaboradorNome,
+              ROTULO_TIPO_OCORRENCIA[item.tipo],
+              item.descricao,
+              item.observacao,
+              { data: item.data },
+              { data: item.dataFim },
+            ),
+            busca,
+          ),
       ],
     );
   }, [ocorrencias, busca, tipo, colaboradorId, dataDe, dataAte]);
@@ -251,7 +263,7 @@ export function OcorrenciasTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -261,7 +273,7 @@ export function OcorrenciasTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Colaborador, tipo, descrição ou data"
               />
             ),
           },

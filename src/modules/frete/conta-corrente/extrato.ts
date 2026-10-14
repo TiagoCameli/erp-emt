@@ -1,4 +1,5 @@
-import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { casaBusca, textoPesquisavel, type CampoBusca } from "@/lib/busca";
+import { dataLocalISO, formatarBRL, formatarData } from "@/lib/formatadores";
 import { CASAS_VALOR_OPERACIONAL } from "@/lib/casas-decimais";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 
@@ -314,10 +315,24 @@ export function contadoresDasAbas(movimentos: readonly MovimentoExtrato[]): Reco
   return contagem;
 }
 
-function contem(campos: readonly (string | null | undefined)[], busca: string): boolean {
-  const q = busca.trim().toLowerCase();
-  if (q === "") return true;
-  return campos.some((c) => (c ?? "").toLowerCase().includes(q));
+/**
+ * Busca universal (src/lib/busca.ts): todo movimento casa pela descrição, pelo
+ * tipo, pelo valor, pela data e pelo mês de referência; cada aba soma os campos
+ * que só ela mostra.
+ */
+function contem(m: MovimentoExtrato, campos: readonly CampoBusca[], busca: string): boolean {
+  return casaBusca(
+    textoPesquisavel(
+      m.descricao,
+      TIPO_LABEL[m.tipo],
+      m.obraNome,
+      { valor: m.valor },
+      { data: dataLocalISO(m.data) },
+      { mes: m.mesReferencia },
+      ...campos,
+    ),
+    busca,
+  );
 }
 
 /**
@@ -342,7 +357,25 @@ export function filtrarTodos(
 ): MovimentoComSaldo[] {
   const setTipos = new Set(tipos);
   const filtrados = movimentos.filter(
-    (m) => (setTipos.size === 0 || setTipos.has(m.tipo)) && contem([m.descricao, placaMovimento(m)], busca),
+    (m) =>
+      (setTipos.size === 0 || setTipos.has(m.tipo)) &&
+      contem(
+        m,
+        [
+          placaMovimento(m),
+          m.freteOrigem,
+          m.freteDestino,
+          m.freteInsumoNome,
+          m.freteNotaFiscal,
+          m.freteNotaFiscal2,
+          m.freteMotorista,
+          m.saidaMotorista,
+          m.saidaCombustivelNome,
+          m.pagamentoNotaFiscal,
+          rotuloMetodo(m.pagamentoMetodo),
+        ],
+        busca,
+      ),
   );
   return comSaldoAcumulado(filtrados);
 }
@@ -352,8 +385,8 @@ export function filtrarFretes(movimentos: readonly MovimentoExtrato[], busca: st
     .filter((m) => m.tipo === "credito_frete")
     .filter((m) =>
       contem(
+        m,
         [
-          m.descricao,
           m.freteOrigem,
           m.freteDestino,
           m.freteNotaFiscal,
@@ -361,7 +394,8 @@ export function filtrarFretes(movimentos: readonly MovimentoExtrato[], busca: st
           m.fretePlaca,
           m.freteMotorista,
           m.freteInsumoNome,
-          m.obraNome,
+          m.fretePeso,
+          m.freteKm,
         ],
         busca,
       ),
@@ -386,7 +420,20 @@ export function filtrarAbastecimentos(
   return movimentos
     .filter((m) => categoriaDoTipo(m.tipo) !== null)
     .filter((m) => categoria === "" || categoriaDoTipo(m.tipo) === categoria)
-    .filter((m) => contem([m.descricao, m.saidaPlaca, m.saidaMotorista, m.saidaCombustivelNome, m.saidaObservacoes], busca))
+    .filter((m) =>
+      contem(
+        m,
+        [
+          m.saidaPlaca,
+          m.saidaMotorista,
+          m.saidaCombustivelNome,
+          m.saidaObservacoes,
+          m.saidaLitros,
+          categoriaDoTipo(m.tipo) === "transterra" ? ROTULO_CATEGORIA.transterra : ROTULO_CATEGORIA.emt,
+        ],
+        busca,
+      ),
+    )
     .sort(compararDesc);
 }
 
@@ -410,7 +457,18 @@ export function filtrarPagamentos(
     .filter((m) => m.tipo === "debito_pagamento_frete")
     .filter((m) => metodo === "" || m.pagamentoMetodo === metodo)
     .filter((m) =>
-      contem([m.descricao, m.pagamentoNotaFiscal, m.pagamentoResponsavel, m.pagamentoPagoPor, m.pagamentoObservacoes], busca),
+      contem(
+        m,
+        [
+          m.pagamentoNotaFiscal,
+          m.pagamentoResponsavel,
+          m.pagamentoPagoPor,
+          m.pagamentoObservacoes,
+          rotuloMetodo(m.pagamentoMetodo),
+          m.pagamentoLitros,
+        ],
+        busca,
+      ),
     )
     .sort(compararDesc);
 }
@@ -431,7 +489,7 @@ export function filtrarAjustes(
   return movimentos
     .filter((m) => sinalDoTipo(m.tipo) !== null)
     .filter((m) => sinal === "" || sinalDoTipo(m.tipo) === sinal)
-    .filter((m) => contem([m.descricao, m.ajusteCriadoPor, m.obraNome], busca))
+    .filter((m) => contem(m, [m.ajusteCriadoPor], busca))
     .sort(compararDesc);
 }
 

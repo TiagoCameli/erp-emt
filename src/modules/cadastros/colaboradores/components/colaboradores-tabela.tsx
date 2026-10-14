@@ -318,7 +318,7 @@ export function ColaboradoresTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome"
+                placeholder="Nome, CPF, função, obra ou salário"
               />
             ),
           },

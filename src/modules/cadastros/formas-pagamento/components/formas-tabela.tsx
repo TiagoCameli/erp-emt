@@ -12,6 +12,7 @@ import {
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -88,7 +89,6 @@ export function FormasTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       formas,
       {
@@ -104,7 +104,7 @@ export function FormasTabela({
                 : true,
         },
       },
-      [(forma) => !termo || forma.nome.toLowerCase().includes(termo)],
+      [(forma) => casaBusca(textoPesquisavel(forma.nome, forma.tipo), busca)],
     );
   }, [formas, busca, status, tipo, uso]);
 

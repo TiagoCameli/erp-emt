@@ -40,6 +40,7 @@ import {
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import {
   formatarBRL,
   formatarData,
@@ -1010,7 +1011,6 @@ function TabelaFaltam({
   // mostra): resolve com Casar. "Não tem" = nada parecido no app: é Lançar,
   // ou Transferência quando é aplicação automática.
   const { linhas: dados, opcoes: opcoesFacetadas } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       transacoes,
       {
@@ -1021,11 +1021,19 @@ function TabelaFaltam({
         },
       },
       [
+        // Busca universal (src/lib/busca.ts): tudo o que o movimento carrega.
         (t) =>
-          !termo ||
-          `${t.memo ?? ""} ${formatarBRL(Math.abs(t.valor))}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              t.memo,
+              t.tipo === "credito" ? "credito" : "debito",
+              t.lancado?.lancamentoNumero,
+              t.fatura?.cartaoNome,
+              { valor: t.valor },
+              { data: t.dataMovimento },
+            ),
+            busca,
+          ),
       ],
     );
   }, [transacoes, busca, tipo, noApp, sugestoes]);
@@ -1309,7 +1317,7 @@ function TabelaFaltam({
             setBusca(v);
             zerarPagina();
           }}
-          placeholder="Buscar no histórico ou valor"
+          placeholder="Histórico, valor ou data"
         />
       ),
     },
@@ -1691,7 +1699,6 @@ function TabelaCasados({
 
   // Facetado: "como casou" só oferece o que existe nas transações da busca.
   const { linhas: dados, opcoes: opcoesFacetadas } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       transacoes,
       {
@@ -1708,9 +1715,29 @@ function TabelaCasados({
         },
       },
       [
+        // Busca universal (src/lib/busca.ts): o movimento e o que casou com ele.
         (t) =>
-          !termo ||
-          `${t.memo ?? ""} ${vinculoDe(t)}`.toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              t.memo,
+              vinculoDe(t),
+              t.parcela?.descricao,
+              t.parcela?.nome,
+              t.parcela?.lancamentoNumero,
+              t.transferencia?.numero,
+              t.transferencia?.descricao,
+              t.transferencia?.origemNome,
+              t.transferencia?.destinoNome,
+              t.estorno?.memo,
+              t.fatura?.cartaoNome,
+              t.automatica ? "automatico" : "manual",
+              { valor: t.valor },
+              { valor: t.parcela?.valorLiquido },
+              { data: t.dataMovimento },
+              { data: t.parcela?.dataPagamento },
+            ),
+            busca,
+          ),
       ],
     );
   }, [transacoes, busca, situacao]);
@@ -1828,7 +1855,7 @@ function TabelaCasados({
             setBusca(v);
             zerarPagina();
           }}
-          placeholder="Buscar no histórico ou no lançamento"
+          placeholder="Histórico, lançamento, valor ou data"
         />
       ),
     },

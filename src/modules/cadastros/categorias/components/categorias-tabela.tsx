@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Plus, Tags } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -119,8 +120,6 @@ export function CategoriasTabela({
     toast.success("Subcategoria movida para a lixeira");
   }
 
-  const termo = busca.trim().toLowerCase();
-
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`). A faceta roda sobre as
   // subcategorias achatadas, cada uma com o grupo dela.
@@ -145,7 +144,7 @@ export function CategoriasTabela({
                 : true,
         },
       },
-      [({ categoria }) => !termo || categoria.nome.toLowerCase().includes(termo)],
+      [({ categoria }) => casaBusca(textoPesquisavel(categoria.nome), busca)],
     );
     const visiveis = new Set(resultado.linhas.map((linha) => linha.categoria.id));
     return {
@@ -161,7 +160,7 @@ export function CategoriasTabela({
           ),
         })),
     };
-  }, [grupos, status, termo, grupoId, comInsumos]);
+  }, [grupos, status, busca, grupoId, comInsumos]);
 
   const colunas = React.useMemo<ColumnDef<CategoriaLista, unknown>[]>(() => {
     const base: ColumnDef<CategoriaLista, unknown>[] = [

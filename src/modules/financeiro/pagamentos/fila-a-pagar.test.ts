@@ -65,6 +65,29 @@ describe("filtrarFilaAPagar", () => {
     ).toHaveLength(2);
   });
 
+  it("a busca é universal: valor, mês, vencimento e categoria também acham", () => {
+    const fila = [
+      parcela({ id: "a" }),
+      parcela({
+        id: "b",
+        valor: 500,
+        dataVencimento: "2026-05-10",
+        dataProgramada: "2026-05-10",
+        mesCompetencia: "2026-04-01",
+        dataCompra: "2026-04-20",
+        categoriaNome: "Combustível",
+      }),
+    ];
+    const ids = (busca: string) =>
+      filtrarFilaAPagar(fila, com({ busca }), null).map((p) => p.id);
+    expect(ids("11.848,99")).toEqual(["a"]);
+    expect(ids("R$ 11848.99")).toEqual(["a"]);
+    expect(ids("março")).toEqual(["a"]);
+    expect(ids("10/05")).toEqual(["b"]);
+    expect(ids("combustivel bradesco")).toEqual(["b"]);
+    expect(ids("combustivel gasolina")).toEqual([]);
+  });
+
   it("lista vazia é 'todos', não 'nenhum'", () => {
     // A armadilha do filtro por conjunto: com `new Set([])` o `has` recusa tudo
     // e a fila aparece zerada com o filtro em branco.

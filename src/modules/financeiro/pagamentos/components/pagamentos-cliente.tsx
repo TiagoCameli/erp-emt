@@ -801,7 +801,7 @@ export function PagamentosCliente({
         <FiltroBusca
           valor={buscaAprovadas}
           onValorChange={setBuscaAprovadas}
-          placeholder="Buscar por lançamento, descrição ou fornecedor"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },
@@ -964,7 +964,7 @@ export function PagamentosCliente({
         <FiltroBusca
           valor={buscaPagas}
           onValorChange={setBuscaPagas}
-          placeholder="Buscar por lançamento, descrição ou fornecedor"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },

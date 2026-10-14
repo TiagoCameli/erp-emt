@@ -1,5 +1,6 @@
 import "server-only";
 
+import { aplicarBusca } from "@/lib/busca";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { ORIGEM_APLICACAO } from "@/modules/financeiro/lancamentos/schemas";
@@ -313,34 +314,6 @@ export async function listarParcelasAReceber(): Promise<ParcelaAReceber[]> {
   }));
 }
 
-/** Máximo de clientes resolvidos por nome numa busca (limite do filtro in). */
-const MAX_CLIENTES_BUSCA = 50;
-
-/**
- * Padrão ilike (%termo%) do termo de busca. Remove os caracteres que quebram a
- * sintaxe do or() do PostgREST (vírgula, parênteses, aspas, barra).
- */
-function padraoBusca(termo: string): string {
-  return `%${termo.replace(/[,()"'\\]/g, "").trim()}%`;
-}
-
-/**
- * Ids de clientes cujo nome bate com o padrão. A busca precisa achar por quem
- * pagou, e o or() do PostgREST não mistura colunas de tabelas diferentes: os ids
- * entram como mais um termo do or() em cima de lancamentos.
- */
-async function idsClientesPorNome(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  padrao: string,
-): Promise<string[]> {
-  const { data } = await supabase
-    .from("clientes")
-    .select("id")
-    .or(`nome.ilike.${padrao},nome_fantasia.ilike.${padrao}`)
-    .limit(MAX_CLIENTES_BUSCA);
-  return (data ?? []).map((cliente) => cliente.id);
-}
-
 /** O pedaço do builder do PostgREST que os filtros dos recebidos usam. */
 interface ConsultaFiltravelRecebidas<T> {
   eq: (coluna: string, valor: string) => T;
@@ -350,20 +323,19 @@ interface ConsultaFiltravelRecebidas<T> {
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
   in: (coluna: string, valores: readonly string[]) => T;
   not: (coluna: string, operador: string, valor: null) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
  * Aplica os filtros da aba "Recebidos". Serve a lista e as facetas
  * (`facetasRecebidas`), que precisam do MESMO recorte.
  *
- * Síncrona, com os ids de cliente da busca e a subárvore do centro já
- * resolvidos: o builder é "thenable", e uma função async o dispararia no return
+ * Síncrona, com a subárvore do centro já resolvida: o builder é "thenable", e uma função async o dispararia no return
  * (ver `aplicarFiltrosPagas`). `subarvore` null é "sem filtro de centro".
  */
 function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
   consultaInicial: T,
   filtros: FiltrosRecebidas,
-  idsClientes: string[],
   subarvore: readonly string[] | null,
 ): T {
   // Rendimento de aplicação é `a_receber` pago, mas não é recebimento: nenhum
@@ -383,20 +355,10 @@ function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
       filtros.mesCompetencia,
     );
   }
-  if (filtros.busca?.trim()) {
-    const padrao = padraoBusca(filtros.busca);
-    const termos = [
-      `numero.ilike.${padrao}`,
-      `numero_documento.ilike.${padrao}`,
-      `descricao.ilike.${padrao}`,
-    ];
-    if (idsClientes.length > 0) {
-      termos.push(`cliente_id.in.(${idsClientes.join(",")})`);
-    }
-    consulta = consulta.or(termos.join(","), {
-      referencedTable: "lancamentos",
-    });
-  }
+  // Busca universal (src/lib/busca.ts) na coluna computada da parcela: valor,
+  // datas e conta dela mais o lançamento (documento, descrição, quem pagou,
+  // categorias, centros, competência).
+  consulta = aplicarBusca(consulta, filtros.busca);
 
   if (filtros.clienteId) {
     consulta = consulta.eq("lancamentos.cliente_id", filtros.clienteId);
@@ -478,9 +440,6 @@ export async function facetasRecebidas(
   filtros: FiltrosRecebidas = {},
 ): Promise<FacetasPresentes<FacetaRecebidas>> {
   const supabase = await createClient();
-  const idsClientes = filtros.busca?.trim()
-    ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
-    : [];
   const subarvore = await subarvoreDoFiltro(supabase, filtros.centroCustoIds);
   const doLancamento = (linha: LinhaFacetaRecebidas) =>
     linha.lancamentos === null
@@ -535,7 +494,6 @@ export async function facetasRecebidas(
               .eq("status", "pago")
               .eq("lancamentos.tipo", "a_receber"),
             recorte,
-            idsClientes,
             subarvoreDoRecorte,
           )
             .order("id", { ascending: true })
@@ -568,9 +526,6 @@ export async function listarParcelasRecebidas({
   const de = pagina * tamanho;
   const ate = de + tamanho - 1;
 
-  const idsClientes = filtros.busca?.trim()
-    ? await idsClientesPorNome(supabase, padraoBusca(filtros.busca))
-    : [];
   const subarvore = await subarvoreDoFiltro(supabase, filtros.centroCustoIds);
   // Centro que não existe mais: lista vazia, não a lista inteira.
   if (subarvore !== null && subarvore.length === 0) {
@@ -583,7 +538,6 @@ export async function listarParcelasRecebidas({
       .eq("status", "pago")
       .eq("lancamentos.tipo", "a_receber"),
     filtros,
-    idsClientes,
     subarvore,
   );
 

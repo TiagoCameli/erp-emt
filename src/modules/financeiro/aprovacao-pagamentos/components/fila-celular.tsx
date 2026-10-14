@@ -135,7 +135,7 @@ export function FilaCelular({
         <FiltroBusca
           valor={busca.valor}
           onValorChange={busca.onValorChange}
-          placeholder="Buscar fornecedor ou lançamento"
+          placeholder="Fornecedor, número ou valor"
         />
       )}
 

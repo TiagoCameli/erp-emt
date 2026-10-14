@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Truck } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -105,7 +106,6 @@ export function FornecedoresTabela({
   // outros (ver `_shared/filtros-facetados`). É isso que faz a cidade seguir a
   // UF escolhida, e o tipo seguir a cidade.
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       fornecedores,
       {
@@ -119,18 +119,23 @@ export function FornecedoresTabela({
         cidade: { selecionados: selecao(cidade), chave: (f) => f.cidade?.trim() },
       },
       [
-        (fornecedor) => {
-          if (termo.length === 0) return true;
-          const alvo = [
-            fornecedor.razaoSocial,
-            fornecedor.nomeFantasia,
-            fornecedor.cnpjCpf,
-          ]
-            .filter((valor): valor is string => valor !== null)
-            .join(" ")
-            .toLowerCase();
-          return alvo.includes(termo);
-        },
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (fornecedor) =>
+          casaBusca(
+            textoPesquisavel(
+              fornecedor.razaoSocial,
+              fornecedor.nomeFantasia,
+              { documento: fornecedor.cnpjCpf },
+              fornecedor.inscricaoEstadual,
+              fornecedor.email,
+              fornecedor.telefone,
+              fornecedor.cidade,
+              fornecedor.uf,
+              fornecedor.endereco,
+              fornecedor.observacoes,
+            ),
+            busca,
+          ),
       ],
     );
   }, [fornecedores, busca, status, tipo, uf, cidade]);
@@ -329,7 +334,7 @@ export function FornecedoresTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome ou documento"
+                placeholder="Nome, CNPJ, cidade ou telefone"
               />
             ),
           },

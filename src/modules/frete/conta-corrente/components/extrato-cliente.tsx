@@ -401,7 +401,7 @@ function AbaTodos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar na descrição ou placa" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Descrição, placa, NF, valor ou data" />,
           },
           {
             id: "tipos",
@@ -459,7 +459,7 @@ function AbaFretes({ movimentos }: { movimentos: MovimentoExtrato[] }) {
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por rota, NF, placa, motorista, insumo" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Rota, NF, placa, insumo, valor ou data" />
             ),
           },
         ]}
@@ -512,7 +512,7 @@ function AbaAbastecimentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por placa, motorista, combustível" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Placa, motorista, litros, valor ou data" />,
           },
           {
             id: "categoria",
@@ -587,7 +587,7 @@ function AbaPagamentos({ movimentos }: { movimentos: MovimentoExtrato[] }) {
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por NF, responsável, observações" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="NF, responsável, método, valor ou data" />,
           },
           {
             id: "metodo",
@@ -677,7 +677,7 @@ function AbaAjustes({ movimentos }: { movimentos: MovimentoExtrato[] }) {
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por descrição, obra, autor" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Descrição, obra, autor, valor ou data" />,
           },
           {
             id: "sinal",

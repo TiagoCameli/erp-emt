@@ -18,7 +18,7 @@
  *
  * As telas que buscam NO BANCO usam o mesmo contrato: a função SQL `busca(...)`
  * (migration `*_busca_universal`) monta o texto com as MESMAS formas, e
- * `filtrosDeBusca` devolve os padrões `ilike` de cada palavra. Mudar uma forma
+ * `aplicarBusca` põe um `like` por palavra na consulta. Mudar uma forma
  * aqui exige mudar lá, e vice-versa — o teste de contrato fica em `busca.test.ts`.
  *
  * Módulo puro, sem React e sem Supabase: roda no client e no servidor.
@@ -57,7 +57,7 @@ export function normalizarBusca(texto: string | null | undefined): string {
  * - "R$" na frente sai: "R$1.500" procura "1.500".
  * - Ponto como decimal ("1500.50", hábito do teclado numérico) vira vírgula. Só
  *   com 1 ou 2 casas depois do ponto: "1.500" é milhar e fica como está.
- * - Curingas do `ilike` (`%`, `_`, `*`) e a barra invertida saem, para a
+ * - Curingas do `like` (`%`, `_`, `*`) e a barra invertida saem, para a
  *   palavra ser sempre literal.
  */
 function normalizarPalavra(palavra: string): string {
@@ -91,7 +91,13 @@ function formasDoMes(ano: string, mes: string): string[] {
   const nome = MESES_BUSCA[Number(mes) - 1];
   if (!nome) return [];
   const ano2 = ano.slice(2);
-  return [`${mes}/${ano}`, `${ano}-${mes}`, `${nome}/${ano}`, `${nome.slice(0, 3)}/${ano2}`, `${mes}/${ano2}`];
+  return [
+    `${mes}/${ano}`,
+    `${ano}-${mes}`,
+    `${nome}/${ano}`,
+    `${nome.slice(0, 3)}/${ano2}`,
+    `${mes}/${ano2}`,
+  ];
 }
 
 /**
@@ -103,7 +109,11 @@ export function textoDeData(data: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data ?? "");
   if (!m) return "";
   const [, ano, mes, dia] = m;
-  return [`${dia}/${mes}/${ano}`, `${ano}-${mes}-${dia}`, ...formasDoMes(ano, mes)].join(" ");
+  return [
+    `${dia}/${mes}/${ano}`,
+    `${ano}-${mes}-${dia}`,
+    ...formasDoMes(ano, mes),
+  ].join(" ");
 }
 
 /** Mês de competência (`yyyy-MM` ou `yyyy-MM-01`) em todas as grafias. */
@@ -123,6 +133,7 @@ export type CampoBusca =
   | { valor: number | string | null | undefined }
   | { data: string | null | undefined }
   | { mes: string | null | undefined }
+  | { documento: string | null | undefined }
   | CampoBusca[];
 
 function textoDoCampo(campo: CampoBusca): string {
@@ -132,7 +143,18 @@ function textoDoCampo(campo: CampoBusca): string {
   if (typeof campo === "string") return normalizarBusca(campo);
   if ("valor" in campo) return textoDeValor(campo.valor);
   if ("data" in campo) return textoDeData(campo.data);
+  if ("documento" in campo) return textoDeDocumento(campo.documento);
   return textoDeMes(campo.mes);
+}
+
+/**
+ * CNPJ/CPF com e sem pontuação: quem copia do boleto cola "34.274.233/0097-46",
+ * quem digita escreve "34274233". O banco grava as mesmas duas formas.
+ */
+export function textoDeDocumento(documento: string | null | undefined): string {
+  if (!documento) return "";
+  const digitos = documento.replace(/\D/g, "");
+  return digitos === documento ? digitos : `${normalizarBusca(documento)} ${digitos}`;
 }
 
 /**
@@ -141,11 +163,17 @@ function textoDoCampo(campo: CampoBusca): string {
  * itens de uma OC, por exemplo).
  */
 export function textoPesquisavel(...campos: CampoBusca[]): string {
-  return campos.map(textoDoCampo).filter((t) => t !== "").join(" ");
+  return campos
+    .map(textoDoCampo)
+    .filter((t) => t !== "")
+    .join(" ");
 }
 
 /** Todas as palavras da busca aparecem no texto? Busca vazia casa tudo. */
-export function casaBusca(texto: string, busca: string | null | undefined): boolean {
+export function casaBusca(
+  texto: string,
+  busca: string | null | undefined,
+): boolean {
   const palavras = palavrasDaBusca(busca);
   return palavras.every((p) => texto.includes(p));
 }
@@ -160,26 +188,32 @@ export function filtrarPorBusca<T>(
   campos: (linha: T) => CampoBusca[],
 ): T[] {
   if (palavrasDaBusca(busca).length === 0) return [...linhas];
-  return linhas.filter((linha) => casaBusca(textoPesquisavel(...campos(linha)), busca));
+  return linhas.filter((linha) =>
+    casaBusca(textoPesquisavel(...campos(linha)), busca),
+  );
 }
 
 /** O pedaço do builder do PostgREST que a busca no banco usa. */
-export interface ConsultaComIlike<T> {
-  ilike: (coluna: string, padrao: string) => T;
+export interface ConsultaComLike<T> {
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
- * Aplica a busca universal numa consulta do PostgREST: um `ilike` por palavra
+ * Aplica a busca universal numa consulta do PostgREST: um `like` por palavra
  * sobre a coluna computada `busca` (função SQL `busca(<tabela>)`), todos em E.
+ *
+ * `like` e não `ilike`: o texto gravado e as palavras já são minúsculos e sem
+ * acento, e o `ilike` pagava a troca de caixa linha a linha à toa (medido em
+ * 14/10/2026: 179 → 124 ms nos 7.145 lançamentos).
  */
-export function aplicarBusca<T extends ConsultaComIlike<T>>(
+export function aplicarBusca<T extends ConsultaComLike<T>>(
   consulta: T,
   busca: string | null | undefined,
   coluna = "busca",
 ): T {
   let resultado = consulta;
   for (const palavra of palavrasDaBusca(busca)) {
-    resultado = resultado.ilike(coluna, `%${palavra}%`);
+    resultado = resultado.like(coluna, `%${palavra}%`);
   }
   return resultado;
 }

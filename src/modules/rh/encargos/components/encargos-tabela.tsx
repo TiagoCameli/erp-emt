@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarPercentual } from "@/lib/formatadores";
 import { removerEncargo } from "@/modules/rh/encargos/actions";
 import type { EncargoLista } from "@/modules/rh/encargos/queries";
@@ -64,7 +65,6 @@ export function EncargosTabela({
   // Facetado: o status só oferece o que existe na lista filtrada pelos outros
   // (ver `_shared/filtros-facetados`).
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       encargos,
       {
@@ -75,7 +75,17 @@ export function EncargosTabela({
       },
       [
         (encargo) => naFaixa(encargo.percentual, percentualDe, percentualAte),
-        (encargo) => !termo || encargo.nome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (encargo) =>
+          casaBusca(
+            textoPesquisavel(
+              encargo.nome,
+              encargo.grupoRecolhimento,
+              formatarPercentual(encargo.percentual, 3),
+              encargo.ativo ? "ativo" : "inativo",
+            ),
+            busca,
+          ),
       ],
     );
   }, [encargos, busca, status, percentualDe, percentualAte]);
@@ -180,7 +190,7 @@ export function EncargosTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por nome",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -190,7 +200,7 @@ export function EncargosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome"
+                placeholder="Nome, grupo ou percentual"
               />
             ),
           },

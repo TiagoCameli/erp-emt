@@ -331,7 +331,7 @@ export function DiariasTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por diarista",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -341,7 +341,7 @@ export function DiariasTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por diarista"
+                placeholder="Diarista, obra, valor, data ou mês"
               />
             ),
           },

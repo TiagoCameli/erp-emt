@@ -17,6 +17,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
@@ -72,7 +73,6 @@ export function SaidasTabela({
   );
 
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       saidas,
       {
@@ -81,11 +81,23 @@ export function SaidasTabela({
       },
       [
         (saida) => saida.excluida === (situacao === "excluidas"),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (saida) =>
-          !termo ||
-          saida.insumoNome.toLowerCase().includes(termo) ||
-          saida.centroCustoRotulo.toLowerCase().includes(termo) ||
-          (saida.observacoes ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              saida.insumoNome,
+              saida.centroCustoRotulo,
+              saida.localNome,
+              saida.observacoes,
+              saida.quantidade,
+              saida.unidade,
+              saida.custoUnitario,
+              saida.motivoExclusao,
+              { valor: saida.valorTotal },
+              { data: saida.data },
+            ),
+            busca,
+          ),
       ],
     );
   }, [saidas, busca, local, centro, situacao]);
@@ -179,7 +191,7 @@ export function SaidasTabela({
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por material ou centro de custo" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Material, centro, local, valor ou data" />
             ),
           },
           {
