@@ -32,6 +32,7 @@ import {
 } from "@/modules/financeiro/lancamentos/hierarquia-centro";
 import type { PagamentoPlanilha } from "@/modules/financeiro/pagamentos/planilha";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { ORIGEM_APLICACAO } from "@/modules/financeiro/lancamentos/schemas";
 import {
   ROTULO_BANCO,
   SEM_CENTRO_DE_CUSTO,
@@ -368,6 +369,9 @@ export async function listarParcelasAPagar(): Promise<ParcelaAprovada[]> {
       .in("status", STATUS_PARCELA_ABERTA)
       .eq("lancamentos.tipo", "a_pagar")
       .neq("lancamentos.status", "cancelado")
+      // Lançamento de aplicação não é conta a pagar (ver ORIGEM_APLICACAO). Hoje
+      // ele já nasce pago e nem chegaria aqui; a trava é para não depender disso.
+      .neq("lancamentos.origem", ORIGEM_APLICACAO)
       .order("data_vencimento", { ascending: true, nullsFirst: false })
       // Desempate obrigatório: sem ele, vencimentos iguais (e são muitos, a
       // carga trouxe parcelas em bloco) mudam de ordem entre uma faixa e a

@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
+import { ORIGEM_APLICACAO } from "@/modules/financeiro/lancamentos/schemas";
 import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
 import {
   facetasNoServidor,
@@ -283,6 +284,8 @@ export async function listarParcelasAReceber(): Promise<ParcelaAReceber[]> {
       .in("status", STATUS_PARCELA_ABERTA)
       .eq("lancamentos.tipo", "a_receber")
       .neq("lancamentos.status", "cancelado")
+      // Rendimento de aplicação não é conta a receber (ver ORIGEM_APLICACAO).
+      .neq("lancamentos.origem", ORIGEM_APLICACAO)
       .order("data_vencimento", { ascending: true, nullsFirst: false })
       // Desempate obrigatório: sem ele, vencimentos iguais mudam de ordem entre
       // uma faixa e a seguinte, repetindo linha numa página e perdendo em outra.
@@ -341,6 +344,7 @@ async function idsClientesPorNome(
 /** O pedaço do builder do PostgREST que os filtros dos recebidos usam. */
 interface ConsultaFiltravelRecebidas<T> {
   eq: (coluna: string, valor: string) => T;
+  neq: (coluna: string, valor: string) => T;
   gte: (coluna: string, valor: string | number) => T;
   lte: (coluna: string, valor: string | number) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
@@ -362,7 +366,9 @@ function aplicarFiltrosRecebidas<T extends ConsultaFiltravelRecebidas<T>>(
   idsClientes: string[],
   subarvore: readonly string[] | null,
 ): T {
-  let consulta = consultaInicial;
+  // Rendimento de aplicação é `a_receber` pago, mas não é recebimento: nenhum
+  // cliente pagou. Fica na aba Aplicações (ver ORIGEM_APLICACAO).
+  let consulta = consultaInicial.neq("lancamentos.origem", ORIGEM_APLICACAO);
   if (subarvore !== null) {
     // O par de Pagamentos (`aplicarCentroDaSubarvore`): o centro mora no rateio
     // do LANÇAMENTO, dois níveis abaixo da parcela, e filtrar embed não-inner
@@ -626,10 +632,12 @@ export async function somarRecebidoNoPeriodo(
   }>((inicio, fim) =>
     supabase
       .from("lancamento_parcelas")
-      .select("valor, valor_liquido, id, lancamentos!inner(tipo, status)")
+      .select("valor, valor_liquido, id, lancamentos!inner(tipo, status, origem)")
       .eq("status", "pago")
       .eq("lancamentos.tipo", "a_receber")
       .neq("lancamentos.status", "cancelado")
+      // O mesmo recorte da aba Recebidos, que este cartão abre.
+      .neq("lancamentos.origem", ORIGEM_APLICACAO)
       .gte("data_pagamento", de)
       .lte("data_pagamento", ate)
       .order("id", { ascending: true })

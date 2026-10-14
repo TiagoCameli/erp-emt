@@ -44,6 +44,12 @@ interface Chamada {
 
 class ConsultaFalsa implements ConsultaFiltravel<ConsultaFalsa> {
   chamadas: Chamada[] = [];
+  /**
+   * O `neq` fica à parte: é o recorte que vale SEMPRE (lançamento de aplicação
+   * fora), não um filtro escolhido. Misturado, toda asserção de lista exata
+   * abaixo teria que repeti-lo.
+   */
+  semprePresentes: Chamada[] = [];
 
   private registrar(metodo: string, coluna: string, valor: unknown) {
     this.chamadas.push({ metodo, coluna, valor });
@@ -52,6 +58,10 @@ class ConsultaFalsa implements ConsultaFiltravel<ConsultaFalsa> {
 
   eq(coluna: string, valor: string) {
     return this.registrar("eq", coluna, valor);
+  }
+  neq(coluna: string, valor: string) {
+    this.semprePresentes.push({ metodo: "neq", coluna, valor });
+    return this;
   }
   in(coluna: string, valores: readonly string[]) {
     return this.registrar("in", coluna, [...valores]);
@@ -82,6 +92,21 @@ function montar(filtros: Parameters<typeof aplicarFiltrosPagas>[1]) {
 }
 
 describe("aplicarFiltrosPagas", () => {
+  it("tira SEMPRE o lançamento gerado pela aba Aplicações", () => {
+    // Rendimento negativo e ajuste de abertura são `a_pagar` pagos, mas não são
+    // pagamento. Com filtro nenhum, e com a origem pedida por nome, eles saem.
+    const esperado = [
+      { metodo: "neq", coluna: "lancamentos.origem", valor: "aplicacao" },
+    ];
+    expect(
+      aplicarFiltrosPagas(new ConsultaFalsa(), {}, []).semprePresentes,
+    ).toEqual(esperado);
+    expect(
+      aplicarFiltrosPagas(new ConsultaFalsa(), { origem: "aplicacao" }, [])
+        .semprePresentes,
+    ).toEqual(esperado);
+  });
+
   it("manda os DOIS fornecedores num in, na coluna do lançamento", () => {
     const chamadas = montar({ fornecedorIds: [FORN_A, FORN_B] });
 
