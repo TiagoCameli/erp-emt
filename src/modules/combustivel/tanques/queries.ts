@@ -3,6 +3,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import type { MovimentoTanque } from "@/modules/combustivel/tanques/calculo";
+import { UNIDADES_CAPACIDADE, type UnidadeCapacidade } from "@/modules/combustivel/tanques/unidades";
 
 /**
  * Leitura dos tanques. Toda lista passa por `todasAsLinhas` (o PostgREST corta
@@ -20,7 +21,12 @@ export interface TanqueLinha {
   id: string;
   nome: string;
   apelido: string | null;
+  /** Volume do tanque, sempre em litros. */
   capacidade: number;
+  /** Unidade em que a capacidade foi digitada (só o cadastro lê). */
+  capacidadeUnidade: UnidadeCapacidade;
+  /** Densidade do material (kg/L): converte massa em volume no tanque de material. */
+  densidade: number | null;
   /** Cache do gatilho (fn_comb_recalcular_nivel). */
   nivel: number;
   /** No tanque de material é o material atual (o cache é o mesmo). */
@@ -37,7 +43,7 @@ export interface TanqueLinha {
   ativo: boolean;
 }
 
-const SELECT_TANQUE = `id, nome, apelido, capacidade_litros, nivel_atual_litros, combustivel_atual_id,
+const SELECT_TANQUE = `id, nome, apelido, capacidade_litros, capacidade_unidade, densidade_kg_l, nivel_atual_litros, combustivel_atual_id,
   uso, eh_externo, proprietario_id, observacoes, ativo,
   insumos(nome, unidades_medida(sigla)),
   fornecedores(razao_social, nome_fantasia)`;
@@ -47,6 +53,8 @@ interface TanqueBruto {
   nome: string;
   apelido: string | null;
   capacidade_litros: number;
+  capacidade_unidade: string;
+  densidade_kg_l: number | null;
   nivel_atual_litros: number;
   combustivel_atual_id: string | null;
   uso: string;
@@ -64,11 +72,16 @@ function paraTanque(linha: TanqueBruto): TanqueLinha {
     nome: linha.nome,
     apelido: linha.apelido,
     capacidade: Number(linha.capacidade_litros),
+    capacidadeUnidade: (UNIDADES_CAPACIDADE as readonly string[]).includes(linha.capacidade_unidade)
+      ? (linha.capacidade_unidade as UnidadeCapacidade)
+      : "L",
+    densidade: linha.densidade_kg_l === null ? null : Number(linha.densidade_kg_l),
     nivel: Number(linha.nivel_atual_litros),
     combustivelId: linha.combustivel_atual_id,
     combustivelNome: linha.insumos?.nome ?? null,
     uso: linha.uso === "material" ? "material" : "combustivel",
-    unidade: linha.uso === "material" ? (linha.insumos?.unidades_medida?.sigla ?? null) : "L",
+    // Vazio, o tanque de material fala na unidade em que a capacidade foi cadastrada.
+    unidade: linha.uso === "material" ? (linha.insumos?.unidades_medida?.sigla ?? linha.capacidade_unidade) : "L",
     ehExterno: linha.eh_externo,
     proprietarioId: linha.proprietario_id,
     proprietarioNome: linha.fornecedores ? nomeFornecedor(linha.fornecedores) : null,

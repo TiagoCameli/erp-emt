@@ -6,6 +6,7 @@ import {
   paraLitros,
   TETO_NUMERIC_14_4,
 } from "@/modules/combustivel/transferencias/schemas";
+import { emLitros, ehUnidadeDeMassa, UNIDADES_CAPACIDADE } from "@/modules/combustivel/tanques/unidades";
 
 /**
  * Cadastro de tanque. Só as colunas que o grant deixa gravar: nome, apelido,
@@ -18,6 +19,10 @@ import {
  */
 
 const MENSAGEM_CAPACIDADE = `Informe a capacidade em litros, zero ou mais, com até ${CASAS_TAXA} casas`;
+const MENSAGEM_CAPACIDADE_FORM = `Informe a capacidade, zero ou mais, com até ${CASAS_TAXA} casas`;
+const MENSAGEM_DENSIDADE = "Informe a densidade do material em kg/L, maior que zero (betume fica perto de 1,00)";
+// numeric(8,4) da coluna densidade_kg_l.
+const TETO_DENSIDADE = 9999.9999;
 const MENSAGEM_DONO = "Selecione o dono do tanque de terceiro";
 
 // Como a origem (e o CHECK tanques_nome_nao_vazio): só não pode ser vazio.
@@ -59,13 +64,29 @@ export const USOS_TANQUE = ["combustivel", "material"] as const;
 export type UsoTanque = (typeof USOS_TANQUE)[number];
 const MENSAGEM_MATERIAL_EXTERNO = "Tanque de material é da EMT: tanque de terceiro é só de combustível";
 
+/** Densidade digitada (kg/L), ou null se não for válida. */
+export function densidadeParaNumero(texto: string): number | null {
+  const numero = paraLitros(texto);
+  if (numero === null || !(numero > 0) || numero > TETO_DENSIDADE) return null;
+  return numero;
+}
+
+const densidadeNumero = z
+  .number({ error: MENSAGEM_DENSIDADE })
+  .gt(0, { error: MENSAGEM_DENSIDADE })
+  .max(TETO_DENSIDADE, { error: MENSAGEM_DENSIDADE })
+  .refine((valor) => casasDecimais(valor) <= CASAS_TAXA, { error: MENSAGEM_DENSIDADE });
+
 export const tanqueFormSchema = z
   .object({
     nome: nomeSchema,
     apelido: apelidoSchema,
+    /** Na unidade escolhida em `capacidadeUnidade`; a action recebe em litros. */
     capacidade: z.string().trim().refine((valor) => capacidadeParaNumero(valor) !== null, {
-      error: MENSAGEM_CAPACIDADE,
+      error: MENSAGEM_CAPACIDADE_FORM,
     }),
+    capacidadeUnidade: z.enum(UNIDADES_CAPACIDADE),
+    densidade: z.string().trim(),
     uso: z.enum(USOS_TANQUE),
     ehExterno: z.boolean(),
     proprietarioId: z.string().trim(),
@@ -75,6 +96,9 @@ export const tanqueFormSchema = z
   .superRefine((dados, contexto) => {
     if (dados.uso === "material" && dados.ehExterno) {
       contexto.addIssue({ code: "custom", path: ["ehExterno"], message: MENSAGEM_MATERIAL_EXTERNO });
+    }
+    if (dados.uso === "material" && densidadeParaNumero(dados.densidade) === null) {
+      contexto.addIssue({ code: "custom", path: ["densidade"], message: MENSAGEM_DENSIDADE });
     }
     if (!dados.ehExterno) return;
     if (!z.guid().safeParse(dados.proprietarioId).success) {
@@ -89,7 +113,10 @@ export const tanqueSchema = z
   .object({
     nome: nomeSchema,
     apelido: apelidoSchema,
+    /** Sempre em litros (capacidade_litros). */
     capacidade: capacidadeNumero,
+    capacidadeUnidade: z.enum(UNIDADES_CAPACIDADE),
+    densidade: densidadeNumero.nullable(),
     uso: z.enum(USOS_TANQUE),
     ehExterno: z.boolean(),
     proprietarioId: z.guid({ error: MENSAGEM_DONO }).nullable(),
@@ -103,16 +130,33 @@ export const tanqueSchema = z
   .refine((dados) => !(dados.uso === "material" && dados.ehExterno), {
     error: MENSAGEM_MATERIAL_EXTERNO,
     path: ["ehExterno"],
+  })
+  // Mesmo CHECK do banco (tanques_capacidade_em_massa_tem_densidade).
+  .refine((dados) => !ehUnidadeDeMassa(dados.capacidadeUnidade) || dados.densidade !== null, {
+    error: MENSAGEM_DENSIDADE,
+    path: ["densidade"],
   });
 
 export type TanqueInput = z.infer<typeof tanqueSchema>;
 
-/** Formulário validado para o contrato da action. Tanque da EMT perde o dono. */
+/**
+ * Formulário validado para o contrato da action. Tanque da EMT perde o dono. A capacidade
+ * vai em litros: no tanque de material a pessoa digita em L, m³, kg ou t, e massa vira
+ * volume pela densidade. Tanque de combustível é sempre em litros e sem densidade.
+ */
 export function tanqueDoForm(form: TanqueFormInput): TanqueInput {
+  const material = form.uso === "material";
+  const densidade = material ? densidadeParaNumero(form.densidade) : null;
+  const unidade = material ? form.capacidadeUnidade : "L";
+  const digitada = capacidadeParaNumero(form.capacidade);
+  const litros = digitada === null ? null : emLitros(digitada, unidade, densidade);
   return {
     nome: form.nome.trim(),
     apelido: form.apelido.trim(),
-    capacidade: capacidadeParaNumero(form.capacidade) ?? Number.NaN,
+    // 4 casas: o numeric(14,4) da coluna. 30 t a 1,03 kg/L dá 29.126,2136 L.
+    capacidade: litros === null ? Number.NaN : Math.round(litros * 10_000) / 10_000,
+    capacidadeUnidade: unidade,
+    densidade,
     uso: form.uso,
     ehExterno: form.ehExterno,
     proprietarioId: form.ehExterno && form.proprietarioId !== "" ? form.proprietarioId : null,

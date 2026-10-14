@@ -9111,7 +9111,9 @@ export type Database = {
           apelido: string | null;
           ativo: boolean;
           capacidade_litros: number;
+          capacidade_unidade: string;
           combustivel_atual_id: string | null;
+          densidade_kg_l: number | null;
           created_at: string;
           created_by: string | null;
           eh_externo: boolean;
@@ -9127,7 +9129,9 @@ export type Database = {
           apelido?: string | null;
           ativo?: boolean;
           capacidade_litros?: number;
+          capacidade_unidade?: string;
           combustivel_atual_id?: string | null;
+          densidade_kg_l?: number | null;
           created_at?: string;
           created_by?: string | null;
           eh_externo?: boolean;
@@ -9143,7 +9147,9 @@ export type Database = {
           apelido?: string | null;
           ativo?: boolean;
           capacidade_litros?: number;
+          capacidade_unidade?: string;
           combustivel_atual_id?: string | null;
+          densidade_kg_l?: number | null;
           created_at?: string;
           created_by?: string | null;
           eh_externo?: boolean;
