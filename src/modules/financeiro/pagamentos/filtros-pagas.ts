@@ -15,7 +15,10 @@ import { z } from "zod";
 
 import { idSchema } from "@/lib/id";
 import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
-import { ORIGENS_LANCAMENTO } from "@/modules/financeiro/lancamentos/schemas";
+import {
+  ORIGEM_APLICACAO,
+  ORIGENS_LANCAMENTO,
+} from "@/modules/financeiro/lancamentos/schemas";
 
 import type { FiltrosParcelasPagas } from "@/modules/financeiro/pagamentos/queries";
 
@@ -30,6 +33,7 @@ export function padraoBusca(termo: string): string {
 /** O pedaço do builder do PostgREST que este módulo usa. */
 export interface ConsultaFiltravel<T> {
   eq: (coluna: string, valor: string) => T;
+  neq: (coluna: string, valor: string) => T;
   gte: (coluna: string, valor: string | number) => T;
   lte: (coluna: string, valor: string | number) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
@@ -55,7 +59,10 @@ export function aplicarFiltrosPagas<T extends ConsultaFiltravel<T>>(
   filtros: FiltrosParcelasPagas,
   idsFornecedoresDaBusca: string[],
 ): T {
-  let consulta = consultaInicial;
+  // Rendimento negativo e ajuste de abertura de aplicação são `a_pagar` pagos,
+  // mas não são pagamento: ninguém recebeu esse dinheiro. Ficam na aba
+  // Aplicações. `origem` é not null, então o `neq` não perde linha nenhuma.
+  let consulta = consultaInicial.neq("lancamentos.origem", ORIGEM_APLICACAO);
 
   if (filtros.contaBancariaIds && filtros.contaBancariaIds.length > 0) {
     consulta = consulta.in("conta_bancaria_id", filtros.contaBancariaIds);

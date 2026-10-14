@@ -882,6 +882,42 @@ export const ORIGENS_LANCAMENTO = [
 
 export type OrigemLancamento = (typeof ORIGENS_LANCAMENTO)[number];
 
+/**
+ * A origem dos lançamentos que a aba Aplicações gera sozinha a cada posição
+ * (rendimento, rendimento negativo, ajuste de abertura). Eles existem para o
+ * saldo da subconta e o resultado financeiro fecharem, mas não são conta: nenhum
+ * fornecedor foi pago e nenhum cliente pagou. Por isso saem das filas e dos
+ * históricos de Pagamentos e Recebimentos, da lista comum de Lançamentos e do
+ * cartão "Pago no mês" (Tiago, 14/10/2026).
+ */
+export const ORIGEM_APLICACAO = "aplicacao" satisfies OrigemLancamento;
+
+/**
+ * A lista comum esconde os lançamentos que a aba Aplicações gera (ver
+ * `ORIGEM_APLICACAO`): eles não são conta a pagar nem a receber.
+ *
+ * Voltam quando o filtro espelha um número que os soma: a origem pedida por
+ * nome, a categoria e a natureza (drill do DRE, onde o rendimento é resultado
+ * financeiro), o recorte (fluxo, aging) e a conta bancária (o extrato da
+ * subconta de investimentos só fecha com eles). Lista que esconde o que a
+ * célula somou não é o mesmo número.
+ */
+export function escondeAplicacao(params: {
+  origem?: string;
+  categoriaIds?: readonly string[];
+  naturezas?: readonly string[];
+  recorte?: unknown;
+  contaBancariaId?: string;
+}): boolean {
+  return !(
+    params.origem ||
+    params.categoriaIds?.length ||
+    params.naturezas?.length ||
+    params.recorte ||
+    params.contaBancariaId
+  );
+}
+
 export const ROTULO_ORIGEM_LANCAMENTO: Record<OrigemLancamento, string> = {
   oc: "Ordem de compra",
   manual: "Manual",

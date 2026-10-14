@@ -45,10 +45,12 @@ import {
   type StatusParcela,
   type TipoLancamento,
 } from "@/modules/financeiro/_shared/formato";
-import type {
-  FiltroAtraso,
-  FiltroRevisao,
-  OrigemLancamento,
+import {
+  escondeAplicacao,
+  ORIGEM_APLICACAO,
+  type FiltroAtraso,
+  type FiltroRevisao,
+  type OrigemLancamento,
 } from "@/modules/financeiro/lancamentos/schemas";
 import { LIMITE_LOTE } from "@/modules/financeiro/lancamentos/lote";
 import {
@@ -1261,8 +1263,13 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
   params: FiltrosDaConsulta,
   resolvidos: FiltrosResolvidos,
   hojeISO: string,
+  /** A faceta de Origem lista a aplicação mesmo quando a lista a esconde. */
+  semEsconderAplicacao = false,
 ): T {
   let consulta = consultaInicial;
+  if (!semEsconderAplicacao && escondeAplicacao(params)) {
+    consulta = consulta.neq("origem", ORIGEM_APLICACAO);
+  }
   const {
     idsFiltrados,
     subarvoreCentro,
@@ -1681,6 +1688,7 @@ export async function facetasLancamentos(
           recorte,
           resolvidos,
           hojeISO,
+          exceto === "origem",
         )
           .order("id")
           .range(de, ate),
