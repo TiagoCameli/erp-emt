@@ -1,20 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { X } from "lucide-react";
+import { Move, X } from "lucide-react";
 
+import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
-import type { LocalidadeMapa } from "@/modules/mapa/tipos";
+import { TIPOS_LOCAL, type LocalidadeMapa } from "@/modules/mapa/tipos";
 
 /**
- * A ficha do local tocado no mapa: o que está ali (tanques, depósitos) e o tamanho da área, que
- * decide até onde uma máquina solta "cai" no local (pátio = parado, oficina = conserto). O raio
- * muda no mapa enquanto a pessoa mexe (prévia) e só grava em "Salvar área".
+ * A ficha do local tocado no mapa: nome e tipos (um local pode ser pátio, jazida e oficina ao
+ * mesmo tempo; o primeiro é o principal e decide o estado da máquina que cai nele), o que está ali
+ * (tanques, depósitos), "Mover no mapa" e o tamanho da área, que decide até onde uma máquina
+ * solta "cai" no local. O raio muda no mapa enquanto a pessoa mexe (prévia) e só grava em
+ * "Salvar área".
  */
+
+const OPCOES_TIPO = TIPOS_LOCAL.map((t) => ({
+  valor: t,
+  rotulo: rotuloTipoLocalidade(t),
+}));
 
 const RAIO_MIN = 10;
 const RAIO_MAX = 5000;
@@ -30,6 +38,8 @@ export function FichaLocal({
   onFechar,
   onPrevia,
   onSalvar,
+  onSalvarDados,
+  onMover,
 }: {
   local: LocalidadeMapa;
   /** Tanques e depósitos ligados ao local. */
@@ -43,7 +53,19 @@ export function FichaLocal({
   onPrevia: (raioM: number | null) => void;
   /** null volta ao padrão. false = recusou (o toast já avisou). */
   onSalvar: (raioM: number | null) => Promise<boolean>;
+  /** Nome e tipos. false = recusou. */
+  onSalvarDados: (nome: string, tipos: string[]) => Promise<boolean>;
+  /** Escolher o novo ponto do local no mapa. */
+  onMover: () => void;
 }) {
+  const [nome, setNome] = React.useState(local.nome);
+  const [tipos, setTipos] = React.useState<string[]>(local.tipos);
+  const idNome = React.useId();
+  const idTipos = React.useId();
+  const dadosMudaram =
+    nome.trim() !== local.nome ||
+    tipos.length !== local.tipos.length ||
+    tipos.some((t, i) => t !== local.tipos[i]);
   const atual = local.raioM ?? padraoM;
   const [raio, setRaio] = React.useState(atual);
   const [texto, setTexto] = React.useState(String(Math.round(atual)));
@@ -63,7 +85,7 @@ export function FichaLocal({
         <div className="min-w-0">
           <p className="text-corpo font-semibold">{local.nome}</p>
           <p className="text-detalhe text-muted-foreground">
-            {rotuloTipoLocalidade(local.tipo)}
+            {local.tipos.map(rotuloTipoLocalidade).join(" · ")}
           </p>
         </div>
         <Button
@@ -76,6 +98,56 @@ export function FichaLocal({
           <X />
         </Button>
       </div>
+
+      {podeEditar ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={idNome}>Nome</Label>
+            <Input
+              id={idNome}
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              maxLength={300}
+              disabled={salvando}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={idTipos}>Tipos (o primeiro é o principal)</Label>
+            <Combobox
+              id={idTipos}
+              valor=""
+              onValorChange={() => undefined}
+              valores={tipos}
+              onValoresChange={setTipos}
+              opcoes={OPCOES_TIPO}
+              placeholder="Escolha os tipos"
+              disabled={salvando}
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              disabled={
+                !dadosMudaram || salvando || !nome.trim() || tipos.length === 0
+              }
+              onClick={() => void onSalvarDados(nome.trim(), tipos)}
+            >
+              Salvar nome e tipos
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={salvando}
+              onClick={onMover}
+            >
+              <Move />
+              Mover no mapa
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {itens.length > 0 ? (
         <ul className="flex flex-col gap-0.5 text-detalhe">

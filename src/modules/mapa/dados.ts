@@ -277,6 +277,16 @@ function modelo(m: Linha): Modelo3d {
 }
 
 /** Converte o JSON da RPC no estado tipado da tela, ou null quando o formato não é o esperado. */
+/** Lista de tipos do local; a RPC antiga (sem `tipos`) vira a lista só com o `tipo`. */
+function tiposDoLocal(tipos: unknown, tipo: unknown): string[] {
+  const lista = Array.isArray(tipos)
+    ? tipos.filter((t): t is string => typeof t === "string" && t !== "")
+    : [];
+  if (lista.length > 0) return lista;
+  const principal = texto(tipo);
+  return principal ? [principal] : [];
+}
+
 export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
   const b = objeto(bruto);
   if (!b || !Array.isArray(b.equipamentos) || !Array.isArray(b.trechos))
@@ -315,6 +325,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
         fornecedorId: textoOuNulo(l.fornecedor_id),
         pos,
         raioM: numeroOuNulo(l.raio_m),
+        tipos: tiposDoLocal(l.tipos, l.tipo),
       };
       return [item];
     }),
@@ -349,6 +360,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       id: texto(l.id),
       nome: texto(l.nome),
       tipo: texto(l.tipo),
+      tipos: tiposDoLocal(l.tipos, l.tipo),
     })),
   };
 }

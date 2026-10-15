@@ -11205,6 +11205,10 @@ export type Database = {
         Args: { p_id: string; p_heading: number | null };
         Returns: undefined;
       };
+      fn_mapa_local_editar: {
+        Args: { p_id: string | null; p_nome: string | null; p_tipos: string[] | null; p_lng: number | null; p_lat: number | null };
+        Returns: string;
+      };
       fn_mapa_local_raio: {
         Args: { p_id: string; p_raio: number | null };
         Returns: undefined;
@@ -11247,6 +11251,18 @@ export type Database = {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
       };
+      fn_mapa_obra_desenhar: {
+        Args: {
+          p_obra: string;
+          p_forma: string;
+          p_geojson: Json;
+          p_rodovia: string | null;
+          p_km_inicial: number | null;
+          p_km_final: number | null;
+          p_substituir: boolean;
+        };
+        Returns: string;
+      };
       fn_mapa_obra_posicionar: {
         Args: { p_obra: string; p_lng: number; p_lat: number };
         Returns: undefined;
@@ -11254,6 +11270,10 @@ export type Database = {
       fn_mapa_mover_equipamentos: {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
+      };
+      fn_mapa_obra_tirar: {
+        Args: { p_obra: string };
+        Returns: undefined;
       };
       fn_mapa_resolver_destino: {
         Args: { p_lng: number; p_lat: number };

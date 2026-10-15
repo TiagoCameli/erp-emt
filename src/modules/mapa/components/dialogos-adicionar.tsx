@@ -38,7 +38,7 @@ export type PedidoColocar =
       /** Dá ponto a um local que já existe; sem ele, cria um novo com nome e tipo. */
       localidadeId?: string;
       nome?: string;
-      tipoLocal?: TipoLocal;
+      tipos?: TipoLocal[];
       vincular?: { alvo: "tanque" | "deposito"; id: string };
     };
 
@@ -83,16 +83,24 @@ function Escolha<T extends string>({
   );
 }
 
+/** Como a obra entra no mapa. */
+export type FormaObra = "trecho" | "area" | "ponto";
+
 export function DialogoAdicionarObra({
   obras,
+  desenhoDe,
   onCancelar,
-  onEscolherNoMapa,
+  onEscolher,
 }: {
   obras: readonly ObraMapa[];
+  /** Quantos trechos e áreas a obra já tem no mapa. */
+  desenhoDe: (obraId: string) => { trechos: number; areas: number };
   onCancelar: () => void;
-  onEscolherNoMapa: (obra: ObraMapa) => void;
+  onEscolher: (obra: ObraMapa, forma: FormaObra, substituir: boolean) => void;
 }) {
   const [obraId, setObraId] = React.useState("");
+  const [forma, setForma] = React.useState<FormaObra>("trecho");
+  const [substituir, setSubstituir] = React.useState(true);
   const idObra = React.useId();
   const opcoes = React.useMemo(
     () =>
@@ -103,6 +111,18 @@ export function DialogoAdicionarObra({
     [obras],
   );
   const escolhida = obras.find((o) => o.id === obraId) ?? null;
+  const desenho = escolhida
+    ? desenhoDe(escolhida.id)
+    : { trechos: 0, areas: 0 };
+  const jaTem =
+    (forma === "trecho" && desenho.trechos > 0) ||
+    (forma === "area" && desenho.areas > 0);
+
+  const trocarObra = (id: string) => {
+    setObraId(id);
+    const o = obras.find((x) => x.id === id);
+    if (o) setForma(o.tipoObra === "edificacao" ? "area" : "trecho");
+  };
 
   return (
     <ConfirmDialog
@@ -111,7 +131,13 @@ export function DialogoAdicionarObra({
         if (!aberto) onCancelar();
       }}
       titulo="Adicionar obra ao mapa"
-      descricao="Escolha a obra e toque no mapa onde ela fica. Obra que já está no mapa muda de lugar."
+      descricao={
+        forma === "trecho"
+          ? "Pavimentação: toque o ponto inicial, as curvas se quiser, e o ponto final."
+          : forma === "area"
+            ? "Edificação: toque os cantos em volta da obra (4 ou mais) e conclua."
+            : "Toque no mapa onde a obra fica."
+      }
       textoConfirmar="Escolher no mapa"
       conteudo={
         <div className="flex flex-col gap-3">
@@ -120,12 +146,33 @@ export function DialogoAdicionarObra({
             <Combobox
               id={idObra}
               valor={obraId}
-              onValorChange={setObraId}
+              onValorChange={trocarObra}
               opcoes={opcoes}
               placeholder="Selecione a obra"
               buscaPlaceholder="Buscar obra"
             />
           </div>
+          <Escolha
+            rotulo="Tipo de obra"
+            valor={forma}
+            onChange={setForma}
+            opcoes={[
+              { valor: "trecho", rotulo: "Pavimentação" },
+              { valor: "area", rotulo: "Edificação" },
+              { valor: "ponto", rotulo: "Só um ponto" },
+            ]}
+          />
+          {jaTem ? (
+            <Escolha
+              rotulo="O desenho que a obra já tem"
+              valor={substituir ? "substituir" : "acrescentar"}
+              onChange={(v) => setSubstituir(v === "substituir")}
+              opcoes={[
+                { valor: "substituir", rotulo: "Substituir" },
+                { valor: "acrescentar", rotulo: "Acrescentar" },
+              ]}
+            />
+          ) : null}
           <p className="text-detalhe text-muted-foreground">
             Obra nova se cadastra em{" "}
             <Link
@@ -143,7 +190,7 @@ export function DialogoAdicionarObra({
           toast.error("Escolha a obra");
           return false;
         }
-        onEscolherNoMapa(escolhida);
+        onEscolher(escolhida, forma, jaTem && substituir);
       }}
     />
   );
@@ -181,7 +228,7 @@ export function DialogoAdicionarLocal({
     podeCriar || semPosicao.length === 0 ? NOVO : (semPosicao[0]?.id ?? NOVO),
   );
   const [nome, setNome] = React.useState("");
-  const [tipo, setTipo] = React.useState<string>("oficina");
+  const [tipos, setTipos] = React.useState<string[]>(["oficina"]);
   const [itemId, setItemId] = React.useState("");
   const [ondeFica, setOndeFica] = React.useState("");
   const ids = {
@@ -256,11 +303,15 @@ export function DialogoAdicionarLocal({
         toast.error("Informe o nome do local");
         return false;
       }
+      if (tipos.length === 0) {
+        toast.error("Escolha ao menos um tipo");
+        return false;
+      }
       onEscolherNoMapa({
         tipo: "local",
         rotulo: nome.trim(),
         nome: nome.trim(),
-        tipoLocal: tipo as TipoLocal,
+        tipos: tipos as TipoLocal[],
       });
       return;
     }
@@ -279,11 +330,15 @@ export function DialogoAdicionarLocal({
       toast.error("Informe o nome do local novo");
       return false;
     }
+    if (tipos.length === 0) {
+      toast.error("Escolha ao menos um tipo");
+      return false;
+    }
     onEscolherNoMapa({
       tipo: "local",
       rotulo: item.nome,
       nome: nome.trim(),
-      tipoLocal: tipo as TipoLocal,
+      tipos: tipos as TipoLocal[],
       vincular: { alvo: oQue, id: item.id },
     });
   };
@@ -307,13 +362,13 @@ export function DialogoAdicionarLocal({
               setItemId("");
               setOndeFica("");
               setNome("");
-              setTipo(
+              setTipos([
                 v === "deposito"
                   ? "deposito"
                   : v === "tanque"
                     ? "patio"
                     : "oficina",
-              );
+              ]);
             }}
             opcoes={[
               { valor: "local", rotulo: "Local" },
@@ -381,12 +436,15 @@ export function DialogoAdicionarLocal({
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor={ids.tipo}>Tipo</Label>
+                <Label htmlFor={ids.tipo}>Tipos</Label>
                 <Combobox
                   id={ids.tipo}
-                  valor={tipo}
-                  onValorChange={setTipo}
+                  valor=""
+                  onValorChange={() => undefined}
+                  valores={tipos}
+                  onValoresChange={setTipos}
                   opcoes={OPCOES_TIPO_LOCAL}
+                  placeholder="Escolha os tipos"
                 />
               </div>
             </div>
@@ -394,6 +452,121 @@ export function DialogoAdicionarLocal({
         </div>
       }
       onConfirmar={confirmar}
+    />
+  );
+}
+
+/**
+ * Fecha o desenho da obra. Pavimentação pede rodovia e km (obrigatórios no banco; vêm 0 e a
+ * extensão desenhada, para corrigir com a quilometragem real); edificação só confirma.
+ */
+export function DialogoConcluirDesenho({
+  obra,
+  forma,
+  extensaoKm,
+  seguiuEstrada,
+  substituir,
+  onCancelar,
+  onConfirmar,
+}: {
+  obra: ObraMapa;
+  forma: "trecho" | "area";
+  extensaoKm: number;
+  /** A linha veio do serviço de rotas (segue a estrada) ou dos pontos tocados. */
+  seguiuEstrada: boolean;
+  substituir: boolean;
+  onCancelar: () => void;
+  onConfirmar: (dados: {
+    rodovia: string;
+    kmInicial: number;
+    kmFinal: number;
+  }) => Promise<boolean>;
+}) {
+  const [rodovia, setRodovia] = React.useState("");
+  const [kmInicial, setKmInicial] = React.useState("0");
+  const [kmFinal, setKmFinal] = React.useState(
+    extensaoKm.toFixed(1).replace(".", ","),
+  );
+  const ids = {
+    rodovia: React.useId(),
+    ini: React.useId(),
+    fim: React.useId(),
+  };
+  // "9,5" e "1.234,5" (vírgula decimal) ou "9.5" (ponto decimal, sem vírgula): nunca 95.
+  const numero = (t: string) => {
+    const limpo = t.trim();
+    return limpo.includes(",")
+      ? Number(limpo.replace(/\./g, "").replace(",", "."))
+      : Number(limpo);
+  };
+
+  return (
+    <ConfirmDialog
+      aberto
+      onAbertoChange={(aberto) => {
+        if (!aberto) onCancelar();
+      }}
+      titulo={
+        forma === "trecho"
+          ? `Pavimentação de ${obra.nome}`
+          : `Edificação de ${obra.nome}`
+      }
+      descricao={
+        forma === "trecho"
+          ? `${extensaoKm.toFixed(1).replace(".", ",")} km desenhados${seguiuEstrada ? ", seguindo a estrada" : " pelos pontos tocados"}.${substituir ? " Substitui o traçado que a obra já tinha." : ""}`
+          : `Área fechada pelos cantos tocados.${substituir ? " Substitui a área que a obra já tinha." : ""}`
+      }
+      textoConfirmar="Salvar"
+      conteudo={
+        forma === "trecho" ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5 sm:col-span-3">
+              <Label htmlFor={ids.rodovia}>Rodovia</Label>
+              <Input
+                id={ids.rodovia}
+                value={rodovia}
+                onChange={(e) => setRodovia(e.target.value)}
+                placeholder="ex.: AC-405"
+                maxLength={60}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={ids.ini}>Km inicial</Label>
+              <Input
+                id={ids.ini}
+                inputMode="decimal"
+                value={kmInicial}
+                onChange={(e) => setKmInicial(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={ids.fim}>Km final</Label>
+              <Input
+                id={ids.fim}
+                inputMode="decimal"
+                value={kmFinal}
+                onChange={(e) => setKmFinal(e.target.value)}
+              />
+            </div>
+          </div>
+        ) : undefined
+      }
+      onConfirmar={() => {
+        const ini = numero(kmInicial);
+        const fim = numero(kmFinal);
+        if (
+          forma === "trecho" &&
+          (!Number.isFinite(ini) || !Number.isFinite(fim))
+        ) {
+          toast.error("Km inicial e final precisam ser números");
+          return false;
+        }
+        return onConfirmar({
+          rodovia: rodovia.trim(),
+          kmInicial: ini,
+          kmFinal: fim,
+        });
+      }}
     />
   );
 }
