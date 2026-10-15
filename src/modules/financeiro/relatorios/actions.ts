@@ -30,6 +30,7 @@ import {
   type ParametrosUrl,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
+import { lerPeriodoFornecedores } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import {
   abaAging,
   abaInvestimentos,
@@ -40,6 +41,8 @@ import {
   abaExtratoFornecedor,
   abaFluxoCaixa,
   abaPosicaoBancaria,
+  abaRankingFornecedores,
+  abasSociosLigadas,
 } from "@/modules/financeiro/relatorios/planilha-abas";
 import {
   montarPlanilhaDeRelatorio,
@@ -62,6 +65,8 @@ import {
   mesesDeCompetencia,
   posicaoBancaria,
   primeirosMesesDosCentros,
+  rankingFornecedores,
+  relatorioSociosLigadas,
 } from "@/modules/financeiro/relatorios/queries";
 import { lerPeriodoInvestimentos } from "@/modules/financeiro/relatorios/investimentos";
 import type { RelatorioId } from "@/modules/financeiro/relatorios/relatorios";
@@ -362,7 +367,14 @@ async function abaDoRelatorio(
       );
     }
 
-    case "socios-ligadas":
+    case "socios-ligadas": {
+      // Três abas (sócios, sócios mês a mês, ligadas) numa escrita só: o
+      // contrato desta função é uma escrita por relatório.
+      const abas = abasSociosLigadas(await relatorioSociosLigadas());
+      return (workbook) => {
+        for (const escrever of abas) escrever(workbook);
+      };
+    }
     case "aquisicoes":
     case "custos-indiretos":
     case "rateio-indireto":
@@ -372,9 +384,14 @@ async function abaDoRelatorio(
     case "extrato-fornecedor": {
       const fornecedorIds = lerFornecedoresDaUrl(params.fornecedor);
       if (fornecedorIds.length === 0) {
-        // Sem fornecedor escolhido a tela não mostra extrato nenhum, então
-        // exportar traria a base inteira de a pagar com a cara de um extrato.
-        return null;
+        // Sem fornecedor escolhido a tela mostra o RANKING, e é ele que vai para
+        // a planilha (a base inteira de a pagar com cara de extrato, não).
+        const escolha = lerPeriodoFornecedores(params, mesCorrente());
+        const periodo = periodoDoModo(escolha);
+        return abaRankingFornecedores(
+          await rankingFornecedores(pontasDaRpc(periodo)),
+          descreverPeriodo(periodo, escolha.modo),
+        );
       }
       return abaExtratoFornecedor(
         await extratoPorFornecedor({ fornecedorIds }),

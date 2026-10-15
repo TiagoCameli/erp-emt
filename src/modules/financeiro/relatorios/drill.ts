@@ -425,6 +425,33 @@ export function drillAquisicao({ centroId }: { centroId: string }): string {
   });
 }
 
+/**
+ * Sócios e ligadas: os lançamentos de distribuição (sócio) ou de mútuo
+ * (ligada) de um centro, do lado que a célula somou. Mesmos cortes de
+ * `fn_rel_socios_ligadas`: a natureza vem pela categoria do RATEIO, e o
+ * cancelado fica fora. Sem `periodo`, a lista abre desde o início, como o
+ * acumulado.
+ */
+export function drillSocioLigada({
+  centroId,
+  natureza,
+  tipo,
+  periodo,
+}: {
+  centroId: string;
+  natureza: "distribuicao" | "mutuo";
+  tipo: TipoLancamentoRecorte;
+  periodo?: PeriodoCompetencia;
+}): string {
+  return montar({
+    centro: centroId,
+    ...(periodo ? periodoNaUrl(periodo) : {}),
+    tipo,
+    sem_cancelado: "1",
+    natureza,
+  });
+}
+
 /** O detalhe de um lançamento (a cota de consórcio). */
 export function detalheLancamento(lancamentoId: string): string {
   return `${ROTA_LANCAMENTOS}/${lancamentoId}`;

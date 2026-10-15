@@ -44,8 +44,14 @@ import {
   type LinhaPrazoAVencer,
   type PrazoFaixa,
 } from "@/modules/financeiro/relatorios/calculo";
-import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
+import {
+  montarSociosLigadas,
+  type SocioLigadaLinha,
+  type SocioLigadaMes,
+  type SociosLigadasRelatorio,
+} from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
+import type { FornecedorRankingLinha } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import type { CustoIndiretoLinha } from "@/modules/financeiro/relatorios/custos-indiretos";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
 import {
@@ -1089,6 +1095,40 @@ export async function extratoPorFornecedor({
   };
 }
 
+/**
+ * Ranking de fornecedores: uma linha por fornecedor, agregada no banco
+ * (`fn_rel_fornecedores_ranking`). `inicio`/`fim` recortam o lançado
+ * (competência) e o pago (data do pagamento); o em aberto é a posição de hoje.
+ * Fim exclusivo; ponta ausente = sem limite.
+ *
+ * Lê em páginas: em 15/10/2026 são 848 fornecedores com movimento, perto do
+ * teto de 1000 linhas do PostgREST.
+ */
+export async function rankingFornecedores({
+  inicio,
+  fim,
+}: { inicio?: string; fim?: string }): Promise<FornecedorRankingLinha[]> {
+  const supabase = await createClient();
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .rpc("fn_rel_fornecedores_ranking", { p_inicio: inicio, p_fim: fim })
+      .range(de, ate),
+  );
+  if (erro) {
+    throw new Error("Não foi possível carregar o ranking de fornecedores");
+  }
+  return linhas.map((l) => ({
+    fornecedorId: l.fornecedor_id,
+    nome: l.nome,
+    lancamentos: Number(l.lancamentos),
+    lancado: Number(l.comprado),
+    pago: Number(l.pago),
+    emAberto: Number(l.em_aberto),
+    vencido: Number(l.vencido),
+    proximos30: Number(l.proximos_30),
+  }));
+}
+
 /** Mês corrente "YYYY-MM" no fuso de Rio Branco, default do seletor do DRE. */
 export function mesCorrente(): string {
   return dataHojeISO().slice(0, 7);
@@ -1416,6 +1456,39 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
     devolvido: Number(l.devolvido),
     saldo: Number(l.saldo),
   }));
+}
+
+/**
+ * Mês a mês de cada centro de sócio e de empresa ligada, com a parte ainda em
+ * aberto (medida pela parcela). Fim exclusivo. Fecha com `sociosLigadas` no
+ * mesmo período.
+ */
+export async function sociosLigadasMensal(inicio: string, fim: string): Promise<SocioLigadaMes[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_socios_ligadas_mensal", {
+    p_inicio: inicio,
+    p_fim: fim,
+  });
+  if (error) {
+    throw new Error("Não foi possível carregar o mês a mês de sócios e ligadas");
+  }
+  return (data ?? []).map((l) => ({
+    centroId: l.centro_id,
+    mes: l.mes.slice(0, 7),
+    enviado: Number(l.enviado),
+    enviadoAberto: Number(l.enviado_aberto),
+    devolvido: Number(l.devolvido),
+    devolvidoAberto: Number(l.devolvido_aberto),
+  }));
+}
+
+/** Os dois juntos, prontos para a tela e para a planilha. */
+export async function relatorioSociosLigadas(): Promise<SociosLigadasRelatorio> {
+  const [centros, meses] = await Promise.all([
+    sociosLigadas("1900-01-01", "2100-01-01"),
+    sociosLigadasMensal("1900-01-01", "2100-01-01"),
+  ]);
+  return montarSociosLigadas(centros, meses, mesCorrente());
 }
 
 
