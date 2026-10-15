@@ -20,7 +20,7 @@ import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { excluirPilha } from "@/modules/estoque/pilhas/actions";
-import type { PilhaLinha } from "@/modules/estoque/pilhas/queries";
+import type { PilhaLinha, PilhaMovimento } from "@/modules/estoque/pilhas/queries";
 import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 import { PilhaFormDrawer } from "./pilha-form-drawer";
 
@@ -40,17 +40,15 @@ function Quantidade({ valor, unidade }: { valor: number; unidade: string | null 
   );
 }
 
-/** Quanto ainda resta do que entrou, em barra e em %. */
-function Restante({ pilha }: { pilha: PilhaLinha }) {
-  if (pilha.totalEntrada <= 0) return <CelulaVazia />;
-  const fracao = Math.min(1, Math.max(0, pilha.saldo / pilha.totalEntrada));
+/** Data e quantidade do último movimento. A pilha tem fluxo constante, então isso diz mais que um %. */
+function UltimoMovimento({ movimento, unidade }: { movimento: PilhaMovimento | null; unidade: string | null }) {
+  if (!movimento) return <CelulaVazia />;
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 w-full min-w-12 overflow-hidden rounded-full bg-muted" aria-hidden>
-        <div className="h-full rounded-full bg-primary" style={{ width: `${fracao * 100}%` }} />
-      </div>
-      <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">{Math.round(fracao * 100)}%</span>
-    </div>
+    <span className="whitespace-nowrap tabular-nums">
+      {formatarData(movimento.data)}
+      <span className="mx-1.5 text-muted-foreground">·</span>
+      <Quantidade valor={movimento.quantidade} unidade={unidade} />
+    </span>
   );
 }
 
@@ -149,10 +147,20 @@ export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: Pilha
         cell: ({ row }) => <Quantidade valor={row.original.totalEntrada} unidade={row.original.unidade} />,
       },
       {
-        id: "restante",
-        header: "Restante",
-        size: 160,
-        cell: ({ row }) => <Restante pilha={row.original} />,
+        id: "ultimaEntrada",
+        accessorFn: (pilha) => pilha.ultimaEntrada?.data ?? "",
+        header: "Última entrada",
+        size: 190,
+        meta: { atomico: true },
+        cell: ({ row }) => <UltimoMovimento movimento={row.original.ultimaEntrada} unidade={row.original.unidade} />,
+      },
+      {
+        id: "ultimaSaida",
+        accessorFn: (pilha) => pilha.ultimaSaida?.data ?? "",
+        header: "Última saída",
+        size: 190,
+        meta: { atomico: true },
+        cell: ({ row }) => <UltimoMovimento movimento={row.original.ultimaSaida} unidade={row.original.unidade} />,
       },
       {
         accessorKey: "ativo",
