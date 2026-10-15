@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extrasPorLocal,
   paraEstadoMapa,
+  paraFichaNumeros,
   poligonosDaArea,
   pontosDoTracado,
 } from "@/modules/mapa/dados";
@@ -389,5 +390,59 @@ describe("schemas das actions", () => {
         fimPrevisto: "2026-10-01",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("paraFichaNumeros", () => {
+  it("lê os números da RPC (texto vira número) e tolera máquina sem abastecimento nem OS", () => {
+    const f = paraFichaNumeros({
+      ultimo_abastecimento: {
+        data: "2026-07-23T17:03:00+00:00",
+        litros: "100.0000",
+        valor: 615,
+        tanque: "Meloza EMT",
+      },
+      consumo_30_dias: { litros: 0, valor: 0, abastecimentos: 0 },
+      ultima_manutencao: {
+        numero: "OS-2026-0077",
+        tipo: "corretiva",
+        status: "concluida",
+        abertura: "2026-08-08",
+        conclusao: "2026-08-06",
+        descricao: "TROCA DE JUNTA",
+        custo: "184.0000",
+      },
+      gasto_manutencao: {
+        total: 61225.17,
+        ultimos_12_meses: 21242.29,
+        ano: 21160.29,
+        mes_passado: 0,
+        mes_passado_ref: "2026-09-01",
+        ano_ref: 2026,
+        tem_centro: true,
+      },
+    });
+    expect(f?.ultimoAbastecimento?.litros).toBe(100);
+    expect(f?.ultimaManutencao?.custo).toBe(184);
+    expect(f?.gastoManutencao.total).toBe(61225.17);
+    expect(f?.gastoManutencao.mesPassadoRef).toBe("2026-09-01");
+    const vazio = paraFichaNumeros({
+      ultimo_abastecimento: null,
+      consumo_30_dias: { litros: 0, valor: 0, abastecimentos: 0 },
+      ultima_manutencao: null,
+      gasto_manutencao: {
+        total: 0,
+        ultimos_12_meses: 0,
+        ano: 0,
+        mes_passado: 0,
+        mes_passado_ref: "2026-09-01",
+        ano_ref: 2026,
+        tem_centro: false,
+      },
+    });
+    expect(vazio?.ultimoAbastecimento).toBeNull();
+    expect(vazio?.ultimaManutencao).toBeNull();
+    expect(vazio?.gastoManutencao.temCentro).toBe(false);
+    expect(paraFichaNumeros(null)).toBeNull();
   });
 });

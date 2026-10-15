@@ -316,3 +316,37 @@ export interface ConfigGoogle {
   chave: string;
   mapId: string;
 }
+
+/**
+ * Números da máquina na ficha (fn_mapa_ficha_equipamento, sob demanda). O gasto em manutenção
+ * vem do Financeiro (rateio no centro de custo da máquina, categorias de manutenção), não das OS.
+ */
+export interface FichaNumeros {
+  ultimoAbastecimento: {
+    data: string;
+    litros: number;
+    valor: number;
+    tanque: string;
+  } | null;
+  consumo30Dias: { litros: number; valor: number; abastecimentos: number };
+  ultimaManutencao: {
+    numero: string;
+    tipo: string;
+    status: string;
+    abertura: string | null;
+    conclusao: string | null;
+    descricao: string;
+    custo: number | null;
+  } | null;
+  gastoManutencao: {
+    total: number;
+    ultimos12Meses: number;
+    ano: number;
+    mesPassado: number;
+    /** Primeiro dia do mês passado (yyyy-mm-dd). */
+    mesPassadoRef: string;
+    anoRef: number;
+    /** A máquina tem centro de custo (sem ele, não há como somar o Financeiro). */
+    temCentro: boolean;
+  };
+}

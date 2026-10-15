@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipamento";
 import { formatarKm } from "@/modules/mapa/geo";
 import { CLASSES_ESTADO } from "@/modules/mapa/rotulos";
 import {
@@ -210,9 +211,6 @@ export function FichaEquipamento({
           </>
         ) : null}
         <Linha rotulo="OS abertas">{e.osAbertas}</Linha>
-        <Linha rotulo="Último abastecimento">
-          {e.ultimoAbastecimento ? formatarData(e.ultimoAbastecimento) : "–"}
-        </Linha>
         <Linha rotulo="Última medição">
           {e.ultimaMedicao !== null
             ? e.ultimaMedicao.toLocaleString("pt-BR")
@@ -222,6 +220,12 @@ export function FichaEquipamento({
           <Linha rotulo="Observação">{e.observacao}</Linha>
         ) : null}
       </div>
+
+      <NumerosEquipamento
+        key={e.id}
+        equipamentoId={e.id}
+        propria={e.propriedade === "propria"}
+      />
 
       <div className="flex flex-col gap-1.5">
         <span className="text-legenda font-medium text-muted-foreground">
