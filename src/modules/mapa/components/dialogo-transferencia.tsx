@@ -60,7 +60,7 @@ function descreverDestino(d: DestinoResolvido): string {
     case "area":
       return `${d.area.nome} (${ROTULO_TIPO_AREA[d.area.tipo] ?? d.area.tipo}) · ${ROTULO_ESTADO[d.estado].toLowerCase()}`;
     case "trecho":
-      return `${d.trecho.nome} · km ${formatarKm(d.km)} · colou no traçado (${formatarMetros(d.distanciaM)}) · operando`;
+      return `${d.trecho.nome} · km ${formatarKm(d.km)} · a ${formatarMetros(d.distanciaM)} do traçado · operando`;
     case "localidade":
       return `${d.local.nome} (${rotuloTipoLocalidade(d.local.tipo).toLowerCase()}, ${formatarMetros(d.distanciaM)}) · ${ROTULO_ESTADO[d.estado].toLowerCase()}`;
     default:

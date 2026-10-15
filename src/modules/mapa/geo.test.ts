@@ -156,13 +156,17 @@ describe("resolver destino (mesma ordem do banco)", () => {
     expect(d.estado).toBe("parado");
   });
 
-  it("perto do traçado cola no km e fica operando", () => {
-    const d = resolverDestino(deslocar([-72.45, -7.7], 180, 50), ctx);
+  it("perto do traçado anota o km e fica operando, sem sair de onde foi tocado", () => {
+    const tocado = deslocar([-72.45, -7.7], 180, 50);
+    const d = resolverDestino(tocado, ctx);
     expect(d.tipo).toBe("trecho");
     if (d.tipo === "trecho") {
       expect(d.km).toBeCloseTo(705.5, 1);
       expect(d.estado).toBe("operando");
+      expect(d.distanciaM).toBeCloseTo(50, 0);
     }
+    // A máquina fica no pátio ao lado da pista, não em cima do eixo (pedido do Tiago, 15/10).
+    expect(d.pos).toEqual(tocado);
   });
 
   it("perto de um pátio vira parado; perto da oficina vira conserto", () => {

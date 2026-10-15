@@ -274,7 +274,7 @@ export interface ContextoDestino {
   snapLocalM: number;
 }
 
-/** Onde o ponto caiu: área ativa > trecho (cola no km) > local próximo > livre. */
+/** Onde o ponto caiu: área ativa > trecho (anota o km) > local próximo > livre. */
 export function resolverDestino(
   p: Posicao,
   ctx: ContextoDestino,
@@ -295,7 +295,9 @@ export function resolverDestino(
     return {
       tipo: "trecho",
       trecho: colado.trecho,
-      pos: colado.pos,
+      // O ponto fica onde foi tocado: o traçado só dá o km (máquina no pátio ao lado da pista
+      // não pode ir parar no eixo). A RPC grava a coordenada tocada do mesmo jeito.
+      pos: p,
       km: colado.km,
       distanciaM: colado.distanciaM,
       heading: colado.heading,

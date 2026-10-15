@@ -38,6 +38,8 @@ export const ARQUIVO_BONECO = "/mapa-modelos/boneco.glb";
 export const PREFIXO_MAQUINA = "maq-";
 export const ID_PESSOAS = "pessoas";
 
+/** Quantas vezes o tamanho real a miniatura aparece (fixo no terreno, em metros). */
+export const ESCALA_MAQUINA = 3;
 const FONTE = "Inter, Helvetica, Arial, sans-serif";
 const BRANCO: Rgb = [255, 255, 255];
 
@@ -243,11 +245,9 @@ export function montarCamadas(cena: Cena): Layer[] {
             : d.estado === "parado"
               ? [205, 205, 205]
               : BRANCO,
-        sizeScale: escala,
-        // Mínimo de pixels POR METRO do modelo: de longe a máquina vira um ícone de uns 25 a 40 px
-        // em vez de sumir (14 px/m, do spike, fazia uma frente inteira virar um borrão só).
-        sizeMinPixels: 2.5,
-        sizeMaxPixels: 400,
+        // 3x o tamanho real, em metros no terreno, sem mínimo nem máximo em pixels: o tamanho
+        // fica preso ao chão e não cresce ao afastar o zoom (pedido do Tiago, 15/10).
+        sizeScale: escala * ESCALA_MAQUINA,
         _lighting: "pbr",
         updateTriggers: {
           getPosition: gatilho,
@@ -288,7 +288,8 @@ export function montarCamadas(cena: Cena): Layer[] {
       id: "anel",
       data: marcados,
       getPosition: (d) => posicaoDe(cena, d),
-      getRadius: (d) => (d.modelo3d === "usina_asfalto" ? 28 : 13),
+      getRadius: (d) =>
+        (d.modelo3d === "usina_asfalto" ? 28 : 13) * ESCALA_MAQUINA,
       radiusUnits: "meters",
       radiusMinPixels: 26,
       filled: true,

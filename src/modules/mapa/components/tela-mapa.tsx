@@ -5,6 +5,8 @@ import {
   Box,
   Layers,
   MousePointer2,
+  PanelRightClose,
+  PanelRightOpen,
   RefreshCw,
   Satellite,
   Tag,
@@ -93,6 +95,8 @@ const ROTULO_MOTOR: Record<TipoMotor, string> = {
 };
 
 /** Cruzeiro do Sul e os lotes da BR-364, quando não há trecho cadastrado para enquadrar. */
+const CHAVE_PAINEL = "erp-emt:mapa:painel";
+
 const CENTRO_PADRAO: { pos: Posicao; zoom: number } = {
   pos: [-72.47, -7.745],
   zoom: 11.8,
@@ -152,6 +156,33 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => new Set(),
   );
   const [ficha, setFicha] = React.useState<Alvo | null>(null);
+  // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado).
+  const [painelAberto, setPainelAberto] = React.useState(true);
+  React.useEffect(() => {
+    try {
+      if (window.localStorage.getItem(CHAVE_PAINEL) === "fechado")
+        setPainelAberto(false);
+    } catch {
+      // sem storage (aba privada): fica aberto
+    }
+  }, []);
+  const alternarPainel = React.useCallback(() => {
+    setPainelAberto((aberto) => {
+      try {
+        window.localStorage.setItem(
+          CHAVE_PAINEL,
+          aberto ? "fechado" : "aberto",
+        );
+      } catch {
+        // sem storage: vale só nesta visita
+      }
+      return !aberto;
+    });
+  }, []);
+  // Tocar numa máquina ou pessoa abre a ficha, que mora na lateral: a lateral abre junto.
+  React.useEffect(() => {
+    if (ficha) setPainelAberto(true);
+  }, [ficha]);
   const [hover, setHover] = React.useState<string | null>(null);
   const [fundo, setFundo] = React.useState<ModoFundo>("mapa");
   const [inclinado, setInclinado] = React.useState(true);
@@ -829,20 +860,41 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
                 setMostrarAreas((v) => !v),
               )}
             </div>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={atualizar}
-              disabled={atualizando}
-              className="pointer-events-auto bg-background/95 backdrop-blur"
-              title="Reler o mapa"
-            >
-              <RefreshCw
-                className={cn("size-3", atualizando && "animate-spin")}
-              />
-              <span className="max-sm:sr-only">Atualizar</span>
-            </Button>
+            <div className="flex gap-1.5">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={atualizar}
+                disabled={atualizando}
+                className="pointer-events-auto bg-background/95 backdrop-blur"
+                title="Reler o mapa"
+              >
+                <RefreshCw
+                  className={cn("size-3", atualizando && "animate-spin")}
+                />
+                <span className="max-sm:sr-only">Atualizar</span>
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={alternarPainel}
+                aria-expanded={painelAberto}
+                aria-controls="mapa-painel-lateral"
+                className="pointer-events-auto bg-background/95 backdrop-blur"
+                title={painelAberto ? "Recolher a lista" : "Mostrar a lista"}
+              >
+                {painelAberto ? (
+                  <PanelRightClose className="size-3" />
+                ) : (
+                  <PanelRightOpen className="size-3" />
+                )}
+                <span className="max-sm:sr-only">
+                  {painelAberto ? "Recolher" : "Lista"}
+                </span>
+              </Button>
+            </div>
           </div>
           {/* No canto de cima para não cobrir o logo nem a atribuição do Google (ficam embaixo). */}
           {motor ? (
@@ -855,7 +907,13 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
           ) : null}
         </div>
 
-        <div className="flex min-h-[16rem] min-w-0 flex-1 flex-col md:w-80 md:flex-none">
+        <div
+          id="mapa-painel-lateral"
+          className={cn(
+            "flex min-h-[16rem] min-w-0 flex-1 flex-col md:w-64 md:flex-none",
+            !painelAberto && "hidden",
+          )}
+        >
           <PainelMapa
             filtros={filtros}
             onFiltros={setFiltros}
