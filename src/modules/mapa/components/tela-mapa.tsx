@@ -330,7 +330,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     [trechosMedidos],
   );
   const marcos = React.useMemo(
-    () => marcosKm(trechosMedidos, 10),
+    // De 1 em 1 km; quem desenha mostra só os do passo do zoom (passoDosMarcos).
+    () => marcosKm(trechosMedidos, 1),
     [trechosMedidos],
   );
   const modelos = React.useMemo(

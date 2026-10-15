@@ -18,7 +18,11 @@ import {
   type Geometry,
 } from "@luma.gl/engine";
 
-import { hexParaRgb, type TrechoMedido } from "@/modules/mapa/geo";
+import {
+  hexParaRgb,
+  marcosNoZoom,
+  type TrechoMedido,
+} from "@/modules/mapa/geo";
 import type { FormaObjeto, ObjetoMapa } from "@/modules/mapa/objetos";
 import { COR_AREA, COR_ESTADO, type Rgb } from "@/modules/mapa/rotulos";
 import type {
@@ -253,7 +257,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     new TextLayer<{ km: number; pos: Posicao }>({
       id: "marcos-km",
       visible: cena.zoom >= ZOOM_NOMES.km,
-      data: cena.marcos,
+      data: marcosNoZoom(cena.marcos, cena.zoom),
       getPosition: (d) => d.pos,
       getText: (d) => `km ${d.km}`,
       getSize: 11,

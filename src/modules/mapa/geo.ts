@@ -125,6 +125,27 @@ export function marcosKm(
   return marcos;
 }
 
+/**
+ * Passo dos marcos de km pelo zoom (pedido do Tiago, 15/10/2026: "marque cada km"): de perto todo
+ * km, aproximando de 5 em 5, de longe de 10 em 10 (senão os 130 km da BR-364 viram um borrão).
+ */
+export function passoDosMarcos(zoom: number): number {
+  if (zoom >= 13.5) return 1;
+  if (zoom >= 12.5) return 5;
+  return 10;
+}
+
+/** Marcos de 1 em 1 km filtrados pelo passo do zoom (km inteiro múltiplo do passo). */
+export function marcosNoZoom<T extends { km: number }>(
+  marcos: readonly T[],
+  zoom: number,
+): T[] {
+  const passo = passoDosMarcos(zoom);
+  return passo === 1
+    ? [...marcos]
+    : marcos.filter((m) => Math.abs(m.km % passo) < 1e-9);
+}
+
 export interface ColagemTrecho {
   trecho: TrechoMapa;
   pos: Posicao;
