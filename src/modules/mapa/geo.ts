@@ -365,6 +365,30 @@ export function sugereAjuste(
   }
 }
 
+/**
+ * Tira o retorno que o roteador às vezes faz nas pontas (vai, contorna uma rotatória e volta para
+ * pegar a mão certa): no começo, corta até o último ponto que volta a ficar a menos de `raioM` do
+ * início; no fim, a partir do primeiro que já está a menos de `raioM` do final. Só olha as `janela`
+ * pontas de cada lado, para não cortar uma estrada que passa duas vezes perto do mesmo lugar.
+ */
+export function tirarRetornoDasPontas(
+  pontos: readonly Posicao[],
+  raioM = 25,
+  janela = 40,
+): Posicao[] {
+  const n = pontos.length;
+  if (n < 3) return [...pontos];
+  const inicio = pontos[0];
+  const fim = pontos[n - 1];
+  let corteInicio = 0;
+  for (let i = 1; i < Math.min(janela, n - 1); i++)
+    if (distanciaM(pontos[i], inicio) < raioM) corteInicio = i;
+  let corteFim = n - 1;
+  for (let i = n - 2; i > Math.max(n - 1 - janela, corteInicio); i--)
+    if (distanciaM(pontos[i], fim) < raioM) corteFim = i;
+  return [inicio, ...pontos.slice(corteInicio + 1, corteFim), fim];
+}
+
 /** Extensão de uma linha tocada no mapa, em km. */
 export function extensaoKm(pontos: readonly Posicao[]): number {
   let total = 0;

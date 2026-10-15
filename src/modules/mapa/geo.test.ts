@@ -17,6 +17,7 @@ import {
   sugereAjuste,
   extensaoKm,
   posicaoDoNomeDaObra,
+  tirarRetornoDasPontas,
 } from "@/modules/mapa/geo";
 import type {
   AreaMapa,
@@ -313,5 +314,33 @@ describe("obra no mapa: nome e extensão", () => {
       extensaoKm([a, deslocar(a, 90, 1000), deslocar(a, 90, 2500)]),
     ).toBeCloseTo(2.5, 2);
     expect(extensaoKm([a])).toBe(0);
+  });
+});
+
+describe("rota pela estrada: retorno nas pontas", () => {
+  it("tira a volta na rotatória do começo e mantém o resto da estrada", () => {
+    const a: [number, number] = [-72.82, -7.655];
+    // sai 60 m para o sul, contorna e volta a passar a 5 m do início, depois segue 2 km a leste
+    const volta = [
+      deslocar(a, 180, 30),
+      deslocar(a, 180, 60),
+      deslocar(a, 90, 30),
+      deslocar(a, 0, 5),
+    ];
+    const estrada = [
+      deslocar(a, 90, 300),
+      deslocar(a, 90, 1000),
+      deslocar(a, 90, 2000),
+    ];
+    const limpo = tirarRetornoDasPontas([a, ...volta, ...estrada]);
+    expect(limpo[0]).toEqual(a);
+    expect(limpo.slice(1)).toEqual(estrada);
+  });
+
+  it("rota sem retorno passa igual; menos de 3 pontos também", () => {
+    const a: [number, number] = [-72.82, -7.655];
+    const reta = [a, deslocar(a, 90, 500), deslocar(a, 90, 1000)];
+    expect(tirarRetornoDasPontas(reta)).toEqual(reta);
+    expect(tirarRetornoDasPontas([a])).toEqual([a]);
   });
 });
