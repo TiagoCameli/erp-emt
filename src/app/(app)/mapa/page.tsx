@@ -45,7 +45,8 @@ export default async function PaginaMapa() {
 
   return (
     <div className="flex h-full min-h-[480px] flex-col">
-      {cabecalho}
+      {/* Sem cabeçalho visível: o espaço é do mapa (pedido do Tiago, 15/10). */}
+      <h1 className="sr-only">Frota no mapa</h1>
       <TelaMapa
         inicial={estado}
         google={{

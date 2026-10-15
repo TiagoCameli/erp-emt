@@ -127,6 +127,8 @@ const CONTROLE_DECK = {
   inertia: 300,
 } as const;
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+/** Teto de zoom dos dois motores (o Google ainda limita pelo que tem de imagem no lugar). */
+const ZOOM_MAXIMO = 22;
 
 /**
  * Cada motor desenha num div PRÓPRIO dentro do container. Sem isso, o StrictMode do React (monta,
@@ -212,6 +214,9 @@ function criarMotorTiles(
     pitch: inclinado ? 50 : 0,
     bearing: 0,
     maxPitch: 70,
+    // Além do último nível de tile (18/19) a imagem só amplia, mas dá para mirar uma máquina no
+    // pátio com precisão de metro.
+    maxZoom: ZOOM_MAXIMO,
   };
   const deck = new Deck({
     parent: palco,
@@ -313,6 +318,7 @@ async function criarMotorGoogle(
     zoomControl: true,
     fullscreenControl: false,
     isFractionalZoomEnabled: true,
+    maxZoom: ZOOM_MAXIMO,
     clickableIcons: false,
   };
   if (cfg.mapId) opcoes.mapId = cfg.mapId;
