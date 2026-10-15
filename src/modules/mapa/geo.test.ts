@@ -18,6 +18,7 @@ import {
   extensaoKm,
   posicaoDoNomeDaObra,
   tirarRetornoDasPontas,
+  marcosNoZoom,
 } from "@/modules/mapa/geo";
 import type {
   AreaMapa,
@@ -342,5 +343,22 @@ describe("rota pela estrada: retorno nas pontas", () => {
     const reta = [a, deslocar(a, 90, 500), deslocar(a, 90, 1000)];
     expect(tirarRetornoDasPontas(reta)).toEqual(reta);
     expect(tirarRetornoDasPontas([a])).toEqual([a]);
+  });
+});
+
+describe("marcos de km pelo zoom", () => {
+  const medido = medirTrecho(trecho); // km 700 → 711
+  const todos = marcosKm([medido], 1);
+
+  it("gera um marco em cada km inteiro do trecho", () => {
+    expect(todos.map((m) => m.km)).toEqual([
+      700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711,
+    ]);
+  });
+
+  it("de perto todo km, aproximando de 5 em 5, de longe de 10 em 10", () => {
+    expect(marcosNoZoom(todos, 14).map((m) => m.km)).toHaveLength(12);
+    expect(marcosNoZoom(todos, 13).map((m) => m.km)).toEqual([700, 705, 710]);
+    expect(marcosNoZoom(todos, 11.5).map((m) => m.km)).toEqual([700, 710]);
   });
 });

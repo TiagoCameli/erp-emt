@@ -5,6 +5,7 @@ import {
   COR_EXTERNO,
   COR_MATERIAL,
   corDaPilha,
+  dimensoesDaPilha,
   dimensoesDoTanque,
   objetosDoEstoque,
 } from "@/modules/mapa/objetos";
@@ -75,5 +76,24 @@ describe("objetos do Estoque no mapa", () => {
     ]);
     expect(objetos[0].detalhe).toBe("tanque · 15.000 L · Diesel S10");
     expect(objetos.filter((o) => o.pos === null)).toHaveLength(2);
+  });
+});
+
+describe("tamanho da pilha pelo saldo", () => {
+  it("1,5 t por m³: o volume do cone bate com o saldo", () => {
+    for (const toneladas of [15, 150, 1500]) {
+      const { diametro, altura, volume } = dimensoesDaPilha(toneladas);
+      expect(volume).toBeCloseTo(toneladas / 1.5, 6);
+      const cone = (Math.PI * (diametro / 2) ** 2 * altura) / 3;
+      expect(cone).toBeCloseTo(volume, 6);
+    }
+  });
+
+  it("pilha zerada aparece do tamanho de 1 m³ e cresce com o saldo", () => {
+    expect(dimensoesDaPilha(0).volume).toBe(1);
+    expect(dimensoesDaPilha(-5).volume).toBe(1);
+    expect(dimensoesDaPilha(300).diametro).toBeGreaterThan(
+      dimensoesDaPilha(30).diametro,
+    );
   });
 });

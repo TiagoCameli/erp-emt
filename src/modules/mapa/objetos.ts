@@ -59,6 +59,30 @@ export function dimensoesDoTanque(
   return { diametro, altura: diametro * 1.5 };
 }
 
+/** 1,5 t de agregado ocupa 1 m³ de pilha (Tiago, 15/10/2026). */
+export const TONELADAS_POR_M3 = 1.5;
+/** Pilha zerada ainda aparece, do tamanho de 1 m³. */
+export const VOLUME_MINIMO_PILHA_M3 = 1;
+/** Altura/raio do cone: ângulo de repouso de agregado, uns 35° (tg 35° ≈ 0,7). */
+const INCLINACAO_PILHA = 0.7;
+
+/**
+ * Tamanho da pilha pelo saldo em toneladas: volume = saldo ÷ 1,5; cone com altura 0,7 do raio, então
+ * V = π·r²·h/3 = 0,7·π·r³/3 e r = ∛(3V / 0,7π). 150 t = 100 m³ ≈ 10,3 m de base × 3,6 m de altura.
+ */
+export function dimensoesDaPilha(saldoToneladas: number): {
+  diametro: number;
+  altura: number;
+  volume: number;
+} {
+  const volume = Math.max(
+    VOLUME_MINIMO_PILHA_M3,
+    (Number.isFinite(saldoToneladas) ? saldoToneladas : 0) / TONELADAS_POR_M3,
+  );
+  const raio = Math.cbrt((3 * volume) / (INCLINACAO_PILHA * Math.PI));
+  return { diametro: raio * 2, altura: raio * INCLINACAO_PILHA, volume };
+}
+
 /** Cor da pilha pelo nome do material: brita cinza, areia bege, terra/argila marrom, pó claro. */
 export function corDaPilha(nome: string): Rgb {
   const n = nome.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -109,19 +133,24 @@ export function objetosDoEstoque(
           : COR_COMBUSTIVEL,
     });
   }
-  for (const p of pilhas)
+  for (const p of pilhas) {
+    const { diametro, altura, volume } = dimensoesDaPilha(p.saldo);
     objetos.push({
       id: p.id,
       alvo: "pilha",
       nome: p.nome,
-      detalhe: "pilha",
+      detalhe:
+        p.saldo > 0
+          ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(p.saldo)} t ≈ ${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(volume)} m³`
+          : "vazia",
       pos: p.pos,
       forma: "cone",
-      largura: 10,
-      comprimento: 10,
-      altura: 4,
+      largura: diametro,
+      comprimento: diametro,
+      altura,
       cor: corDaPilha(p.nome),
     });
+  }
   for (const d of depositos)
     objetos.push({
       id: d.id,
