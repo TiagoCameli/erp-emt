@@ -19,25 +19,23 @@ import {
 const CORRENTE = "2026-10";
 
 const LINHAS: LinhaFluxoRpc[] = [
-  { mes: "2026-07", tipo: "a_receber", grupo: "operacao", realizado: true, total: 5_558_839.77 },
-  { mes: "2026-07", tipo: "emprestimo_tomado", grupo: "divida", realizado: true, total: 2_298_000 },
-  // O resgate manual é série `a_receber` (legado) e grupo `aplicacao`: até
-  // 15/10 ele inflava as "entradas operacionais".
-  { mes: "2026-07", tipo: "a_receber", grupo: "aplicacao", realizado: true, total: 1_000_000 },
-  { mes: "2026-07", tipo: "a_pagar", grupo: "operacao", realizado: true, total: 4_000_000 },
+  { mes: "2026-07", grupo: "operacao", sentido: "entrada", realizado: true, total: 5_558_839.77 },
+  { mes: "2026-07", grupo: "divida", sentido: "entrada", realizado: true, total: 2_298_000 },
+  // O resgate manual é grupo `aplicacao`: até 15/10 ele inflava as "entradas
+  // operacionais".
+  { mes: "2026-07", grupo: "aplicacao", sentido: "entrada", realizado: true, total: 1_000_000 },
+  { mes: "2026-07", grupo: "operacao", sentido: "saida", realizado: true, total: 4_000_000 },
   // CAPEX, distribuição e mútuo eram "saídas operacionais".
-  { mes: "2026-07", tipo: "a_pagar", grupo: "investimento", realizado: true, total: 700_000 },
-  { mes: "2026-07", tipo: "a_pagar", grupo: "socios", realizado: true, total: 300_000 },
-  { mes: "2026-07", tipo: "a_receber", grupo: "socios", realizado: true, total: 100_000 },
-  // Rendimento de aplicação: série `a_receber`, grupo nulo. Fora do caixa.
-  { mes: "2026-07", tipo: "a_receber", grupo: null, realizado: true, total: 363_571.31 },
+  { mes: "2026-07", grupo: "investimento", sentido: "saida", realizado: true, total: 700_000 },
+  { mes: "2026-07", grupo: "socios", sentido: "saida", realizado: true, total: 300_000 },
+  { mes: "2026-07", grupo: "socios", sentido: "entrada", realizado: true, total: 100_000 },
   // Outubro: parte já paga (está no saldo de hoje), parte ainda prevista.
-  { mes: "2026-10", tipo: "a_pagar", grupo: "operacao", realizado: true, total: 100_000 },
-  { mes: "2026-10", tipo: "a_pagar", grupo: "operacao", realizado: false, total: 50_000 },
-  { mes: "2026-11", tipo: "a_pagar", grupo: "investimento", realizado: false, total: 286_447.61 },
-  { mes: "2026-11", tipo: "amortizacao", grupo: "divida", realizado: false, total: 380_821.67 },
-  { mes: "2026-12", tipo: "a_pagar", grupo: "operacao", realizado: false, total: 249_459.79 },
-  { mes: "2026-12", tipo: "amortizacao", grupo: "divida", realizado: false, total: 302_978.51 },
+  { mes: "2026-10", grupo: "operacao", sentido: "saida", realizado: true, total: 100_000 },
+  { mes: "2026-10", grupo: "operacao", sentido: "saida", realizado: false, total: 50_000 },
+  { mes: "2026-11", grupo: "investimento", sentido: "saida", realizado: false, total: 286_447.61 },
+  { mes: "2026-11", grupo: "divida", sentido: "saida", realizado: false, total: 380_821.67 },
+  { mes: "2026-12", grupo: "operacao", sentido: "saida", realizado: false, total: 249_459.79 },
+  { mes: "2026-12", grupo: "divida", sentido: "saida", realizado: false, total: 302_978.51 },
 ];
 
 /** Disponível e aplicado de 15/10/2026. */
@@ -80,19 +78,17 @@ describe("montarFluxoCaixa: cinco grupos pela natureza", () => {
     expect(mes(fluxo, "2026-11").grupos.divida.saida.projetado).toBe(380_821.67);
   });
 
-  it("grupo nulo (rendimento) fica fora do caixa", () => {
-    // Somando o rendimento, julho entraria com 363 mil a mais, e o saldo
-    // projetado partiria de um dinheiro que não passou pela conta corrente.
+  it("as entradas do mês somam os grupos, cada um no seu lado", () => {
     const julho = mes(fluxo, "2026-07");
     expect(julho.entradas).toBe(5_558_839.77 + 2_298_000 + 1_000_000 + 100_000);
   });
 
-  it("série desconhecida e grupo desconhecido ficam fora em vez de cair num lado", () => {
+  it("lado desconhecido e grupo desconhecido ficam fora em vez de cair num lado", () => {
     const comLixo = montarFluxoCaixa({
       linhas: [
         ...LINHAS,
-        { mes: "2026-11", tipo: "banana", grupo: "operacao", realizado: false, total: 1 },
-        { mes: "2026-11", tipo: "a_pagar", grupo: "banana", realizado: false, total: 1 },
+        { mes: "2026-11", grupo: "operacao", sentido: "banana", realizado: false, total: 1 },
+        { mes: "2026-11", grupo: "banana", sentido: "saida", realizado: false, total: 1 },
       ],
       mesCorrente: CORRENTE,
       saldoInicial: DISPONIVEL,
@@ -187,9 +183,9 @@ describe("montarFluxoCaixa: saldo acumulado", () => {
     // ele nunca entraria na projeção e o saldo ficaria inflado.
     const comAtraso = montarFluxoCaixa({
       linhas: [
-        { mes: "2026-08", tipo: "a_pagar", grupo: "operacao", realizado: false, total: 10_000 },
-        { mes: "2026-08", tipo: "a_receber", grupo: "operacao", realizado: true, total: 999 },
-        { mes: "2026-10", tipo: "a_pagar", grupo: "investimento", realizado: false, total: 1_000 },
+        { mes: "2026-08", grupo: "operacao", sentido: "saida", realizado: false, total: 10_000 },
+        { mes: "2026-08", grupo: "operacao", sentido: "entrada", realizado: true, total: 999 },
+        { mes: "2026-10", grupo: "investimento", sentido: "saida", realizado: false, total: 1_000 },
       ],
       mesCorrente: CORRENTE,
       saldoInicial: 50_000,
@@ -262,7 +258,7 @@ describe("previsto à frente e o aviso de projeção só com saídas", () => {
     const comReceber = montarFluxoCaixa({
       linhas: [
         ...LINHAS,
-        { mes: "2026-11", tipo: "a_receber", grupo: "operacao", realizado: false, total: 1 },
+        { mes: "2026-11", grupo: "operacao", sentido: "entrada", realizado: false, total: 1 },
       ],
       mesCorrente: CORRENTE,
       saldoInicial: DISPONIVEL,

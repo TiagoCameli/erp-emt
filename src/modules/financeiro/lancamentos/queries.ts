@@ -903,22 +903,26 @@ async function valoresDoRecorte(
   recorte: Recorte,
   contaBancariaId?: string,
 ): Promise<Map<string, number>> {
-  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
-    p_tipo_recorte: recorte.tipo,
-    // `undefined` e não `null`: os parâmetros da RPC são opcionais com default
-    // null no banco, e é assim que os tipos gerados os descrevem.
-    p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
-    // No aging, o tipo do lançamento. No fluxo, o grupo e o lado clicados (ver
-    // `fn_rel_fluxo_caixa`); ausentes trazem todos, e a situação ausente traz
-    // pago e previsto.
-    p_tipo_lancamento:
-      recorte.tipo === "aging" ? recorte.tipoLancamento : undefined,
-    p_mes: recorte.tipo === "fluxo" ? recorte.mes : undefined,
-    p_realizado: recorte.tipo === "fluxo" ? recorte.realizado : undefined,
-    p_grupo: recorte.tipo === "fluxo" ? recorte.grupo : undefined,
-    p_sentido: recorte.tipo === "fluxo" ? recorte.sentido : undefined,
-    p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
-  });
+  // O fluxo tem RPC própria desde que passou a separar pela natureza
+  // (15/10/2026): o grupo e o lado clicados; ausentes trazem todos, e a
+  // situação ausente traz pago e previsto.
+  const { data, error } =
+    recorte.tipo === "fluxo"
+      ? await supabase.rpc("fn_lancamentos_do_fluxo", {
+          p_mes: recorte.mes,
+          p_realizado: recorte.realizado,
+          p_grupo: recorte.grupo,
+          p_sentido: recorte.sentido,
+        })
+      : await supabase.rpc("fn_lancamentos_do_recorte", {
+          p_tipo_recorte: recorte.tipo,
+          // `undefined` e não `null`: os parâmetros da RPC são opcionais com
+          // default null no banco, e é assim que os tipos gerados os descrevem.
+          p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
+          p_tipo_lancamento:
+            recorte.tipo === "aging" ? recorte.tipoLancamento : undefined,
+          p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
+        });
 
   if (error) {
     // A mensagem do banco vai junto: sem ela a falha chega como "não foi
@@ -947,8 +951,7 @@ async function idsDoGrupoDoFluxo(
   supabase: ClienteSupabase,
   recorte: Extract<Recorte, { tipo: "fluxo" }>,
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
-    p_tipo_recorte: "fluxo",
+  const { data, error } = await supabase.rpc("fn_lancamentos_do_fluxo", {
     p_mes: recorte.mes,
     p_realizado: recorte.realizado,
     p_grupo: recorte.grupo,

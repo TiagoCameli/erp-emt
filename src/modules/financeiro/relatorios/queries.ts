@@ -177,7 +177,7 @@ export async function fluxoCaixa(
   // Agregado no banco: uma linha por mês/série/realizado (a regra do mês do
   // pagamento x mês do vencimento, e a da série, vivem na fn_rel_fluxo_caixa).
   const [fluxoResultado, contasResultado, saldosResultado] = await Promise.all([
-    supabase.rpc("fn_rel_fluxo_caixa", {
+    supabase.rpc("fn_rel_fluxo_caixa_por_grupo", {
       // `undefined` e não `null` quando o lado não filtra: os parâmetros da RPC
       // são opcionais com default null no banco, e é assim que os tipos gerados
       // os descrevem. Lista vazia também vira `undefined`, senão um `{}`

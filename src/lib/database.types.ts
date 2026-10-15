@@ -11003,6 +11003,28 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_diaria: { Args: { p_id: string }; Returns: undefined };
+      fn_lancamentos_do_fluxo: {
+        Args: {
+          p_grupo?: string;
+          p_mes: string;
+          p_realizado?: boolean;
+          p_sentido?: string;
+        };
+        Returns: {
+          lancamento_id: string;
+          valor_no_recorte: number;
+        }[];
+      };
+      fn_rel_fluxo_caixa_por_grupo: {
+        Args: { p_centros_custo?: string[]; p_centros_receita?: string[] };
+        Returns: {
+          grupo: string;
+          mes: string;
+          realizado: boolean;
+          sentido: string;
+          total: number;
+        }[];
+      };
       fn_salvar_diaria: {
         Args: {
           p_colaborador: string;
@@ -11163,11 +11185,9 @@ export type Database = {
         Args: {
           p_conta?: string;
           p_faixa?: string;
-          p_grupo?: string;
           p_hoje?: string;
           p_mes?: string;
           p_realizado?: boolean;
-          p_sentido?: string;
           p_tipo_lancamento?: string;
           p_tipo_recorte: string;
         };
@@ -12156,7 +12176,6 @@ export type Database = {
       fn_rel_fluxo_caixa: {
         Args: { p_centros_custo?: string[]; p_centros_receita?: string[] };
         Returns: {
-          grupo: string | null;
           mes: string;
           realizado: boolean;
           tipo: string;

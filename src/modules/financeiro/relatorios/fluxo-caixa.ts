@@ -19,19 +19,18 @@ import {
  *
  * ## Cinco grupos pela natureza (15/10/2026)
  *
- * `fn_rel_fluxo_caixa` devolve em `grupo` de onde veio ou para onde foi o
+ * `fn_rel_fluxo_caixa_por_grupo` devolve de onde veio ou para onde foi o
  * dinheiro, pela NATUREZA da categoria (ver `GrupoFluxo`): a operação, o CAPEX,
- * sócios e mútuo, a dívida e as aplicações. O sentido (entrada ou saída) é o
- * lado da série legada em `tipo`.
+ * sócios e mútuo, a dívida e as aplicações, cada um com o sentido (entrada ou
+ * saída).
  *
  * Até 15/10 a tela separava por `tipo` em quatro séries e chamava tudo de
  * "operacional": as entradas levavam R$ 9,03 mi de resgate de aplicação, e as
  * saídas, CAPEX 4,86 mi, distribuição 3,71 mi e mútuo 1,33 mi. A soma fechava,
  * a história não: quem lia achava que a obra gastava o que a empresa investia.
  *
- * Linha com `grupo` nulo (origem `aplicacao`: rendimento, ajuste de abertura)
- * fica FORA: é variação dentro da subconta, não passou pela conta corrente. O
- * cliente antigo ainda a somava pela série; este não.
+ * A origem `aplicacao` (rendimento, ajuste de abertura) fica FORA, e a RPC nem
+ * a devolve: é variação dentro da subconta, não passou pela conta corrente.
  *
  * ## Saldo projetado é saldo de verdade, e em duas linhas
  *
@@ -55,24 +54,16 @@ import {
  * inteiros e só voltam a reais no fim, como o resto do módulo.
  */
 
-/** Uma linha de `fn_rel_fluxo_caixa`, como o Postgres devolve. */
+/** Uma linha de `fn_rel_fluxo_caixa_por_grupo`, como o Postgres devolve. */
 export interface LinhaFluxoRpc {
   mes: string;
-  /** A série legada: `a_pagar`, `a_receber`, `emprestimo_tomado`, `amortizacao`. */
-  tipo: string;
+  /** O grupo pela natureza. A origem aplicação nem vem da RPC. */
+  grupo: string;
+  /** `entrada` (a receber) ou `saida` (a pagar). */
+  sentido: string;
   realizado: boolean;
   total: number;
-  /** O grupo pela natureza. Nulo = fora do caixa (origem aplicação). */
-  grupo: string | null;
 }
-
-/** As séries legadas que são dinheiro ENTRANDO na conta. */
-const SERIES_DE_ENTRADA: readonly string[] = ["a_receber", "emprestimo_tomado"];
-const SERIES_CONHECIDAS: readonly string[] = [
-  ...SERIES_DE_ENTRADA,
-  "a_pagar",
-  "amortizacao",
-];
 
 /** Quanto de um lado já aconteceu e quanto ainda está previsto, em reais. */
 export interface LadoFluxo {
@@ -185,8 +176,12 @@ export interface EntradaFluxo {
   comCorteDeCentro?: boolean;
 }
 
-function ehGrupo(grupo: string | null): grupo is GrupoFluxo {
-  return grupo !== null && (GRUPOS_FLUXO as readonly string[]).includes(grupo);
+function ehGrupo(grupo: string): grupo is GrupoFluxo {
+  return (GRUPOS_FLUXO as readonly string[]).includes(grupo);
+}
+
+function ehSentido(sentido: string): sentido is SentidoFluxo {
+  return (SENTIDOS_FLUXO as readonly string[]).includes(sentido);
 }
 
 /** Centavos de um lado: o que foi pago e o que está previsto. */
@@ -279,14 +274,10 @@ export function montarFluxoCaixa({
 }: EntradaFluxo): FluxoCaixa {
   const porMes = new Map<string, Acumulador>();
   for (const linha of linhas) {
-    // Fora do caixa (grupo nulo) ou série desconhecida ficam fora em vez de
-    // cair num lado por engano: somá-las mudaria o saldo sem ninguém ver.
-    if (!ehGrupo(linha.grupo) || !SERIES_CONHECIDAS.includes(linha.tipo)) {
-      continue;
-    }
-    const sentido: SentidoFluxo = SERIES_DE_ENTRADA.includes(linha.tipo)
-      ? "entrada"
-      : "saida";
+    // Grupo ou lado desconhecido fica fora em vez de cair num lado por
+    // engano: somá-lo mudaria o saldo sem ninguém ver de onde.
+    if (!ehGrupo(linha.grupo) || !ehSentido(linha.sentido)) continue;
+    const { sentido } = linha;
     const acc = porMes.get(linha.mes) ?? acumuladorVazio();
     const centavos = paraCentavos(linha.total);
     if (linha.realizado) acc[linha.grupo][sentido].realizado += centavos;
