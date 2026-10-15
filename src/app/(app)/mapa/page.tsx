@@ -10,9 +10,11 @@ import { carregarEstadoMapa } from "@/modules/mapa/queries";
  * Mapa: a frota e as pessoas em 3D sobre a BR-364, arrastáveis. Leitura numa RPC só
  * (`fn_mapa_estado`, que recusa quem não tem mapa.mapa/ver); as ações pedem editar.
  *
- * A chave e o Map ID do Google são NEXT_PUBLIC_ (vão para o navegador de propósito, a chave é
- * restrita por domínio). Lidos aqui, no servidor, e passados como prop: sem chave a tela avisa e
- * segue com tiles da Esri em vez de quebrar.
+ * A chave e o Map ID do Google vão para o navegador de propósito (a chave é restrita por domínio).
+ * Lidos aqui, no servidor, a cada requisição, e passados como prop: sem chave a tela avisa e segue
+ * com tiles da Esri em vez de quebrar. Na Vercel as variáveis se chamam NEXT_GOOGLE_MAPS_* (sem
+ * PUBLIC_); por serem lidas no servidor, não precisam do prefixo que o Next embute no build.
+ * NEXT_PUBLIC_GOOGLE_MAPS_* continua valendo como reserva (.env.local antigo).
  */
 export default async function PaginaMapa() {
   const usuario = await getUsuarioLogado();
@@ -47,8 +49,14 @@ export default async function PaginaMapa() {
       <TelaMapa
         inicial={estado}
         google={{
-          chave: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
-          mapId: process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ?? "",
+          chave:
+            process.env.NEXT_GOOGLE_MAPS_API_KEY ||
+            process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
+            "",
+          mapId:
+            process.env.NEXT_GOOGLE_MAPS_MAP_ID ||
+            process.env.NEXT_PUBLIC_GOOGLE_MAPS_MAP_ID ||
+            "",
         }}
         permissoes={{
           editar: temPermissao(usuario, "mapa.mapa", "editar"),
