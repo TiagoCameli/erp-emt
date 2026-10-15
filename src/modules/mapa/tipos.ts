@@ -192,6 +192,8 @@ export interface LocalidadeMapa {
   obraId: string | null;
   fornecedorId: string | null;
   pos: Posicao;
+  /** Todos os tipos do local (pátio, jazida, oficina...); o primeiro é o principal (`tipo`). */
+  tipos: string[];
   /** Raio da área do local, em metros; null = o padrão da configuração (snapLocalM). */
   raioM: number | null;
 }
@@ -247,6 +249,7 @@ export interface LocalSemPosicao {
   id: string;
   nome: string;
   tipo: string;
+  tipos: string[];
 }
 
 export interface FrenteHoje {

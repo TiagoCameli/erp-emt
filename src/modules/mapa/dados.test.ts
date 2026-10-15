@@ -214,7 +214,7 @@ describe("paraEstadoMapa", () => {
     expect(estado.tanques[0].apelido).toBe("");
     expect(estado.depositos[0].localidadeId).toBeNull();
     expect(estado.localidadesSemPosicao).toEqual([
-      { id: "l9", nome: "Escola", tipo: "canteiro" },
+      { id: "l9", nome: "Escola", tipo: "canteiro", tipos: ["canteiro"] },
     ]);
     const antigo = paraEstadoMapa(bruto);
     expect(antigo?.obras).toEqual([]);

@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import {
   criarIluminacao,
   ID_LOCAIS,
+  ID_OBRAS,
   ID_PESSOAS,
   montarCamadas,
   PREFIXO_MAQUINA,
@@ -102,6 +103,8 @@ export interface MapaEmtProps {
   onClicarMapa: (pos: Posicao) => void;
   /** Toque no nome de um local (abre a ficha do local). */
   onClicarLocal: (id: string) => void;
+  /** Toque no nome de uma obra (abre a ficha da obra). */
+  onClicarObra: (id: string) => void;
   onMotor: (motor: TipoMotor, aviso: string | null) => void;
   className?: string;
 }
@@ -798,11 +801,14 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         p.onClicarMapa(c);
         return;
       }
-      const local = motor.pegar(x, y, [ID_LOCAIS]).find((i) => i.object) as
-        | { object?: { id?: unknown } }
+      const rotulo = motor
+        .pegar(x, y, [ID_OBRAS, ID_LOCAIS])
+        .find((i) => i.object) as
+        | { object?: { id?: unknown }; layer?: { id: string } | null }
         | undefined;
-      if (local && typeof local.object?.id === "string") {
-        p.onClicarLocal(local.object.id);
+      if (rotulo && typeof rotulo.object?.id === "string") {
+        if (rotulo.layer?.id === ID_OBRAS) p.onClicarObra(rotulo.object.id);
+        else p.onClicarLocal(rotulo.object.id);
         return;
       }
       if (p.selecao.size > 0 && !(e.shiftKey || e.ctrlKey || e.metaKey))

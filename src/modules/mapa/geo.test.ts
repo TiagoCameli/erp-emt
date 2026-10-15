@@ -15,6 +15,8 @@ import {
   resolverDestino,
   rumo,
   sugereAjuste,
+  extensaoKm,
+  posicaoDoNomeDaObra,
 } from "@/modules/mapa/geo";
 import type {
   AreaMapa,
@@ -45,6 +47,7 @@ const local: LocalidadeMapa = {
   id: "l1",
   nome: "Pátio",
   tipo: "patio",
+  tipos: ["patio"],
   obraId: null,
   fornecedorId: null,
   pos: [-72.6, -7.8],
@@ -54,6 +57,7 @@ const oficina: LocalidadeMapa = {
   id: "l2",
   nome: "Oficina",
   tipo: "oficina",
+  tipos: ["oficina"],
   obraId: null,
   fornecedorId: null,
   pos: [-72.7, -7.9],
@@ -280,5 +284,34 @@ describe("ajuste de localização x transferência (sugestão da confirmação)"
     expect(
       sugereAjuste({ ...atualLivre, pos: null }, resolverDestino(livre, ctx)),
     ).toBe(false);
+  });
+});
+
+describe("obra no mapa: nome e extensão", () => {
+  it("nome no ponto; sem ponto, no meio do trecho mais longo; sem trecho, no centro da área", () => {
+    const medido = medirTrecho(trecho);
+    const curto = medirTrecho({
+      ...trecho,
+      id: "t2",
+      pontos: [
+        [-72.6, -7.6],
+        [-72.599, -7.6],
+      ],
+      kmInicial: 0,
+      kmFinal: 0.1,
+    });
+    expect(posicaoDoNomeDaObra([-1, -2], [medido], [])).toEqual([-1, -2]);
+    const meio = posicaoDoNomeDaObra(null, [curto, medido], []);
+    expect(meio?.[0]).toBeCloseTo(-72.45, 2);
+    expect(posicaoDoNomeDaObra(null, [], [area])).toEqual(area.centro);
+    expect(posicaoDoNomeDaObra(null, [], [])).toBeNull();
+  });
+
+  it("extensão soma os segmentos tocados", () => {
+    const a: [number, number] = [-72.5, -7.7];
+    expect(
+      extensaoKm([a, deslocar(a, 90, 1000), deslocar(a, 90, 2500)]),
+    ).toBeCloseTo(2.5, 2);
+    expect(extensaoKm([a])).toBe(0);
   });
 });

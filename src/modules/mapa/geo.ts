@@ -365,6 +365,34 @@ export function sugereAjuste(
   }
 }
 
+/** Extensão de uma linha tocada no mapa, em km. */
+export function extensaoKm(pontos: readonly Posicao[]): number {
+  let total = 0;
+  for (let i = 1; i < pontos.length; i++)
+    total += distanciaM(pontos[i - 1], pontos[i]);
+  return total / 1000;
+}
+
+/**
+ * Onde vai o nome da obra no mapa: no ponto dela; sem ponto, no meio do trecho mais longo; sem
+ * trecho, no centro da área. Sem nada desenhado, não aparece.
+ */
+export function posicaoDoNomeDaObra(
+  ponto: Posicao | null,
+  trechos: readonly TrechoMedido[],
+  areas: readonly AreaMapa[],
+): Posicao | null {
+  if (ponto) return ponto;
+  const maisLongo = [...trechos].sort(
+    (a, b) => b.comprimento - a.comprimento,
+  )[0];
+  if (maisLongo) {
+    const t = maisLongo.trecho;
+    return pontoNoKm(maisLongo, (t.kmInicial + t.kmFinal) / 2).pos;
+  }
+  return areas.find((a) => a.centro)?.centro ?? null;
+}
+
 export const formatarKm = (km: number): string =>
   km.toFixed(1).replace(".", ",");
 export const formatarMetros = (m: number): string => `${Math.round(m)} m`;
