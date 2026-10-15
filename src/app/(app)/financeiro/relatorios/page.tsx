@@ -85,6 +85,8 @@ import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-g
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
 import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo-cc-grafico";
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
+import { CustoGrupoHistoria } from "@/modules/financeiro/relatorios/components/custo-grupo-historia";
+import { mesesDoPeriodo } from "@/modules/financeiro/relatorios/custo-grupo-comparacao";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
 import { AgingPrazos } from "@/modules/financeiro/relatorios/components/aging-prazos";
@@ -126,6 +128,7 @@ import {
   aging,
   custoPorCentroCusto,
   custoPorGrupo,
+  custoPorGrupoMensal,
   custoReceita,
   investimentos,
   rankingFornecedores,
@@ -1381,7 +1384,18 @@ async function ConteudoCustoGrupo({
   recorte: RecorteCustoGrupo;
   podeVerLancamentos: boolean;
 }) {
-  const custo = await custoPorGrupo({ ...pontasDaRpc(periodo), ...recorte });
+  // O período anterior de mesmo tamanho e a série mensal contam onde o custo
+  // sobe. Período aberto (tudo, "de X em diante") não tem nem um nem outro.
+  const anteriorPeriodo = periodoAnterior(periodo);
+  const meses = mesesDoPeriodo(periodo);
+  const pontas = pontasDaRpc(periodo);
+  const [custo, anterior, serie] = await Promise.all([
+    custoPorGrupo({ ...pontas, ...recorte }),
+    anteriorPeriodo ? custoPorGrupo({ ...pontasDaRpc(anteriorPeriodo), ...recorte }) : null,
+    meses.length > 1 && meses.length <= 36 && pontas.inicio && pontas.fim
+      ? custoPorGrupoMensal({ ...recorte, inicio: pontas.inicio, fim: pontas.fim })
+      : [],
+  ]);
 
   const descricaoPeriodo = descreverPeriodo(periodo, modo);
   const temRecorte =
@@ -1424,6 +1438,13 @@ async function ConteudoCustoGrupo({
           detalhe="Abra o grupo para ver subcategoria e insumo"
         />
       </GradeKpis>
+      <CustoGrupoHistoria
+        custo={custo}
+        anterior={anterior}
+        descricaoPeriodo={descricaoPeriodo}
+        descricaoAnterior={anteriorPeriodo ? descreverPeriodo(anteriorPeriodo) : null}
+        serie={serie}
+      />
       <GradeKpis id="financeiro.relatorios.custo-grupo.tabela" titulo="Tabela do custo por grupo" vao="amplo">
         <ItemGrade titulo="Tabela do custo por grupo" idCard="tabela" larguraPadrao={12}>
           <CustoGrupoTabela
@@ -1736,7 +1757,7 @@ export default async function RelatoriosPage({
           relatorio="custo-grupo"
           exportar={relatorio}
           titulo="Custo por grupo de insumo"
-          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo."
+          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo; a linha Sem insumo (lançamento sem item de ordem de compra) abre pela categoria financeira do rateio. A comparação é contra o período anterior de mesmo tamanho, com o mesmo centro e categoria; em O que mais subiu entram os grupos com insumo e as categorias do Sem insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo, menos o rateio sem categoria lançado em centro de empresa ligada: aqui o centro de empresa ligada fica fora pela raiz, lá ele entra quando o rateio não tem categoria (em 2026, dois 13º no centro Amazônia, R$ 1.621,00)."
         >
           <FiltrosCustoGrupoBarra
             filtros={filtrosCustoGrupo}

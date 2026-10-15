@@ -1155,6 +1155,14 @@ export interface CustoSubcategoria {
   valor: number;
 }
 
+/** Uma categoria financeira dentro da linha "Sem insumo". */
+export interface CustoCategoriaSemInsumo {
+  /** Nulo = rateio sem categoria (nem no rateio nem no lançamento). */
+  categoriaId: string | null;
+  nome: string;
+  valor: number;
+}
+
 export interface CustoGrupo {
   /** Nulo na linha "Sem insumo (lançamento avulso)". */
   grupoId: string | null;
@@ -1163,6 +1171,11 @@ export interface CustoGrupo {
   valor: number;
   /** Nível 2 do drill-down, já carregado (são poucas linhas). */
   subcategorias: CustoSubcategoria[];
+  /**
+   * Só na linha "Sem insumo": o nível 2 é a categoria financeira, porque esse
+   * dinheiro não tem insumo para abrir (92,8% do custo de 2026).
+   */
+  categorias?: CustoCategoriaSemInsumo[];
 }
 
 export interface CustoPorGrupo {
@@ -1270,18 +1283,76 @@ export async function custoPorGrupo(
     }),
   );
 
+  const categoriasSemInsumo = linhas.some((linha) => !linha.grupo_id)
+    ? await custoSemInsumoPorCategoria(filtros)
+    : [];
+
   const grupos: CustoGrupo[] = linhas.map((linha, indice) => ({
     grupoId: linha.grupo_id,
     nome: linha.grupo_nome,
     cor: corGrupo(linha.grupo_cor),
     valor: paraReais(paraCentavos(linha.total)),
     subcategorias: subcategorias[indice] ?? [],
+    ...(linha.grupo_id ? {} : { categorias: categoriasSemInsumo }),
   }));
 
   return {
     grupos,
     total: grupos.reduce((soma, grupo) => soma + grupo.valor, 0),
   };
+}
+
+/**
+ * A linha "Sem insumo" aberta por categoria financeira (a do rateio, caindo na
+ * do lançamento). Mesmo filtro do ramo `sem_insumo` de `fn_rel_custo_por_grupo`:
+ * a soma fecha com a linha.
+ */
+export async function custoSemInsumoPorCategoria(
+  filtros?: FiltrosCustoPorGrupo,
+): Promise<CustoCategoriaSemInsumo[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custo_sem_insumo_por_categoria", {
+    p_inicio: filtros?.inicio,
+    p_fim: filtros?.fim,
+    p_centro_custo: filtros?.centroCustoId,
+    p_categoria: filtros?.categoriaId,
+    p_incluir_investimento: filtros?.incluirInvestimento,
+  });
+  if (error) {
+    throw new Error("Não foi possível abrir o custo sem insumo por categoria");
+  }
+  return (data ?? []).map((linha) => ({
+    categoriaId: linha.categoria_id,
+    nome: linha.categoria_nome,
+    valor: paraReais(paraCentavos(linha.total)),
+  }));
+}
+
+/**
+ * Custo total por mês (yyyy-MM), somando os grupos. Chama a própria
+ * `fn_rel_custo_por_grupo` mês a mês no banco, então o mês fecha com o período.
+ * Precisa das duas pontas; a função recusa mais de 36 meses.
+ */
+export async function custoPorGrupoMensal(
+  filtros: FiltrosCustoPorGrupo & { inicio: string; fim: string },
+): Promise<{ mes: string; total: number }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_custo_por_grupo_mensal", {
+    p_inicio: filtros.inicio,
+    p_fim: filtros.fim,
+    p_centro_custo: filtros.centroCustoId,
+    p_categoria: filtros.categoriaId,
+    p_incluir_investimento: filtros.incluirInvestimento,
+  });
+  if (error) {
+    throw new Error("Não foi possível carregar o custo mês a mês");
+  }
+  const porMes = new Map<string, number>();
+  for (const linha of data ?? []) {
+    const mes = linha.mes.slice(0, 7);
+    porMes.set(mes, (porMes.get(mes) ?? 0) + paraCentavos(linha.total));
+  }
+  return [...porMes.entries()].map(([mes, centavos]) => ({ mes, total: paraReais(centavos) }));
 }
 
 /**

@@ -244,3 +244,37 @@ describe("CustoGrupoTabela: cada número embaixo do cabeçalho dele", () => {
     expect(contorno?.className).toContain("w-full");
   });
 });
+
+describe("CustoGrupoTabela — Sem insumo por categoria", () => {
+  it("a linha Sem insumo abre pelas categorias financeiras, sem link que não fecharia", () => {
+    render(
+      <CustoGrupoTabela
+        custo={{
+          total: 1000,
+          grupos: [
+            {
+              grupoId: null,
+              nome: "Sem insumo (lançamento avulso)",
+              cor: "neutro",
+              valor: 1000,
+              subcategorias: [],
+              categorias: [
+                { categoriaId: "cat-folha", nome: "Folha de pagamento", valor: 700 },
+                { categoriaId: null, nome: "Sem categoria", valor: 300 },
+              ],
+            },
+          ],
+        }}
+        periodo={{ mes: "2026-08" }}
+        recorte={{}}
+        podeVerLancamentos
+      />,
+    );
+    expect(screen.queryByText("Folha de pagamento")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Abrir Sem insumo (lançamento avulso)"));
+    const folha = screen.getByText("Folha de pagamento");
+    expect(folha.closest("a")).toBeNull();
+    expect(celulasDaLinha("Folha de pagamento").join(" ")).toContain("70,0%");
+    expect(screen.getByText("Sem categoria")).toBeTruthy();
+  });
+});
