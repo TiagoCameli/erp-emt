@@ -157,7 +157,8 @@ function equipamento(e: Linha): EquipamentoMapa {
     propriedade: propriedade(e.propriedade),
     modelo3d: texto(e.modelo_3d) || "generico",
     pos: posicao(e.lng, e.lat),
-    heading: numero(e.heading),
+    heading: numeroOuNulo(e.heading) ?? 0,
+    rumoManual: numeroOuNulo(e.heading),
     fontePosicao: e.fonte_posicao === "gps" ? "gps" : "manual",
     estado: estadoEfetivo(e.estado),
     estadoDesde: textoOuNulo(e.estado_desde),
@@ -313,6 +314,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
         obraId: textoOuNulo(l.obra_id),
         fornecedorId: textoOuNulo(l.fornecedor_id),
         pos,
+        raioM: numeroOuNulo(l.raio_m),
       };
       return [item];
     }),

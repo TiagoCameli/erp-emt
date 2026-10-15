@@ -258,3 +258,21 @@ export const vincularLocalSchema = z.strictObject({
   localidadeId: idSchemaCom("Local inválido"),
 });
 export type VincularLocalInput = z.infer<typeof vincularLocalSchema>;
+
+/** Raio da área do local, em metros; null volta ao padrão da configuração. */
+export const raioLocalSchema = z.strictObject({
+  localidadeId: idSchemaCom("Local inválido"),
+  raioM: z
+    .number({ error: "Raio inválido" })
+    .min(10, { error: "Raio mínimo de 10 m" })
+    .max(5000, { error: "Raio máximo de 5 km" })
+    .nullable(),
+});
+export type RaioLocalInput = z.infer<typeof raioLocalSchema>;
+
+/** Rumo da máquina em graus (qualquer valor; o banco normaliza para 0..360); null = segue a pista. */
+export const girarEquipamentoSchema = z.strictObject({
+  equipamentoId: idSchemaCom("Equipamento inválido"),
+  rumo: z.number({ error: "Rumo inválido" }).finite().nullable(),
+});
+export type GirarEquipamentoInput = z.infer<typeof girarEquipamentoSchema>;

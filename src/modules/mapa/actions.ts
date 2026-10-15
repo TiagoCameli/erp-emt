@@ -11,11 +11,13 @@ import {
   assinalarOperadorSchema,
   colocarLocalSchema,
   encerrarLocacaoSchema,
+  girarEquipamentoSchema,
   iniciarLocacaoSchema,
   marcarEstadoSchema,
   moverEquipamentosSchema,
   moverPessoasSchema,
   posicionarObraSchema,
+  raioLocalSchema,
   vincularLocalSchema,
 } from "@/modules/mapa/schemas";
 import type { EstadoMapa } from "@/modules/mapa/tipos";
@@ -441,6 +443,66 @@ export async function vincularLocal(dados: unknown): Promise<ResultadoMapa> {
       "mapa.vincularLocal",
       erro,
       `Não foi possível ligar ao local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Tamanho da área de um local (raio em metros); null volta ao padrão. */
+export async function ajustarRaioLocal(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = raioLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_local_raio", {
+      p_id: v.localidadeId,
+      p_raio: v.raioM,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.localRaio",
+        error,
+        mensagemDaRpc(error, "Não foi possível mudar a área do local"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.localRaio",
+      erro,
+      `Não foi possível mudar a área do local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Rumo da máquina no mapa; null volta a seguir a pista. Não é movimentação. */
+export async function girarEquipamento(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = girarEquipamentoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_girar_equipamento", {
+      p_id: v.equipamentoId,
+      p_heading: v.rumo,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.girar",
+        error,
+        mensagemDaRpc(error, "Não foi possível girar a máquina"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.girar",
+      erro,
+      `Não foi possível girar a máquina: ${textoDoErro(erro)}`,
     );
   }
 }

@@ -38,6 +38,8 @@ export const ARQUIVO_BONECO = "/mapa-modelos/boneco.glb";
 /** Prefixos de id das camadas clicáveis: é por eles que o ponteiro sabe o que pegou. */
 export const PREFIXO_MAQUINA = "maq-";
 export const ID_PESSOAS = "pessoas";
+/** Rótulo do local: tocar nele abre a ficha do local (área). */
+export const ID_LOCAIS = "locais-nome";
 
 /** Quantas vezes o tamanho real a miniatura aparece (fixo no terreno, em metros). */
 export const ESCALA_MAQUINA = 3;
@@ -204,7 +206,7 @@ export function montarCamadas(cena: Cena): Layer[] {
       id: "locais-zona",
       data: cena.localidades,
       getPosition: (d) => d.pos,
-      getRadius: cena.snapLocalM,
+      getRadius: (d) => d.raioM ?? cena.snapLocalM,
       radiusUnits: "meters",
       filled: true,
       getFillColor: [42, 120, 214, 30],
@@ -214,7 +216,7 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: false,
     }),
     new TextLayer<LocalidadeMapa>({
-      id: "locais-nome",
+      id: ID_LOCAIS,
       data: cena.localidades,
       getPosition: (d) => d.pos,
       getText: (d) => {
@@ -229,7 +231,7 @@ export function montarCamadas(cena: Cena): Layer[] {
       getPixelOffset: [0, -22],
       fontFamily: FONTE,
       characterSet: "auto",
-      pickable: false,
+      pickable: true,
     }),
   );
 

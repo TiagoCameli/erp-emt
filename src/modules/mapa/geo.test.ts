@@ -48,6 +48,7 @@ const local: LocalidadeMapa = {
   obraId: null,
   fornecedorId: null,
   pos: [-72.6, -7.8],
+  raioM: null,
 };
 const oficina: LocalidadeMapa = {
   id: "l2",
@@ -56,6 +57,7 @@ const oficina: LocalidadeMapa = {
   obraId: null,
   fornecedorId: null,
   pos: [-72.7, -7.9],
+  raioM: null,
 };
 
 const area: AreaMapa = {
@@ -200,6 +202,19 @@ describe("cor hex", () => {
     expect(hexParaRgb("#3E7744")).toEqual([62, 119, 68]);
     expect(hexParaRgb("cf943a")).toEqual([207, 148, 58]);
     expect(hexParaRgb("")).toEqual([69, 70, 75]);
+  });
+});
+
+describe("raio de cada local", () => {
+  it("o raio do local manda; sem raio, vale o padrão", () => {
+    const longe = deslocar(local.pos, 0, 600);
+    expect(colarNoLocal(longe, [local], 300)).toBeNull();
+    const grande = { ...local, raioM: 800 };
+    expect(colarNoLocal(longe, [grande], 300)?.local.id).toBe("l1");
+    const pequeno = { ...local, raioM: 50 };
+    expect(
+      colarNoLocal(deslocar(local.pos, 0, 120), [pequeno], 300),
+    ).toBeNull();
   });
 });
 

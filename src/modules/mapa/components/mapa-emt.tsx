@@ -9,6 +9,7 @@ export type {
   ArrasteSolto,
   CenaBase,
   Foco,
+  GiroMapa,
   ItemSolto,
   MapaEmtProps,
   ModoFundo,
