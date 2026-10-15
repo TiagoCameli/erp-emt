@@ -235,6 +235,11 @@ describe("paraEstadoMapa", () => {
       ehExterno: false,
       localidadeId,
       equipamentoId,
+      pos: null,
+      capacidade: null,
+      nivel: null,
+      unidade: "L",
+      insumo: "",
     });
     const extras = extrasPorLocal(
       [
@@ -244,7 +249,7 @@ describe("paraEstadoMapa", () => {
         t("meloza", "l1", "eq1"),
         t("solto", null),
       ],
-      [{ id: "d1", nome: "Almox", localidadeId: "l2" }],
+      [{ id: "d1", nome: "Almox", localidadeId: "l2", pos: null }],
     );
     expect(extras.get("l1")).toBe("2 tanques");
     expect(extras.get("l2")).toBe("1 tanque · 1 depósito");

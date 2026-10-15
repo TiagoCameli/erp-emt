@@ -32,6 +32,12 @@ import {
 export type PedidoColocar =
   | { tipo: "obra"; obra: ObraMapa }
   | {
+      tipo: "objeto";
+      alvo: "tanque" | "pilha" | "deposito";
+      id: string;
+      rotulo: string;
+    }
+  | {
       tipo: "local";
       /** Nome mostrado no aviso e na confirmação. */
       rotulo: string;
