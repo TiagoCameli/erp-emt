@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import {
   APLICACOES_OLEO,
@@ -65,7 +66,6 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
   // Facetado: aplicação e status só oferecem o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       tipos,
       {
@@ -75,7 +75,14 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
         },
         aplicacao: { selecionados: selecao(aplicacao), chave: (tipo) => tipo.aplicacao },
       },
-      [(tipo) => !termo || tipo.nome.toLowerCase().includes(termo)],
+      [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (tipo) =>
+          casaBusca(
+            textoPesquisavel(tipo.nome, ROTULO_APLICACAO_OLEO[tipo.aplicacao], tipo.intervaloMeses),
+            busca,
+          ),
+      ],
     );
   }, [tipos, busca, aplicacao, status]);
 
@@ -193,7 +200,7 @@ export function TiposOleoTabela({ tipos, podeEditar, podeExcluir, onEditar }: Ti
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por nome" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, aplicação ou intervalo" />,
           },
           {
             id: "aplicacao",

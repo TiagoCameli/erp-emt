@@ -29,6 +29,10 @@ describe("palavrasDaBusca", () => {
     expect(palavrasDaBusca("100% _a*")).toEqual(["100", "a"]);
   });
 
+  it("palavra só de pontuação sai, para não casar tudo", () => {
+    expect(palavrasDaBusca("(,) - diesel /")).toEqual(["diesel"]);
+  });
+
   it("busca vazia não tem palavra", () => {
     expect(palavrasDaBusca("   ")).toEqual([]);
     expect(palavrasDaBusca(undefined)).toEqual([]);

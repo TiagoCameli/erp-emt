@@ -16,6 +16,7 @@ import {
   CelulaVazia,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarQuantidade } from "@/lib/formatadores";
 import {
   abaixoDoMinimo,
@@ -39,6 +40,23 @@ const OPCOES_SITUACAO = [
 interface LinhaTabela extends SaldoLinha {
   valorEmEstoque: number;
   abaixo: boolean;
+}
+
+/** Busca universal (src/lib/busca.ts): tudo o que a linha carrega. */
+function casaBuscaSaldo(linha: LinhaTabela, busca: string): boolean {
+  return casaBusca(
+    textoPesquisavel(
+      linha.insumoNome,
+      linha.unidade,
+      linha.depositoNome,
+      linha.saldo,
+      linha.estoqueMinimo,
+      linha.abaixo ? "abaixo do minimo" : linha.saldo > 0 ? "em estoque" : "zerado",
+      { valor: linha.custoMedio },
+      { valor: linha.valorEmEstoque },
+    ),
+    busca,
+  );
 }
 
 export interface SaldosTabelaProps {
@@ -75,11 +93,9 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
   );
 
   const doRecorte = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return linhas.filter((linha) => {
       if (deposito && linha.depositoId !== deposito) return false;
-      if (termo && !linha.insumoNome.toLowerCase().includes(termo)) return false;
-      return true;
+      return casaBuscaSaldo(linha, busca);
     });
   }, [linhas, busca, deposito]);
 
@@ -87,7 +103,6 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
   // pelos outros (ver `_shared/filtros-facetados`). Os cartões seguem em
   // `doRecorte`, sem a situação.
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       linhas,
       {
@@ -102,7 +117,7 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
           },
         },
       },
-      [(linha) => !termo || linha.insumoNome.toLowerCase().includes(termo)],
+      [(linha) => casaBuscaSaldo(linha, busca)],
     );
   }, [linhas, busca, deposito, situacao]);
 
@@ -215,7 +230,7 @@ export function SaldosTabela({ saldos, depositos }: SaldosTabelaProps) {
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar peça pelo nome"
+                placeholder="Peça, depósito, saldo ou valor"
               />
             ),
           },

@@ -66,12 +66,16 @@ function normalizarPalavra(palavra: string): string {
   return p;
 }
 
-/** As palavras da busca, normalizadas. Busca vazia devolve lista vazia. */
+/**
+ * As palavras da busca, normalizadas. Busca vazia devolve lista vazia, e
+ * palavra sem letra nem dígito ("-", ",", "/") é descartada: sozinha ela casaria
+ * quase tudo e não diz o que a pessoa procura.
+ */
 export function palavrasDaBusca(busca: string | null | undefined): string[] {
   return normalizarBusca(busca)
     .split(" ")
     .map(normalizarPalavra)
-    .filter((p) => p !== "" && p !== "r$");
+    .filter((p) => /[\p{L}\p{N}]/u.test(p));
 }
 
 /** "1500,00 1.500,00" — as duas grafias de um valor em reais. */
