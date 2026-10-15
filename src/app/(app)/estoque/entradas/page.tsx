@@ -34,14 +34,14 @@ export default async function PaginaEntradasEstoque() {
   ]);
 
   const todosLocais = locais.map((l) => ({ id: l.id, nome: l.nome }));
-  const locaisAtivos = locais.filter((l) => l.ativo).map((l) => ({ id: l.id, nome: l.nome }));
+  const locaisAtivos = locais.filter((l) => l.ativo).map((l) => ({ id: l.id, nome: l.nome, insumoId: l.insumoId }));
 
   return (
     <>
       <PageHeader
         modulo="Estoque"
         titulo="Entradas"
-        descricao="Material que entrou no depósito ou no tanque, avulso ou puxado de uma OC aprovada"
+        descricao="Material que entrou no depósito, no tanque ou na pilha, avulso ou puxado de uma OC aprovada"
         acoes={
           <EntradasAcoesCabecalho
             podeCriar={podeCriar}

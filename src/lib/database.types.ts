@@ -3228,7 +3228,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           id: string;
-          insumo_atual_id: string | null;
+          insumo_id: string | null;
           nome: string;
           observacoes: string | null;
           saldo: number;
@@ -3241,7 +3241,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
-          insumo_atual_id?: string | null;
+          insumo_id?: string | null;
           nome: string;
           observacoes?: string | null;
           saldo?: number;
@@ -3254,7 +3254,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           id?: string;
-          insumo_atual_id?: string | null;
+          insumo_id?: string | null;
           nome?: string;
           observacoes?: string | null;
           saldo?: number;

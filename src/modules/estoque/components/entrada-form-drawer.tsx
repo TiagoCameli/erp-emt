@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { salvarEntrada } from "@/modules/estoque/actions";
+import type { LocalFormOpcao } from "@/modules/estoque/calculo";
 import type { EntradaLinha, ItemOcDisponivel } from "@/modules/estoque/queries";
 import {
   entradaDoForm,
@@ -37,7 +38,7 @@ import {
   paraNumero,
   totalDaLinha,
 } from "@/modules/manutencao/almoxarifado/calculo";
-import type { InsumoOpcao, Opcao } from "@/modules/manutencao/almoxarifado/queries";
+import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 
 const ID_FORM = "form-entrada-estoque";
 
@@ -79,8 +80,8 @@ export interface EntradaFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Nula para registrar; a linha para editar. */
   entrada: EntradaLinha | null;
-  /** Depósitos, tanques de material e pilhas ativos (`listarLocais`). */
-  locais: Opcao[];
+  /** Depósitos, tanques de material e pilhas ativos (`listarLocais`); a pilha leva o insumo dela. */
+  locais: LocalFormOpcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
 }
@@ -126,10 +127,26 @@ export function EntradaFormDrawer({
     () => insumos.map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} (${i.unidade})` : i.nome })),
     [insumos],
   );
+  // Pilha guarda um insumo só: escolhida a pilha, o insumo é o dela (e da OC, só os itens dele).
+  const insumoDaPilha = locais.find((l) => l.id === local)?.insumoId ?? null;
   const opcoesItensOc = React.useMemo(
-    () => itensOc.map((item) => ({ valor: item.ocItemId, rotulo: rotuloItemOc(item) })),
-    [itensOc],
+    () =>
+      itensOc
+        .filter((item) => insumoDaPilha === null || item.insumoId === insumoDaPilha)
+        .map((item) => ({ valor: item.ocItemId, rotulo: rotuloItemOc(item) })),
+    [itensOc, insumoDaPilha],
   );
+
+  function escolherLocal(valor: string) {
+    form.setValue("local", valor, { shouldDirty: true, shouldValidate: true });
+    const insumoNovo = locais.find((l) => l.id === valor)?.insumoId ?? null;
+    if (insumoNovo === null) return;
+    if (origem === "oc") {
+      if (itemOc && itemOc.insumoId !== insumoNovo) form.setValue("ocItemId", "", { shouldDirty: true });
+    } else {
+      form.setValue("insumoId", insumoNovo, { shouldDirty: true, shouldValidate: true });
+    }
+  }
 
   function escolherItemOc(valor: string) {
     form.setValue("ocItemId", valor, { shouldDirty: true, shouldValidate: true });
@@ -258,7 +275,7 @@ export function EntradaFormDrawer({
             id="entrada-local"
             valor={local ?? ""}
             rotuloDoValor={entrada?.localNome}
-            onValorChange={(valor) => form.setValue("local", valor, { shouldDirty: true, shouldValidate: true })}
+            onValorChange={escolherLocal}
             opcoes={opcoesLocais}
             placeholder="Selecione o depósito, o tanque ou a pilha"
             vazioTexto="Nenhum depósito, tanque de material ou pilha ativa. Crie nas abas Depósitos, Tanques e Pilhas"
@@ -267,7 +284,13 @@ export function EntradaFormDrawer({
         </CampoFormulario>
 
         {daOc ? null : (
-          <CampoFormulario id="entrada-insumo" rotulo="Insumo" obrigatorio erro={erros.insumoId?.message}>
+          <CampoFormulario
+            id="entrada-insumo"
+            rotulo="Insumo"
+            obrigatorio
+            ajuda={insumoDaPilha ? "O insumo da pilha escolhida" : undefined}
+            erro={erros.insumoId?.message}
+          >
             <Combobox
               id="entrada-insumo"
               valor={insumoId ?? ""}
@@ -276,7 +299,7 @@ export function EntradaFormDrawer({
               opcoes={opcoesInsumos}
               placeholder="Selecione o insumo"
               buscaPlaceholder="Buscar insumo"
-              disabled={salvando}
+              disabled={salvando || insumoDaPilha !== null}
             />
           </CampoFormulario>
         )}

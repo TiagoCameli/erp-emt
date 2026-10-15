@@ -1,11 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
 
-import { CampoFormulario, classesFormulario, FormDrawer, submeterComAviso } from "@/components/canonicos";
+import {
+  CampoFormulario,
+  classesFormulario,
+  Combobox,
+  FormDrawer,
+  LinhaCampos,
+  submeterComAviso,
+} from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,32 +20,50 @@ import { Textarea } from "@/components/ui/textarea";
 import { criarPilha, editarPilha } from "@/modules/estoque/pilhas/actions";
 import type { PilhaLinha } from "@/modules/estoque/pilhas/queries";
 import { pilhaSchema, type PilhaInput } from "@/modules/estoque/pilhas/schemas";
+import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 
 const ID_FORM = "form-pilha-estoque";
 
-const PADRAO: PilhaInput = { nome: "", observacoes: "" };
+const PADRAO: PilhaInput = { nome: "", insumoId: "", observacoes: "" };
 
 export interface PilhaFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   /** Pilha em edição. Ausente abre em modo de criação. */
   pilha?: PilhaLinha | null;
+  /** Insumos ativos, com a unidade do cadastro. */
+  insumos: InsumoOpcao[];
 }
 
-/** Criação e edição da pilha: nome e observações. O material vem da primeira entrada. */
-export function PilhaFormDrawer({ aberto, onAbertoChange, pilha }: PilhaFormDrawerProps) {
+/**
+ * Criação e edição da pilha: nome, insumo e observações. A unidade é a do cadastro do
+ * insumo, por isso o insumo aparece com ela. Depois da primeira entrada o insumo não troca.
+ */
+export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: PilhaFormDrawerProps) {
   const editando = Boolean(pilha);
+  // Saída só existe depois de entrada: entrou alguma coisa = tem movimento.
+  const insumoTravado = (pilha?.totalEntrada ?? 0) > 0;
 
   const form = useForm<PilhaInput>({
     resolver: zodResolver(pilhaSchema),
     defaultValues: PADRAO,
   });
   const salvando = form.formState.isSubmitting;
+  const insumoId = useWatch({ control: form.control, name: "insumoId" });
 
   React.useEffect(() => {
     if (!aberto) return;
-    form.reset(pilha ? { nome: pilha.nome, observacoes: pilha.observacoes ?? "" } : PADRAO);
+    form.reset(
+      pilha ? { nome: pilha.nome, insumoId: pilha.insumoId ?? "", observacoes: pilha.observacoes ?? "" } : PADRAO,
+    );
   }, [aberto, pilha, form]);
+
+  const opcoesInsumos = React.useMemo(
+    () => insumos.map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} · ${i.unidade}` : i.nome })),
+    [insumos],
+  );
+  const insumo = insumos.find((i) => i.id === insumoId) ?? null;
+  const unidade = insumo ? insumo.unidade : insumoId && insumoId === pilha?.insumoId ? pilha.unidade : null;
 
   async function aoEnviar(dados: PilhaInput) {
     const resultado = pilha ? await editarPilha(pilha.id, dados) : await criarPilha(dados);
@@ -50,12 +75,14 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha }: PilhaFormDraw
     onAbertoChange(false);
   }
 
+  const erros = form.formState.errors;
+
   return (
     <FormDrawer
       aberto={aberto}
       onAbertoChange={onAbertoChange}
       titulo={editando ? "Editar pilha" : "Nova pilha"}
-      descricao="O material é o da primeira entrada. Quando a pilha zera, ela fica inativa sozinha"
+      descricao="Cada pilha guarda um insumo só, na unidade do cadastro dele. Quando zera, fica inativa sozinha"
       temAlteracoesNaoSalvas={form.formState.isDirty && !salvando}
       rodape={
         <>
@@ -78,7 +105,7 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha }: PilhaFormDraw
       }
     >
       <form id={ID_FORM} onSubmit={submeterComAviso(form, aoEnviar)} className={classesFormulario} noValidate>
-        <CampoFormulario id="pilha-nome" rotulo="Nome" obrigatorio erro={form.formState.errors.nome?.message}>
+        <CampoFormulario id="pilha-nome" rotulo="Nome" obrigatorio erro={erros.nome?.message}>
           <Input
             id="pilha-nome"
             autoComplete="off"
@@ -88,7 +115,36 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha }: PilhaFormDraw
           />
         </CampoFormulario>
 
-        <CampoFormulario id="pilha-observacoes" rotulo="Observações" erro={form.formState.errors.observacoes?.message}>
+        <LinhaCampos>
+          <CampoFormulario
+            id="pilha-insumo"
+            rotulo="Insumo"
+            obrigatorio
+            ajuda={insumoTravado ? "A pilha já teve entrada: o insumo não troca mais" : undefined}
+            erro={erros.insumoId?.message}
+          >
+            <Combobox
+              id="pilha-insumo"
+              valor={insumoId ?? ""}
+              rotuloDoValor={pilha?.insumoNome ?? undefined}
+              onValorChange={(valor) => form.setValue("insumoId", valor, { shouldDirty: true, shouldValidate: true })}
+              opcoes={opcoesInsumos}
+              placeholder="Selecione o insumo"
+              buscaPlaceholder="Buscar insumo"
+              disabled={salvando || insumoTravado}
+            />
+          </CampoFormulario>
+          <CampoFormulario
+            id="pilha-unidade"
+            rotulo="Unidade"
+            largura="curto"
+            ajuda={insumoId ? "A do cadastro do insumo" : undefined}
+          >
+            <Input id="pilha-unidade" value={unidade ?? (insumoId ? "Sem unidade" : "—")} readOnly disabled />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <CampoFormulario id="pilha-observacoes" rotulo="Observações" erro={erros.observacoes?.message}>
           <Textarea id="pilha-observacoes" rows={3} disabled={salvando} {...form.register("observacoes")} />
         </CampoFormulario>
       </form>

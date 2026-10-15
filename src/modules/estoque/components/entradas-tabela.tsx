@@ -22,6 +22,7 @@ import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { excluirMovimento, restaurarMovimento } from "@/modules/estoque/actions";
+import type { LocalFormOpcao } from "@/modules/estoque/calculo";
 import type { EntradaLinha, ItemOcDisponivel } from "@/modules/estoque/queries";
 import { formatarPreco } from "@/modules/manutencao/almoxarifado/calculo";
 import type { InsumoOpcao, Opcao } from "@/modules/manutencao/almoxarifado/queries";
@@ -32,9 +33,9 @@ type Situacao = (typeof SITUACOES)[number];
 
 export interface EntradasTabelaProps {
   entradas: EntradaLinha[];
-  /** Todos os locais (depósitos e tanques de material), para o filtro. */
+  /** Todos os locais (depósitos, tanques de material e pilhas), para o filtro. */
   locais: Opcao[];
-  locaisAtivos: Opcao[];
+  locaisAtivos: LocalFormOpcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
   podeEditar: boolean;

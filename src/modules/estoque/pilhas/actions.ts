@@ -9,11 +9,12 @@ import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
+import { traduzirErroEstoque } from "@/modules/estoque/erros";
 import { pilhaSchema, type PilhaInput } from "@/modules/estoque/pilhas/schemas";
 
 /**
- * Cadastro das pilhas (`estoque.pilhas`). A tela grava só nome e observações (grant por
- * coluna); entrada e saída são as do Estoque, e o status muda sozinho no banco.
+ * Cadastro das pilhas (`estoque.pilhas`). A tela grava nome, insumo e observações (grant por
+ * coluna; o insumo só troca enquanto a pilha não tem movimento); entrada e saída são as do Estoque, e o status muda sozinho no banco.
  * Nenhuma action lança: tudo volta `{ erro }`.
  */
 
@@ -45,7 +46,19 @@ function revalidar(): void {
 }
 
 function linhaPilha(dados: PilhaInput) {
-  return { nome: dados.nome, observacoes: dados.observacoes === "" ? null : dados.observacoes };
+  return {
+    nome: dados.nome,
+    insumo_id: dados.insumoId,
+    observacoes: dados.observacoes === "" ? null : dados.observacoes,
+  };
+}
+
+const CHECK_VIOLADO = "23514";
+
+/** As travas do banco (insumo inativo, insumo de outro módulo, troca com movimento) já falam português. */
+function erroDeSalvar(error: { code?: string; message?: string }): string {
+  if (error.code === CHECK_VIOLADO) return "Escolha o insumo da pilha";
+  return traduzirErroEstoque(error, "Não foi possível salvar a pilha. Tente novamente");
 }
 
 export async function criarPilha(dados: PilhaInput): Promise<ResultadoAcao> {
@@ -57,7 +70,7 @@ export async function criarPilha(dados: PilhaInput): Promise<ResultadoAcao> {
 
     const supabase = await createClient();
     const { error } = await supabase.from("estoque_pilhas").insert(linhaPilha(validado.data));
-    if (error) return erroAcao("estoque.pilhas.criar", error, "Não foi possível salvar a pilha. Tente novamente");
+    if (error) return erroAcao("estoque.pilhas.criar", error, erroDeSalvar(error));
 
     revalidar();
     return { ok: true };
@@ -80,7 +93,7 @@ export async function editarPilha(id: string, dados: PilhaInput): Promise<Result
       .update(linhaPilha(validado.data))
       .eq("id", idValido.data)
       .select("id");
-    if (error) return erroAcao("estoque.pilhas.editar", error, "Não foi possível salvar a pilha. Tente novamente");
+    if (error) return erroAcao("estoque.pilhas.editar", error, erroDeSalvar(error));
     if (!data || data.length === 0) return { erro: "Pilha não encontrada" };
 
     revalidar();
