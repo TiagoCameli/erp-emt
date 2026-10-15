@@ -124,6 +124,9 @@ const ROTULO_MOTOR: Record<TipoMotor, string> = {
 
 /** Cruzeiro do Sul e os lotes da BR-364, quando não há trecho cadastrado para enquadrar. */
 const CHAVE_PAINEL = "erp-emt:mapa:painel";
+/** Raio do anel de giro em volta da máquina (as miniaturas são 3x o tamanho real). */
+const RAIO_GIRO_M = 45;
+const RAIO_GIRO_USINA_M = 90;
 const assinantesPainel = new Set<() => void>();
 /** Reserva para quando o storage não existe (aba privada): vale só nesta visita. */
 let painelNaMemoria: boolean | null = null;
@@ -440,6 +443,24 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     [estado.trechos, estado.areas],
   );
 
+  // Anel de giro: uma máquina só selecionada, com a ficha aberta, no mapa e editável.
+  const anelGiro = React.useMemo(() => {
+    if (
+      !permissoes.editar ||
+      ficha?.tipo !== "equipamento" ||
+      selecao.size !== 1
+    )
+      return null;
+    const e = estado.equipamentos.find((x) => x.id === ficha.id);
+    if (!e || !e.pos || e.fontePosicao === "gps" || !selecao.has(e.id))
+      return null;
+    return {
+      id: e.id,
+      pos: e.pos,
+      raioM: e.modelo3d === "usina_asfalto" ? RAIO_GIRO_USINA_M : RAIO_GIRO_M,
+    };
+  }, [permissoes.editar, ficha, selecao, estado.equipamentos]);
+
   const cena = React.useMemo<CenaBase>(() => {
     const equipamentos = filtrados.flatMap((e) => {
       const pos = posicoesPendentes.get(e.id) ?? e.pos;
@@ -480,6 +501,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       extrasDoLocal,
       obras: obrasNoMapa,
       rotulosObra,
+      anelGiro,
       desenho: desenhoFinal
         ? { forma: desenho?.forma ?? "trecho", pontos: desenhoFinal.pontos }
         : desenho
@@ -505,6 +527,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     extrasDoLocal,
     obrasNoMapa,
     rotulosObra,
+    anelGiro,
     desenho,
     desenhoFinal,
     estado.config.snapLocalM,
@@ -850,14 +873,32 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
    * Girar a máquina: o mapa mostra na hora e grava 600 ms depois do último toque (vários
    * toques de 15° viram uma gravação só). null volta a seguir a pista e grava direto.
    */
-  const girar = (e: EquipamentoMapa, delta: number | null) => {
-    if (timerGiro.current) clearTimeout(timerGiro.current);
-    const gravar = async (rumo: number | null) => {
-      const r = await girarEquipamento({ equipamentoId: e.id, rumo });
+  const gravarRumo = React.useCallback(
+    async (id: string, rumo: number | null) => {
+      const r = await girarEquipamento({ equipamentoId: id, rumo });
       if ("erro" in r) toast.error(r.erro);
       else if (r.estado) setEstado(r.estado);
       setRumoPrevio(null);
-    };
+    },
+    [],
+  );
+
+  // Anel de giro (apertar e arrastar em volta da máquina): prévia enquanto arrasta, grava ao soltar.
+  const girarPeloAnel = React.useCallback((id: string, rumo: number) => {
+    if (timerGiro.current) clearTimeout(timerGiro.current);
+    setRumoPrevio({ id, rumo });
+  }, []);
+  const soltarAnel = React.useCallback(
+    (id: string, rumo: number) => {
+      setRumoPrevio({ id, rumo });
+      void gravarRumo(id, rumo);
+    },
+    [gravarRumo],
+  );
+
+  const girar = (e: EquipamentoMapa, delta: number | null) => {
+    if (timerGiro.current) clearTimeout(timerGiro.current);
+    const gravar = (rumo: number | null) => gravarRumo(e.id, rumo);
     if (delta === null) {
       setRumoPrevio(null);
       void gravar(null);
@@ -1225,6 +1266,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             onClicarMapa={clicarMapa}
             onClicarLocal={clicarLocal}
             onClicarObra={clicarObra}
+            onGirarPrevia={girarPeloAnel}
+            onGirarFim={soltarAnel}
             onMotor={aoMotor}
           />
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">

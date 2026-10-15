@@ -11236,6 +11236,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_ficha_equipamento: { Args: { p_id: string }; Returns: Json };
       fn_mapa_girar_equipamento: {
         Args: { p_id: string; p_heading: number | null };
         Returns: undefined;

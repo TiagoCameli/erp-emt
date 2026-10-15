@@ -15,6 +15,7 @@ import { Loader } from "@googlemaps/js-api-loader";
 import { cn } from "@/lib/utils";
 import {
   criarIluminacao,
+  ID_GIRO,
   ID_LOCAIS,
   ID_OBRAS,
   ID_PESSOAS,
@@ -22,6 +23,7 @@ import {
   PREFIXO_MAQUINA,
   type Cena,
 } from "@/modules/mapa/components/camadas";
+import { rumo } from "@/modules/mapa/geo";
 import { ROTULO_ESTADO } from "@/modules/mapa/tipos";
 import type {
   ConfigGoogle,
@@ -105,6 +107,10 @@ export interface MapaEmtProps {
   onClicarLocal: (id: string) => void;
   /** Toque no nome de uma obra (abre a ficha da obra). */
   onClicarObra: (id: string) => void;
+  /** Arrastando o anel de giro: o rumo apontado (prévia). */
+  onGirarPrevia: (id: string, rumo: number) => void;
+  /** Soltou o anel de giro: grava o rumo. */
+  onGirarFim: (id: string, rumo: number) => void;
   onMotor: (motor: TipoMotor, aviso: string | null) => void;
   className?: string;
 }
@@ -503,6 +509,13 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   });
   const motorRef = React.useRef<Motor | null>(null);
   const arrastoRef = React.useRef<Arrasto | null>(null);
+  // Giro pelo anel: centro da máquina e o último rumo apontado pelo ponteiro.
+  const giroRef = React.useRef<{
+    id: string;
+    centro: Posicao;
+    pointerId: number;
+    rumo: number | null;
+  } | null>(null);
   // O navegador dispara um `click` depois do arraste; ele não pode limpar a seleção.
   const ignorarCliqueRef = React.useRef(false);
   const tickRef = React.useRef(0);
@@ -681,7 +694,31 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const [x, y] = relativo(e);
       const info = pegar(x, y);
       const alvo = info ? alvoDe(info) : null;
-      if (!alvo) return;
+      if (!alvo) {
+        // Sem máquina embaixo: o anel de giro da selecionada?
+        const anel = propsRef.current.cena.anelGiro;
+        if (
+          anel &&
+          motor.pegar(x, y, [ID_GIRO]).some((i) => i.object) &&
+          propsRef.current.podeArrastar
+        ) {
+          giroRef.current = {
+            id: anel.id,
+            centro: anel.pos,
+            pointerId: e.pointerId,
+            rumo: null,
+          };
+          motor.travar(true);
+          try {
+            el.setPointerCapture(e.pointerId);
+          } catch {
+            // sem captura o giro segue
+          }
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
       const p = propsRef.current;
       const c0 = motor.pixelParaCoord(x, y);
       if (!c0) return;
@@ -731,6 +768,15 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const motor = motorRef.current;
       if (!motor) return;
       const [x, y] = relativo(e);
+      const g = giroRef.current;
+      if (g) {
+        const c = motor.pixelParaCoord(x, y);
+        if (!c) return;
+        g.rumo = rumo(g.centro, c);
+        propsRef.current.onGirarPrevia(g.id, g.rumo);
+        e.preventDefault();
+        return;
+      }
       const a = arrastoRef.current;
       if (a) {
         if (!propsRef.current.podeArrastar) return;
@@ -759,6 +805,19 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     };
 
     const soltar = (e: PointerEvent) => {
+      const g = giroRef.current;
+      if (g) {
+        giroRef.current = null;
+        motorRef.current?.travar(false);
+        try {
+          el.releasePointerCapture(g.pointerId);
+        } catch {
+          // sem captura, nada a soltar
+        }
+        ignorarCliqueRef.current = true;
+        if (g.rumo !== null) propsRef.current.onGirarFim(g.id, g.rumo);
+        return;
+      }
       const a = arrastoRef.current;
       if (!a) return;
       arrastoRef.current = null;

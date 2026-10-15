@@ -55,6 +55,9 @@ export interface RotuloObra {
   pos: Posicao;
 }
 
+/** Anel de giro da máquina selecionada. */
+export const ID_GIRO = "giro-anel";
+
 /** Nome da obra: tocar nele abre a ficha da obra. */
 export const ID_OBRAS = "obras-nome";
 
@@ -75,6 +78,8 @@ export interface Cena {
   obras: ObraNoMapa[];
   /** Nome de cada obra no mapa: no ponto, no meio do trecho ou no centro da área (clicável). */
   rotulosObra: RotuloObra[];
+  /** Anel de giro em volta da máquina selecionada: apertar e arrastar gira a máquina. */
+  anelGiro: { id: string; pos: Posicao; raioM: number } | null;
   /** Obra sendo desenhada (pavimentação = linha, edificação = polígono): o rascunho. */
   desenho: { forma: "trecho" | "area"; pontos: Posicao[] } | null;
   modelos: ReadonlyMap<string, Modelo3d>;
@@ -282,6 +287,27 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: true,
     }),
   );
+
+  // Anel de giro: só o contorno (o miolo deixa a máquina clicável para arrastar), com mínimo em
+  // pixels para dar para pegar mesmo de longe.
+  if (cena.anelGiro)
+    camadas.push(
+      new ScatterplotLayer<{ id: string; pos: Posicao; raioM: number }>({
+        id: ID_GIRO,
+        data: [cena.anelGiro],
+        getPosition: (d) => d.pos,
+        getRadius: (d) => d.raioM,
+        radiusUnits: "meters",
+        radiusMinPixels: 34,
+        filled: false,
+        stroked: true,
+        getLineColor: [255, 255, 255, 230],
+        lineWidthUnits: "pixels",
+        getLineWidth: 6,
+        pickable: true,
+        parameters: { depthCompare: "always" },
+      }),
+    );
 
   // Rascunho da obra sendo desenhada: a linha (fechada, na edificação) e os pontos tocados.
   if (cena.desenho && cena.desenho.pontos.length > 0) {

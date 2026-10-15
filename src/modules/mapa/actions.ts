@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao, textoDoErro } from "@/lib/erros";
+import { idSchemaCom } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
+import { paraFichaNumeros } from "@/modules/mapa/dados";
 import {
   assinalarOperadorSchema,
   colocarLocalSchema,
@@ -23,7 +25,7 @@ import {
   tirarObraSchema,
   vincularLocalSchema,
 } from "@/modules/mapa/schemas";
-import type { EstadoMapa } from "@/modules/mapa/tipos";
+import type { EstadoMapa, FichaNumeros } from "@/modules/mapa/tipos";
 
 /**
  * Mutações do Mapa. Cada uma pede mapa.mapa/editar aqui E na RPC (fn_mapa_exigir), valida o
@@ -610,6 +612,40 @@ export async function tirarObra(dados: unknown): Promise<ResultadoMapa> {
       "mapa.obraTirar",
       erro,
       `Não foi possível tirar a obra do mapa: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Números da ficha da máquina (abastecimento, consumo, manutenção e gasto). Pede só ver. */
+export async function carregarFichaEquipamento(
+  equipamentoId: string,
+): Promise<{ ok: true; ficha: FichaNumeros } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.mapa", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver o Mapa" };
+  }
+  const id = idSchemaCom("Equipamento inválido").safeParse(equipamentoId);
+  if (!id.success) return { erro: "Equipamento inválido" };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_mapa_ficha_equipamento", {
+      p_id: id.data,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.fichaEquipamento",
+        error,
+        mensagemDaRpc(error, "Não foi possível carregar os números da máquina"),
+      );
+    const ficha = paraFichaNumeros(data);
+    if (!ficha) return { erro: "Resposta inesperada ao carregar a máquina" };
+    return { ok: true, ficha };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.fichaEquipamento",
+      erro,
+      `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
     );
   }
 }

@@ -5,6 +5,7 @@ import type {
   EquipamentoMapa,
   EstadoEfetivo,
   EstadoMapa,
+  FichaNumeros,
   FrenteHoje,
   LocacaoMapa,
   LocalidadeMapa,
@@ -395,4 +396,49 @@ export function extrasPorLocal(
     extras.set(id, partes.join(" · "));
   }
   return extras;
+}
+
+/** JSON de fn_mapa_ficha_equipamento → FichaNumeros (null se o formato não for o esperado). */
+export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
+  const b = objeto(bruto);
+  if (!b) return null;
+  const abast = objeto(b.ultimo_abastecimento);
+  const consumo = objeto(b.consumo_30_dias) ?? {};
+  const os = objeto(b.ultima_manutencao);
+  const gasto = objeto(b.gasto_manutencao) ?? {};
+  return {
+    ultimoAbastecimento: abast
+      ? {
+          data: texto(abast.data),
+          litros: numero(abast.litros),
+          valor: numero(abast.valor),
+          tanque: texto(abast.tanque),
+        }
+      : null,
+    consumo30Dias: {
+      litros: numero(consumo.litros),
+      valor: numero(consumo.valor),
+      abastecimentos: inteiro(consumo.abastecimentos),
+    },
+    ultimaManutencao: os
+      ? {
+          numero: texto(os.numero),
+          tipo: texto(os.tipo),
+          status: texto(os.status),
+          abertura: textoOuNulo(os.abertura),
+          conclusao: textoOuNulo(os.conclusao),
+          descricao: texto(os.descricao),
+          custo: numeroOuNulo(os.custo),
+        }
+      : null,
+    gastoManutencao: {
+      total: numero(gasto.total),
+      ultimos12Meses: numero(gasto.ultimos_12_meses),
+      ano: numero(gasto.ano),
+      mesPassado: numero(gasto.mes_passado),
+      mesPassadoRef: texto(gasto.mes_passado_ref),
+      anoRef: inteiro(gasto.ano_ref),
+      temCentro: gasto.tem_centro === true,
+    },
+  };
 }
