@@ -123,8 +123,8 @@ describe("Limpar filtros preserva o relatório aberto", () => {
     expect(query.get("rel")).toBe("custo-cc");
   });
 
-  it("Custo x receita: some a janela de meses, fica o `rel`", () => {
-    navegador.query = "rel=custo-receita&de=2026-08&ate=2026-08";
+  it("Cruzar centros: some a janela de meses, ficam o `rel` e a visão", () => {
+    navegador.query = "rel=resultado-obra&visao=cruzar&de=2026-08&ate=2026-08";
     render(
       <FiltrosCustoReceitaBarra
         filtros={{ ...CUSTO_RECEITA_VAZIO, de: "2026-08", ate: "2026-08" }}
@@ -136,7 +136,9 @@ describe("Limpar filtros preserva o relatório aberto", () => {
 
     const query = ultimaQuery();
     expect(query.get("mes_ref")).toBeNull();
-    expect(query.get("rel")).toBe("custo-receita");
+    expect(query.get("rel")).toBe("resultado-obra");
+    // A visão "Cruzar centros" é navegação: limpar filtro não volta para "Por obra".
+    expect(query.get("visao")).toBe("cruzar");
   });
 
   it("Custo por grupo de insumo: some o centro, fica o `rel`", () => {
@@ -220,7 +222,7 @@ describe("Limpar filtros preserva o relatório aberto", () => {
   it("com o `rel` sozinho na URL, o botão nem aparece", () => {
     // Linha de controle: se `rel` fosse contado como filtro, a barra acharia que
     // há filtro ativo e ofereceria um botão que só teria o que apagar por engano.
-    navegador.query = "rel=custo-receita";
+    navegador.query = "rel=resultado-obra&visao=cruzar";
     render(
       <FiltrosCustoReceitaBarra
         filtros={CUSTO_RECEITA_VAZIO}

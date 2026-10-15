@@ -386,7 +386,7 @@ export default async function GestaoPage({
           }
           rotuloDestaque="Receita do período"
           link={{
-            href: "/financeiro/relatorios?rel=custo-receita",
+            href: "/financeiro/relatorios?rel=resultado-obra&visao=cruzar",
             rotulo: "Abrir relatório",
           }}
           nota="Regime de competência. Empréstimo e movimentação entre contas próprias ficam fora dos dois lados: entram e saem do caixa sem virar resultado."
@@ -427,7 +427,7 @@ export default async function GestaoPage({
               : `Margem de ${formatarPercentual(resultado.margem, 1)}`
           }
           link={{
-            href: "/financeiro/relatorios?rel=custo-receita",
+            href: "/financeiro/relatorios?rel=resultado-obra",
             rotulo: "Abrir relatório",
           }}
           nota={resultado === null ? undefined : frasesDoResultado(resultado)}

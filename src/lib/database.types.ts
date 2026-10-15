@@ -11629,6 +11629,23 @@ export type Database = {
         Args: { p_fim: string; p_inicio: string };
         Returns: { centro_id: string | null; indireto: number; nao_rateado: number }[];
       };
+      fn_rel_rateio_indireto_meses: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: {
+          centro: string | null;
+          centro_id: string | null;
+          custo_direto: number;
+          custo_indireto_mes: number;
+          indireto: number;
+          mes: string;
+          nao_rateado: number;
+          status: string;
+        }[];
+      };
+      fn_rel_obras_ponte_dre: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: { termo: string; valor: number }[];
+      };
       fn_rateio_indireto_salvar: {
         Args: { p_confirmar: boolean; p_mes: string; p_motivo: string; p_percentuais: Json };
         Returns: undefined;

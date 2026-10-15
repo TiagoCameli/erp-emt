@@ -44,3 +44,24 @@ describe("a vencer por prazo", () => {
     expect(longo?.valor).toBe(10);
   });
 });
+
+import { queryDoIdAntigo } from "@/modules/financeiro/relatorios/relatorios";
+
+describe("ids antigos de relatório (15/10/2026)", () => {
+  const novo = (q: string) => queryDoIdAntigo(new URLSearchParams(q));
+
+  it("Custos indiretos e Rateio do indireto caem no Indireto, mantendo o mês", () => {
+    expect(novo("rel=custos-indiretos&ano_indireto=2025")).toBe("rel=indireto&ano_indireto=2025");
+    expect(novo("rel=rateio-indireto&mes_rateio=2026-10")).toBe("rel=indireto&mes_rateio=2026-10");
+  });
+
+  it("Custo x receita sem filtro cai no Resultado por obra; com centro, na visão Cruzar centros", () => {
+    expect(novo("rel=custo-receita")).toBe("rel=resultado-obra");
+    expect(novo("rel=custo-receita&centro_custo=x")).toBe("rel=resultado-obra&centro_custo=x&visao=cruzar");
+  });
+
+  it("id atual não redireciona: é o que impede o laço pela query lembrada na sessão", () => {
+    for (const id of RELATORIOS) expect(novo(`rel=${id}`)).toBeNull();
+    expect(novo("")).toBeNull();
+  });
+});

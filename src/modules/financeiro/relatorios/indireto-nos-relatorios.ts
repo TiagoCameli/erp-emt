@@ -148,65 +148,6 @@ export function janelasContiguas(meses: readonly string[]): { inicio: string; fi
   return janelas;
 }
 
-export interface MargemDaObra {
-  centroId: string;
-  nome: string;
-  receita: number;
-  custoDireto: number;
-  indireto: number;
-  resultadoSem: number;
-  /** Resultado sobre a receita, em pontos. `null` sem receita: não há margem. */
-  margemSem: number | null;
-  resultadoCom: number;
-  margemCom: number | null;
-}
-
-/**
- * Margem de cada obra sem e com o indireto rateado.
- *
- * Os indiretos saem da lista: o custo deles já está dentro do indireto das
- * obras, e mostrá-los como linha contaria o mesmo dinheiro duas vezes.
- */
-export function margemPorObra(
-  receitaPorObra: ReadonlyMap<string, { nome: string; receita: number }>,
-  custoPorObra: ReadonlyMap<string, number>,
-  indiretoPorObra: ReadonlyMap<string, number>,
-  indiretos: ReadonlySet<string>,
-  nomes?: ReadonlyMap<string, string>,
-): MargemDaObra[] {
-  const ids = new Set([...receitaPorObra.keys(), ...custoPorObra.keys(), ...indiretoPorObra.keys()]);
-  const linhas: MargemDaObra[] = [];
-  for (const id of ids) {
-    if (indiretos.has(id)) continue;
-    const receitaCent = cent(receitaPorObra.get(id)?.receita ?? 0);
-    const custoCent = cent(custoPorObra.get(id) ?? 0);
-    const indiretoCent = cent(indiretoPorObra.get(id) ?? 0);
-    const semCent = receitaCent - custoCent;
-    const comCent = semCent - indiretoCent;
-    linhas.push({
-      centroId: id,
-      nome: receitaPorObra.get(id)?.nome ?? nomes?.get(id) ?? "Centro sem nome",
-      receita: reais(receitaCent),
-      custoDireto: reais(custoCent),
-      indireto: reais(indiretoCent),
-      resultadoSem: reais(semCent),
-      margemSem: receitaCent === 0 ? null : (semCent / receitaCent) * 100,
-      resultadoCom: reais(comCent),
-      margemCom: receitaCent === 0 ? null : (comCent / receitaCent) * 100,
-    });
-  }
-  return linhas.sort((a, b) => b.receita - a.receita || b.custoDireto - a.custoDireto);
-}
-
-/**
- * "Margem por obra" só com a mesma base do rateio: sem corte de centro (o
- * rateio é da empresa inteira) e sem "Incluir investimentos" (o rateio é sempre
- * sem CAPEX; com ele ligado, o custo direto teria CAPEX e o indireto não).
- */
-export function margemPorObraPermitida(f: { semCorteDeCentro: boolean; incluirInvestimento: boolean }): boolean {
-  return f.semCorteDeCentro && !f.incluirInvestimento;
-}
-
 /** Mês do rateio vindo da URL (yyyy-MM, mês 01 a 12); inválido cai no padrão. */
 export function mesDoRateio(valor: string | undefined, padrao: string): string {
   return valor && /^\d{4}-(0[1-9]|1[0-2])$/.test(valor) ? valor : padrao;
