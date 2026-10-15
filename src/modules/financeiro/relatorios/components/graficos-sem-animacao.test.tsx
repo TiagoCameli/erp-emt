@@ -10,7 +10,12 @@ import { CustoCcGrafico } from "./custo-cc-grafico-impl";
 import { CustoCcSerie } from "./custo-cc-serie-impl";
 import { CustoReceitaGrafico } from "./custo-receita-grafico-impl";
 import { FluxoCaixaGrafico } from "./fluxo-caixa-grafico-impl";
-import { COR_ENTIDADE } from "./cores-grafico";
+import { COR_ENTIDADE, corProjetada } from "./cores-grafico";
+import {
+  GRUPOS_FLUXO,
+  type GrupoFluxo,
+} from "@/modules/financeiro/lancamentos/recorte";
+import type { FluxoCaixaMes } from "../fluxo-caixa";
 
 /**
  * O gráfico que desenhava eixo, escala e legenda e NENHUMA BARRA.
@@ -150,48 +155,58 @@ function renderizarAging() {
   );
 }
 
-/** Um mês do fluxo com tudo zerado, para cada caso preencher só o que importa. */
-const MES_FLUXO_VAZIO = {
-  aReceberRealizado: 0,
-  aReceberProjetado: 0,
-  emprestimoTomadoRealizado: 0,
-  emprestimoTomadoProjetado: 0,
-  aPagarRealizado: 0,
-  aPagarProjetado: 0,
-  amortizacaoRealizado: 0,
-  amortizacaoProjetado: 0,
-  entradas: 0,
-  saidas: 0,
-  liquido: 0,
-  saldoAcumulado: null,
-};
+/** Um lado de um grupo num mês. */
+function lado(realizado: number, projetado = 0) {
+  return { realizado, projetado, total: realizado + projetado };
+}
 
-const MESES_FLUXO = [
-  {
-    ...MES_FLUXO_VAZIO,
-    mes: "2026-06",
-    rotulo: "06/2026",
-    aReceberRealizado: 1_120_000,
-    aPagarRealizado: 980_450.33,
-    entradas: 1_120_000,
-    saidas: 980_450.33,
-    liquido: 139_549.67,
-  },
-  {
-    ...MES_FLUXO_VAZIO,
-    mes: "2026-07",
-    rotulo: "07/2026",
-    aReceberRealizado: 640_000,
-    aReceberProjetado: 410_000,
-    emprestimoTomadoRealizado: 2_298_000,
-    aPagarRealizado: 505_300.1,
-    aPagarProjetado: 322_000,
-    amortizacaoProjetado: 380_821.67,
-    entradas: 3_348_000,
-    saidas: 1_208_121.77,
-    liquido: 2_139_878.23,
-    saldoAcumulado: 4_925_294.55,
-  },
+/** Um mês do fluxo com os cinco grupos zerados e o que cada caso preencher. */
+function mesFluxo(
+  mes: string,
+  grupos: Partial<
+    Record<GrupoFluxo, { entrada?: ReturnType<typeof lado>; saida?: ReturnType<typeof lado> }>
+  >,
+  saldoAcumulado: number | null = null,
+): FluxoCaixaMes {
+  const completos = {} as FluxoCaixaMes["grupos"];
+  let entradas = 0;
+  let saidas = 0;
+  for (const grupo of GRUPOS_FLUXO) {
+    const entrada = grupos[grupo]?.entrada ?? lado(0);
+    const saida = grupos[grupo]?.saida ?? lado(0);
+    completos[grupo] = { entrada, saida, liquido: entrada.total - saida.total };
+    entradas += entrada.total;
+    saidas += saida.total;
+  }
+  return {
+    mes,
+    rotulo: `${mes.slice(5)}/${mes.slice(0, 4)}`,
+    grupos: completos,
+    entradas,
+    saidas,
+    liquido: entradas - saidas,
+    saldoAcumulado,
+    saldoComAplicado: saldoAcumulado === null ? null : saldoAcumulado + 10_583_093.4,
+  };
+}
+
+const MES_CORRENTE_FLUXO = "2026-06";
+
+const MESES_FLUXO: FluxoCaixaMes[] = [
+  mesFluxo(
+    "2026-06",
+    { operacao: { entrada: lado(1_120_000), saida: lado(980_450.33) } },
+    -690_477.58,
+  ),
+  mesFluxo(
+    "2026-07",
+    {
+      operacao: { entrada: lado(0, 410_000), saida: lado(0, 322_000) },
+      divida: { saida: lado(0, 380_821.67) },
+      investimento: { saida: lado(0, 286_447.61) },
+    },
+    -1_269_746.86,
+  ),
 ];
 
 describe("a série nasce com forma no primeiro quadro", () => {
@@ -204,16 +219,19 @@ describe("a série nasce com forma no primeiro quadro", () => {
     expect(barrasComForma(container)).toBe(4);
   });
 
-  it("fluxo de caixa: as quatro séries de barra e as linhas", () => {
+  it("fluxo de caixa: um pedaço por grupo e lado com valor, e as duas linhas", () => {
     const { container } = render(
-      <FluxoCaixaGrafico meses={MESES_FLUXO} podeVerLancamentos />,
+      <FluxoCaixaGrafico
+        meses={MESES_FLUXO}
+        mesCorrente={MES_CORRENTE_FLUXO}
+        podeVerLancamentos
+      />,
     );
 
-    // 06/2026 tem duas barras com valor, 07/2026 tem seis (as quatro séries,
-    // duas delas com realizado e projetado).
-    expect(barrasComForma(container)).toBe(8);
+    // 06/2026 tem dois pedaços (operação entrou e saiu), 07/2026 tem quatro
+    // (operação nos dois lados, dívida e CAPEX saindo).
+    expect(barrasComForma(container)).toBe(6);
     expect(gruposDeBarra(container)).toBe(barrasComForma(container));
-
     esperarLinhaInteira(container.querySelector(".recharts-line-curve"));
   });
 
@@ -318,36 +336,43 @@ describe("a série nasce com forma no primeiro quadro", () => {
   });
 });
 
-describe("legenda", () => {
-  it("separa entrada realizada de projetada por COR, não por opacidade", () => {
+describe("fluxo de caixa: cor por grupo, tom claro no previsto", () => {
+  it("a legenda mostra um item por grupo presente, não um por barra", () => {
     const { container } = render(
-      <FluxoCaixaGrafico meses={MESES_FLUXO} podeVerLancamentos />,
+      <FluxoCaixaGrafico
+        meses={MESES_FLUXO}
+        mesCorrente={MES_CORRENTE_FLUXO}
+        podeVerLancamentos
+      />,
     );
-    const cores = coresDaLegenda(container);
+    const texto = container.textContent ?? "";
+    expect(texto).toContain("Operação");
+    expect(texto).toContain("Investimento (CAPEX)");
+    expect(texto).toContain("Dívida");
+    // Sócios e aplicações não mexeram na janela: não prometem cor nenhuma.
+    expect(texto).not.toContain("Sócios e mútuo");
+    expect(texto).not.toContain("Aplicações");
+    expect(texto).toContain("Disponível mais aplicado");
+  });
 
-    const realizadas = cores.get("Entradas operacionais realizadas");
-    const projetadas = cores.get("Entradas operacionais projetadas");
-    expect(realizadas).toBeTruthy();
-    expect(projetadas).toBeTruthy();
-    // O ícone da Legend lê o `fill` e ignora o `fillOpacity`: com opacidade os
-    // dois quadrados saíam idênticos, e a legenda deixava de dizer qual dinheiro
-    // já entrou.
-    expect(projetadas).not.toBe(realizadas);
-    expect(cores.get("Saídas operacionais projetadas")).not.toBe(
-      cores.get("Saídas operacionais realizadas"),
+  it("o mês depois do corrente sai no tom claro da MESMA cor do grupo", () => {
+    const { container } = render(
+      <FluxoCaixaGrafico
+        meses={MESES_FLUXO}
+        mesCorrente={MES_CORRENTE_FLUXO}
+        podeVerLancamentos
+      />,
     );
-    // As séries de movimentação têm cor própria, diferente do operacional do
-    // mesmo lado: senão a prestação do empréstimo se perderia no custo da obra.
-    expect(cores.get("Amortizações realizadas")).toBe(COR_ENTIDADE.amortizacao);
-    expect(cores.get("Amortizações realizadas")).not.toBe(
-      cores.get("Saídas operacionais realizadas"),
+    const cores = [...container.querySelectorAll(".recharts-bar-rectangle path")].map(
+      (path) => path.getAttribute("fill") ?? "",
     );
-    expect(cores.get("Empréstimos tomados realizados")).toBe(
-      COR_ENTIDADE.emprestimo_tomado,
-    );
-    // E o projetado continua sendo a MESMA entidade: o tom claro é derivado da
-    // cor dela, não uma cor nova.
-    expect(projetadas).toContain(COR_ENTIDADE.a_receber);
+    // Junho é o corrente: cor cheia. Julho é previsto: a cor clareada, derivada
+    // da do grupo, e não uma cor nova.
+    expect(cores).toContain(COR_ENTIDADE.fluxo_operacao);
+    expect(cores).toContain(corProjetada(COR_ENTIDADE.fluxo_operacao));
+    expect(cores).toContain(corProjetada(COR_ENTIDADE.fluxo_divida));
+    expect(cores).toContain(corProjetada(COR_ENTIDADE.fluxo_investimento));
+    expect(COR_ENTIDADE.fluxo_divida).not.toBe(COR_ENTIDADE.fluxo_operacao);
   });
 });
 

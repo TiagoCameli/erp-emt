@@ -1,7 +1,8 @@
 import {
-  tipoDaSerie,
+  tipoDoSentido,
+  type GrupoFluxo,
   type Recorte,
-  type SerieFluxo,
+  type SentidoFluxo,
 } from "@/modules/financeiro/lancamentos/recorte";
 
 /**
@@ -118,9 +119,9 @@ const FAIXA_EM_DIAS: Record<string, { de: number; ate: number }> = {
 /**
  * Traduz o recorte nas condições do embed.
  *
- * A série do fluxo NÃO entra aqui: ela depende da natureza da categoria e da
+ * O grupo do fluxo NÃO entra aqui: ele depende da natureza da categoria e da
  * origem, que moram no LANÇAMENTO, não na parcela, então é filtro do pai. Quem
- * monta a consulta a aplica, com `aplicarSerieDoFluxo`.
+ * monta a consulta o aplica, com `aplicarGrupoDoFluxo`.
  */
 export function recorteNoEmbed(
   recorte: Recorte,
@@ -133,8 +134,11 @@ export function recorteNoEmbed(
         { coluna: "mes_fluxo", operador: "eq", valor: `${recorte.mes}-01` },
       ];
       // Realizado é `status = 'pago'`; previsto é todo o resto que não foi
-      // cancelado. `neq` sozinho traria a cancelada de volta.
-      if (recorte.realizado) {
+      // cancelado. `neq` sozinho traria a cancelada de volta. Sem situação, as
+      // duas: só a cancelada fica fora, como na view.
+      if (recorte.realizado === undefined) {
+        condicoes.push({ coluna: "status", operador: "neq", valor: "cancelado" });
+      } else if (recorte.realizado) {
         condicoes.push({ coluna: "status", operador: "eq", valor: "pago" });
       } else {
         condicoes.push({
@@ -275,85 +279,84 @@ export function aplicarRecorteNoEmbed<T extends ConsultaComEmbed<T>>(
   return consulta.not(alias, "is", null);
 }
 
-/** O que a série do fluxo precisa saber e só o banco sabe. */
-export interface ContextoDaSerie {
-  /** As categorias de natureza `movimentacao` (4 hoje). */
-  categoriasDeMovimentacao: readonly string[];
+/** O que o grupo do fluxo precisa saber e só o banco sabe. */
+export interface ContextoDoGrupo {
   /**
-   * Os lançamentos da série `emprestimo_tomado` no mesmo mês e situação, como
-   * `fn_lancamentos_do_recorte` os devolve. Só a entrada precisa: o que separa
-   * empréstimo tomado de resgate é o rateio no centro de Empréstimos, e isso o
-   * filtro do pai não alcança. São poucos (um por contrato liberado no mês), então
-   * viajam como lista sem pesar na URL.
+   * Os ids de categoria das naturezas que NÃO são operação: investimento,
+   * distribuição, mútuo e movimentação. Dezenas no máximo, e a operação é o
+   * complemento delas (incluindo a categoria nula, que a view trata como
+   * operacional).
    */
-  idsEmprestimoTomado: readonly string[];
+  categorias: {
+    investimento: readonly string[];
+    socios: readonly string[];
+    movimentacao: readonly string[];
+  };
+  /**
+   * Os lançamentos do grupo `divida` ou `aplicacao` no mês e situação do
+   * recorte, como `fn_lancamentos_do_recorte` os devolve. O que separa um do
+   * outro é o rateio no centro raiz financeiro, e isso o filtro do pai não
+   * alcança. São poucos (um contrato liberado, umas prestações, um resgate),
+   * então viajam como lista sem pesar na URL.
+   */
+  idsDoGrupo: readonly string[];
+}
+
+/** Os grupos que só se resolvem por lista de ids (ver `ContextoDoGrupo`). */
+export function grupoPorIds(grupo: GrupoFluxo | undefined): boolean {
+  return grupo === "divida" || grupo === "aplicacao";
 }
 
 /**
- * A série do fluxo de caixa no nível do LANÇAMENTO, repetindo `serie_fluxo` de
+ * O grupo do fluxo de caixa no nível do LANÇAMENTO, repetindo `grupo_fluxo` de
  * `vw_parcelas_caixa`:
  *
- * - natureza diferente de movimentação: a série é o tipo do lançamento;
- * - movimentação de saída: `amortizacao`;
- * - movimentação de entrada rateada no centro de Empréstimos: `emprestimo_tomado`;
- * - outra movimentação de entrada (resgate antigo): `a_receber`;
- * - movimentação com `origem = 'aplicacao'`: fora do fluxo, em qualquer série.
+ * - origem `aplicacao` (rendimento, ajuste de abertura): fora de todos;
+ * - `investimento`: categoria de natureza investimento;
+ * - `socios`: categoria de natureza distribuição ou mútuo;
+ * - `operacao`: o resto que não é movimentação, inclusive sem categoria;
+ * - `divida` e `aplicacao`: movimentação, separada pelo rateio, por lista.
  *
- * Até 03/10/2026 este lugar descartava a movimentação inteira dos três recortes
- * de caixa. Desde a D1 ela entra no caixa, e o aging e a conta paga não filtram
- * natureza nenhuma; só o fluxo ainda precisa da categoria, para separar as séries
- * e tirar o ajuste de aplicação.
+ * O sentido é o `tipo` do lançamento. A categoria vai sempre como `or` com
+ * `categoria_id.is.null` quando a nula entra: `not.in` sozinho descartaria o
+ * lançamento SEM categoria (em SQL, `null not in (...)` é nulo).
  *
- * A categoria vai sempre como `or` com `categoria_id.is.null`: `not.in` sozinho
- * descartaria o lançamento SEM categoria (em SQL, `null not in (...)` é nulo), e
- * a view trata a categoria nula como operacional.
- *
- * Devolve `null` quando a série com certeza não tem lançamento nenhum (sem
- * categoria de movimentação, ou sem empréstimo tomado no mês): quem chama
- * responde lista vazia em vez de abrir a lista inteira.
+ * Devolve `null` quando o grupo com certeza não tem lançamento nenhum: quem
+ * chama responde lista vazia em vez de abrir a lista inteira.
  */
-export function aplicarSerieDoFluxo<T extends ConsultaComEmbed<T>>(
+export function aplicarGrupoDoFluxo<T extends ConsultaComEmbed<T>>(
   consultaInicial: T,
-  serie: SerieFluxo | undefined,
-  contexto: ContextoDaSerie,
+  grupo: GrupoFluxo | undefined,
+  sentido: SentidoFluxo | undefined,
+  contexto: ContextoDoGrupo,
 ): T | null {
-  const movimentacao = contexto.categoriasDeMovimentacao;
-  const lista = `(${movimentacao.join(",")})`;
-  const naoMovimentacao = `categoria_id.is.null,categoria_id.not.in.${lista}`;
+  let consulta = consultaInicial.neq("origem", "aplicacao");
+  if (sentido) consulta = consulta.eq("tipo", tipoDoSentido(sentido));
+  const { investimento, socios, movimentacao } = contexto.categorias;
 
-  if (serie === undefined) {
-    // As quatro séries: tudo, menos a movimentação de origem aplicação.
-    if (movimentacao.length === 0) return consultaInicial;
-    return consultaInicial.or(`${naoMovimentacao},origem.neq.aplicacao`);
-  }
+  switch (grupo) {
+    case undefined:
+      return consulta;
 
-  const consulta = consultaInicial.eq("tipo", tipoDaSerie(serie));
-
-  switch (serie) {
-    case "a_pagar":
-      if (movimentacao.length === 0) return consulta;
-      return consulta.or(naoMovimentacao);
-
-    case "amortizacao":
-      if (movimentacao.length === 0) return null;
-      return consulta
-        .in("categoria_id", movimentacao)
-        .neq("origem", "aplicacao");
-
-    case "emprestimo_tomado":
-      if (contexto.idsEmprestimoTomado.length === 0) return null;
-      return consulta.in("id", contexto.idsEmprestimoTomado);
-
-    case "a_receber": {
-      if (movimentacao.length === 0) return consulta;
-      // Movimentação de entrada só é a_receber quando não é ajuste de aplicação
-      // nem empréstimo tomado.
-      const tomado = contexto.idsEmprestimoTomado;
-      const movimentacaoQueFica =
-        tomado.length === 0
-          ? "origem.neq.aplicacao"
-          : `and(origem.neq.aplicacao,id.not.in.(${tomado.join(",")}))`;
-      return consulta.or(`${naoMovimentacao},${movimentacaoQueFica}`);
+    case "operacao": {
+      const fora = [...investimento, ...socios, ...movimentacao];
+      if (fora.length === 0) return consulta;
+      return consulta.or(
+        `categoria_id.is.null,categoria_id.not.in.(${fora.join(",")})`,
+      );
     }
+
+    case "investimento":
+      if (investimento.length === 0) return null;
+      return consulta.in("categoria_id", investimento);
+
+    case "socios":
+      if (socios.length === 0) return null;
+      return consulta.in("categoria_id", socios);
+
+    case "divida":
+    case "aplicacao":
+      if (contexto.idsDoGrupo.length === 0) return null;
+      return consulta.in("id", contexto.idsDoGrupo);
   }
 }

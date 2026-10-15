@@ -8,10 +8,12 @@ import {
   ROTULO_BANCO,
   type BancoConta,
 } from "@/modules/financeiro/_shared/formato";
-import { formatarData } from "@/lib/formatadores";
+import { formatarBRL, formatarData } from "@/lib/formatadores";
+import { cn } from "@/lib/utils";
 import { drillContaBancaria } from "@/modules/financeiro/relatorios/drill";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import type { PosicaoBancaria, PosicaoBancariaConta } from "../queries";
+import { classeDaConta, situacaoDoExtrato } from "../posicao-bancaria";
 
 interface PosicaoBancariaTabelaProps {
   posicao: PosicaoBancaria;
@@ -46,9 +48,66 @@ function colunaValor(
   };
 }
 
+const ORDEM_SITUACAO = {
+  divergente: 0,
+  atrasado: 1,
+  sem_extrato: 2,
+  em_dia: 3,
+  nao_se_aplica: 4,
+} as const;
+
+/**
+ * A conta contra o último extrato, na data dele. Divergente em vermelho (falta
+ * ou sobra lançamento), atrasada em âmbar (o banco ainda não confirmou o que o
+ * sistema tem depois do extrato), em dia em cinza.
+ */
+function CelulaConferencia({ conta }: { conta: PosicaoBancariaConta }) {
+  const situacao = situacaoDoExtrato(conta.tipo, conta.extrato);
+  const extrato = conta.extrato;
+  switch (situacao) {
+    case "divergente":
+      return (
+        <span
+          className="text-detalhe font-medium text-status-rejeitado"
+          title={`Na data do extrato o sistema tinha ${formatarBRL(extrato!.saldoNaData)} e o banco ${formatarBRL(extrato!.saldoExtrato)}.`}
+        >
+          Não bate: diferença de {formatarBRL(extrato!.diferencaNaData)}
+        </span>
+      );
+    case "atrasado":
+      return (
+        <span
+          className="text-detalhe font-medium text-status-pendente"
+          title="Movimento lançado no sistema depois do último extrato importado. Importe o extrato mais recente para confirmar."
+        >
+          {formatarBRL(extrato!.movimentoDepois)} depois do extrato (
+          {extrato!.lancamentosDepois} mov.), a confirmar
+        </span>
+      );
+    case "sem_extrato":
+      return (
+        <span className="text-detalhe text-status-pendente">
+          Sem extrato importado
+        </span>
+      );
+    case "em_dia":
+      return <span className="text-detalhe text-muted-foreground">Bate com o banco</span>;
+    case "nao_se_aplica":
+      return (
+        <span className="text-detalhe text-muted-foreground">
+          {classeDaConta(conta.tipo) === "aplicado"
+            ? "Subconta, sem extrato próprio"
+            : "Sem extrato (caixa)"}
+        </span>
+      );
+  }
+}
+
 /**
  * Posição bancária em tabela: por conta, saldo inicial, entradas, saídas e
- * saldo atual, mais a linha de total. Detalha os KPICards de cada conta.
+ * saldo atual, o último extrato e a conferência contra ele, mais a linha de
+ * total. As subcontas vêm depois das correntes, recuadas: é aplicado, não
+ * disponível.
  */
 export function PosicaoBancariaTabela({
   posicao,
@@ -65,7 +124,7 @@ export function PosicaoBancariaTabela({
         cell: ({ row }) => {
           const conta = row.original;
           return (
-            <span className="text-foreground">
+            <span className={cn("text-foreground", classeDaConta(conta.tipo) === "aplicado" && "pl-3")}>
               {/* O clique abre as parcelas PAGAS por esta conta, que é o que a
                   posição soma (pelo líquido). Sem o recorte a lista traria
                   também o que ainda não passou por ela. */}
@@ -127,6 +186,37 @@ export function PosicaoBancariaTabela({
       colunaValor("entradas", "Entradas", "text-detalhe"),
       colunaValor("saidas", "Saídas", "text-detalhe"),
       colunaValor("saldoAtual", "Saldo atual", "text-detalhe font-medium"),
+      {
+        id: "extrato",
+        accessorFn: (conta) => conta.extrato?.data ?? "",
+        header: "Último extrato",
+        size: 150,
+        meta: { rotulo: "Último extrato", alinharDireita: true, atomico: true },
+        cell: ({ row }) => {
+          const { extrato } = row.original;
+          if (!extrato) {
+            return <span className="text-detalhe text-muted-foreground">—</span>;
+          }
+          return (
+            <div className="flex flex-col items-end gap-0.5">
+              <MoneyText valor={extrato.saldoExtrato} className="text-detalhe" />
+              <span className="text-legenda text-muted-foreground">
+                em {formatarData(extrato.data)}
+              </span>
+            </div>
+          );
+        },
+      },
+      {
+        id: "conferencia",
+        // Ordena pela gravidade: divergente, atrasada, sem extrato, em dia.
+        accessorFn: (conta) =>
+          ORDEM_SITUACAO[situacaoDoExtrato(conta.tipo, conta.extrato)],
+        header: "Contra o extrato",
+        size: 220,
+        meta: { rotulo: "Contra o extrato", atomico: true },
+        cell: ({ row }) => <CelulaConferencia conta={row.original} />,
+      },
     ],
     [podeVerLancamentos],
   );

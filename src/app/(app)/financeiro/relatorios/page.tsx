@@ -9,7 +9,7 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL, formatarPercentual } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -112,8 +112,16 @@ import { RankingFornecedores } from "@/modules/financeiro/relatorios/components/
 import { lerPeriodoFornecedores } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
-import type { SaldoProjetado } from "@/modules/financeiro/relatorios/fluxo-caixa";
+import {
+  fraseDoFluxo,
+  fraseDoSaldo,
+  ponteDoCaixa,
+  type GrupoNoFluxo,
+  type SaldoProjetado,
+} from "@/modules/financeiro/relatorios/fluxo-caixa";
+import { FluxoCaixaPonte } from "@/modules/financeiro/relatorios/components/fluxo-caixa-ponte";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
+import { fraseDaPosicao } from "@/modules/financeiro/relatorios/posicao-bancaria";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
 import { SociosLigadasRelatorioTela } from "@/modules/financeiro/relatorios/components/socios-ligadas-relatorio";
 import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
@@ -312,10 +320,11 @@ function PainelGrafico({
 }
 
 /**
- * O saldo no fim da janela, a partir do saldo de hoje das contas correntes e
- * caixa (ver `fluxo-caixa.ts`). Cada motivo de não haver saldo tem a sua frase,
- * e nenhum vira R$ 0,00: zero é um saldo, e um saldo inventado leva a decisão de
- * pagamento errada.
+ * O saldo DISPONÍVEL no fim da janela, a partir do saldo de hoje das contas
+ * correntes e caixa (ver `fluxo-caixa.ts`), com o disponível mais o aplicado no
+ * detalhe. Cada motivo de não haver saldo tem a sua frase, e nenhum vira
+ * R$ 0,00: zero é um saldo, e um saldo inventado leva a decisão de pagamento
+ * errada.
  *
  * `idCard` fixo porque o título leva o mês, e a grade personalizável guarda a
  * posição do cartão pelo id: sem ele, a virada do mês esqueceria onde a pessoa o
@@ -326,7 +335,7 @@ function CartaoSaldoProjetado({
   contasNoSaldo,
 }: {
   saldo: SaldoProjetado;
-  contasNoSaldo: { contas: number; ocultas: number };
+  contasNoSaldo: { contas: number; ocultas: number; aplicadas: number };
 }) {
   if (saldo.tipo !== "calculado") {
     const detalhe: Record<typeof saldo.tipo, string> = {
@@ -340,28 +349,51 @@ function CartaoSaldoProjetado({
     return (
       <KPICard
         idCard="saldo-projetado"
-        titulo="Saldo projetado"
+        titulo="Disponível projetado"
         valor={<span className="text-muted-foreground">Sem saldo</span>}
         detalhe={detalhe[saldo.tipo]}
       />
     );
   }
-  const plural = contasNoSaldo.contas === 1 ? "conta" : "contas";
   return (
     <KPICard
       idCard="saldo-projetado"
-      titulo={`Saldo projetado em ${rotuloMes(saldo.mes)}`}
+      titulo={`Disponível projetado em ${rotuloMes(saldo.mes)}`}
       valor={<MoneyText valor={saldo.valor} />}
       detalhe={
         <>
-          Saldo de hoje <MoneyText valor={saldo.saldoInicial} /> em{" "}
-          {contasNoSaldo.contas} {plural} corrente e caixa, mais o previsto
+          {saldo.valorComAplicado !== null ? (
+            <>
+              Com o aplicado <MoneyText valor={saldo.valorComAplicado} />
+            </>
+          ) : (
+            "Sem subconta de investimento visível"
+          )}
           {contasNoSaldo.ocultas > 0
-            ? `; ${contasNoSaldo.ocultas} sem saldo visível ficaram fora`
+            ? `; ${contasNoSaldo.ocultas} conta(s) sem saldo visível ficaram fora`
             : ""}
         </>
       }
     />
+  );
+}
+
+/** "Entrou X, saiu Y" de um grupo, com os nomes que cada grupo usa. */
+function DetalheDoGrupo({
+  grupo,
+  rotulos,
+  fatia,
+}: {
+  grupo: GrupoNoFluxo;
+  rotulos: [string, string];
+  fatia: string;
+}) {
+  return (
+    <>
+      {rotulos[0]} <MoneyText valor={grupo.entrada.total} />, {rotulos[1]}{" "}
+      <MoneyText valor={grupo.saida.total} />
+      {fatia}
+    </>
   );
 }
 
@@ -388,8 +420,6 @@ async function ConteudoFluxoCaixa({
     receita: centrosReceita,
   });
   const janelaDescrita = descreverJanela(janela);
-  const fatiaCusto = descreverFatia(centrosCusto.length);
-  const fatiaReceita = descreverFatia(centrosReceita.length);
   const temCorteDeCentro = centrosCusto.length > 0 || centrosReceita.length > 0;
   if (dados.meses.length === 0) {
     // Três causas com respostas diferentes: não há parcela nenhuma, a janela não
@@ -417,76 +447,110 @@ async function ConteudoFluxoCaixa({
       />
     );
   }
+  // Os dois lados se escolhem separados, então um grupo pode estar somando a
+  // fatia de uma obra numa ponta e o total da empresa na outra. Quem lê precisa
+  // saber disso ANTES de decidir pagamento.
+  const fatias = [
+    centrosReceita.length > 0
+      ? `entradas: ${descreverFatia(centrosReceita.length).toLowerCase()}`
+      : null,
+    centrosCusto.length > 0
+      ? `saídas: ${descreverFatia(centrosCusto.length).toLowerCase()}`
+      : null,
+  ].filter((parte) => parte !== null);
+  const fatia = fatias.length > 0 ? ` · ${fatias.join("; ")}` : "";
+  const { grupos } = dados;
+  const ponte = ponteDoCaixa(dados);
+  const frase = fraseDoFluxo(dados, formatarBRL);
+  const saldo = fraseDoSaldo(dados, formatarBRL);
+
   return (
     <>
+      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4">
+        <FluxoCaixaPonte ponte={ponte} frase={frase} />
+        {fatia ? (
+          <p className="text-detalhe text-muted-foreground">
+            Recorte por centro{fatia}. A ponte soma a fatia de cada lado.
+          </p>
+        ) : null}
+        {saldo ? (
+          <div className="flex flex-col gap-2 border-t border-dashed pt-4">
+            <p className="text-corpo text-foreground">{saldo.saldo}</p>
+            {saldo.aviso ? (
+              <p
+                role="note"
+                className="rounded-md border border-status-pendente/40 bg-status-pendente/10 px-3 py-2 text-detalhe text-foreground"
+              >
+                {saldo.aviso}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <GradeKpis id="financeiro.relatorios.fluxo-caixa" titulo="Fluxo de caixa">
         <KPICard
-          titulo="Entradas operacionais"
-          valor={<MoneyText valor={dados.series.a_receber.total} />}
+          idCard="operacao"
+          titulo="Geração operacional"
+          valor={<MoneyText valor={grupos.operacao.liquido} />}
+          detalhe={
+            <DetalheDoGrupo
+              grupo={grupos.operacao}
+              rotulos={["Entrou", "saiu"]}
+              fatia={fatia}
+            />
+          }
+        />
+        <KPICard
+          idCard="investimento"
+          titulo="Investimento (CAPEX)"
+          valor={<MoneyText valor={grupos.investimento.liquido} />}
           detalhe={
             <>
-              Realizado <MoneyText valor={dados.series.a_receber.realizado} />
-              {fatiaReceita ? ` · ${fatiaReceita.toLowerCase()}` : ""}
+              Pago <MoneyText valor={grupos.investimento.saida.realizado} />,
+              previsto <MoneyText valor={grupos.investimento.saida.projetado} />
+              {fatia}
             </>
           }
         />
         <KPICard
-          titulo="Saídas operacionais"
-          valor={<MoneyText valor={dados.series.a_pagar.total} />}
+          idCard="socios"
+          titulo="Sócios e mútuo"
+          valor={<MoneyText valor={grupos.socios.liquido} />}
           detalhe={
-            <>
-              Realizado <MoneyText valor={dados.series.a_pagar.realizado} />
-              {fatiaCusto ? ` · ${fatiaCusto.toLowerCase()}` : ""}
-            </>
+            <DetalheDoGrupo
+              grupo={grupos.socios}
+              rotulos={["Devolvido", "enviado"]}
+              fatia={fatia}
+            />
           }
         />
         <KPICard
-          titulo="Empréstimos tomados"
-          valor={<MoneyText valor={dados.series.emprestimo_tomado.total} />}
+          idCard="divida"
+          titulo="Dívida"
+          valor={<MoneyText valor={grupos.divida.liquido} />}
           detalhe={
-            <>
-              Realizado{" "}
-              <MoneyText valor={dados.series.emprestimo_tomado.realizado} />
-              {fatiaReceita ? ` · ${fatiaReceita.toLowerCase()}` : ""}
-            </>
+            <DetalheDoGrupo
+              grupo={grupos.divida}
+              rotulos={["Tomou", "amortizou"]}
+              fatia={fatia}
+            />
           }
         />
         <KPICard
-          titulo="Amortizações"
-          valor={<MoneyText valor={dados.series.amortizacao.total} />}
+          idCard="aplicacao"
+          titulo="Aplicações"
+          valor={<MoneyText valor={grupos.aplicacao.liquido} />}
           detalhe={
-            <>
-              Realizado <MoneyText valor={dados.series.amortizacao.realizado} />
-              {fatiaCusto ? ` · ${fatiaCusto.toLowerCase()}` : ""}
-            </>
-          }
-        />
-        <KPICard
-          titulo="Líquido da janela"
-          valor={<MoneyText valor={dados.liquidoJanela} />}
-          detalhe={
-            <>
-              Entradas <MoneyText valor={dados.totalEntradas} /> menos saídas{" "}
-              <MoneyText valor={dados.totalSaidas} />, as quatro séries
-              {/*
-                Os dois lados se escolhem separados, então o líquido pode estar
-                somando a fatia de uma obra com o total da empresa. Quem lê o
-                número precisa saber disso ANTES de decidir pagamento.
-              */}
-              {(centrosCusto.length > 0) !== (centrosReceita.length > 0)
-                ? "; um dos lados está recortado por centro"
-                : ""}
-            </>
+            <DetalheDoGrupo
+              grupo={grupos.aplicacao}
+              rotulos={["Resgatou", "aplicou"]}
+              fatia={fatia}
+            />
           }
         />
         <CartaoSaldoProjetado
           saldo={dados.saldoProjetado}
           contasNoSaldo={dados.contasNoSaldo}
-        />
-        <KPICard
-          titulo="Meses com movimento"
-          valor={dados.meses.length}
-          detalhe={janelaDescrita}
         />
       </GradeKpis>
       <PainelGrafico
@@ -495,6 +559,7 @@ async function ConteudoFluxoCaixa({
       >
         <FluxoCaixaGrafico
           meses={dados.meses}
+          mesCorrente={mesCorrente()}
           centrosCusto={centrosCusto}
           centrosReceita={centrosReceita}
           podeVerLancamentos={podeVerLancamentos}
@@ -771,34 +836,62 @@ async function ConteudoPosicaoBancaria({
       />
     );
   }
+  const { resumo } = posicao;
+  const atrasadas = resumo.aConferir.filter((c) => c.situacao === "atrasado").length;
+  const divergentes = resumo.aConferir.filter((c) => c.situacao === "divergente").length;
   return (
     <>
+      <p className="rounded-lg border border-border bg-card p-4 text-corpo text-foreground">
+        {fraseDaPosicao(resumo, formatarBRL, formatarData)}
+      </p>
       <GradeKpis
         id="financeiro.relatorios.posicao-bancaria"
         titulo="Posição bancária"
       >
-        {posicao.contas.map((conta) => (
-          <KPICard
-            key={conta.contaId}
-            idCard={conta.contaId}
-            titulo={conta.nome}
-            valor={<MoneyText valor={conta.saldoAtual} />}
-            detalhe={
-              <>
-                Inicial <MoneyText valor={conta.saldoInicial} />
-              </>
-            }
-          />
-        ))}
         <KPICard
-          titulo="Saldo total"
-          valor={<MoneyText valor={posicao.totalSaldoAtual} />}
-          // "Todas as contas ativas" passa a ser mentira quando alguma ficou
-          // fora por permissão, e é uma mentira que parece o dinheiro da empresa.
+          idCard="disponivel"
+          titulo="Disponível"
+          valor={<MoneyText valor={resumo.disponivel} />}
+          detalhe={`${resumo.contasDisponiveis} conta(s) corrente e caixa: o que paga boleto hoje`}
+        />
+        <KPICard
+          idCard="aplicado"
+          titulo="Aplicado"
+          valor={<MoneyText valor={resumo.aplicado} />}
           detalhe={
-            posicao.contasOcultas > 0
-              ? `Somando as ${posicao.contas.length} contas que você pode ver`
-              : "Somando todas as contas ativas"
+            <>
+              {resumo.contasAplicadas} subconta(s) de investimento; com o
+              disponível, <MoneyText valor={resumo.total} />
+              {/* "Todas as contas ativas" vira mentira quando alguma ficou
+                  fora por permissão, e parece o dinheiro da empresa. */}
+              {posicao.contasOcultas > 0
+                ? ` nas ${posicao.contas.length} contas que você pode ver`
+                : ""}
+            </>
+          }
+        />
+        <KPICard
+          idCard="extrato"
+          titulo="Extrato a conferir"
+          valor={
+            resumo.aConferir.length === 0 ? (
+              <span className="text-muted-foreground">Nenhuma</span>
+            ) : (
+              `${resumo.aConferir.length} conta(s)`
+            )
+          }
+          detalhe={
+            resumo.aConferir.length === 0
+              ? "Toda conta com extrato bate com o banco na data dele"
+              : [
+                  atrasadas > 0 ? `${atrasadas} com lançamento depois do último extrato` : null,
+                  divergentes > 0 ? `${divergentes} que não bate(m) na data do extrato` : null,
+                  resumo.aConferir.length - atrasadas - divergentes > 0
+                    ? `${resumo.aConferir.length - atrasadas - divergentes} sem extrato importado`
+                    : null,
+                ]
+                  .filter((parte) => parte !== null)
+                  .join("; ")
           }
         />
       </GradeKpis>
@@ -1953,7 +2046,7 @@ export default async function RelatoriosPage({
           relatorio="fluxo-caixa"
           exportar={relatorio}
           titulo="Fluxo de caixa"
-          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. Empréstimos tomados e amortizações entram em série própria, separados do operacional. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O saldo projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. O dinheiro se separa pela NATUREZA da categoria em cinco grupos: operação (operacional e financeira), investimento (CAPEX), sócios e mútuo, dívida (empréstimo tomado e amortização) e aplicações (resgate e aplicação manuais). Rendimento e ajuste de abertura de aplicação ficam fora: mudam o saldo da subconta, não passam pela conta corrente. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O disponível projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto; a segunda linha soma o aplicado de hoje nas subcontas de investimento. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
         >
           <FiltrosFluxoCaixaBarra
             filtros={filtrosFluxo}
@@ -2045,7 +2138,7 @@ export default async function RelatoriosPage({
           relatorio="posicao-bancaria"
           exportar={relatorio}
           titulo="Posição bancária"
-          descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
+          descricao="Saldo por conta: saldo inicial mais as parcelas pagas e as transferências desde a data de corte. Disponível é o das contas correntes e caixa; aplicado, o das subcontas de investimento. Cada conta é comparada com o último extrato importado, na data dele: o que o sistema registra depois ainda não foi confirmado pelo banco."
         >
           <ConteudoPosicaoBancaria podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
@@ -2092,7 +2185,7 @@ export default async function RelatoriosPage({
           relatorio="investimentos"
           exportar={relatorio}
           titulo="Investimentos"
-          descricao="Dinheiro aplicado (CDB, fundo) na subconta de investimentos de cada conta. Aplicar não é despesa: o dinheiro só muda de bolso e continua da empresa, por isso fica fora do custo, do DRE e do fluxo de caixa."
+          descricao="Dinheiro aplicado (CDB, fundo) na subconta de investimentos de cada conta. Aplicar não é despesa: o dinheiro só muda de bolso e continua da empresa, por isso fica fora do custo e do DRE; no fluxo de caixa, resgate e aplicação aparecem no grupo Aplicações, separados da operação. Leitura para quem não tem a aba Aplicações: quem tem é levado direto a ela, que é onde se lança."
         >
           <FiltrosInvestimentosBarra periodo={periodoInvestimentos} />
           <ConteudoInvestimentos periodo={periodoInvestimentos} />
