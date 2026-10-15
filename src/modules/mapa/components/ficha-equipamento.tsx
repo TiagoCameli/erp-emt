@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Crosshair, LocateFixed, X } from "lucide-react";
+import { Crosshair, LocateFixed, RotateCcw, RotateCw, X } from "lucide-react";
 
 import { Combobox, MoneyText } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,8 @@ export interface FichaEquipamentoProps {
   onMarcarEstado: (estado: EstadoMaquina) => void;
   onAssinalarOperador: (colaboradorId: string | null) => void;
   onEncerrarLocacao: () => void;
+  /** Gira a máquina: graus a somar ao rumo atual; null volta a seguir a pista. */
+  onGirar: (delta: number | null) => void;
 }
 
 function Linha({
@@ -68,6 +70,7 @@ export function FichaEquipamento({
   onMarcarEstado,
   onAssinalarOperador,
   onEncerrarLocacao,
+  onGirar,
 }: FichaEquipamentoProps) {
   const opcoesOperador = React.useMemo(
     () =>
@@ -283,6 +286,67 @@ export function FichaEquipamento({
               Encerrar locação
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {podeEditar && e.pos && e.fontePosicao !== "gps" ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-legenda font-medium text-muted-foreground">
+            Rumo {Math.round(((e.heading % 360) + 360) % 360)}°{" "}
+            {e.rumoManual === null ? "(segue a pista)" : "(escolhido)"}
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => onGirar(-90)}
+              title="Girar 90° para a esquerda"
+            >
+              <RotateCcw className="size-3" />
+              90°
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => onGirar(-15)}
+              title="Girar 15° para a esquerda"
+            >
+              <RotateCcw className="size-3" />
+              15°
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => onGirar(15)}
+              title="Girar 15° para a direita"
+            >
+              <RotateCw className="size-3" />
+              15°
+            </Button>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => onGirar(90)}
+              title="Girar 90° para a direita"
+            >
+              <RotateCw className="size-3" />
+              90°
+            </Button>
+            {e.rumoManual !== null ? (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => onGirar(null)}
+              >
+                Seguir a pista
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

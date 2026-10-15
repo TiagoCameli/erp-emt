@@ -11122,6 +11122,14 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_girar_equipamento: {
+        Args: { p_id: string; p_heading: number | null };
+        Returns: undefined;
+      };
+      fn_mapa_local_raio: {
+        Args: { p_id: string; p_raio: number | null };
+        Returns: undefined;
+      };
       fn_mapa_local_salvar: {
         Args: { p_id: string | null; p_nome: string | null; p_tipo: string | null; p_lng: number; p_lat: number };
         Returns: string;

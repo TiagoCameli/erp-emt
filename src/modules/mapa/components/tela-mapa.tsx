@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   Box,
+  Compass,
   HardHat,
   Layers,
   MapPinPlus,
@@ -10,6 +11,8 @@ import {
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Satellite,
   Tag,
   Users,
@@ -29,9 +32,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
+  ajustarRaioLocal,
   assinalarOperador,
   colocarLocal,
   encerrarLocacao,
+  girarEquipamento,
   marcarEstado,
   moverEquipamentos,
   moverPessoas,
@@ -57,12 +62,14 @@ import {
 } from "@/modules/mapa/components/dialogos-adicionar";
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
+import { FichaLocal } from "@/modules/mapa/components/ficha-local";
 import {
   MapaEmt,
   type Alvo,
   type ArrasteSolto,
   type CenaBase,
   type Foco,
+  type GiroMapa,
   type ModoFundo,
   type TipoMotor,
 } from "@/modules/mapa/components/mapa-emt";
@@ -167,10 +174,12 @@ function normalizar(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
+/** Rumo desenhado: o escolhido na ficha ganha; sem ele, o da pista no km da máquina. */
 function headingNoTrecho(
   e: EquipamentoMapa,
   medidos: ReadonlyMap<string, TrechoMedido>,
 ): number {
+  if (e.rumoManual !== null) return e.rumoManual;
   if (e.trechoId && e.km !== null) {
     const m = medidos.get(e.trechoId);
     if (m) return pontoNoKm(m, e.km).heading;
@@ -198,6 +207,25 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => new Set(),
   );
   const [ficha, setFicha] = React.useState<Alvo | null>(null);
+  // Ficha do local (tocar no nome dele no mapa); some quando outra ficha abre.
+  const [localFicha, setLocalFicha] = React.useState<string | null>(null);
+  const abrirFicha = React.useCallback((alvo: Alvo) => {
+    setLocalFicha(null);
+    setFicha(alvo);
+  }, []);
+  // Prévias que valem mais que o banco até gravar: raio do local e rumo da máquina.
+  const [raioPrevio, setRaioPrevio] = React.useState<{
+    id: string;
+    raioM: number;
+  } | null>(null);
+  const [rumoPrevio, setRumoPrevio] = React.useState<{
+    id: string;
+    rumo: number;
+  } | null>(null);
+  const timerGiro = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [giroMapa, setGiroMapa] = React.useState<GiroMapa | null>(null);
+  const girarMapa = (delta: number | null) =>
+    setGiroMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
   // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado). A ficha
   // mora na lateral, então ficha aberta mostra a lateral mesmo com a lista recolhida.
   const listaAberta = React.useSyncExternalStore(
@@ -205,9 +233,12 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     lerPainel,
     () => true,
   );
-  const painelAberto = listaAberta || ficha !== null;
+  const painelAberto = listaAberta || ficha !== null || localFicha !== null;
   const alternarPainel = () => {
-    if (painelAberto) setFicha(null);
+    if (painelAberto) {
+      setFicha(null);
+      setLocalFicha(null);
+    }
     gravarPainel(!painelAberto);
   };
   const [hover, setHover] = React.useState<string | null>(null);
@@ -365,9 +396,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       if (!pos) return [];
       const item = pendente?.itens.find((i) => i.equipamento.id === e.id);
       const heading =
-        item && item.destino.tipo === "trecho"
-          ? item.destino.heading
-          : headingNoTrecho(e, medidosPorId);
+        rumoPrevio?.id === e.id
+          ? rumoPrevio.rumo
+          : item && item.destino.tipo === "trecho" && e.rumoManual === null
+            ? item.destino.heading
+            : headingNoTrecho(e, medidosPorId);
       return [{ ...e, pos, heading }];
     });
     const idsNaCena = new Set(equipamentos.map((e) => e.id));
@@ -389,7 +422,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       trechos: trechosMedidos,
       marcos,
       areas: estado.areas,
-      localidades: estado.localidades,
+      localidades: raioPrevio
+        ? estado.localidades.map((l) =>
+            l.id === raioPrevio.id ? { ...l, raioM: raioPrevio.raioM } : l,
+          )
+        : estado.localidades,
       extrasDoLocal,
       obras: obrasNoMapa,
       modelos,
@@ -407,6 +444,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     estado.equipamentos,
     estado.areas,
     estado.localidades,
+    raioPrevio,
+    rumoPrevio,
     extrasDoLocal,
     obrasNoMapa,
     estado.config.snapLocalM,
@@ -496,9 +535,9 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
           return new Set([alvo.id]);
         });
       }
-      setFicha(alvo);
+      abrirFicha(alvo);
     },
-    [multi],
+    [multi, abrirFicha],
   );
 
   const soltar = React.useCallback(
@@ -626,6 +665,68 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     },
     [aplicar, estado.localidades],
   );
+
+  const clicarLocal = React.useCallback((id: string) => {
+    setFicha(null);
+    setRaioPrevio(null);
+    setLocalFicha(id);
+  }, []);
+
+  const localDaFicha = localFicha
+    ? (estado.localidades.find((l) => l.id === localFicha) ?? null)
+    : null;
+  const itensDoLocal = localDaFicha
+    ? [
+        ...estado.tanques
+          .filter((t) => t.localidadeId === localDaFicha.id)
+          .map((t) => `Tanque: ${t.nome}`),
+        ...estado.depositos
+          .filter((d) => d.localidadeId === localDaFicha.id)
+          .map((d) => `Depósito: ${d.nome}`),
+      ]
+    : [];
+
+  const salvarRaio = React.useCallback(
+    async (id: string, raioM: number | null): Promise<boolean> => {
+      setSalvando(true);
+      try {
+        const r = await ajustarRaioLocal({ localidadeId: id, raioM });
+        return aplicar(
+          r,
+          raioM === null ? "Área voltou ao padrão" : "Área do local salva",
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [aplicar],
+  );
+
+  /**
+   * Girar a máquina: o mapa mostra na hora e grava 600 ms depois do último toque (vários
+   * toques de 15° viram uma gravação só). null volta a seguir a pista e grava direto.
+   */
+  const girar = (e: EquipamentoMapa, delta: number | null) => {
+    if (timerGiro.current) clearTimeout(timerGiro.current);
+    const gravar = async (rumo: number | null) => {
+      const r = await girarEquipamento({ equipamentoId: e.id, rumo });
+      if ("erro" in r) toast.error(r.erro);
+      else if (r.estado) setEstado(r.estado);
+      setRumoPrevio(null);
+    };
+    if (delta === null) {
+      setRumoPrevio(null);
+      void gravar(null);
+      return;
+    }
+    const base =
+      rumoPrevio?.id === e.id
+        ? rumoPrevio.rumo
+        : headingNoTrecho(e, medidosPorId);
+    const rumo = (((base + delta) % 360) + 360) % 360;
+    setRumoPrevio({ id: e.id, rumo });
+    timerGiro.current = setTimeout(() => void gravar(rumo), 600);
+  };
 
   const confirmarTransferencia = React.useCallback(
     async ({ data, motivo, estadoLivre, ajuste }: ConfirmacaoTransferencia) => {
@@ -800,18 +901,18 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         else nova.add(e.id);
         return nova;
       });
-      setFicha({ tipo: "equipamento", id: e.id });
+      abrirFicha({ tipo: "equipamento", id: e.id });
       if (e.pos) focar(e.pos, 15);
     },
-    [focar, multi],
+    [focar, multi, abrirFicha],
   );
 
   const iniciarPosicionar = React.useCallback((e: EquipamentoMapa) => {
     setPosicionando(e.id);
-    setFicha({ tipo: "equipamento", id: e.id });
+    abrirFicha({ tipo: "equipamento", id: e.id });
     setSelecao(new Set([e.id]));
     toast.info(`Toque no mapa onde está ${e.codigo}.`);
-  }, []);
+  }, [abrirFicha]);
 
   const aoIniciarLocacao = React.useCallback(
     (
@@ -830,11 +931,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         : null;
       if (alvo) {
         setPosicionando(alvo.id);
-        setFicha({ tipo: "equipamento", id: alvo.id });
+        abrirFicha({ tipo: "equipamento", id: alvo.id });
         setSelecao(new Set([alvo.id]));
       }
     },
-    [estado.equipamentos],
+    [estado.equipamentos, abrirFicha],
   );
 
   const aoMotor = React.useCallback((tipo: TipoMotor, aviso: string | null) => {
@@ -968,11 +1069,13 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               !pontoColocar
             }
             foco={foco}
+            giroMapa={giroMapa}
             centroInicial={centroInicial}
             onSelecionar={selecionar}
             onHover={setHover}
             onSoltar={soltar}
             onClicarMapa={clicarMapa}
+            onClicarLocal={clicarLocal}
             onMotor={aoMotor}
           />
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
@@ -983,6 +1086,39 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               {botaoAlternar(inclinado, "3D", Box, () =>
                 setInclinado((v) => !v),
               )}
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(-30)}
+                title="Girar o mapa para a esquerda"
+                aria-label="Girar o mapa para a esquerda"
+                className="bg-background/95 backdrop-blur"
+              >
+                <RotateCcw className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(30)}
+                title="Girar o mapa para a direita"
+                aria-label="Girar o mapa para a direita"
+                className="bg-background/95 backdrop-blur"
+              >
+                <RotateCw className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(null)}
+                title="Norte para cima"
+                className="bg-background/95 backdrop-blur"
+              >
+                <Compass className="size-3" />
+                <span className="max-sm:sr-only">Norte</span>
+              </Button>
               {permissoes.editar
                 ? botaoAlternar(multi, "Seleção múltipla", MousePointer2, () =>
                     setMulti((v) => !v),
@@ -1091,14 +1227,29 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             onCancelarPosicionar={() => setPosicionando(null)}
             onEscolherEquipamento={escolherEquipamento}
             onEscolherPessoa={(p) => {
-              setFicha({ tipo: "pessoa", id: p.id });
+              abrirFicha({ tipo: "pessoa", id: p.id });
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
           >
             {equipamentoFicha ? (
               <FichaEquipamento
-                equipamento={equipamentoFicha}
+                equipamento={
+                  rumoPrevio?.id === equipamentoFicha.id
+                    ? {
+                        ...equipamentoFicha,
+                        heading: rumoPrevio.rumo,
+                        rumoManual: rumoPrevio.rumo,
+                      }
+                    : {
+                        ...equipamentoFicha,
+                        heading: headingNoTrecho(
+                          equipamentoFicha,
+                          medidosPorId,
+                        ),
+                      }
+                }
+                onGirar={(delta) => girar(equipamentoFicha, delta)}
                 pessoas={estado.pessoas}
                 permissoes={permissoes}
                 selecionados={selecao.size}
@@ -1151,6 +1302,25 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
                   </p>
                 ) : null}
               </section>
+            ) : localDaFicha ? (
+              <FichaLocal
+                key={localDaFicha.id}
+                local={localDaFicha}
+                itens={itensDoLocal}
+                padraoM={estado.config.snapLocalM}
+                podeEditar={permissoes.editar}
+                salvando={salvando}
+                onFechar={() => {
+                  setLocalFicha(null);
+                  setRaioPrevio(null);
+                }}
+                onPrevia={(raioM) =>
+                  setRaioPrevio(
+                    raioM === null ? null : { id: localDaFicha.id, raioM },
+                  )
+                }
+                onSalvar={(raioM) => salvarRaio(localDaFicha.id, raioM)}
+              />
             ) : null}
           </PainelMapa>
         </div>

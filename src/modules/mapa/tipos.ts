@@ -74,8 +74,10 @@ export interface EquipamentoMapa {
   modelo3d: string;
   /** Null enquanto ninguém posicionou (estado `sem_posicao`). */
   pos: Posicao | null;
-  /** Graus a partir do norte, sentido horário. */
+  /** Graus a partir do norte, sentido horário: o rumo desenhado (manual ou o da pista). */
   heading: number;
+  /** Rumo escolhido na ficha; null = segue o traçado no km da máquina. */
+  rumoManual: number | null;
   fontePosicao: "manual" | "gps";
   estado: EstadoEfetivo;
   estadoDesde: string | null;
@@ -190,6 +192,8 @@ export interface LocalidadeMapa {
   obraId: string | null;
   fornecedorId: string | null;
   pos: Posicao;
+  /** Raio da área do local, em metros; null = o padrão da configuração (snapLocalM). */
+  raioM: number | null;
 }
 
 /** Tipos de local aceitos pelo cadastro (CHECK de `localidades.tipo`). */

@@ -15,6 +15,7 @@ import { Loader } from "@googlemaps/js-api-loader";
 import { cn } from "@/lib/utils";
 import {
   criarIluminacao,
+  ID_LOCAIS,
   ID_PESSOAS,
   montarCamadas,
   PREFIXO_MAQUINA,
@@ -73,6 +74,13 @@ export interface Foco {
   chave: number;
 }
 
+/** Pedido de girar o mapa: graus a somar ao rumo atual, ou null para voltar ao norte. */
+export interface GiroMapa {
+  delta: number | null;
+  /** Muda a cada pedido, para o mesmo giro poder ser pedido duas vezes. */
+  chave: number;
+}
+
 export interface MapaEmtProps {
   google: ConfigGoogle;
   cena: CenaBase;
@@ -86,11 +94,14 @@ export interface MapaEmtProps {
   /** Clique no chão posiciona a máquina escolhida no painel (cursor em cruz). */
   modoPosicionar: boolean;
   foco: Foco | null;
+  giroMapa: GiroMapa | null;
   centroInicial: { pos: Posicao; zoom: number };
   onSelecionar: (alvo: Alvo | null, multi: boolean) => void;
   onHover: (id: string | null) => void;
   onSoltar: (arraste: ArrasteSolto) => void;
   onClicarMapa: (pos: Posicao) => void;
+  /** Toque no nome de um local (abre a ficha do local). */
+  onClicarLocal: (id: string) => void;
   onMotor: (motor: TipoMotor, aviso: string | null) => void;
   className?: string;
 }
@@ -104,6 +115,8 @@ interface Motor {
   setFundo(fundo: ModoFundo, inclinado: boolean): void;
   setInclinado(inclinado: boolean, fundo: ModoFundo): void;
   voarPara(pos: Posicao, zoom?: number): void;
+  /** Soma graus ao rumo do mapa; null volta ao norte. */
+  girarMapa(delta: number | null): void;
   finalizar(): void;
 }
 
@@ -281,6 +294,15 @@ function criarMotorTiles(
         },
       });
     },
+    girarMapa(delta) {
+      deck.setProps({
+        initialViewState: {
+          ...vista,
+          bearing: delta === null ? 0 : (vista.bearing ?? 0) + delta,
+          transitionDuration: 400,
+        },
+      });
+    },
     finalizar() {
       deck.finalize();
       palco.remove();
@@ -445,6 +467,10 @@ async function criarMotorGoogle(
           : 0,
       );
     },
+    girarMapa(delta) {
+      // Só o mapa vetorial gira; no raster o Google ignora o rumo.
+      map.setHeading(delta === null ? 0 : (map.getHeading() ?? 0) + delta);
+    },
     voarPara(pos, zoom) {
       map.panTo({ lat: pos[1], lng: pos[0] });
       const atual = map.getZoom() ?? centro.zoom;
@@ -563,7 +589,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     redesenhar();
   }, [cena, selecao, hover, posicoesPendentes, redesenhar]);
 
-  const { fundo, inclinado, foco } = props;
+  const { fundo, inclinado, foco, giroMapa } = props;
   React.useEffect(() => {
     motorRef.current?.setFundo(fundo, inclinado);
     redesenhar();
@@ -576,6 +602,10 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   React.useEffect(() => {
     if (foco) motorRef.current?.voarPara(foco.pos, foco.zoom);
   }, [foco]);
+
+  React.useEffect(() => {
+    if (giroMapa) motorRef.current?.girarMapa(giroMapa.delta);
+  }, [giroMapa]);
 
   // Ponteiro: clique, hover e arraste (mouse e toque), como no spike.
   React.useEffect(() => {
@@ -766,6 +796,13 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const c = motor.pixelParaCoord(x, y);
       if (p.modoPosicionar && c) {
         p.onClicarMapa(c);
+        return;
+      }
+      const local = motor.pegar(x, y, [ID_LOCAIS]).find((i) => i.object) as
+        | { object?: { id?: unknown } }
+        | undefined;
+      if (local && typeof local.object?.id === "string") {
+        p.onClicarLocal(local.object.id);
         return;
       }
       if (p.selecao.size > 0 && !(e.shiftKey || e.ctrlKey || e.metaKey))

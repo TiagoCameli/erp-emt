@@ -183,6 +183,7 @@ export function colarNoTrecho(
   return melhor;
 }
 
+/** Local mais perto cujo raio alcança o ponto (raio do local, ou `maxM` quando não tem). */
 export function colarNoLocal(
   p: Posicao,
   locais: LocalidadeMapa[],
@@ -191,7 +192,7 @@ export function colarNoLocal(
   let melhor: { local: LocalidadeMapa; distanciaM: number } | null = null;
   for (const local of locais) {
     const d = distanciaM(p, local.pos);
-    if (d <= maxM && (!melhor || d < melhor.distanciaM))
+    if (d <= (local.raioM ?? maxM) && (!melhor || d < melhor.distanciaM))
       melhor = { local, distanciaM: d };
   }
   return melhor;
