@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ConfirmDialog } from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,6 +16,7 @@ import {
 import {
   formatarKm,
   formatarMetros,
+  sugereAjuste,
   type DestinoResolvido,
 } from "@/modules/mapa/geo";
 import { rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
@@ -29,7 +31,9 @@ import {
 /**
  * Confirmação do arraste (ou do "posicionar"): diz onde cada máquina vai cair, segundo a mesma
  * regra do banco (área > trecho > local > livre), pede a data efetiva e o motivo, e só pergunta
- * o estado quando alguma caiu fora de qualquer zona. Confirmar grava; cancelar devolve as
+ * o estado quando alguma caiu fora de qualquer zona. No arraste, a pessoa escolhe entre
+ * transferência e ajuste de localização (só corrige o ponto: estado, obra e frente ficam, sem data
+ * nem estado); a sugestão vem de `sugereAjuste` (continua na mesma zona = ajuste). Confirmar grava; cancelar devolve as
  * máquinas para onde estavam. Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  */
 
@@ -51,18 +55,23 @@ export interface ConfirmacaoTransferencia {
   motivo: string;
   /** Estado para os itens que caíram em ponto livre. */
   estadoLivre: EstadoMaquina;
+  /** Só corrige o ponto no mapa; não é transferência. */
+  ajuste: boolean;
 }
 
 const ESTADOS_LIVRE: EstadoMaquina[] = ["operando", "parado", "em_rota"];
 
-function descreverDestino(d: DestinoResolvido): string {
+/** Onde a máquina cai; no ajuste sem o estado da zona, que não muda. */
+function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
+  const estado = (e: EstadoMaquina) =>
+    comEstado ? ` · ${ROTULO_ESTADO[e].toLowerCase()}` : "";
   switch (d.tipo) {
     case "area":
-      return `${d.area.nome} (${ROTULO_TIPO_AREA[d.area.tipo] ?? d.area.tipo}) · ${ROTULO_ESTADO[d.estado].toLowerCase()}`;
+      return `${d.area.nome} (${ROTULO_TIPO_AREA[d.area.tipo] ?? d.area.tipo})${estado(d.estado)}`;
     case "trecho":
-      return `${d.trecho.nome} · km ${formatarKm(d.km)} · a ${formatarMetros(d.distanciaM)} do traçado · operando`;
+      return `${d.trecho.nome} · km ${formatarKm(d.km)} · a ${formatarMetros(d.distanciaM)} do traçado${estado(d.estado)}`;
     case "localidade":
-      return `${d.local.nome} (${rotuloTipoLocalidade(d.local.tipo).toLowerCase()}, ${formatarMetros(d.distanciaM)}) · ${ROTULO_ESTADO[d.estado].toLowerCase()}`;
+      return `${d.local.nome} (${rotuloTipoLocalidade(d.local.tipo).toLowerCase()}, ${formatarMetros(d.distanciaM)})${estado(d.estado)}`;
     default:
       return `Fora de qualquer zona (${d.pos[1].toFixed(5)}, ${d.pos[0].toFixed(5)})`;
   }
@@ -86,15 +95,25 @@ export function DialogoTransferencia({
   const idData = React.useId();
   const idMotivo = React.useId();
   const idEstado = React.useId();
+  const podeAjustar =
+    pendente.modo === "arraste" &&
+    pendente.itens.every((i) => i.equipamento.pos !== null);
+  const [ajuste, setAjuste] = React.useState(
+    () =>
+      podeAjustar &&
+      pendente.itens.every((i) => sugereAjuste(i.equipamento, i.destino)),
+  );
 
   const n = pendente.itens.length;
-  const algumLivre = pendente.itens.some((i) => i.destino.tipo === "livre");
+  const algumLivre =
+    !ajuste && pendente.itens.some((i) => i.destino.tipo === "livre");
+  const alvo = n > 1 ? `${n} equipamentos` : pendente.principal.codigo;
   const titulo =
     pendente.modo === "posicionar"
       ? `Posicionar ${pendente.principal.codigo}`
-      : n > 1
-        ? `Transferir ${n} equipamentos`
-        : `Transferir ${pendente.principal.codigo}`;
+      : ajuste
+        ? `Ajustar localização de ${alvo}`
+        : `Transferir ${alvo}`;
 
   return (
     <ConfirmDialog
@@ -106,13 +125,43 @@ export function DialogoTransferencia({
       descricao={
         pendente.modo === "posicionar"
           ? "A máquina entra no mapa neste ponto. A alocação e a movimentação ficam registradas."
-          : "A posição nova vale a partir da data efetiva e fica na trilha de movimentações."
+          : ajuste
+            ? "Só corrige o ponto no mapa. Estado, obra e frente continuam os mesmos; não conta como transferência."
+            : "A posição nova vale a partir da data efetiva e fica na trilha de movimentações."
       }
       textoConfirmar={
-        pendente.modo === "posicionar" ? "Posicionar" : "Transferir"
+        pendente.modo === "posicionar"
+          ? "Posicionar"
+          : ajuste
+            ? "Ajustar"
+            : "Transferir"
       }
       conteudo={
         <div className="flex flex-col gap-4">
+          {podeAjustar ? (
+            <div
+              role="group"
+              aria-label="Tipo de mudança"
+              className="grid grid-cols-2 gap-2"
+            >
+              <Button
+                type="button"
+                variant={ajuste ? "default" : "outline"}
+                aria-pressed={ajuste}
+                onClick={() => setAjuste(true)}
+              >
+                Ajuste de localização
+              </Button>
+              <Button
+                type="button"
+                variant={ajuste ? "outline" : "default"}
+                aria-pressed={!ajuste}
+                onClick={() => setAjuste(false)}
+              >
+                Transferência
+              </Button>
+            </div>
+          ) : null}
           <ul className="flex flex-col gap-2 text-detalhe">
             {pendente.itens.map((item) => (
               <li
@@ -126,7 +175,7 @@ export function DialogoTransferencia({
                   </span>
                 </p>
                 <p className="text-muted-foreground">
-                  {descreverDestino(item.destino)}
+                  {descreverDestino(item.destino, !ajuste)}
                 </p>
               </li>
             ))}
@@ -153,23 +202,33 @@ export function DialogoTransferencia({
               </Select>
             </div>
           ) : null}
-          <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor={idData}>Data efetiva</Label>
-              <Input
-                id={idData}
-                type="date"
-                value={data}
-                onChange={(e) => setData(e.target.value)}
-              />
-            </div>
+          <div
+            className={
+              ajuste ? "grid gap-4" : "grid gap-4 sm:grid-cols-[10rem_1fr]"
+            }
+          >
+            {ajuste ? null : (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={idData}>Data efetiva</Label>
+                <Input
+                  id={idData}
+                  type="date"
+                  value={data}
+                  onChange={(e) => setData(e.target.value)}
+                />
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <Label htmlFor={idMotivo}>Motivo</Label>
               <Input
                 id={idMotivo}
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                placeholder="ex.: frente de CBUQ km 701"
+                placeholder={
+                  ajuste
+                    ? "ex.: ponto corrigido para dentro do pátio"
+                    : "ex.: frente de CBUQ km 701"
+                }
                 maxLength={300}
               />
             </div>
@@ -177,7 +236,12 @@ export function DialogoTransferencia({
         </div>
       }
       onConfirmar={() =>
-        onConfirmar({ data, motivo: motivo.trim(), estadoLivre })
+        onConfirmar({
+          data: ajuste ? hoje : data,
+          motivo: motivo.trim(),
+          estadoLivre,
+          ajuste,
+        })
       }
     />
   );
