@@ -559,6 +559,14 @@ export function abaCustoGrupo(
 ): EscritaDeAba {
   const linhas: LinhaGrupoPlanilha[] = [];
   for (const grupo of dados.grupos) {
+    // O "Sem insumo" sai aberto por categoria financeira, como na tela: uma
+    // linha só com 92% do custo não diz nada na planilha também.
+    if (grupo.categorias && grupo.categorias.length > 0) {
+      for (const categoria of grupo.categorias) {
+        linhas.push({ grupo: grupo.nome, subcategoria: categoria.nome, valor: categoria.valor });
+      }
+      continue;
+    }
     if (grupo.subcategorias.length === 0) {
       linhas.push({ grupo: grupo.nome, subcategoria: null, valor: grupo.valor });
       continue;
@@ -577,8 +585,8 @@ export function abaCustoGrupo(
   const colunas: ColunaRelatorio<LinhaGrupoPlanilha>[] = [
     { cabecalho: "Grupo", largura: 24, tipo: "texto", celula: (l) => l.grupo },
     {
-      cabecalho: "Subcategoria",
-      largura: 34,
+      cabecalho: "Subcategoria (ou categoria, no Sem insumo)",
+      largura: 40,
       tipo: "texto",
       celula: (l) => l.subcategoria,
     },

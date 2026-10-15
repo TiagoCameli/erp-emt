@@ -11694,6 +11694,59 @@ export type Database = {
           vencido: number;
         }[];
       };
+      fn_rel_custo_sem_insumo_por_categoria: {
+        Args: {
+          p_categoria?: string;
+          p_centro_custo?: string;
+          p_fim?: string;
+          p_incluir_investimento?: boolean;
+          p_inicio?: string;
+        };
+        Returns: {
+          categoria_id: string | null;
+          categoria_nome: string;
+          total: number;
+        }[];
+      };
+      fn_rel_custo_por_grupo_mensal: {
+        Args: {
+          p_categoria?: string;
+          p_centro_custo?: string;
+          p_fim: string;
+          p_incluir_investimento?: boolean;
+          p_inicio: string;
+        };
+        Returns: {
+          grupo_id: string | null;
+          grupo_nome: string;
+          mes: string;
+          total: number;
+        }[];
+      };
+      fn_rel_aquisicoes_quitacao: {
+        Args: never;
+        Returns: {
+          a_pagar: number;
+          centro: string;
+          centro_id: string;
+          descricao: string | null;
+          divida: string | null;
+          fornecedor: string | null;
+          grupo: string;
+          lancamento_id: string | null;
+          lancamentos: number;
+          numero: string | null;
+          pago: number;
+          parcelas: number | null;
+          parcelas_abertas: number;
+          parcelas_pagas: number | null;
+          primeira_competencia: string | null;
+          proximo_vencimento: string | null;
+          tipo: string;
+          ultimo_vencimento: string | null;
+          valor: number;
+        }[];
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
