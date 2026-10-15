@@ -49,6 +49,12 @@ export const ROTULO_TIPO_LOCALIDADE: Record<string, string> = {
   pedreira: "Pedreira",
   porto: "Porto",
   cidade: "Cidade",
+  sede: "Sede",
+  deposito: "Depósito",
+  canteiro: "Canteiro",
+  alojamento: "Alojamento",
+  pulmao: "Pulmão",
+  outro: "Outro",
 };
 
 export function rotuloTipoLocalidade(tipo: string): string {

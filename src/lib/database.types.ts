@@ -11122,6 +11122,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_local_salvar: {
+        Args: { p_id: string | null; p_nome: string | null; p_tipo: string | null; p_lng: number; p_lat: number };
+        Returns: string;
+      };
       fn_mapa_locacao_encerrar: {
         Args: { p_equipamento: string; p_fim?: string | null; p_medicao_fim?: number | null; p_motivo?: string | null };
         Returns: undefined;
@@ -11156,6 +11160,10 @@ export type Database = {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
       };
+      fn_mapa_obra_posicionar: {
+        Args: { p_obra: string; p_lng: number; p_lat: number };
+        Returns: undefined;
+      };
       fn_mapa_mover_equipamentos: {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
@@ -11163,6 +11171,10 @@ export type Database = {
       fn_mapa_resolver_destino: {
         Args: { p_lng: number; p_lat: number };
         Returns: Json;
+      };
+      fn_mapa_vincular_local: {
+        Args: { p_alvo: string; p_id: string; p_localidade: string };
+        Returns: undefined;
       };
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string };

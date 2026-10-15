@@ -19,6 +19,7 @@ import type {
   EquipamentoMapa,
   LocalidadeMapa,
   Modelo3d,
+  ObraMapa,
   PessoaMapa,
   Posicao,
 } from "@/modules/mapa/tipos";
@@ -43,6 +44,12 @@ export const ESCALA_MAQUINA = 3;
 const FONTE = "Inter, Helvetica, Arial, sans-serif";
 const BRANCO: Rgb = [255, 255, 255];
 
+/** Obra que já tem ponto (a cena só leva essas). */
+export type ObraNoMapa = ObraMapa & { pos: Posicao };
+
+/** Verde EMT: obra sem cor própria no cadastro. */
+const VERDE_EMT: Rgb = [62, 119, 68];
+
 export interface Cena {
   /** Só os que têm posição (quem não tem fica na lista do painel). */
   equipamentos: EquipamentoMapa[];
@@ -51,6 +58,10 @@ export interface Cena {
   marcos: { km: number; pos: Posicao }[];
   areas: AreaMapa[];
   localidades: LocalidadeMapa[];
+  /** Segunda linha do rótulo do local: o que está ali ("2 tanques · 1 depósito"). */
+  extrasDoLocal: ReadonlyMap<string, string>;
+  /** Obras com ponto no mapa. */
+  obras: ObraNoMapa[];
   modelos: ReadonlyMap<string, Modelo3d>;
   snapLocalM: number;
   selecao: ReadonlySet<string>;
@@ -206,13 +217,48 @@ export function montarCamadas(cena: Cena): Layer[] {
       id: "locais-nome",
       data: cena.localidades,
       getPosition: (d) => d.pos,
-      getText: (d) => d.nome,
+      getText: (d) => {
+        const extra = cena.extrasDoLocal.get(d.id);
+        return extra ? `${d.nome}\n${extra}` : d.nome;
+      },
       getSize: 12,
       getColor: BRANCO,
       background: true,
       getBackgroundColor: [42, 120, 214, 210],
       backgroundPadding: [6, 3],
       getPixelOffset: [0, -22],
+      fontFamily: FONTE,
+      characterSet: "auto",
+      pickable: false,
+    }),
+  );
+
+  // Obras: pino na cor da obra e o nome num rótulo verde, acima do pino.
+  camadas.push(
+    new ScatterplotLayer<ObraNoMapa>({
+      id: "obras-pino",
+      data: cena.obras,
+      getPosition: (d) => d.pos,
+      getRadius: 9,
+      radiusUnits: "pixels",
+      filled: true,
+      getFillColor: (d) => (d.cor ? hexParaRgb(d.cor, VERDE_EMT) : VERDE_EMT),
+      stroked: true,
+      getLineColor: BRANCO,
+      lineWidthMinPixels: 2,
+      pickable: false,
+    }),
+    new TextLayer<ObraNoMapa>({
+      id: "obras-nome",
+      data: cena.obras,
+      getPosition: (d) => d.pos,
+      getText: (d) => d.nome,
+      getSize: 13,
+      getColor: BRANCO,
+      background: true,
+      getBackgroundColor: [...VERDE_EMT, 230],
+      backgroundPadding: [6, 3],
+      getPixelOffset: [0, -24],
       fontFamily: FONTE,
       characterSet: "auto",
       pickable: false,
