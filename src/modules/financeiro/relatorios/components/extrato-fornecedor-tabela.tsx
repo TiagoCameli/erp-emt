@@ -20,6 +20,7 @@ import {
   StatusBadge,
   type FiltroConfiguravel,
 } from "@/components/canonicos";
+import { ValorAnimado } from "@/modules/financeiro/relatorios/components/movimento";
 import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
@@ -390,7 +391,7 @@ export function ExtratoFornecedorTabela({
         />
         <KPICard
           titulo="A pagar"
-          valor={<MoneyText valor={resumo.total} />}
+          valor={<ValorAnimado valor={resumo.total} />}
           detalhe={
             comSaldo === 0
               ? "Nada em aberto"
@@ -399,27 +400,27 @@ export function ExtratoFornecedorTabela({
         />
         <KPICard
           titulo="Pago"
-          valor={<MoneyText valor={totalPago} />}
+          valor={<ValorAnimado valor={totalPago} />}
           detalhe="Já saiu da conta, com desconto abatido"
         />
         <KPICard
           titulo="Vencido"
-          valor={<MoneyText valor={resumo.vencido} />}
+          valor={<ValorAnimado valor={resumo.vencido} />}
           detalhe={resumo.vencido > 0 ? "Já passou do prazo" : "Nada atrasado"}
         />
         <KPICard
           titulo="Vence em até 7 dias"
-          valor={<MoneyText valor={resumo.ate7} />}
+          valor={<ValorAnimado valor={resumo.ate7} />}
           detalhe="Contando de hoje"
         />
         <KPICard
           titulo="Vence em 8 a 30 dias"
-          valor={<MoneyText valor={resumo.de8a30} />}
+          valor={<ValorAnimado valor={resumo.de8a30} />}
           detalhe="Próximo mês de caixa"
         />
         <KPICard
           titulo="Vence em mais de 30 dias"
-          valor={<MoneyText valor={resumo.mais30} />}
+          valor={<ValorAnimado valor={resumo.mais30} />}
           detalhe="Depois dos 30 dias"
         />
         <KPICard

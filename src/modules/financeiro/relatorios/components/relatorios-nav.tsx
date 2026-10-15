@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { motion, MotionConfig } from "motion/react";
 import {
   Layers,
   Banknote,
@@ -104,41 +105,58 @@ export function RelatoriosNav({
   }
 
   return (
-    <nav
-      aria-label="Relatórios financeiros"
-      className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,auto)] xl:justify-start"
-    >
-      {GRUPOS_RELATORIOS.map((grupo) => (
-        <div key={grupo.titulo} className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-legenda font-medium uppercase tracking-wide text-muted-foreground">
-            {grupo.titulo}
-          </span>
-          <ul className="flex flex-wrap gap-1">
-            {grupo.relatorios.map((id) => {
-              const { rotulo, icone: Icone } = APRESENTACAO[id];
-              const selecionado = id === ativo;
-              return (
-                <li key={id}>
-                  <button
-                    type="button"
-                    aria-current={selecionado ? "page" : undefined}
-                    onClick={() => abrir(id)}
-                    className={cn(
-                      "foco-anel inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
-                      selecionado
-                        ? "border-primary/30 bg-primary/10 font-medium text-primary"
-                        : "border-border bg-card text-muted-foreground hover:bg-surface hover:text-foreground",
-                    )}
-                  >
-                    <Icone className="size-4" aria-hidden="true" />
-                    {rotulo}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
-    </nav>
+    <MotionConfig reducedMotion="user">
+      <nav
+        aria-label="Relatórios financeiros"
+        className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,auto)] xl:justify-start"
+      >
+        {GRUPOS_RELATORIOS.map((grupo) => (
+          <div key={grupo.titulo} className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-legenda font-medium uppercase tracking-wide text-muted-foreground">
+              {grupo.titulo}
+            </span>
+            <ul className="flex flex-wrap gap-1">
+              {grupo.relatorios.map((id) => {
+                const { rotulo, icone: Icone } = APRESENTACAO[id];
+                const selecionado = id === ativo;
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      aria-current={selecionado ? "page" : undefined}
+                      onClick={() => abrir(id)}
+                      className={cn(
+                        "foco-anel relative isolate inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
+                        selecionado
+                          ? "border-primary/30 font-medium text-primary"
+                          : "border-border bg-card text-muted-foreground hover:bg-surface hover:text-foreground",
+                      )}
+                    >
+                      {/* O fundo do relatório ativo é UM elemento que desliza de
+                        um botão para o outro (layoutId): o olho segue para onde
+                        a tela foi, em vez de procurar o botão aceso. */}
+                      {selecionado ? (
+                        <motion.span
+                          aria-hidden
+                          layoutId="relatorio-ativo"
+                          className="absolute inset-0 -z-10 rounded-[inherit] bg-primary/10"
+                          transition={{
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 40,
+                          }}
+                        />
+                      ) : null}
+                      <Icone className="size-4" aria-hidden="true" />
+                      {rotulo}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </MotionConfig>
   );
 }

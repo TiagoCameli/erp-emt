@@ -52,3 +52,28 @@ if (!("ResizeObserver" in globalThis)) {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
+
+/**
+ * `IntersectionObserver` fingido, para o jsdom.
+ *
+ * O `motion` usa para o `whileInView` e o `useInView` dos relatórios (barras
+ * que crescem, valores que contam ao entrar na tela). Sem ele, todo teste que
+ * monta um desses componentes estoura no `new IntersectionObserver`. Nunca
+ * dispara: no teste o elemento fica no estado de repouso, que é o valor final
+ * (o `ValorAnimado` já nasce com o número certo).
+ */
+if (typeof window !== "undefined" && !("IntersectionObserver" in window)) {
+  class IntersectionObserverFalso {
+    readonly root = null;
+    readonly rootMargin = "";
+    readonly thresholds: number[] = [];
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  globalThis.IntersectionObserver =
+    IntersectionObserverFalso as unknown as typeof IntersectionObserver;
+}

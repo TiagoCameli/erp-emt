@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MoneyText } from "@/components/canonicos";
 import { formatarPercentual } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { CrescerDaEsquerda } from "@/modules/financeiro/relatorios/components/movimento";
 import type { MesDoIndireto } from "@/modules/financeiro/relatorios/indireto-por-mes";
 import { ROTULO_STATUS_RATEIO } from "@/modules/financeiro/relatorios/rateio-indireto";
 import { mesPorExtenso, nomeCurto } from "@/modules/financeiro/relatorios/resultado-por-obra";
@@ -40,17 +41,29 @@ export function legendaDaReparticao(mes: MesDoIndireto): string {
   return partes.join(" · ");
 }
 
-function Reparticao({ mes, cores }: { mes: MesDoIndireto; cores: ReadonlyMap<string, string> }) {
+function Reparticao({
+  mes,
+  cores,
+  ordem,
+}: {
+  mes: MesDoIndireto;
+  cores: ReadonlyMap<string, string>;
+  /** Posição do mês na tabela: as barras crescem uma depois da outra. */
+  ordem: number;
+}) {
   if (mes.total === 0) return <span className="text-muted-foreground">—</span>;
   const naoRateadoPct = mes.total === 0 ? 0 : (mes.naoRateado / mes.total) * 100;
   return (
     <div className="flex min-w-48 flex-col gap-1">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-[3px] bg-muted" aria-hidden>
+      <CrescerDaEsquerda
+        ordem={ordem}
+        className="flex h-2.5 w-full overflow-hidden rounded-[3px] bg-muted"
+      >
         {mes.obras.map((o) => (
           <span key={o.centroId} className={cores.get(o.centroId) ?? COR_DEMAIS} style={{ width: `${o.pct}%` }} />
         ))}
         {naoRateadoPct > 0 ? <span className="bg-destructive/60" style={{ width: `${naoRateadoPct}%` }} /> : null}
-      </div>
+      </CrescerDaEsquerda>
       <span className="text-legenda text-muted-foreground">{legendaDaReparticao(mes)}</span>
     </div>
   );
@@ -89,7 +102,7 @@ export function IndiretoMesesTabela({
           </tr>
         </thead>
         <tbody>
-          {meses.map((m) => {
+          {meses.map((m, i) => {
             const maior = m.categorias[0];
             const ativo = m.mes === aberto;
             return (
@@ -104,7 +117,7 @@ export function IndiretoMesesTabela({
                   <MoneyText valor={m.total} />
                 </td>
                 <td className="px-2 py-1.5">
-                  <Reparticao mes={m} cores={cores} />
+                  <Reparticao mes={m} cores={cores} ordem={i} />
                 </td>
                 <td className="px-2 py-1.5">
                   {maior ? (

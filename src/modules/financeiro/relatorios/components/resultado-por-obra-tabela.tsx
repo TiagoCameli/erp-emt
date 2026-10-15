@@ -6,6 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable, MoneyText } from "@/components/canonicos";
 import { formatarPercentual } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { BarraDivergente } from "@/modules/financeiro/relatorios/components/movimento";
 import { classeDoSinal, sinalDoResultado } from "@/modules/financeiro/relatorios/relatorios";
 import type {
   Janela,
@@ -95,6 +96,44 @@ const CAMPOS: readonly Campo[] = ["receita", "direto", "indireto", "resultado", 
  * resultado de um mês sozinho pode ser só o mês sem medição. O mês e a história
  * inteira ficam a um clique.
  */
+/**
+ * Quem deu lucro e quem está no vermelho na janela escolhida, do maior para o
+ * menor resultado, com a barra saindo do zero. É a resposta da tela antes da
+ * tabela: a tabela tem as colunas, o quadro tem a ordem.
+ */
+function QuadroDoResultado({ obras, janela }: { obras: readonly LinhaObra[]; janela: Janela }) {
+  const linhas = [...obras]
+    .filter((o) => Math.round(o[janela].resultado * 100) !== 0)
+    .sort((a, b) => b[janela].resultado - a[janela].resultado);
+  if (linhas.length === 0) return null;
+  const maximo = Math.max(...linhas.map((o) => Math.abs(o[janela].resultado)));
+  return (
+    <ol aria-label="Resultado de cada obra" className="flex flex-col gap-1.5">
+      {linhas.map((o, i) => (
+        <li
+          // A chave leva a janela: trocar de janela refaz o crescimento das barras.
+          key={`${janela}-${o.centroId}`}
+          className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-x-3 gap-y-1 sm:grid-cols-[minmax(10rem,16rem)_minmax(0,1fr)_8.5rem]"
+        >
+          <span className="truncate text-detalhe text-foreground" title={o.nome}>
+            {o.nome}
+          </span>
+          <BarraDivergente
+            valor={o[janela].resultado}
+            maximo={maximo}
+            ordem={i}
+            className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"
+          />
+          <MoneyText
+            valor={o[janela].resultado}
+            className={cn("text-right text-detalhe", classeDoSinal(sinalDoResultado(o[janela].resultado)))}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function ResultadoPorObraTabela({
   obras,
   total,
@@ -151,6 +190,7 @@ export function ResultadoPorObraTabela({
           </button>
         ))}
       </div>
+      <QuadroDoResultado obras={obras} janela={janela} />
       <DataTable
         idTabela={`financeiro.relatorios.resultado-obra.${janela}`}
         columns={colunas}
