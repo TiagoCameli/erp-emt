@@ -4,6 +4,7 @@ import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { percentualDoNivel } from "@/modules/combustivel/tanques/calculo";
+import { deLitros, ehUnidadeDeMassa, emLitros, siglaVisivel } from "@/modules/combustivel/tanques/unidades";
 import { corDoCombustivel, formatarCapacidade } from "@/modules/combustivel/tanques/visual";
 
 export interface TanqueVisualProps {
@@ -16,10 +17,13 @@ export interface TanqueVisualProps {
   /** Combustível corrente. Null = vazio. */
   combustivelNome?: string | null;
   /**
-   * Unidade do conteúdo. No tanque de material vem a do insumo (t, kg...); fora de litro
-   * o percentual da capacidade (em litros) não se compara e o nível sai na unidade dele.
+   * Unidade do conteúdo. No tanque de material vem a do insumo (t, kg, m³...): o saldo vira
+   * litros (massa pela densidade) para comparar com a capacidade, e o card fala na unidade
+   * do material.
    */
   unidade?: string | null;
+  /** Densidade do material (kg/L). Sem ela, saldo em massa não se compara com a capacidade. */
+  densidade?: number | null;
   /** Nome, apelido e selo do combustível acima da cápsula. O detalhe já tem título. */
   comCabecalho?: boolean;
   className?: string;
@@ -56,13 +60,20 @@ export function TanqueVisual({
   nivel,
   combustivelNome,
   unidade = "L",
+  densidade = null,
   comCabecalho = true,
   className,
 }: TanqueVisualProps) {
-  const emLitros = !unidade || unidade.toLowerCase() === "l";
-  const cap = emLitros ? Math.max(capacidade, 0) : 0;
+  const ehLitro = !unidade || unidade.toLowerCase() === "l";
+  const sigla = siglaVisivel(unidade ?? "L");
+  // Saldo em litros para a régua; null = unidade sem conversão (ou massa sem densidade).
+  const nivelEmLitros = ehLitro ? nivel : emLitros(nivel, unidade, densidade);
+  const cap = nivelEmLitros === null ? 0 : Math.max(capacidade, 0);
   const temCapacidade = cap > 0;
-  const percentual = percentualDoNivel(nivel, cap) ?? 0;
+  const percentual = percentualDoNivel(nivelEmLitros ?? 0, cap) ?? 0;
+  // A capacidade aparece na unidade do material: 30.000 L de CAP a 1,00 kg/L são 30 t.
+  const capNaUnidade = ehLitro ? cap : (deLitros(cap, unidade, densidade) ?? cap);
+  const acimaDaCapacidade = !ehLitro && temCapacidade && (nivelEmLitros ?? 0) > cap;
   const vazio = nivel <= 0;
   const cor = corDoCombustivel(vazio ? null : combustivelNome);
 
@@ -75,12 +86,17 @@ export function TanqueVisual({
   const idCasco = `${idBase}-casco`;
   const idLiquido = `${idBase}-liquido`;
 
-  const textoNivel = emLitros ? formatarLitros(nivel) : `${formatarQuantidade(nivel)} ${unidade}`;
-  const textoPercentual = temCapacidade
-    ? `${Math.round(percentual).toLocaleString("pt-BR")}% de ${formatarCapacidade(cap)} L`
-    : emLitros
-      ? "sem capacidade cadastrada"
-      : "capacidade em litros, saldo em outra unidade";
+  const textoNivel = ehLitro ? formatarLitros(nivel) : `${formatarQuantidade(nivel)} ${sigla}`;
+  const textoCapacidade = `${formatarCapacidade(capNaUnidade)} ${sigla}`;
+  const textoPercentual = acimaDaCapacidade
+    ? `acima da capacidade de ${textoCapacidade}`
+    : temCapacidade
+      ? `${Math.round(percentual).toLocaleString("pt-BR")}% de ${textoCapacidade}`
+      : nivelEmLitros === null
+        ? ehUnidadeDeMassa(unidade)
+          ? "informe a densidade no cadastro do tanque"
+          : `${sigla} não converte em litros`
+        : "sem capacidade cadastrada";
 
   const textos = (claro: boolean) => (
     <g fontFamily="ui-sans-serif, system-ui" textAnchor="middle">
@@ -124,7 +140,7 @@ export function TanqueVisual({
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
-        aria-label={`Tanque ${nome}: ${textoNivel}${temCapacidade ? ` de ${formatarCapacidade(cap)} L` : ""}`}
+        aria-label={`Tanque ${nome}: ${textoNivel}${temCapacidade ? ` de ${textoCapacidade}` : ""}`}
       >
         <defs>
           <linearGradient id={idGradiente} x1="0%" y1="0%" x2="0%" y2="100%">
@@ -168,10 +184,10 @@ export function TanqueVisual({
                 0
               </text>
               <text x={TANK_X - 6} y={TANK_Y + TANK_H / 2 + 3}>
-                {formatarCapacidade(Math.round(cap / 2))}
+                {formatarCapacidade(ehLitro ? Math.round(cap / 2) : capNaUnidade / 2)}
               </text>
               <text x={TANK_X - 6} y={TANK_Y + 8}>
-                {formatarCapacidade(cap)}
+                {formatarCapacidade(capNaUnidade)}
               </text>
             </g>
             <g stroke="var(--border)" strokeWidth="1">
@@ -182,7 +198,7 @@ export function TanqueVisual({
           </>
         ) : null}
 
-        {/* Litros e percentual: escuro no casco, branco onde há líquido */}
+        {/* Saldo e percentual: escuro no casco, branco onde há líquido */}
         {textos(false)}
         {fillH > 0 ? (
           <g clipPath={`url(#${idLiquido})`} aria-hidden="true">

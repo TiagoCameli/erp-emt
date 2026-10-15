@@ -23,10 +23,21 @@ import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { criarTanque, editarTanque } from "@/modules/combustivel/tanques/actions";
 import type { FornecedorOpcao, TanqueLinha } from "@/modules/combustivel/tanques/queries";
 import {
+  capacidadeParaNumero,
+  densidadeParaNumero,
   tanqueDoForm,
   tanqueFormSchema,
   type TanqueFormInput,
 } from "@/modules/combustivel/tanques/schemas";
+import {
+  deLitros,
+  emLitros,
+  ROTULO_UNIDADE_CAPACIDADE,
+  siglaVisivel,
+  UNIDADES_CAPACIDADE,
+  type UnidadeCapacidade,
+} from "@/modules/combustivel/tanques/unidades";
+import { formatarCapacidade } from "@/modules/combustivel/tanques/visual";
 import { litrosParaTexto } from "@/modules/combustivel/transferencias/schemas";
 
 const ID_FORM = "form-tanque";
@@ -36,11 +47,21 @@ const OPCOES_USO = [
   { valor: "material", rotulo: "Material (CAP, emulsão...)" },
 ];
 
+const OPCOES_UNIDADE = UNIDADES_CAPACIDADE.map((u) => ({ valor: u, rotulo: ROTULO_UNIDADE_CAPACIDADE[u] }));
+
+/** Betume, emulsão e imprimação ficam perto da água: o tanque novo de material nasce com 1. */
+const DENSIDADE_PADRAO = "1";
+
 function valoresIniciais(tanque: TanqueLinha | null | undefined): TanqueFormInput {
+  const unidade = tanque?.capacidadeUnidade ?? "L";
+  // A capacidade volta na unidade em que foi digitada (o banco guarda em litros).
+  const capacidade = tanque ? deLitros(tanque.capacidade, unidade, tanque.densidade) ?? tanque.capacidade : null;
   return {
     nome: tanque?.nome ?? "",
     apelido: tanque?.apelido ?? "",
-    capacidade: tanque ? litrosParaTexto(tanque.capacidade) || "0" : "",
+    capacidade: capacidade === null ? "" : litrosParaTexto(capacidade) || "0",
+    capacidadeUnidade: unidade,
+    densidade: tanque?.densidade ? litrosParaTexto(tanque.densidade) : DENSIDADE_PADRAO,
     uso: tanque?.uso ?? "combustivel",
     ehExterno: tanque?.ehExterno ?? false,
     proprietarioId: tanque?.proprietarioId ?? "",
@@ -76,10 +97,38 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
     if (aberto) form.reset(valoresIniciais(tanque));
   }, [aberto, tanque, form]);
 
-  const [ehExterno, proprietarioId, capacidade, ativo, uso] = useWatch({
+  const [ehExterno, proprietarioId, capacidade, ativo, uso, capacidadeUnidade, densidade] = useWatch({
     control: form.control,
-    name: ["ehExterno", "proprietarioId", "capacidade", "ativo", "uso"],
+    name: ["ehExterno", "proprietarioId", "capacidade", "ativo", "uso", "capacidadeUnidade", "densidade"],
   });
+  const material = uso === "material";
+  const densidadeNumero = densidadeParaNumero(densidade ?? "");
+
+  // Trocar a unidade converte o número já digitado (30.000 L vira 30 m³), quando dá.
+  function trocarUnidade(nova: UnidadeCapacidade) {
+    const atual = capacidadeParaNumero(capacidade ?? "");
+    const litros = atual === null ? null : emLitros(atual, capacidadeUnidade, densidadeNumero);
+    const convertida = litros === null ? null : deLitros(litros, nova, densidadeNumero);
+    form.setValue("capacidadeUnidade", nova, { shouldDirty: true });
+    if (convertida !== null) {
+      form.setValue("capacidade", litrosParaTexto(Math.round(convertida * 10_000) / 10_000) || "0", {
+        shouldDirty: true,
+      });
+    }
+  }
+
+  // O tanque é volume: mostra quantos litros a capacidade digitada ocupa.
+  const capacidadeNumero = capacidadeParaNumero(capacidade ?? "");
+  const capacidadeEmLitros =
+    capacidadeNumero === null ? null : emLitros(capacidadeNumero, capacidadeUnidade, densidadeNumero);
+  const ajudaCapacidade =
+    capacidadeNumero === null || capacidadeNumero === 0
+      ? "Zero desliga a trava de capacidade nas entradas"
+      : capacidadeUnidade === "L"
+        ? "O saldo em kg ou t é convertido pela densidade para conferir a capacidade"
+        : capacidadeEmLitros === null
+          ? "Informe a densidade para converter em litros"
+          : `Volume do tanque: ${formatarCapacidade(capacidadeEmLitros)} L`;
 
   const opcoesFornecedores = React.useMemo(
     () => fornecedores.map((f) => ({ valor: f.id, rotulo: f.nome })),
@@ -156,23 +205,75 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
           </CampoFormulario>
         </LinhaCampos>
 
-        <CampoFormulario
-          id="tanque-capacidade"
-          rotulo="Capacidade (litros)"
-          obrigatorio
-          largura="medio"
-          ajuda="Zero desliga a trava de capacidade nas entradas"
-          erro={erros.capacidade?.message}
-        >
-          <InputQuantidade
+        {material ? (
+          <>
+            <LinhaCampos colunas={2}>
+              <CampoFormulario
+                id="tanque-capacidade"
+                rotulo={`Capacidade (${siglaVisivel(capacidadeUnidade ?? "L")})`}
+                obrigatorio
+                ajuda={ajudaCapacidade}
+                erro={erros.capacidade?.message}
+              >
+                <InputQuantidade
+                  id="tanque-capacidade"
+                  valor={capacidade ?? ""}
+                  onValorChange={(valor) => form.setValue("capacidade", valor, { shouldDirty: true })}
+                  onBlur={() => void form.trigger("capacidade")}
+                  placeholder="0"
+                  disabled={salvando}
+                />
+              </CampoFormulario>
+              <CampoFormulario id="tanque-capacidade-unidade" rotulo="Unidade da capacidade" obrigatorio>
+                <Combobox
+                  id="tanque-capacidade-unidade"
+                  valor={capacidadeUnidade ?? "L"}
+                  onValorChange={(valor) => {
+                    const nova = UNIDADES_CAPACIDADE.find((u) => u === valor);
+                    if (nova) trocarUnidade(nova);
+                  }}
+                  opcoes={OPCOES_UNIDADE}
+                  disabled={salvando}
+                />
+              </CampoFormulario>
+            </LinhaCampos>
+            <CampoFormulario
+              id="tanque-densidade"
+              rotulo="Densidade do material (kg/L)"
+              obrigatorio
+              largura="medio"
+              ajuda="Converte kg e t em litros. Betume, emulsão e imprimação ficam perto de 1,00"
+              erro={erros.densidade?.message}
+            >
+              <InputQuantidade
+                id="tanque-densidade"
+                valor={densidade ?? ""}
+                onValorChange={(valor) => form.setValue("densidade", valor, { shouldDirty: true })}
+                onBlur={() => void form.trigger("densidade")}
+                placeholder={DENSIDADE_PADRAO}
+                disabled={salvando}
+              />
+            </CampoFormulario>
+          </>
+        ) : (
+          <CampoFormulario
             id="tanque-capacidade"
-            valor={capacidade ?? ""}
-            onValorChange={(valor) => form.setValue("capacidade", valor, { shouldDirty: true })}
-            onBlur={() => void form.trigger("capacidade")}
-            placeholder="0"
-            disabled={salvando}
-          />
-        </CampoFormulario>
+            rotulo="Capacidade (litros)"
+            obrigatorio
+            largura="medio"
+            ajuda="Zero desliga a trava de capacidade nas entradas"
+            erro={erros.capacidade?.message}
+          >
+            <InputQuantidade
+              id="tanque-capacidade"
+              valor={capacidade ?? ""}
+              onValorChange={(valor) => form.setValue("capacidade", valor, { shouldDirty: true })}
+              onBlur={() => void form.trigger("capacidade")}
+              placeholder="0"
+              disabled={salvando}
+            />
+          </CampoFormulario>
+        )}
 
         <CampoFormulario
           id="tanque-uso"
@@ -190,6 +291,8 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
             valor={uso ?? "combustivel"}
             onValorChange={(valor) => {
               const novo = valor === "material" ? "material" : "combustivel";
+              // Combustível é só em litros: o número digitado em outra unidade volta para L.
+              if (novo === "combustivel" && capacidadeUnidade !== "L") trocarUnidade("L");
               form.setValue("uso", novo, { shouldDirty: true });
               if (novo === "material") {
                 form.setValue("ehExterno", false, { shouldDirty: true });

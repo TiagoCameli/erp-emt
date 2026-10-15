@@ -5325,3 +5325,12 @@ Continuação de "2026-10-14 - Busca universal".
 - **Telas em memória** (Cadastros, RH, Combustível, Estoque, Frete, Manutenção, Administração, Conciliação, filas do Financeiro) usam `casaBusca(textoPesquisavel(...))` com todos os campos da linha. Em Contas bancárias o saldo só entra para quem pode vê-lo.
 - **Ficaram de fora** as buscas que são do Combobox (escolher item em formulário: abastecimento, pagamento de frete, equipamento no campo, lançar campo e ajuste da medição) e a Lixeira (busca por motivo).
 - Palavra sem letra nem dígito é descartada: sozinha casaria quase tudo.
+
+## 2026-10-14 - Estoque: tanque de material em qualquer unidade
+
+**Pedido do Tiago:** "esses tanques de materiais tem que ser compatíveis com várias unidades de medida, ainda mais para betumes que tem densidade muito parecida à água". O card mostrava "capacidade em litros, saldo em outra unidade" para RR (kg) e Imprima (t), e a trava de capacidade só valia para material medido em litro: o tanque de RR estava com 20.000 kg num cadastro de 100 L.
+- **Densidade no tanque** (`tanques.densidade_kg_l`): a do material guardado (um por vez). É a ponte massa ↔ volume (litros = kg / densidade). Obrigatória no tanque de material; o formulário sugere 1,00. Os três tanques de material existentes receberam 1,00.
+- **Capacidade em L, m³, kg ou t** (`tanques.capacidade_unidade`): a pessoa digita na unidade que quiser; o banco guarda sempre o volume em `capacidade_litros` (o Combustível lê essa coluna) e a unidade só para o cadastro reabrir igual. Capacidade em massa exige densidade (CHECK). Trocar a unidade no formulário converte o número digitado. Tanque de combustível continua só em litros.
+- **Card:** o saldo vira litros pela unidade do insumo (L, m³ direto; kg, t pela densidade) e o card mostra percentual e capacidade na unidade do material ("67% de 30.000 kg"). Acima da capacidade diz "acima da capacidade de ...". Massa sem densidade pede a densidade; unidade fora da lista (un, sc) avisa que não converte.
+- **Trava** (`fn_estoque_atualizar_tanque` + `fn_tanque_em_litros`): confere a capacidade em qualquer unidade conversível, mas só quando o saldo SOBE (entrada ou troca de material). Saída de um tanque que já está acima da capacidade passa, para os 100 L provisórios de hoje não prenderem o consumo.
+- Migration `20261014210000_tanque_material_unidades`, ensaiada no banco vivo em transação desfeita (conversões, saída em tanque estourado passa, entrada acima recusa em kg e em t, massa sem densidade sem trava, CHECK da capacidade em t sem densidade).

@@ -248,6 +248,7 @@ export function TanquesLista({
                       nivel={tanque.nivel}
                       combustivelNome={tanque.combustivelNome}
                       unidade={tanque.unidade}
+                      densidade={tanque.densidade}
                     />
                     <div className="relative z-10 mt-3 flex items-center justify-between gap-2 border-t pt-3">
                       <div className="flex items-center gap-1">

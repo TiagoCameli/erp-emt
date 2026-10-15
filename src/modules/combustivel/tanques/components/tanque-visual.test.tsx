@@ -56,6 +56,47 @@ describe("TanqueVisual — dado do ERP", () => {
     expect(texto).toContain("100% de 1.000 L");
   });
 
+  it("LINHA DE CONTROLE (print de 14/10/2026): 20.000 kg de RR num tanque de 30.000 L a 1 kg/L dão 67% de 30.000 kg", () => {
+    const { container } = render(
+      <TanqueVisual id={ID} nome="Tanque de RR" capacidade={30000} nivel={20000} unidade="kg" densidade={1} combustivelNome="RR-2C" />,
+    );
+    const texto = container.textContent ?? "";
+    expect(texto).toContain("20.000 kg");
+    expect(texto).toContain("67% de 30.000 kg");
+    expect(texto).not.toContain("outra unidade");
+  });
+
+  it("2,5 t de imprimação a 0,95 kg/L num tanque de 10.000 L: 26% de 9,5 t", () => {
+    const { container } = render(
+      <TanqueVisual id={ID} nome="Imprima" capacidade={10000} nivel={2.5} unidade="t" densidade={0.95} combustivelNome="EAI" />,
+    );
+    expect(container.textContent ?? "").toContain("26% de 9,5 t");
+  });
+
+  it("material acima da capacidade diz que passou, não para em 100%", () => {
+    const { container } = render(
+      <TanqueVisual id={ID} nome="Tanque de RR" capacidade={100} nivel={20000} unidade="kg" densidade={1} combustivelNome="RR-2C" />,
+    );
+    expect(container.textContent ?? "").toContain("acima da capacidade de 100 kg");
+  });
+
+  it("massa sem densidade pede a densidade; unidade fora da lista avisa que não converte", () => {
+    const semDensidade = render(
+      <TanqueVisual id={ID} nome="A" capacidade={100} nivel={5} unidade="t" combustivelNome="CAP" />,
+    );
+    expect(semDensidade.container.textContent ?? "").toContain("informe a densidade no cadastro do tanque");
+    cleanup();
+    const un = render(<TanqueVisual id={ID} nome="B" capacidade={100} nivel={5} unidade="un" densidade={1} combustivelNome="X" />);
+    expect(un.container.textContent ?? "").toContain("un não converte em litros");
+  });
+
+  it("m³ não precisa de densidade", () => {
+    const { container } = render(
+      <TanqueVisual id={ID} nome="C" capacidade={40000} nivel={10} unidade="m3" combustivelNome="Água" />,
+    );
+    expect(container.textContent ?? "").toContain("25% de 40 m³");
+  });
+
   it("o selo do combustível tem a cor dele", () => {
     const { getByText } = render(
       <TanqueVisual id={ID} nome="Comboio" capacidade={5000} nivel={2168.5} combustivelNome="OLEO DIESEL B S500" />,

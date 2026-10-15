@@ -34,6 +34,8 @@ function tanque(troca: Partial<TanqueLinha> = {}): TanqueLinha {
     nome: "Tanque Comboio 01",
     apelido: "Comboio",
     capacidade: 5000,
+    capacidadeUnidade: "L",
+    densidade: null,
     nivel: 2168.5,
     combustivelId: "22222222-2222-4222-8222-222222222222",
     combustivelNome: "Diesel S500",

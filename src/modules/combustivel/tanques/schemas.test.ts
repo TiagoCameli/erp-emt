@@ -22,11 +22,41 @@ describe("uso do tanque", () => {
   });
 });
 
+describe("unidade da capacidade do tanque de material", () => {
+  it("LINHA DE CONTROLE: 30 t de CAP a 1,03 kg/L vão para a action como 29.126,2136 L", () => {
+    const dados = tanqueDoForm(form({ uso: "material", capacidade: "30", capacidadeUnidade: "t", densidade: "1,03" }));
+    expect(dados).toMatchObject({ capacidade: 29126.2136, capacidadeUnidade: "t", densidade: 1.03 });
+    expect(tanqueSchema.safeParse(dados).success).toBe(true);
+  });
+  it("m³ vira litro sem densidade de por meio; kg divide pela densidade", () => {
+    expect(tanqueDoForm(form({ uso: "material", capacidade: "30", capacidadeUnidade: "m3" })).capacidade).toBe(30000);
+    expect(tanqueDoForm(form({ uso: "material", capacidade: "950", capacidadeUnidade: "kg", densidade: "0,95" })).capacidade).toBe(1000);
+  });
+  it("tanque de material exige densidade; o de combustível não", () => {
+    const semDensidade = tanqueFormSchema.safeParse(form({ uso: "material", densidade: "" }));
+    expect(semDensidade.success).toBe(false);
+    expect(semDensidade.error?.issues[0]?.path).toEqual(["densidade"]);
+    expect(tanqueFormSchema.safeParse(form({ uso: "material", densidade: "0" })).success).toBe(false);
+    expect(tanqueFormSchema.safeParse(form({ densidade: "" })).success).toBe(true);
+  });
+  it("tanque de combustível é sempre em litros e sem densidade, sobre qualquer resto do form", () => {
+    const dados = tanqueDoForm(form({ capacidade: "15000", capacidadeUnidade: "t", densidade: "2" }));
+    expect(dados).toMatchObject({ capacidade: 15000, capacidadeUnidade: "L", densidade: null });
+  });
+  it("o servidor repete o CHECK do banco: capacidade em massa sem densidade é recusada", () => {
+    const base = tanqueDoForm(form({ uso: "material", capacidade: "30", capacidadeUnidade: "t" }));
+    expect(tanqueSchema.safeParse({ ...base, densidade: null }).success).toBe(false);
+    expect(tanqueSchema.safeParse({ ...base, capacidadeUnidade: "m3", densidade: null }).success).toBe(true);
+  });
+});
+
 function form(troca: Partial<TanqueFormInput> = {}): TanqueFormInput {
   return {
     nome: "Tanque Comboio 01",
     apelido: "",
     capacidade: "15000",
+    capacidadeUnidade: "L",
+    densidade: "1",
     uso: "combustivel",
     ehExterno: false,
     proprietarioId: "",
