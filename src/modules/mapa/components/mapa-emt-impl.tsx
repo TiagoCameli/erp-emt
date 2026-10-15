@@ -32,9 +32,9 @@ import type {
  * O mapa 3D (deck.gl) sobre o Google Maps, com arraste de máquinas e pessoas. Porte do spike
  * validado em 14 e 15/10/2026 (spike/spike-mapa-3d.html), já com:
  *
- * - Google Maps vetorial (Map ID) com o deck.gl entrelaçado no mesmo WebGL, inclinável; se o
- *   aparelho não roda o mapa vetorial, o Google cai para raster e o overlay é recriado
- *   (`renderingtype_changed`), sem inclinação;
+ * - Google Maps vetorial (Map ID) com o deck.gl num canvas próprio por cima, seguindo a câmera
+ *   do Google (inclinável); se o aparelho não roda o mapa vetorial, o Google cai para raster e o
+ *   overlay é recriado (`renderingtype_changed`), sem inclinação;
  * - sem chave do Google (ambiente sem as variáveis), tiles da Esri com o deck.gl puro, para a
  *   tela continuar útil;
  * - arraste com o mapa travado durante o gesto (mouse e toque), com `pickMultipleObjects` para
@@ -335,8 +335,13 @@ async function criarMotorGoogle(
 
   const criarOverlay = () => {
     overlay?.finalize();
+    // Não entrelaçado: no @deck.gl/google-maps 9.4.0, com o mapa vetorial, o overlay de
+    // posicionamento cria o Deck antes do `onContextRestored`, e este devolve a mesma instância
+    // sem o `gl` do Google; o deck desenha num canvas próprio de 1x1 e nada aparece (visto em
+    // produção em 15/10/2026). Com canvas próprio as máquinas só deixam de ser escondidas por
+    // prédios 3D do Google, o que não existe na BR-364.
     overlay = new GoogleMapsOverlay({
-      interleaved: true,
+      interleaved: false,
       layers: camadas,
       effects: [criarIluminacao()],
     });
