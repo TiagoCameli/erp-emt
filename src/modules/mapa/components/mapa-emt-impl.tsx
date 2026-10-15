@@ -69,7 +69,10 @@ export interface ArrasteSolto {
 }
 
 /** A parte da cena que vem do pai (o que desenhar); seleção, hover e arraste entram aqui. */
-export type CenaBase = Omit<Cena, "selecao" | "hover" | "posicoes" | "tick">;
+export type CenaBase = Omit<
+  Cena,
+  "selecao" | "hover" | "posicoes" | "tick" | "zoom"
+>;
 
 export interface Foco {
   pos: Posicao;
@@ -152,6 +155,11 @@ const CONTROLE_DECK = {
   inertia: 300,
 } as const;
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+/**
+ * Piso de zoom dos dois motores: no 5 o mundo já é mais largo que a tela, então o planeta não se
+ * repete lado a lado ao afastar (pedido do Tiago, 15/10/2026: "limite a um só mapa").
+ */
+const ZOOM_MINIMO = 5;
 /** Teto de zoom dos dois motores (o Google ainda limita pelo que tem de imagem no lugar). */
 const ZOOM_MAXIMO = 22;
 
@@ -228,6 +236,7 @@ function criarMotorTiles(
   centro: { pos: Posicao; zoom: number },
   inclinado: boolean,
   fundo: ModoFundo,
+  aoZoom: (zoom: number) => void,
 ): Motor {
   const palco = criarPalco(el);
   let fundoAtual = fundo;
@@ -242,6 +251,7 @@ function criarMotorTiles(
     // Além do último nível de tile (18/19) a imagem só amplia, mas dá para mirar uma máquina no
     // pátio com precisão de metro.
     maxZoom: ZOOM_MAXIMO,
+    minZoom: ZOOM_MINIMO,
   };
   const deck = new Deck({
     parent: palco,
@@ -252,6 +262,7 @@ function criarMotorTiles(
     useDevicePixels: Math.min(2, window.devicePixelRatio || 1),
     onViewStateChange: ({ viewState }) => {
       vista = viewState as MapViewState;
+      aoZoom(vista.zoom);
     },
   });
   const aplicar = () =>
@@ -331,6 +342,7 @@ async function criarMotorGoogle(
   fundo: ModoFundo,
   aoMudarMotor: (tipo: TipoMotor, aviso: string | null) => void,
   aindaVale: () => boolean,
+  aoZoom: (zoom: number) => void,
 ): Promise<Motor | null> {
   const loader = obterLoader(cfg.chave);
   const {
@@ -353,10 +365,12 @@ async function criarMotorGoogle(
     fullscreenControl: false,
     isFractionalZoomEnabled: true,
     maxZoom: ZOOM_MAXIMO,
+    minZoom: ZOOM_MINIMO,
     clickableIcons: false,
   };
   if (cfg.mapId) opcoes.mapId = cfg.mapId;
   const map = new MapaGoogle(palco, opcoes);
+  map.addListener("zoom_changed", () => aoZoom(map.getZoom() ?? centro.zoom));
 
   // Projeção pixel ↔ lat/lng do próprio mapa (vale para raster e vetorial).
   let projecao: google.maps.MapCanvasProjection | null = null;
@@ -528,6 +542,9 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   } | null>(null);
   const [carregando, setCarregando] = React.useState(true);
 
+  // Zoom em degraus de meio nível, lido na hora de montar as camadas (os nomes dependem dele).
+  const zoomRef = React.useRef(Math.floor(centroInicial.zoom * 2) / 2);
+
   /** Monta as camadas com a cena atual e manda para o motor (sem passar pelo React). */
   const redesenhar = React.useCallback(() => {
     const motor = motorRef.current;
@@ -542,9 +559,21 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         hover: p.hover,
         posicoes,
         tick: tickRef.current,
+        zoom: zoomRef.current,
       }),
     );
   }, []);
+
+  /** Zoom mudou: só redesenha quando cruza um degrau de meio nível (é o que liga/desliga nomes). */
+  const aoZoom = React.useCallback(
+    (zoom: number) => {
+      const degrau = Math.floor(zoom * 2) / 2;
+      if (degrau === zoomRef.current) return;
+      zoomRef.current = degrau;
+      redesenhar();
+    },
+    [redesenhar],
+  );
 
   // Motor: Google quando há chave, tiles quando não. Recriado só se a chave/Map ID mudarem.
   React.useEffect(() => {
@@ -568,6 +597,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
               if (!cancelado) propsRef.current.onMotor(tipo, aviso);
             },
             () => !cancelado,
+            aoZoom,
           );
           if (!motor) return;
         } catch (erro) {
@@ -576,10 +606,22 @@ export function MapaEmtImpl(props: MapaEmtProps) {
             "tiles",
             `Google Maps não carregou (${erro instanceof Error ? erro.message : "chave ou rede"}); seguindo com tiles da Esri.`,
           );
-          motor = criarMotorTiles(el, centroInicial, p.inclinado, p.fundo);
+          motor = criarMotorTiles(
+            el,
+            centroInicial,
+            p.inclinado,
+            p.fundo,
+            aoZoom,
+          );
         }
       } else {
-        motor = criarMotorTiles(el, centroInicial, p.inclinado, p.fundo);
+        motor = criarMotorTiles(
+          el,
+          centroInicial,
+          p.inclinado,
+          p.fundo,
+          aoZoom,
+        );
         propsRef.current.onMotor(
           "tiles",
           "Sem chave do Google Maps (NEXT_GOOGLE_MAPS_API_KEY): mapa com tiles da Esri.",
@@ -600,7 +642,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       motorRef.current = null;
       arrastoRef.current = null;
     };
-  }, [chaveGoogle, mapIdGoogle, centroInicial, redesenhar]);
+  }, [chaveGoogle, mapIdGoogle, centroInicial, redesenhar, aoZoom]);
 
   // Qualquer mudança no que desenhar redesenha; o arraste em curso tem prioridade (ref).
   const { cena, selecao, hover, posicoesPendentes } = props;

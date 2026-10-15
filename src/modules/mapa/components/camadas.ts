@@ -65,6 +65,19 @@ export interface RotuloObra {
 /** Anel de giro da máquina selecionada. */
 export const ID_GIRO = "giro-anel";
 
+/**
+ * A partir de que zoom cada nome aparece (pedido do Tiago, 15/10/2026: "os nomes só quando estou
+ * mais próximo"). De longe ficam só os desenhos; as obras nomeiam primeiro, as máquinas por último.
+ */
+export const ZOOM_NOMES = {
+  obras: 10,
+  km: 11.5,
+  locais: 12.5,
+  areas: 13,
+  objetos: 14,
+  maquinas: 15,
+} as const;
+
 /** Nome do tanque, pilha ou depósito: tocar nele abre a ficha. */
 export const ID_OBJETOS = "objetos-nome";
 
@@ -122,6 +135,8 @@ export interface Cena {
   mostrarAreas: boolean;
   /** Muda a cada arraste/seleção para o deck.gl reavaliar os accessors. */
   tick: number;
+  /** Zoom atual do mapa (degrau de meio nível): os nomes só aparecem de perto. */
+  zoom: number;
 }
 
 /** A luz: ambiente forte (sem sombra preta) e um sol de cima. Validado no spike. */
@@ -194,6 +209,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<AreaMapa>({
         id: "areas-nome",
+        visible: cena.zoom >= ZOOM_NOMES.areas,
         // Área de edificação de uma obra leva o nome da obra (rótulo da obra, clicável).
         data: cena.areas.filter(
           (a) => a.centro && !(a.tipo === "edificacao" && a.obraId),
@@ -236,6 +252,7 @@ export function montarCamadas(cena: Cena): Layer[] {
   camadas.push(
     new TextLayer<{ km: number; pos: Posicao }>({
       id: "marcos-km",
+      visible: cena.zoom >= ZOOM_NOMES.km,
       data: cena.marcos,
       getPosition: (d) => d.pos,
       getText: (d) => `km ${d.km}`,
@@ -267,6 +284,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     }),
     new TextLayer<LocalidadeMapa>({
       id: ID_LOCAIS,
+      visible: cena.zoom >= ZOOM_NOMES.locais,
       data: cena.localidades,
       getPosition: (d) => d.pos,
       getText: (d) => {
@@ -302,6 +320,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     }),
     new TextLayer<RotuloObra>({
       id: ID_OBRAS,
+      visible: cena.zoom >= ZOOM_NOMES.obras,
       data: cena.rotulosObra,
       getPosition: (d) => d.pos,
       getText: (d) => d.nome,
@@ -348,6 +367,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<ObjetoNoMapa>({
         id: ID_OBJETOS,
+        visible: cena.zoom >= ZOOM_NOMES.objetos,
         data: cena.objetos,
         getPosition: (d) => d.pos,
         getText: (d) => d.nome,
@@ -521,6 +541,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<EquipamentoMapa>({
         id: "rotulos",
+        visible: cena.zoom >= ZOOM_NOMES.maquinas,
         data: cena.equipamentos,
         getPosition: (d) => posicaoDe(cena, d),
         getText: (d) => d.codigo || d.descricao,
