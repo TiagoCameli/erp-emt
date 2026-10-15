@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -40,6 +41,7 @@ export interface PilhaFormDrawerProps {
  * insumo, por isso o insumo aparece com ela. Depois da primeira entrada o insumo não troca.
  */
 export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: PilhaFormDrawerProps) {
+  const router = useRouter();
   const editando = Boolean(pilha);
   // Saída só existe depois de entrada: entrou alguma coisa = tem movimento.
   const insumoTravado = (pilha?.totalEntrada ?? 0) > 0;
@@ -71,8 +73,14 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: Pilh
       toast.error(resultado.erro);
       return;
     }
-    toast.success(editando ? "Pilha salva" : "Pilha criada");
     onAbertoChange(false);
+    // Criado agora: o lugar é marcado no mapa do módulo Mapa (quem pode editar o Mapa vai direto).
+    if (!editando && resultado.mapa) {
+      toast.success("Pilha criada: toque no mapa onde ela fica");
+      router.push(resultado.mapa);
+      return;
+    }
+    toast.success(editando ? "Pilha salva" : "Pilha criada");
   }
 
   const erros = form.formState.errors;
