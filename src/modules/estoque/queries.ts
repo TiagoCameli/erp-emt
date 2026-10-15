@@ -17,15 +17,20 @@ function nomeFornecedor(fornecedor: { razao_social: string; nome_fantasia: strin
   return fornecedor.nome_fantasia?.trim() || fornecedor.razao_social;
 }
 
-/** O local da linha (depósito ou tanque) num valor só, com o nome para a tabela. */
+/** O local da linha (depósito, tanque ou pilha) num valor só, com o nome para a tabela. */
 function localDaLinha(linha: {
   deposito_id: string | null;
   tanque_id: string | null;
+  pilha_id: string | null;
   almoxarifado_depositos: { nome: string } | null;
   tanques: { nome: string } | null;
+  estoque_pilhas: { nome: string } | null;
 }): { local: string; localNome: string } {
   if (linha.tanque_id) {
     return { local: codificarLocal("tanque", linha.tanque_id), localNome: `${linha.tanques?.nome ?? ""} (tanque)` };
+  }
+  if (linha.pilha_id) {
+    return { local: codificarLocal("pilha", linha.pilha_id), localNome: `${linha.estoque_pilhas?.nome ?? ""} (pilha)` };
   }
   return { local: codificarLocal("deposito", linha.deposito_id ?? ""), localNome: linha.almoxarifado_depositos?.nome ?? "" };
 }
@@ -42,23 +47,29 @@ export interface LocalOpcao {
 }
 
 /**
- * Onde o Estoque guarda: os depósitos e os tanques de MATERIAL (CAP, emulsão...). O tanque
- * de combustível é do módulo Combustível e fica de fora.
+ * Onde o Estoque guarda: os depósitos, os tanques de MATERIAL (CAP, emulsão...) e as pilhas
+ * de agregado. O tanque de combustível é do módulo Combustível e fica de fora.
  */
 export async function listarLocais(): Promise<LocalOpcao[]> {
   const supabase = await createClient();
-  const [depositos, tanques] = await Promise.all([
+  const [depositos, tanques, pilhas] = await Promise.all([
     todasAsLinhas((de, ate) =>
       supabase.from("almoxarifado_depositos").select("id, nome, ativo").order("nome").order("id").range(de, ate),
     ),
     todasAsLinhas((de, ate) =>
       supabase.from("tanques").select("id, nome, ativo").eq("uso", "material").order("nome").order("id").range(de, ate),
     ),
+    todasAsLinhas((de, ate) =>
+      supabase.from("estoque_pilhas").select("id, nome, ativo").order("nome").order("id").range(de, ate),
+    ),
   ]);
-  if (depositos.erro || tanques.erro) throw new Error("Não foi possível carregar os depósitos e tanques");
+  if (depositos.erro || tanques.erro || pilhas.erro) {
+    throw new Error("Não foi possível carregar os depósitos, tanques e pilhas");
+  }
   return [
     ...depositos.linhas.map((d) => ({ id: codificarLocal("deposito", d.id), nome: d.nome, ativo: d.ativo })),
     ...tanques.linhas.map((t) => ({ id: codificarLocal("tanque", t.id), nome: `${t.nome} (tanque)`, ativo: t.ativo })),
+    ...pilhas.linhas.map((p) => ({ id: codificarLocal("pilha", p.id), nome: `${p.nome} (pilha)`, ativo: p.ativo })),
   ];
 }
 
@@ -71,7 +82,7 @@ export type OrigemPosicao = "estoque" | "combustivel" | "pecas";
 export interface PosicaoLinha {
   chave: string;
   origem: OrigemPosicao;
-  localTipo: "deposito" | "tanque";
+  localTipo: "deposito" | "tanque" | "pilha";
   localId: string;
   localNome: string;
   insumoId: string | null;
@@ -95,7 +106,7 @@ export async function listarPosicao(): Promise<PosicaoLinha[]> {
       return {
         chave: `${linha.origem}:${linha.local_id}:${linha.insumo_id ?? "vazio"}`,
         origem: linha.origem as OrigemPosicao,
-        localTipo: linha.local_tipo as "deposito" | "tanque",
+        localTipo: linha.local_tipo as PosicaoLinha["localTipo"],
         localId: linha.local_id,
         localNome: linha.local_nome,
         insumoId: linha.insumo_id,
@@ -119,7 +130,7 @@ export async function listarPosicao(): Promise<PosicaoLinha[]> {
 export interface EntradaLinha {
   id: string;
   data: string;
-  /** Depósito ou tanque de material, por `codificarLocal`. */
+  /** Depósito, tanque de material ou pilha, por `codificarLocal`. */
   local: string;
   localNome: string;
   insumoId: string;
@@ -144,10 +155,11 @@ export async function listarEntradas(): Promise<EntradaLinha[]> {
     supabase
       .from("estoque_entradas")
       .select(
-        `id, data, deposito_id, tanque_id, insumo_id, quantidade, valor_unitario, valor_total, oc_item_id, oc_numero,
+        `id, data, deposito_id, tanque_id, pilha_id, insumo_id, quantidade, valor_unitario, valor_total, oc_item_id, oc_numero,
          nota_fiscal, observacoes, excluido_em, motivo_exclusao,
          almoxarifado_depositos(nome),
          tanques(nome),
+         estoque_pilhas(nome),
          insumos(nome, unidades_medida(sigla)),
          fornecedores(razao_social, nome_fantasia)`,
       )
@@ -210,10 +222,11 @@ export async function listarSaidas(): Promise<SaidaLinha[]> {
       supabase
         .from("estoque_saidas")
         .select(
-          `id, data, deposito_id, tanque_id, insumo_id, quantidade, custo_unitario, valor_total, centro_custo_id,
+          `id, data, deposito_id, tanque_id, pilha_id, insumo_id, quantidade, custo_unitario, valor_total, centro_custo_id,
            observacoes, excluido_em, motivo_exclusao,
            almoxarifado_depositos(nome),
            tanques(nome),
+           estoque_pilhas(nome),
            insumos(nome, unidades_medida(sigla))`,
         )
         .order("data", { ascending: false })

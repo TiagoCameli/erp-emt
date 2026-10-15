@@ -79,7 +79,7 @@ export interface EntradaFormDrawerProps {
   onAbertoChange: (aberto: boolean) => void;
   /** Nula para registrar; a linha para editar. */
   entrada: EntradaLinha | null;
-  /** Depósitos e tanques de material ativos (`listarLocais`). */
+  /** Depósitos, tanques de material e pilhas ativos (`listarLocais`). */
   locais: Opcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
@@ -253,15 +253,15 @@ export function EntradaFormDrawer({
           </div>
         ) : null}
 
-        <CampoFormulario id="entrada-local" rotulo="Depósito ou tanque" obrigatorio erro={erros.local?.message}>
+        <CampoFormulario id="entrada-local" rotulo="Local" obrigatorio erro={erros.local?.message}>
           <Combobox
             id="entrada-local"
             valor={local ?? ""}
             rotuloDoValor={entrada?.localNome}
             onValorChange={(valor) => form.setValue("local", valor, { shouldDirty: true, shouldValidate: true })}
             opcoes={opcoesLocais}
-            placeholder="Selecione o depósito ou o tanque"
-            vazioTexto="Nenhum depósito ou tanque de material ativo. Crie nas abas Depósitos e Tanques"
+            placeholder="Selecione o depósito, o tanque ou a pilha"
+            vazioTexto="Nenhum depósito, tanque de material ou pilha ativa. Crie nas abas Depósitos, Tanques e Pilhas"
             disabled={salvando}
           />
         </CampoFormulario>

@@ -338,6 +338,15 @@ export const RECURSOS = [
     rota: "/estoque/tanques",
     acoes: CRUD,
   },
+  // Pilhas de agregado (15/10/2026): movimentadas como o tanque de material, ficam
+  // inativas sozinhas quando zeram.
+  {
+    id: "estoque.pilhas",
+    nome: "Pilhas",
+    modulo: "estoque",
+    rota: "/estoque/pilhas",
+    acoes: CRUD,
+  },
   // Combustível (Fase 3 da migração do Gestão Obras, plano seção 4.1). Não gera
   // lançamento, parcela nem rateio: o abastecimento de carreta vira débito na conta
   // corrente da transportadora (Frete), nunca no Financeiro.
