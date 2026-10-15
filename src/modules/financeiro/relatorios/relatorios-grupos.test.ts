@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { agregarPrazoAVencer, aVencerEm30Dias } from "@/modules/financeiro/relatorios/calculo";
 import {
   GRUPOS_RELATORIOS,
   PERGUNTA_DO_RELATORIO,
@@ -18,7 +19,6 @@ describe("grupos de relatórios", () => {
   });
 });
 
-import { agregarPrazoAVencer, aVencerEm30Dias } from "@/modules/financeiro/relatorios/calculo";
 
 describe("a vencer por prazo", () => {
   // Recorte de fn_rel_aging em 15/10/2026 (a pagar).
