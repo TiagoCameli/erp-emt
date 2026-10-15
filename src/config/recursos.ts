@@ -36,9 +36,12 @@ export interface RecursoDef {
  * entre RH e Administração (pedido do Tiago em 24/09/2026). Medição de Contratos
  * fica depois da Manutenção (25/09/2026).
  * Estoque fica logo depois de Compras, que é de onde vêm as entradas (13/10/2026).
+ * Mapa fica logo depois de Gestão: é a tela de "onde está a frota hoje", a segunda
+ * mais aberta depois do painel (15/10/2026).
  */
 export const MODULOS = [
   { id: "gestao", nome: "Gestão", rota: "/gestao" },
+  { id: "mapa", nome: "Mapa", rota: "/mapa" },
   { id: "cadastros", nome: "Cadastros", rota: "/cadastros" },
   { id: "compras", nome: "Compras", rota: "/compras" },
   { id: "estoque", nome: "Estoque", rota: "/estoque" },
@@ -71,6 +74,15 @@ export const RECURSOS = [
     modulo: "gestao",
     rota: "/gestao",
     acoes: ["ver"],
+  },
+  // Mapa (frota e pessoas em 3D sobre a BR-364). O recurso mapa.historico, que o
+  // banco já conhece (RLS das movimentações), entra no catálogo quando a tela dele existir.
+  {
+    id: "mapa.mapa",
+    nome: "Mapa",
+    modulo: "mapa",
+    rota: "/mapa",
+    acoes: CRUD,
   },
   // Cadastros
   {

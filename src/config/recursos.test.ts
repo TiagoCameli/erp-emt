@@ -177,8 +177,10 @@ describe("módulo Gestão", () => {
   it("a sidebar põe Frete, Combustível, Manutenção e Medição entre RH e Administração", () => {
     // Pedido do Tiago em 24/09/2026, com print da sidebar. Medição de Contratos
     // entrou depois da Manutenção em 25/09/2026. Estoque logo depois de Compras em 13/10/2026.
+    // Mapa logo depois de Gestão em 15/10/2026.
     expect(MODULOS.map((m) => m.id)).toEqual([
       "gestao",
+      "mapa",
       "cadastros",
       "compras",
       "estoque",

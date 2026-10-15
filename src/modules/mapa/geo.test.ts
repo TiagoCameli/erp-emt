@@ -1,0 +1,199 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  colarNoLocal,
+  colarNoTrecho,
+  dentroDaArea,
+  deslocar,
+  distanciaM,
+  estadoDaArea,
+  estadoDoLocal,
+  hexParaRgb,
+  marcosKm,
+  medirTrecho,
+  pontoNoKm,
+  resolverDestino,
+  rumo,
+} from "@/modules/mapa/geo";
+import type {
+  AreaMapa,
+  LocalidadeMapa,
+  TrechoMapa,
+} from "@/modules/mapa/tipos";
+
+/** Trecho reto de ~11 km para leste, km 700 → 711, perto de Cruzeiro do Sul. */
+const trecho: TrechoMapa = {
+  id: "t1",
+  obraId: "o1",
+  obraNome: "BR-364",
+  trechoPaiId: null,
+  nome: "Lote teste",
+  rodovia: "BR-364",
+  kmInicial: 700,
+  kmFinal: 711,
+  cor: "#3E7744",
+  ordem: 0,
+  pontos: [
+    [-72.5, -7.7],
+    [-72.45, -7.7],
+    [-72.4, -7.7],
+  ],
+};
+
+const local: LocalidadeMapa = {
+  id: "l1",
+  nome: "Pátio",
+  tipo: "patio",
+  obraId: null,
+  fornecedorId: null,
+  pos: [-72.6, -7.8],
+};
+const oficina: LocalidadeMapa = {
+  id: "l2",
+  nome: "Oficina",
+  tipo: "oficina",
+  obraId: null,
+  fornecedorId: null,
+  pos: [-72.7, -7.9],
+};
+
+const area: AreaMapa = {
+  id: "a1",
+  nome: "Pátio Lote 10",
+  tipo: "patio_obra",
+  obraId: "o1",
+  obraNome: "BR-364",
+  localidadeId: null,
+  atributos: {},
+  poligonos: [
+    [
+      [
+        [-72.401, -7.701],
+        [-72.399, -7.701],
+        [-72.399, -7.699],
+        [-72.401, -7.699],
+        [-72.401, -7.701],
+      ],
+    ],
+  ],
+  centro: [-72.4, -7.7],
+};
+
+describe("distância e rumo", () => {
+  it("mede ~11,0 km entre as pontas do trecho e aponta para leste", () => {
+    const d = distanciaM(trecho.pontos[0], trecho.pontos[2]);
+    expect(d).toBeGreaterThan(10_900);
+    expect(d).toBeLessThan(11_100);
+    expect(rumo(trecho.pontos[0], trecho.pontos[2])).toBeCloseTo(90, 0);
+  });
+
+  it("deslocar 100 m para o norte sobe ~0,0009 grau de latitude", () => {
+    const p = deslocar([-72.5, -7.7], 0, 100);
+    expect(p[0]).toBeCloseTo(-72.5, 6);
+    // A projeção local é plana (110,574 km por grau); o haversine difere dela em menos de 1%.
+    expect(Math.abs(distanciaM([-72.5, -7.7], p) - 100)).toBeLessThan(1);
+  });
+});
+
+describe("km ao longo do traçado", () => {
+  const medido = medirTrecho(trecho);
+
+  it("o meio do traçado é o km do meio", () => {
+    const { pos, heading } = pontoNoKm(medido, 705.5);
+    expect(pos[0]).toBeCloseTo(-72.45, 4);
+    expect(heading).toBeCloseTo(90, 0);
+  });
+
+  it("km fora da faixa trava nas pontas", () => {
+    expect(pontoNoKm(medido, 600).pos).toEqual(trecho.pontos[0]);
+    expect(pontoNoKm(medido, 900).pos[0]).toBeCloseTo(-72.4, 6);
+  });
+
+  it("marca os km redondos dentro da faixa", () => {
+    expect(marcosKm([medido], 10).map((m) => m.km)).toEqual([700, 710]);
+    expect(marcosKm([medido], 5).map((m) => m.km)).toEqual([700, 705, 710]);
+  });
+});
+
+describe("colar no traçado", () => {
+  const medido = medirTrecho(trecho);
+
+  it("ponto a 100 m da pista cola nela, com km proporcional e rumo da pista", () => {
+    const p = deslocar([-72.45, -7.7], 0, 100);
+    const c = colarNoTrecho(p, [medido], 300);
+    expect(c).not.toBeNull();
+    expect(c?.distanciaM).toBeCloseTo(100, 0);
+    expect(c?.km).toBeCloseTo(705.5, 1);
+    expect(c?.pos[1]).toBeCloseTo(-7.7, 5);
+    expect(c?.heading).toBeCloseTo(90, 0);
+  });
+
+  it("ponto a 500 m não cola quando o limite é 300 m", () => {
+    expect(
+      colarNoTrecho(deslocar([-72.45, -7.7], 0, 500), [medido], 300),
+    ).toBeNull();
+  });
+
+  it("ponto além da ponta cai na ponta, sem passar do km final", () => {
+    const c = colarNoTrecho([-72.395, -7.7], [medido], 1000);
+    expect(c?.km).toBeCloseTo(711, 3);
+  });
+});
+
+describe("resolver destino (mesma ordem do banco)", () => {
+  const ctx = {
+    trechos: [medirTrecho(trecho)],
+    areas: [area],
+    localidades: [local, oficina],
+    snapTracadoM: 300,
+    snapLocalM: 300,
+  };
+
+  it("dentro de uma área ganha do traçado e impõe o estado da zona", () => {
+    expect(dentroDaArea([-72.4, -7.7], area)).toBe(true);
+    const d = resolverDestino([-72.4, -7.7], ctx);
+    expect(d.tipo).toBe("area");
+    expect(d.estado).toBe("parado");
+  });
+
+  it("perto do traçado cola no km e fica operando", () => {
+    const d = resolverDestino(deslocar([-72.45, -7.7], 180, 50), ctx);
+    expect(d.tipo).toBe("trecho");
+    if (d.tipo === "trecho") {
+      expect(d.km).toBeCloseTo(705.5, 1);
+      expect(d.estado).toBe("operando");
+    }
+  });
+
+  it("perto de um pátio vira parado; perto da oficina vira conserto", () => {
+    const patio = resolverDestino(deslocar(local.pos, 90, 120), ctx);
+    expect(patio.tipo).toBe("localidade");
+    expect(patio.estado).toBe("parado");
+    const cons = resolverDestino(deslocar(oficina.pos, 90, 120), ctx);
+    expect(cons.estado).toBe("conserto");
+    expect(
+      colarNoLocal(deslocar(oficina.pos, 90, 120), [local, oficina], 300)?.local
+        .id,
+    ).toBe("l2");
+  });
+
+  it("longe de tudo é livre e sem estado (a tela pergunta)", () => {
+    const d = resolverDestino([-73.5, -8.5], ctx);
+    expect(d).toEqual({ tipo: "livre", pos: [-73.5, -8.5], estado: null });
+  });
+
+  it("estados das zonas batem com a regra do banco", () => {
+    expect(estadoDaArea("zona_oficina")).toBe("conserto");
+    expect(estadoDaArea("jazida")).toBe("operando");
+    expect(estadoDoLocal("terreno")).toBe("parado");
+    expect(estadoDoLocal("usina")).toBe("operando");
+  });
+});
+
+describe("cor hex", () => {
+  it("converte e cai no cinza quando inválida", () => {
+    expect(hexParaRgb("#3E7744")).toEqual([62, 119, 68]);
+    expect(hexParaRgb("cf943a")).toEqual([207, 148, 58]);
+    expect(hexParaRgb("")).toEqual([69, 70, 75]);
+  });
+});
