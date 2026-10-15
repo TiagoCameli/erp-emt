@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
 import { LINHAS_CABECALHO_MARCA } from "@/lib/planilha-marca";
+import { agregarPrazoAVencer } from "@/modules/financeiro/relatorios/calculo";
 import {
   abaAging,
   abaCustoCc,
@@ -55,6 +56,8 @@ describe("aba do aging", () => {
     totalAReceber: 8202830.19,
     vencidoAPagar: 40600,
     vencidoAReceber: 0,
+    prazosAPagar: agregarPrazoAVencer([{ prazo: "ate_7", valor: 9941603.46 }]),
+    prazosAReceber: agregarPrazoAVencer([{ prazo: "acima_60", valor: 8202830.19 }]),
   };
 
   it("põe a pagar e a receber lado a lado, pareados pela faixa", async () => {

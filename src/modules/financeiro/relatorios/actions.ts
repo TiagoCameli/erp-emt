@@ -57,6 +57,7 @@ import {
   extratoPorFornecedor,
   fluxoCaixa,
   mesCorrente,
+  mesFechado,
   listarCentrosCustoParaFiltro,
   mesesDeCompetencia,
   posicaoBancaria,
@@ -240,7 +241,7 @@ async function abaDoRelatorio(
     }
 
     case "dre": {
-      const escolha = lerPeriodoDaUrl(params, mesCorrente());
+      const escolha = lerPeriodoDaUrl(params, mesFechado());
       // O DRE precisa das duas pontas FECHADAS: `fn_rel_dre` não tem default
       // nem guarda de nulo, então "tudo" vira o primeiro e o último mês que
       // existem de verdade — não uma data inventada com folga, que traria mês
@@ -272,7 +273,7 @@ async function abaDoRelatorio(
     }
 
     case "custo-cc": {
-      const { filtros } = lerFiltrosCustoCc(params, mesCorrente());
+      const { filtros } = lerFiltrosCustoCc(params, mesFechado());
       // A escada de centro vira a lista que a RPC aceita: a etapa escolhida
       // SUBSTITUI a raiz, e o banco filtra pela subárvore do que receber.
       const centroIds = centrosEfetivos(
@@ -340,7 +341,7 @@ async function abaDoRelatorio(
     }
 
     case "custo-grupo": {
-      const filtros = lerFiltrosCustoGrupo(params, mesCorrente());
+      const filtros = lerFiltrosCustoGrupo(params, mesFechado());
       const periodo = periodoDoModo(filtros);
       const dados = await custoPorGrupo({
         ...pontasDaRpc(periodo),
