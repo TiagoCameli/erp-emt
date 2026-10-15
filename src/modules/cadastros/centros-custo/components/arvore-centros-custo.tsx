@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Plus,
 } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -129,7 +130,7 @@ function montarArvore(nos: NoCentroCusto[]): NoArvore[] {
 
 /** Filtros que valem nó a nó, em qualquer nível da árvore. */
 interface FiltrosDeLinha {
-  /** Termo de busca já em minúsculas e sem espaço nas pontas. */
+  /** Busca digitada, sem espaço nas pontas (a busca universal normaliza o resto). */
   termo: string;
   /** "todos" | "ativos" | "inativos". */
   status: string;
@@ -148,11 +149,8 @@ function noCasa(no: NoCentroCusto, filtros: FiltrosDeLinha): boolean {
   if (filtros.status === "ativos" && !no.ativo) return false;
   if (filtros.status === "inativos" && no.ativo) return false;
   if (filtros.nivel !== "" && String(no.nivel) !== filtros.nivel) return false;
-  if (filtros.termo === "") return true;
-  return (
-    no.nome.toLowerCase().includes(filtros.termo) ||
-    (no.codigo?.toLowerCase().includes(filtros.termo) ?? false)
-  );
+  // Busca universal (src/lib/busca.ts): nome e código, sem acento e por palavra.
+  return casaBusca(textoPesquisavel(no.nome, no.codigo), filtros.termo);
 }
 
 /**
@@ -230,7 +228,7 @@ export function ArvoreCentrosCusto({
   const [aDesativar, setADesativar] = React.useState<NoCentroCusto | null>(null);
   const [aExcluir, setAExcluir] = React.useState<NoCentroCusto | null>(null);
 
-  const termo = busca.trim().toLowerCase();
+  const termo = busca.trim();
 
   // Obras vindas dos próprios centros: a raiz de obra espelha o nome da obra, e
   // é ela que carrega o obra_id.
@@ -282,10 +280,7 @@ export function ArvoreCentrosCusto({
         },
       },
       [
-        ({ no }) =>
-          termo === "" ||
-          no.nome.toLowerCase().includes(termo) ||
-          (no.codigo?.toLowerCase().includes(termo) ?? false),
+        ({ no }) => casaBusca(textoPesquisavel(no.nome, no.codigo), termo),
       ],
     );
   }, [nos, status, tipo, obraId, nivel, termo]);

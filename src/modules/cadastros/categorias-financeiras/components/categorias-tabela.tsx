@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Filter, FolderTree, MoreHorizontal, Plus } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -174,7 +175,6 @@ export function CategoriasTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       categorias,
       {
@@ -201,8 +201,7 @@ export function CategoriasTabela({
         // A busca cobre o nome do pai também: quem digita "Combustível" quer o
         // galho inteiro, não só a categoria com aquele nome exato.
         (c) =>
-          !termo ||
-          `${c.nome} ${c.paiNome ?? ""}`.toLowerCase().includes(termo),
+          casaBusca(textoPesquisavel(c.nome, c.paiNome, c.tipo, c.natureza), busca),
       ],
     );
   }, [categorias, busca, tipo, natureza, status, paiId, nivel, uso]);

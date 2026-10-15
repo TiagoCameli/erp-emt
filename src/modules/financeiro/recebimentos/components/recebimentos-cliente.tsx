@@ -640,7 +640,7 @@ export function RecebimentosCliente({
         <FiltroBusca
           valor={buscaAReceber}
           onValorChange={setBuscaAReceber}
-          placeholder="Buscar por documento, descrição ou quem paga"
+          placeholder="Cliente, número, valor, data ou mês"
         />
       ),
     },
@@ -905,7 +905,7 @@ export function RecebimentosCliente({
         <FiltroBusca
           valor={buscaRecebidos}
           onValorChange={setBuscaRecebidos}
-          placeholder="Buscar por documento, descrição ou quem pagou"
+          placeholder="Cliente, número, valor, data ou mês"
         />
       ),
     },

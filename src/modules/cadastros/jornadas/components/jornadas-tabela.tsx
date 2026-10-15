@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Clock4, MoreHorizontal } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -84,7 +85,6 @@ export function JornadasTabela({
   // outros (ver `_shared/filtros-facetados`). A faixa de horas restringe os
   // outros sem ser restringida.
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     const minimo = horasDe === "" ? null : Number(horasDe);
     const maximo = horasAte === "" ? null : Number(horasAte);
     return filtrarFacetado(
@@ -112,7 +112,7 @@ export function JornadasTabela({
           }
           return true;
         },
-        (jornada) => !termo || jornada.nome.toLowerCase().includes(termo),
+        (jornada) => casaBusca(textoPesquisavel(jornada.nome), busca),
       ],
     );
   }, [jornadas, busca, status, horasDe, horasAte, sabado, domingo]);

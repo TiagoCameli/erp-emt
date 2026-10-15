@@ -17,6 +17,7 @@ import {
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
@@ -202,7 +203,6 @@ export function TransferenciasTabela({
   // filtradas pelos outros (ver `_shared/filtros-facetados`). Busca, datas e
   // valor entram livres.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       transferencias,
       {
@@ -228,11 +228,22 @@ export function TransferenciasTabela({
           if (criadoAte !== "" && diaCriacao > criadoAte) return false;
           return dentroDaFaixaValor(linha.valor, valorDe, valorAte);
         },
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (linha) =>
-          !termo ||
-          `${linha.numero} ${linha.contaOrigemNome} ${linha.contaDestinoNome} ${linha.descricao ?? ""}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              linha.numero,
+              linha.contaOrigemNome,
+              linha.contaDestinoNome,
+              linha.descricao,
+              linha.aplicacaoNome,
+              { valor: linha.valor },
+              { valor: linha.totalSaida },
+              linha.tarifa > 0 && { valor: linha.tarifa },
+              { data: linha.dataTransferencia },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -293,7 +304,7 @@ export function TransferenciasTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={mudarBusca}
-          placeholder="Buscar por número, conta ou descrição"
+          placeholder="Número, conta, valor ou data"
         />
       ),
     },

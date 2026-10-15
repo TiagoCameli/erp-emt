@@ -17,6 +17,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { excluirEntrada } from "@/modules/manutencao/almoxarifado/actions";
@@ -54,16 +55,27 @@ export function EntradasTabela({
   // Facetado: o depósito só oferece o que existe entre as que passam na busca
   // (ver `_shared/filtros-facetados`).
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       entradas,
       { deposito: { selecionados: selecao(deposito), chave: (entrada) => entrada.depositoId } },
       [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (entrada) =>
-          !termo ||
-          entrada.insumoNome.toLowerCase().includes(termo) ||
-          entrada.fornecedorNome.toLowerCase().includes(termo) ||
-          (entrada.notaFiscal ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              entrada.insumoNome,
+              entrada.fornecedorNome,
+              entrada.notaFiscal,
+              entrada.depositoNome,
+              entrada.unidade,
+              entrada.observacoes,
+              entrada.quantidade,
+              { valor: entrada.valorUnitario },
+              { valor: entrada.valorTotal },
+              { data: entrada.data },
+            ),
+            busca,
+          ),
       ],
     );
   }, [entradas, busca, deposito]);
@@ -168,7 +180,7 @@ export function EntradasTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por peça, fornecedor ou NF"
+                placeholder="Peça, fornecedor, NF, valor ou data"
               />
             ),
           },

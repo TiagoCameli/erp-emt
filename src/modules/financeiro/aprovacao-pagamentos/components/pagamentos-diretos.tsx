@@ -14,6 +14,7 @@ import {
   Undo2,
   Wallet,
 } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -224,7 +225,6 @@ export function PagamentosDiretos({
   // outros (ver `_shared/filtros-facetados`). Busca, mês, valor e datas entram
   // livres.
   const { linhas: visiveis, opcoes } = React.useMemo(() => {
-    const termo = filtroBusca.trim().toLowerCase();
     const binario = (valor: string, sim: string, nao: string) =>
       valor === sim || valor === nao ? [valor] : [];
     return filtrarFacetado(
@@ -254,11 +254,29 @@ export function PagamentosDiretos({
           dentroDaFaixaValor(pagamento.valor, filtroValorDe, filtroValorAte) &&
           dentroDoPeriodo(pagamento.dataVencimento, filtroVencDe, filtroVencAte) &&
           dentroDoPeriodo(pagamento.dataPagamento, filtroPagoDe, filtroPagoAte),
+        // Busca universal (src/lib/busca.ts): tudo o que o pagamento carrega.
         (pagamento) =>
-          termo === "" ||
-          `${pagamento.lancamentoNumero ?? ""} ${pagamento.lancamentoDescricao} ${pagamento.fornecedorNome} ${pagamento.origemNumero ?? ""}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              pagamento.lancamentoNumero,
+              pagamento.lancamentoDescricao,
+              pagamento.observacoes,
+              pagamento.fornecedorNome,
+              pagamento.origem,
+              pagamento.origemNumero,
+              pagamento.categoriaNome,
+              pagamento.formaPagamentoNome,
+              pagamento.contaBancariaNome,
+              pagamento.rateios.map((rateio) => rateio.nome),
+              { valor: pagamento.valor },
+              { valor: pagamento.valorLiquido },
+              { data: pagamento.dataVencimento },
+              { data: pagamento.dataPagamento },
+              { data: pagamento.dataCompra },
+              { mes: pagamento.mesCompetencia },
+            ),
+            filtroBusca,
+          ),
       ],
     );
   }, [
@@ -844,7 +862,7 @@ export function PagamentosDiretos({
         <FiltroBusca
           valor={filtroBusca}
           onValorChange={(valor) => aoTrocarFiltro(() => setFiltroBusca(valor))}
-          placeholder="Buscar por lançamento, descrição, fornecedor ou OC"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },

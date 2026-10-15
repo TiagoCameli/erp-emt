@@ -233,7 +233,7 @@ export function TransferenciasTabela({
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por tanque ou observação" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Tanque, combustível, litros ou data" />
             ),
           },
           {

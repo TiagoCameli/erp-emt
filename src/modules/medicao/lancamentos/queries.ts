@@ -1,5 +1,6 @@
 import "server-only";
 
+import { aplicarBusca } from "@/lib/busca";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { facetasNoServidor, type FacetasPresentes } from "@/modules/_shared/filtros-facetados";
@@ -12,12 +13,6 @@ export interface ContratoParaLancarCampo {
   codigo: string;
   nomeObra: string;
   tipoLocalizacao: "rodovia" | "texto";
-}
-
-/** Padrão ilike do termo, sem os caracteres que quebram o `or()` do PostgREST (mesmo padrão de
- * `padraoBuscaOs` em manutencao/servicos/filtros.ts). */
-function padraoBusca(termo: string): string {
-  return `%${termo.replace(/[,()"'\\%*]/g, "").trim()}%`;
 }
 
 /**
@@ -54,7 +49,7 @@ interface ConsultaFiltravelLancamentos<T> {
   is: (coluna: string, valor: null) => T;
   gte: (coluna: string, valor: string) => T;
   lte: (coluna: string, valor: string) => T;
-  or: (filtro: string) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
@@ -71,14 +66,10 @@ export function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos
   if (filtros.de) consulta = consulta.gte("data", filtros.de);
   if (filtros.ate) consulta = consulta.lte("data", filtros.ate);
   if (filtros.itemId) consulta = consulta.eq("item_id", filtros.itemId);
-  if (filtros.busca) {
-    const padrao = padraoBusca(filtros.busca);
-    if (padrao !== "%%") {
-      consulta = consulta.or(
-        `codigo.ilike.${padrao},descricao.ilike.${padrao},estaca.ilike.${padrao},local_texto.ilike.${padrao},observacao.ilike.${padrao}`,
-      );
-    }
-  }
+  // Busca universal (src/lib/busca.ts): código e descrição do item, estaca,
+  // local, observação, quantidade, nº da medição e data, pela coluna computada
+  // `busca(mc_v_lancamentos)`.
+  consulta = aplicarBusca(consulta, filtros.busca);
   return consulta;
 }
 

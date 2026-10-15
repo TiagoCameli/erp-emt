@@ -20,6 +20,7 @@ import {
   type FiltroConfiguravel,
   type StatusPadrao,
 } from "@/components/canonicos";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import {
@@ -225,7 +226,6 @@ export function ProgramadosTabela({
   // nas parcelas filtradas pelos outros (ver `_shared/filtros-facetados`).
   // Busca, valor e datas entram livres.
   const { linhas: parcelasFiltradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       parcelas,
       {
@@ -248,11 +248,21 @@ export function ProgramadosTabela({
         },
       },
       [
+        // Busca universal (src/lib/busca.ts): tudo o que a parcela carrega.
         (parcela) =>
-          termo === "" ||
-          `${parcela.lancamentoNumero ?? ""} ${parcela.lancamentoDescricao} ${parcela.fornecedorNome}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              parcela.lancamentoNumero,
+              parcela.lancamentoDescricao,
+              parcela.fornecedorNome,
+              parcela.categoriaNome,
+              parcela.contaBancariaNome,
+              { valor: parcela.valor },
+              { data: parcela.dataVencimento },
+              { data: parcela.dataProgramada },
+            ),
+            busca,
+          ),
         (parcela) =>
           dentroDaFaixaValor(parcela.valor, valorDe, valorAte) &&
           dentroDoPeriodo(parcela.dataEfetiva, programadaDe, programadaAte) &&
@@ -291,7 +301,7 @@ export function ProgramadosTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={mudarBusca}
-          placeholder="Buscar por lançamento, descrição ou fornecedor"
+          placeholder="Fornecedor, número, valor, data ou mês"
         />
       ),
     },

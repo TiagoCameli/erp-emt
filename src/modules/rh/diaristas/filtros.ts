@@ -1,3 +1,4 @@
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import {
   filtrarFacetado,
   selecao,
@@ -37,7 +38,6 @@ export function filtrarDiarias(
   diarias: readonly DiariaLista[],
   f: FiltrosTelaDiarias,
 ): ResultadoFacetado<DiariaLista, FacetaDiarias> {
-  const termo = f.busca.trim().toLowerCase();
   return filtrarFacetado<DiariaLista, FacetaDiarias>(
     diarias,
     {
@@ -58,7 +58,24 @@ export function filtrarDiarias(
       (item) => !f.competencia || item.competencia === f.competencia,
       (item) => noPeriodo(item.data, f.dataDe, f.dataAte),
       (item) => naFaixa(item.valor, f.valorDe, f.valorAte),
-      (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+      (item) =>
+        casaBusca(
+          textoPesquisavel(
+            item.colaboradorNome,
+            item.obraNome,
+            item.obraLote,
+            item.funcaoNome,
+            item.observacao,
+            item.situacao,
+            { valor: item.valor },
+            { valor: item.valorDiaria },
+            { data: item.data },
+            { data: item.dataFim },
+            { mes: item.competencia },
+          ),
+          f.busca,
+        ),
     ],
   );
 }

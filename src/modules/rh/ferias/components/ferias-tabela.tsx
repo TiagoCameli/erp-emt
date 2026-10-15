@@ -24,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData } from "@/lib/formatadores";
 import { removerFerias } from "@/modules/rh/ferias/actions";
 import type {
@@ -139,7 +140,6 @@ export function FeriasTabela({
   // situação, colaborador e status só oferecem o que existe na lista filtrada
   // pelos outros (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       ferias,
       {
@@ -158,7 +158,25 @@ export function FeriasTabela({
         // pede uma janela de gozo: sem data de início, não é resposta.
         (item) => noPeriodo(item.dataInicio, gozoDe, gozoAte),
         (item) => noPeriodo(item.limiteGozo, limiteDe, limiteAte),
-        (item) => !termo || item.colaboradorNome.toLowerCase().includes(termo),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega. O
+        // líquido só entra com recibo: sem ele é zero e casaria "0,00" à toa.
+        (item) =>
+          casaBusca(
+            textoPesquisavel(
+              item.colaboradorNome,
+              item.observacao,
+              ROTULO_STATUS_FERIAS[item.status],
+              SITUACAO_BADGE[item.situacao].rotulo,
+              STATUS_RECIBO_INFO[item.statusRecibo].rotulo,
+              item.statusRecibo !== "sem_recibo" && { valor: item.valorLiquido },
+              { data: item.periodoAquisitivoInicio },
+              { data: item.periodoAquisitivoFim },
+              { data: item.dataInicio },
+              { data: item.dataFim },
+              { data: item.limiteGozo },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -326,7 +344,7 @@ export function FeriasTabela({
         filtros={[
           {
             id: "busca",
-            rotulo: "Busca por colaborador",
+            rotulo: "Busca",
             fixo: true,
             // Entra no "Limpar filtros": sem isto o botão limpa os seletores e
             // deixa o texto da busca filtrando a lista.
@@ -336,7 +354,7 @@ export function FeriasTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por colaborador"
+                placeholder="Colaborador, situação, valor ou data"
               />
             ),
           },

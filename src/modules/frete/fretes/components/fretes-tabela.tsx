@@ -299,7 +299,7 @@ export function FretesTabela({
       fixo: true,
       temValor: busca !== "",
       onLimpar: () => setBusca(""),
-      elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por nota fiscal..." />,
+      elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="NF, rota, placa, material, valor ou data" />,
     },
     filtroSelect("tipo", "Tipo", CHAVE.tipo, filtros.tipo, opcoesFacetadas("tipo", OPCOES_TIPO), "Todos os tipos"),
     filtroSelect("obra", "Obra", CHAVE.obra, filtros.obraId, opcoesFacetadas("obra", opcoesObra), "Todas as obras"),

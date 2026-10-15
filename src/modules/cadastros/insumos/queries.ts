@@ -1,5 +1,6 @@
 import "server-only";
 
+import { aplicarBusca } from "@/lib/busca";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import {
@@ -90,7 +91,7 @@ export type FiltrosInsumos = Omit<ListarInsumosParams, "pagina" | "tamanho">;
 /** O pedaço do builder do PostgREST que os filtros dos insumos usam. */
 interface ConsultaFiltravelInsumos<T> {
   eq: (coluna: string, valor: string | boolean) => T;
-  or: (filtro: string) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
@@ -113,11 +114,9 @@ function aplicarFiltrosInsumos<T extends ConsultaFiltravelInsumos<T>>(
     consulta = consulta.eq("categorias_insumo.grupo_id", filtros.grupoId);
   }
 
-  // Remove caracteres que quebram a sintaxe do filtro `or` do PostgREST.
-  const termo = (filtros.busca ?? "").trim().replace(/[,()"\\]/g, "");
-  if (termo) {
-    consulta = consulta.or(`nome.ilike.%${termo}%,codigo.ilike.%${termo}%`);
-  }
+  // Busca universal (src/lib/busca.ts): código, nome, descrição, categoria,
+  // grupo, unidade e categoria de custo, pela coluna computada `busca(insumos)`.
+  consulta = aplicarBusca(consulta, filtros.busca);
   return consulta;
 }
 

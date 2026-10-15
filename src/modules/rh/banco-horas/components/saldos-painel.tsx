@@ -10,6 +10,7 @@ import {
   FiltroBusca,
   FiltroSelect,
 } from "@/components/canonicos";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
@@ -63,7 +64,6 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
   // Facetado: o sinal só oferece o que existe na lista filtrada pela busca
   // (ver `_shared/filtros-facetados`).
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       saldos,
       {
@@ -75,7 +75,14 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
             (valor === "zerado" && item.saldo === 0),
         },
       },
-      [(item) => !termo || item.nome.toLowerCase().includes(termo)],
+      // Busca universal (src/lib/busca.ts): nome e saldo da linha.
+      [
+        (item) =>
+          casaBusca(
+            textoPesquisavel(item.nome, formatarQuantidade(item.saldo)),
+            busca,
+          ),
+      ],
     );
   }, [saldos, busca, sinal]);
 
@@ -117,7 +124,7 @@ export function SaldosPainel({ saldos }: SaldosPainelProps) {
             <FiltroBusca
               valor={busca}
               onValorChange={setBusca}
-              placeholder="Buscar por colaborador"
+              placeholder="Colaborador ou saldo"
             />
           ),
         },

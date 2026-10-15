@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { MapPin, MoreHorizontal } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -60,16 +61,15 @@ export function LocalidadesTabela({
   // Facetado: o status só oferece o que existe na lista filtrada pela busca
   // (ver `_shared/filtros-facetados`).
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       localidades,
       { status: facetaAtivo<LocalidadeLista>(status) },
       [
         (localidade) =>
-          !termo ||
-          localidade.nome.toLowerCase().includes(termo) ||
-          (localidade.endereco ?? "").toLowerCase().includes(termo) ||
-          (localidade.fornecedorNome ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(localidade.nome, localidade.endereco, localidade.fornecedorNome),
+            busca,
+          ),
       ],
     );
   }, [localidades, busca, status]);

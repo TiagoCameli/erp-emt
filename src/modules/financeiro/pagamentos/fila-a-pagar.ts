@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { idSchema } from "@/lib/id";
 // De `filtros-predicados`, e NÃO de `filtros-cliente`: aquele é `"use client"`
 // por causa de um hook que mora nele, e Next transforma cada export de módulo
@@ -151,7 +152,6 @@ export function facetarFilaAPagar(
   subarvore: ReadonlySet<string> | null,
   subarvoreDe: (centroId: string) => ReadonlySet<string> = (id) => new Set([id]),
 ): ResultadoFacetado<ParcelaAprovada, FacetaAPagar> {
-  const termo = valores.busca.trim().toLowerCase();
   const valorDe = valores.valorDe === "" ? null : Number(valores.valorDe);
   const valorAte = valores.valorAte === "" ? null : Number(valores.valorAte);
   const centrosEscolhidos = new Set(valores.centroIds);
@@ -208,11 +208,26 @@ export function facetarFilaAPagar(
       },
     },
     [
+      // Busca universal (src/lib/busca.ts): tudo o que a parcela carrega.
       (parcela) =>
-        termo === "" ||
-        `${parcela.lancamentoNumero ?? ""} ${parcela.descricao} ${parcela.fornecedorNome}`
-          .toLowerCase()
-          .includes(termo),
+        casaBusca(
+          textoPesquisavel(
+            parcela.lancamentoNumero,
+            parcela.descricao,
+            parcela.observacoes,
+            parcela.fornecedorNome,
+            parcela.categoriaNome,
+            parcela.centroCustoNomes,
+            parcela.centroCustoRotulo,
+            parcela.origem,
+            { valor: parcela.valor },
+            { data: parcela.dataVencimento },
+            { data: parcela.dataProgramada },
+            { data: parcela.dataCompra },
+            { mes: parcela.mesCompetencia },
+          ),
+          valores.busca,
+        ),
       (parcela) => {
         if (valorDe !== null && parcela.valor < valorDe) return false;
         if (valorAte !== null && parcela.valor > valorAte) return false;

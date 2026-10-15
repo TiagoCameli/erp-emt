@@ -13,7 +13,8 @@ import {
   StatusBadge,
 } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
-import { formatarData } from "@/lib/formatadores";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
+import { dataLocalISO, formatarData } from "@/lib/formatadores";
 import type { PerfilOpcao, UsuarioLista } from "@/modules/administracao/usuarios/queries";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { DetalheUsuarioDrawer } from "./detalhe-usuario-drawer";
@@ -137,7 +138,6 @@ export function UsuariosTabela({
   // outros (ver `_shared/filtros-facetados`). Período e busca restringem os
   // outros sem serem restringidos.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       usuarios,
       {
@@ -173,11 +173,19 @@ export function UsuariosTabela({
           if (criadoAte !== "" && criadoDia > criadoAte) return false;
           return true;
         },
-        (usuario) => {
-          if (!termo) return true;
-          const alvo = `${usuario.nome} ${usuario.email}`.toLowerCase();
-          return alvo.includes(termo);
-        },
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (usuario) =>
+          casaBusca(
+            textoPesquisavel(
+              usuario.nome,
+              usuario.email,
+              usuario.perfilNome ?? "sem perfil",
+              usuario.ativo ? "ativo" : "inativo",
+              usuario.acessoPendente ? "1º acesso pendente" : null,
+              { data: dataLocalISO(usuario.criadoEm) },
+            ),
+            busca,
+          ),
       ],
     );
   }, [usuarios, busca, perfilId, status, acesso, criadoDe, criadoAte]);
@@ -202,7 +210,7 @@ export function UsuariosTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome ou email"
+                placeholder="Nome, email, perfil ou data"
               />
             ),
           },

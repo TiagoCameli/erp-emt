@@ -210,7 +210,7 @@ interface ConsultaFiltravelCotacoes<T> {
   gte: (coluna: string, valor: string) => T;
   lt: (coluna: string, valor: string) => T;
   is: (coluna: string, valor: null) => T;
-  ilike: (coluna: string, padrao: string) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**

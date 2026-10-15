@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, MoreHorizontal } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -98,7 +99,6 @@ export function ClientesTabela({
   // outros (ver `_shared/filtros-facetados`). É isso que faz a cidade seguir a
   // UF escolhida.
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       clientes,
       {
@@ -107,7 +107,25 @@ export function ClientesTabela({
         uf: { selecionados: selecao(uf), chave: (cliente) => cliente.uf },
         cidade: { selecionados: selecao(cidade), chave: (cliente) => cliente.cidade },
       },
-      [(cliente) => termo.length === 0 || cliente.nome.toLowerCase().includes(termo)],
+      [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (cliente) =>
+          casaBusca(
+            textoPesquisavel(
+              cliente.nome,
+              cliente.nomeFantasia,
+              { documento: cliente.cpfCnpj },
+              cliente.inscricaoEstadual,
+              cliente.email,
+              cliente.telefone,
+              cliente.cidade,
+              cliente.uf,
+              cliente.endereco,
+              cliente.observacoes,
+            ),
+            busca,
+          ),
+      ],
     );
   }, [clientes, busca, status, tipo, uf, cidade]);
 
@@ -288,7 +306,7 @@ export function ClientesTabela({
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome"
+                placeholder="Nome, CNPJ, cidade ou telefone"
               />
             ),
           },

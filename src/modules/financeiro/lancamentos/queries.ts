@@ -7,6 +7,7 @@ import {
   type EventoTrilha,
   type RegistroAuditLog,
 } from "@/components/canonicos";
+import { aplicarBusca } from "@/lib/busca";
 import { dataHojeISO, TIMEZONE } from "@/lib/formatadores";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
@@ -1248,6 +1249,7 @@ interface ConsultaFiltravelLancamentos<T>
   lte: (coluna: string, valor: string | number) => T;
   not: (coluna: string, operador: string, valor: string | null) => T;
   or: (filtro: string, opcoes?: { referencedTable?: string }) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
@@ -1424,14 +1426,10 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
     // deixaria de fora tudo que foi criado depois de 00:00 do último dia.
     consulta = consulta.lt("created_at", inicioDoDiaISO(params.criadoAte, 1));
   }
-  if (params.busca?.trim()) {
-    const padrao = `%${params.busca.replace(/[,()"'\\]/g, "").trim()}%`;
-    // O número do documento entra junto: quem tem o boleto na mão procura pelo
-    // número dele, não pelo número interno do lançamento.
-    consulta = consulta.or(
-      `numero.ilike.${padrao},numero_documento.ilike.${padrao},descricao.ilike.${padrao}`,
-    );
-  }
+  // Busca universal (src/lib/busca.ts): número, nota, descrição, fornecedor ou
+  // cliente ou colaborador, categorias, centros, formas, OC de origem, valores,
+  // datas das parcelas e competência, pela coluna computada `busca(lancamentos)`.
+  consulta = aplicarBusca(consulta, params.busca);
   return consulta;
 }
 

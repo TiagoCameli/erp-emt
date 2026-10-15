@@ -20,6 +20,7 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarDataHora } from "@/lib/formatadores";
 import { conferirAnomaliaFrete } from "@/modules/frete/anomalias/actions";
 import {
@@ -94,7 +95,6 @@ export function AnomaliasFreteTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos outros
   // (ver `_shared/filtros-facetados`). Período e busca restringem, sem lista.
   const { linhas: visiveis, opcoes } = React.useMemo(() => {
-    const q = busca.trim().toLowerCase();
     return filtrarFacetado(
       anomalias,
       {
@@ -108,7 +108,29 @@ export function AnomaliasFreteTabela({
       [
         (a) => !de || a.data >= de,
         (a) => !ate || a.data <= ate,
-        (a) => !q || `${a.title} ${a.description}`.toLowerCase().includes(q),
+        // Busca universal (src/lib/busca.ts): a anomalia e os fretes que ela aponta.
+        (a) =>
+          casaBusca(
+            textoPesquisavel(
+              a.title,
+              a.description,
+              a.acaoSugerida,
+              a.detector,
+              a.rotuloDetector,
+              SEVERITY_LABEL[a.severity],
+              { data: a.data },
+              a.fretes.map((f) => [
+                f.origem,
+                f.destino,
+                f.material,
+                f.placa,
+                f.notaFiscal,
+                { valor: f.valorMaterial },
+                { data: f.data },
+              ]),
+            ),
+            busca,
+          ),
       ],
     );
   }, [anomalias, situacao, severidade, regra, de, ate, busca]);
@@ -261,7 +283,7 @@ export function AnomaliasFreteTabela({
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por título ou descrição" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Anomalia, placa, material, NF ou data" />,
           },
           {
             id: "regra",

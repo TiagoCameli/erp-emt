@@ -21,6 +21,7 @@ import {
   type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
@@ -240,7 +241,6 @@ export function ContasTabela({ contas, aplicacoes, podeEditar }: ContasTabelaPro
   // filtradas pelos outros (ver `_shared/filtros-facetados`). Busca e saldo
   // entram livres.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       contas,
       {
@@ -265,13 +265,21 @@ export function ContasTabela({ contas, aplicacoes, podeEditar }: ContasTabelaPro
             dentroDaFaixaValor(conta.saldoAtual, saldoDe, saldoAte)
           );
         },
-        // A busca cobre nome, agência e conta: quem procura "1234" está com o
-        // extrato na mão, não lembrando o apelido da conta.
+        // Busca universal (src/lib/busca.ts): nome, banco, agência e conta (quem
+        // procura "1234" está com o extrato na mão). O saldo só entra para quem
+        // pode vê-lo: achar a conta pelo valor diria o saldo escondido.
         (conta) =>
-          !termo ||
-          `${conta.nome} ${conta.agencia ?? ""} ${conta.conta ?? ""}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              conta.nome,
+              ROTULO_BANCO[conta.banco],
+              conta.agencia,
+              conta.conta,
+              ROTULO_TIPO_CONTA[conta.tipo],
+              conta.podeVerSaldo && { valor: conta.saldoAtual },
+            ),
+            busca,
+          ),
       ],
     );
   }, [contas, busca, status, banco, tipo, saldoDe, saldoAte]);
@@ -310,7 +318,7 @@ export function ContasTabela({ contas, aplicacoes, podeEditar }: ContasTabelaPro
         <FiltroBusca
           valor={busca}
           onValorChange={mudarBusca}
-          placeholder="Buscar por nome, agência ou conta"
+          placeholder="Nome, banco, agência ou conta"
         />
       ),
     },

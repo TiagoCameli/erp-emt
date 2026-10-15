@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Briefcase, MoreHorizontal } from "lucide-react";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { toast } from "@/components/canonicos/toast";
 
 import {
@@ -74,7 +75,6 @@ export function FuncoesTabela({
   // outros (ver `_shared/filtros-facetados`). A faixa de salário restringe os
   // outros sem ser restringida.
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     const minimo = salarioDe === "" ? null : Number(salarioDe);
     const maximo = salarioAte === "" ? null : Number(salarioAte);
     return filtrarFacetado(
@@ -99,7 +99,7 @@ export function FuncoesTabela({
           }
           return true;
         },
-        (funcao) => !termo || funcao.nome.toLowerCase().includes(termo),
+        (funcao) => casaBusca(textoPesquisavel(funcao.nome, funcao.cbo, { valor: funcao.salarioBase }), busca),
       ],
     );
   }, [funcoes, busca, status, cbo, salarioDe, salarioAte]);

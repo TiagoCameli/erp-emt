@@ -3,6 +3,7 @@ import {
   selecao,
   type ResultadoFacetado,
 } from "@/modules/_shared/filtros-facetados";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import type { ColaboradorLista } from "@/modules/cadastros/colaboradores/queries";
 
@@ -39,7 +40,6 @@ export function filtrarColaboradores(
   colaboradores: readonly ColaboradorLista[],
   filtros: FiltrosColaboradores,
 ): ResultadoFacetado<ColaboradorLista, FacetaColaborador> {
-  const termo = filtros.busca.trim().toLowerCase();
   const { admissaoDe, admissaoAte } = filtros;
   return filtrarFacetado<ColaboradorLista, FacetaColaborador>(
     colaboradores,
@@ -63,7 +63,24 @@ export function filtrarColaboradores(
         admissaoDe === "" || (c.dataAdmissao !== null && c.dataAdmissao >= admissaoDe),
       (c) =>
         admissaoAte === "" || (c.dataAdmissao !== null && c.dataAdmissao <= admissaoAte),
-      (c) => !termo || c.nome.toLowerCase().includes(termo),
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+      (c) =>
+        casaBusca(
+          textoPesquisavel(
+            c.nome,
+            { documento: c.cpf },
+            c.funcao,
+            c.jornadaNome,
+            c.vinculo,
+            c.obraNome,
+            c.centroCustoNome,
+            c.telefone,
+            { valor: c.salario },
+            { valor: c.valorDiaria },
+            { data: c.dataAdmissao },
+          ),
+          filtros.busca,
+        ),
     ],
   );
 }

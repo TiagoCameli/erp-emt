@@ -20,6 +20,7 @@ import {
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -124,7 +125,6 @@ export function AnomaliasTabela({
   // aqui, facetados: cada um só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: visiveis, opcoes } = React.useMemo(() => {
-    const q = busca.trim().toLowerCase();
     return filtrarFacetado(
       anomalias,
       {
@@ -135,7 +135,25 @@ export function AnomaliasTabela({
         severidade: { selecionados: selecao(severidade), chave: (a) => a.severity },
         detector: { selecionados: selecao(detector), chave: (a) => a.detector },
       },
-      [(a) => !q || `${a.title} ${a.description}`.toLowerCase().includes(q)],
+      [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+        (a) =>
+          casaBusca(
+            textoPesquisavel(
+              a.title,
+              a.description,
+              a.acaoSugerida,
+              a.detector,
+              a.rotuloDetector,
+              SEVERITY_LABEL[a.severity],
+              a.equipamentoRotulo,
+              a.conferencia?.motivo,
+              { data: a.data },
+              a.saidas.map((s) => [s.tanque, s.obra, s.litros, { valor: s.valorTotal }, { data: s.data }]),
+            ),
+            busca,
+          ),
+      ],
     );
   }, [anomalias, situacao, severidade, detector, busca]);
 
@@ -439,7 +457,7 @@ export function AnomaliasTabela({
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por título ou descrição" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Anomalia, equipamento, tanque, obra ou data" />,
           },
           {
             id: "periodo",

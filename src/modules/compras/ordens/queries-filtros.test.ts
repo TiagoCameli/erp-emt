@@ -93,13 +93,13 @@ describe("aplicarFiltrosOrdens com mais de uma opção por filtro", () => {
     expect(chamadas).toContainEqual(["eq", "created_by", A]);
   });
 
-  it("busca é universal: um ilike por palavra na coluna computada", () => {
+  it("busca é universal: um like por palavra na coluna computada", () => {
     const { consulta, chamadas } = consultaGravada();
     aplicarFiltrosOrdens(consulta, { busca: "Ipiranga março R$ 1.500" });
     expect(chamadas).toEqual([
-      ["ilike", "busca", "%ipiranga%"],
-      ["ilike", "busca", "%marco%"],
-      ["ilike", "busca", "%1.500%"],
+      ["like", "busca", "%ipiranga%"],
+      ["like", "busca", "%marco%"],
+      ["like", "busca", "%1.500%"],
     ]);
   });
 });

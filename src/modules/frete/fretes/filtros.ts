@@ -1,5 +1,6 @@
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { filtrarFacetado, selecao, type ResultadoFacetado } from "@/modules/_shared/filtros-facetados";
-import { dataIsoValida, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
+import { dataIsoValida, ROTULO_TIPO_FRETE, TIPOS_FRETE, type TipoFrete } from "@/modules/frete/fretes/schemas";
 import type { FreteLinha } from "@/modules/frete/fretes/tipos";
 
 /**
@@ -32,7 +33,7 @@ export const CHAVES_FILTRO_FRETES = {
 } as const;
 
 export interface FiltrosFretes {
-  /** Nota fiscal (só a NF 1, como a origem). */
+  /** Busca universal: NF, rota, transportadora, placa, material, valor, data... */
   busca: string;
   tipo: TipoFrete | "";
   obraId: string;
@@ -128,13 +129,12 @@ export type FacetaFrete = "tipo" | "obra" | "transportadora" | "placa" | "materi
 /**
  * O filtro da lista, facetado (ver `_shared/filtros-facetados`): devolve as linhas e
  * as opções de cada select restritas ao que existe nas linhas que passam nos outros.
- * NF, período, motorista, "sem chegada" e a lista de ids restringem, sem lista.
+ * Busca, período, motorista, "sem chegada" e a lista de ids restringem, sem lista.
  */
 export function filtrarFretesFacetado(
   fretes: readonly FreteLinha[],
   filtros: FiltrosFretes,
 ): ResultadoFacetado<FreteLinha, FacetaFrete> {
-  const nf = filtros.busca.trim().toLowerCase();
   const motorista = filtros.motorista.trim().toLowerCase();
   const ids = filtros.ids.length > 0 ? new Set(filtros.ids) : null;
   return filtrarFacetado<FreteLinha, FacetaFrete>(
@@ -151,7 +151,31 @@ export function filtrarFretesFacetado(
     [
       (f) => !ids || ids.has(f.id),
       (f) => !filtros.semChegada || !f.dataChegada,
-      (f) => !nf || (f.notaFiscal ?? "").toLowerCase().includes(nf),
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega, e não só a NF.
+      (f) =>
+        casaBusca(
+          textoPesquisavel(
+            f.notaFiscal,
+            f.notaFiscal2,
+            ROTULO_TIPO_FRETE[f.tipo],
+            f.obraNome,
+            f.origemNome,
+            f.destinoNome,
+            f.transportadoraNome,
+            f.motorista,
+            f.placaCarreta,
+            normalizarPlaca(f.placaCarreta),
+            f.insumoNome,
+            f.pesoToneladas,
+            f.kmRodados,
+            f.observacoes,
+            { valor: f.valorTotal },
+            { valor: f.valorMaterial },
+            { data: f.data },
+            { data: f.dataChegada },
+          ),
+          filtros.busca,
+        ),
       (f) => !filtros.de || f.data >= filtros.de,
       (f) => !filtros.ate || f.data <= filtros.ate,
       (f) => !motorista || (f.motorista ?? "").toLowerCase().includes(motorista),

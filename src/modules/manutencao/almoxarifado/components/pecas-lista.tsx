@@ -15,6 +15,7 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { alternarAtivoPeca } from "@/modules/manutencao/almoxarifado/actions";
@@ -72,7 +73,7 @@ export function PecasLista({
   // Facetado: tipo e status só oferecem o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: filtradas, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const nomeEquipamento = new Map(equipamentos.map((e) => [e.id, e.nome]));
     return filtrarFacetado(
       pecas,
       {
@@ -86,13 +87,25 @@ export function PecasLista({
         },
       },
       [
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega, mais os
+        // equipamentos em que a peça vai.
         (peca) =>
-          !termo ||
-          peca.insumoNome.toLowerCase().includes(termo) ||
-          (peca.tipoOleoNome ?? "").toLowerCase().includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              peca.insumoNome,
+              peca.unidade,
+              peca.tipoOleoNome,
+              peca.tipoOleoId ? "oleo" : "peca",
+              peca.observacoes,
+              peca.estoqueMinimo,
+              peca.estoqueMaximo,
+              peca.equipamentoIds.map((id) => nomeEquipamento.get(id)),
+            ),
+            busca,
+          ),
       ],
     );
-  }, [pecas, busca, status, tipo]);
+  }, [pecas, equipamentos, busca, status, tipo]);
 
   function abrir(peca: PecaLinha) {
     setEditando(peca);
@@ -195,7 +208,7 @@ export function PecasLista({
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por insumo ou tipo de óleo" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Peça, tipo de óleo ou equipamento" />
             ),
           },
           {

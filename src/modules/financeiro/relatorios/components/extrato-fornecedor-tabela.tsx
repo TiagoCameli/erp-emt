@@ -21,6 +21,7 @@ import {
   type FiltroConfiguravel,
 } from "@/components/canonicos";
 import { FiltroJanelaMeses } from "@/modules/financeiro/relatorios/components/filtro-janela-meses";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarMesAno } from "@/lib/formatadores";
 import {
   dentroDaFaixaValor,
@@ -192,7 +193,6 @@ export function ExtratoFornecedorTabela({
   // outros (ver `_shared/filtros-facetados`). Busca, mês, valor e vencimento
   // entram livres.
   const { linhas: dados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       lancamentos,
       {
@@ -214,11 +214,21 @@ export function ExtratoFornecedorTabela({
           dentroDaJanelaDeMeses(lancamento.mesCompetencia, mesDe, mesAte) &&
           dentroDaFaixaValor(lancamento.valor, valorDe, valorAte) &&
           dentroDoPeriodo(lancamento.dataVencimento, vencimentoDe, vencimentoAte),
+        // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
         (lancamento) =>
-          termo === "" ||
-          `${lancamento.numero ?? ""} ${lancamento.descricao}`
-            .toLowerCase()
-            .includes(termo),
+          casaBusca(
+            textoPesquisavel(
+              lancamento.numero,
+              lancamento.descricao,
+              lancamento.categoriaNome,
+              formatoStatus(lancamento.status).rotulo,
+              { valor: lancamento.valor },
+              { valor: lancamento.aberto.total },
+              { data: lancamento.dataVencimento },
+              { mes: lancamento.mesCompetencia },
+            ),
+            busca,
+          ),
       ],
     );
   }, [
@@ -246,7 +256,7 @@ export function ExtratoFornecedorTabela({
         <FiltroBusca
           valor={busca}
           onValorChange={mudarBusca}
-          placeholder="Buscar por número ou descrição"
+          placeholder="Número, descrição, valor ou mês"
         />
       ),
     },

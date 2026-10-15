@@ -5316,6 +5316,16 @@ Resultado (6.919 movimentos): 4.572 casados por nome, 1.416 com selo "Confira", 
 - **Bloco 1:** Ordens de compra e Cotações. Saíram `idsFornecedoresPorNome`/`padraoBusca` de Compras (a busca por nome de fornecedor virou parte do texto). Os próximos blocos acrescentam um `fn_busca_texto_<tabela>`, um ramo no `fn_busca_indexar` e nos triggers de cadastro, e a função `busca(<tabela>)`.
 - Migrations `20261014180000_busca_universal_compras`, `20261014183000_busca_universal_indice`, `20261014184500_busca_universal_leitura_definer`; rollback único em `20261014180000_busca_universal_compras.rollback.sql`.
 
+## 2026-10-15 - Busca universal: Financeiro, OS, Insumos, Medição e as telas em memória
+
+Continuação de "2026-10-14 - Busca universal".
+- **Lançamentos e parcelas:** o índice grava três textos. `lancamentos_base` (o lançamento sem as parcelas), `lancamento_parcelas` (a parcela já somada à base, para a leitura ser uma chave só) e `lancamentos` (base mais todas as parcelas). Pagamentos e Recebimentos listam parcelas e buscam no texto da parcela, então "15/03" acha a parcela daquele dia e não as irmãs. A base não leva `lancamentos.data_vencimento` (é o vencimento da 1ª parcela e aparecia em todas). Medido como authenticated: 124 ms nos 7.145 lançamentos e 165 ms nas 9.648 parcelas.
+- **`like` e não `ilike`:** texto e palavras já são minúsculos e sem acento; o `ilike` só gastava (179 → 124 ms).
+- **OS e Insumos** entram no índice gravado. **Medição** monta o texto direto da linha da view `mc_v_lancamentos`, que já tem tudo.
+- **Telas em memória** (Cadastros, RH, Combustível, Estoque, Frete, Manutenção, Administração, Conciliação, filas do Financeiro) usam `casaBusca(textoPesquisavel(...))` com todos os campos da linha. Em Contas bancárias o saldo só entra para quem pode vê-lo.
+- **Ficaram de fora** as buscas que são do Combobox (escolher item em formulário: abastecimento, pagamento de frete, equipamento no campo, lançar campo e ajuste da medição) e a Lixeira (busca por motivo).
+- Palavra sem letra nem dígito é descartada: sozinha casaria quase tudo.
+
 ## 2026-10-14 - Estoque: tanque de material em qualquer unidade
 
 **Pedido do Tiago:** "esses tanques de materiais tem que ser compatíveis com várias unidades de medida, ainda mais para betumes que tem densidade muito parecida à água". O card mostrava "capacidade em litros, saldo em outra unidade" para RR (kg) e Imprima (t), e a trava de capacidade só valia para material medido em litro: o tanque de RR estava com 20.000 kg num cadastro de 100 L.

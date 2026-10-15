@@ -5,7 +5,6 @@ import {
   aplicarFiltrosServicos,
   lerFiltrosServicos,
   soltarFacetaServicos,
-  padraoBuscaOs,
   TAMANHO_MAXIMO_SERVICOS,
   TAMANHO_PADRAO_SERVICOS,
   type ConsultaFiltravelOs,
@@ -70,7 +69,7 @@ function consultaFalsa(): Falsa {
     gte: (coluna, valor) => (chamadas.push(`gte ${coluna} ${valor}`), consulta),
     lte: (coluna, valor) => (chamadas.push(`lte ${coluna} ${valor}`), consulta),
     in: (coluna, valores) => (chamadas.push(`in ${coluna} ${valores.join(",")}`), consulta),
-    or: (filtro) => (chamadas.push(`or ${filtro}`), consulta),
+    like: (coluna, padrao) => (chamadas.push(`like ${coluna} ${padrao}`), consulta),
   };
   return consulta;
 }
@@ -98,7 +97,7 @@ describe("aplicarFiltrosServicos", () => {
       "eq tipo corretiva",
       "gte data_conclusao 2026-01-01",
       "lte data_conclusao 2026-01-31",
-      "or numero.ilike.%OS-2026%,numero_legado.ilike.%OS-2026%,descricao.ilike.%OS-2026%",
+      "like busca %os-2026%",
     ]);
   });
 
@@ -109,9 +108,15 @@ describe("aplicarFiltrosServicos", () => {
   });
 });
 
-describe("padraoBuscaOs", () => {
-  it("tira o que quebra o or() do PostgREST", () => {
-    expect(padraoBuscaOs('bomba, (hidr)"')).toBe("%bomba hidr%");
+describe("busca universal da OS", () => {
+  it("um like por palavra, sem acento e sem curinga", () => {
+    const consulta = consultaFalsa();
+    aplicarFiltrosServicos(consulta, { status: [], busca: 'Bomba hidráulica (100%)' });
+    expect(consulta.chamadas).toEqual([
+      "like busca %bomba%",
+      "like busca %hidraulica%",
+      "like busca %100%",
+    ]);
   });
 });
 
@@ -135,7 +140,7 @@ function emMemoria(linhas: Linha[]): EmMemoria {
     gte: (nome, valor) => com(filtradas.filter((l) => coluna(l, nome) >= valor)),
     lte: (nome, valor) => com(filtradas.filter((l) => coluna(l, nome) <= valor)),
     in: (nome, valores) => com(filtradas.filter((l) => valores.includes(coluna(l, nome)))),
-    or: () => com(filtradas),
+    like: () => com(filtradas),
   });
   return com(linhas);
 }

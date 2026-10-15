@@ -1,3 +1,4 @@
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { dataLocalISO } from "@/lib/formatadores";
 import type { EntradaLinha } from "@/modules/combustivel/entradas/queries";
 import { diaValido, type Periodo } from "@/modules/combustivel/relatorios/periodo";
@@ -62,7 +63,6 @@ export function lerFiltrosEntradas(params: Parametros, periodoPadrao?: Periodo):
  * dia seguinte em UTC.
  */
 export function facetarEntradas(entradas: readonly EntradaLinha[], filtros: FiltrosEntradas) {
-  const termo = filtros.busca.trim().toLowerCase();
   return filtrarFacetado(
     entradas,
     {
@@ -77,11 +77,25 @@ export function facetarEntradas(entradas: readonly EntradaLinha[], filtros: Filt
         if (filtros.ate && dia > filtros.ate) return false;
         return true;
       },
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
       (entrada) =>
-        !termo ||
-        (entrada.fornecedorNome ?? "").toLowerCase().includes(termo) ||
-        (entrada.notaFiscal ?? "").toLowerCase().includes(termo) ||
-        (entrada.observacoes ?? "").toLowerCase().includes(termo),
+        casaBusca(
+          textoPesquisavel(
+            entrada.fornecedorNome,
+            entrada.notaFiscal,
+            entrada.observacoes,
+            entrada.tanqueNome,
+            entrada.insumoNome,
+            entrada.unidade,
+            entrada.quantidade,
+            entrada.litros,
+            entrada.origem,
+            entrada.motivoExclusao,
+            { valor: entrada.valorTotal },
+            { data: dataLocalISO(entrada.dataHora) },
+          ),
+          filtros.busca,
+        ),
     ],
   );
 }

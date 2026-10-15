@@ -80,6 +80,9 @@ class ConsultaFalsa implements ConsultaFiltravel<ConsultaFalsa> {
   not(coluna: string, operador: string, valor: null) {
     return this.registrar("not", coluna, `${operador} ${valor}`);
   }
+  like(coluna: string, padrao: string) {
+    return this.registrar("like", coluna, padrao);
+  }
 }
 
 const FORN_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -88,7 +91,7 @@ const CONTA_A = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const CONTA_B = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 
 function montar(filtros: Parameters<typeof aplicarFiltrosPagas>[1]) {
-  return aplicarFiltrosPagas(new ConsultaFalsa(), filtros, []).chamadas;
+  return aplicarFiltrosPagas(new ConsultaFalsa(), filtros).chamadas;
 }
 
 describe("aplicarFiltrosPagas", () => {
@@ -99,10 +102,10 @@ describe("aplicarFiltrosPagas", () => {
       { metodo: "neq", coluna: "lancamentos.origem", valor: "aplicacao" },
     ];
     expect(
-      aplicarFiltrosPagas(new ConsultaFalsa(), {}, []).semprePresentes,
+      aplicarFiltrosPagas(new ConsultaFalsa(), {}).semprePresentes,
     ).toEqual(esperado);
     expect(
-      aplicarFiltrosPagas(new ConsultaFalsa(), { origem: "aplicacao" }, [])
+      aplicarFiltrosPagas(new ConsultaFalsa(), { origem: "aplicacao" })
         .semprePresentes,
     ).toEqual(esperado);
   });
@@ -167,18 +170,12 @@ describe("aplicarFiltrosPagas", () => {
     ]);
   });
 
-  it("a busca continua indo no or() do lançamento", () => {
-    const chamadas = aplicarFiltrosPagas(
-      new ConsultaFalsa(),
-      { busca: "diesel" },
-      [FORN_A],
-    ).chamadas;
-
-    expect(chamadas).toHaveLength(1);
-    expect(chamadas[0].metodo).toBe("or");
-    expect(chamadas[0].coluna).toBe("lancamentos");
-    expect(chamadas[0].valor).toContain("numero.ilike.%diesel%");
-    expect(chamadas[0].valor).toContain(`fornecedor_id.in.(${FORN_A})`);
+  it("a busca é universal: um like por palavra na coluna computada da parcela", () => {
+    expect(montar({ busca: "Diesel março 1.500" })).toEqual([
+      { metodo: "like", coluna: "busca", valor: "%diesel%" },
+      { metodo: "like", coluna: "busca", valor: "%marco%" },
+      { metodo: "like", coluna: "busca", valor: "%1.500%" },
+    ]);
   });
 });
 
@@ -196,7 +193,6 @@ describe("categoria e forma em multipla escolha", () => {
     const consulta = aplicarFiltrosPagas(
       new ConsultaFalsa(),
       { categoriaIds: [A, B] },
-      [],
     );
     expect(consulta.chamadas).toContainEqual({
       metodo: "in",
@@ -211,7 +207,6 @@ describe("categoria e forma em multipla escolha", () => {
     const consulta = aplicarFiltrosPagas(
       new ConsultaFalsa(),
       { formaPagamentoIds: [A, B] },
-      [],
     );
     expect(consulta.chamadas).toContainEqual({
       metodo: "in",
@@ -232,7 +227,6 @@ describe("categoria e forma em multipla escolha", () => {
     const consulta = aplicarFiltrosPagas(
       new ConsultaFalsa(),
       { categoriaIds: [], formaPagamentoIds: [] },
-      [],
     );
     expect(
       consulta.chamadas.filter((c) => c.coluna.includes("categoria_id")),

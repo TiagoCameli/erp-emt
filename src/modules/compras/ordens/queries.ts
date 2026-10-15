@@ -445,7 +445,7 @@ interface ConsultaFiltravelOrdens<T> {
   not: (coluna: string, operador: string, valor: null) => T;
   is: (coluna: string, valor: null) => T;
   or: (filtro: string) => T;
-  ilike: (coluna: string, padrao: string) => T;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**

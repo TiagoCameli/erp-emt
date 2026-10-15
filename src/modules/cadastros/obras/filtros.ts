@@ -3,6 +3,7 @@ import {
   selecao,
   type ResultadoFacetado,
 } from "@/modules/_shared/filtros-facetados";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import type { ObraLista } from "@/modules/cadastros/obras/queries";
 
@@ -40,7 +41,6 @@ export function filtrarObras(
   obras: readonly ObraLista[],
   filtros: FiltrosObras,
 ): ResultadoFacetado<ObraLista, FacetaObra> {
-  const termo = filtros.busca.trim().toLowerCase();
   return filtrarFacetado<ObraLista, FacetaObra>(
     obras,
     {
@@ -57,7 +57,23 @@ export function filtrarObras(
       // ninguém saber se ela cabe na janela pedida.
       (o) => dentro(o.dataInicio, filtros.inicioDe, filtros.inicioAte),
       (o) => dentro(o.dataFimPrevista, filtros.fimDe, filtros.fimAte),
-      (o) => !termo || o.nome.toLowerCase().includes(termo),
+      // Busca universal (src/lib/busca.ts): tudo o que a linha carrega.
+      (o) =>
+        casaBusca(
+          textoPesquisavel(
+            o.nome,
+            o.numeroContrato,
+            o.clienteNome,
+            o.rodovia,
+            o.lote,
+            o.uf,
+            o.status,
+            o.observacoes,
+            { data: o.dataInicio },
+            { data: o.dataFimPrevista },
+          ),
+          filtros.busca,
+        ),
     ],
   );
 }

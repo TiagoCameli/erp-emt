@@ -322,7 +322,7 @@ export function EntradasTabela({
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
             elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Buscar por fornecedor, NF ou observação" />
+              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Fornecedor, NF, tanque, valor ou data" />
             ),
           },
           {

@@ -12,6 +12,7 @@ import {
   FiltroSelect,
   StatusBadge,
 } from "@/components/canonicos";
+import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { facetaAtivo } from "@/modules/cadastros/_shared/faceta-ativo";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
@@ -91,7 +92,6 @@ export function CartoesTabela({
   // Facetado: cada filtro só oferece o que existe na lista filtrada pelos
   // outros (ver `_shared/filtros-facetados`).
   const { linhas: filtrados, opcoes } = React.useMemo(() => {
-    const termo = busca.trim().toLowerCase();
     return filtrarFacetado(
       cartoes,
       {
@@ -107,14 +107,19 @@ export function CartoesTabela({
         },
       },
       [
-        (cartao) => {
-          if (!termo) return true;
-          // A busca casa também com os dígitos: quem está com a fatura na mão
-          // procura por "4829", não pelo apelido.
-          const alvo =
-            `${cartao.nome} ${cartao.ultimosDigitos} ${cartao.bandeira ?? ""} ${cartao.banco ?? ""}`.toLowerCase();
-          return alvo.includes(termo);
-        },
+        // Busca universal (src/lib/busca.ts). Os dígitos entram: quem está com a
+        // fatura na mão procura por "4829", não pelo apelido.
+        (cartao) =>
+          casaBusca(
+            textoPesquisavel(
+              cartao.nome,
+              cartao.ultimosDigitos,
+              cartao.bandeira,
+              cartao.banco,
+              cartao.contaNome,
+            ),
+            busca,
+          ),
       ],
     );
   }, [cartoes, busca, status, uso]);

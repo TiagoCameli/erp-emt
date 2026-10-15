@@ -297,7 +297,7 @@ export function ObrasTabela({ obras, clientes, podeEditar }: ObrasTabelaProps) {
               <FiltroBusca
                 valor={busca}
                 onValorChange={setBusca}
-                placeholder="Buscar por nome"
+                placeholder="Nome, contrato, cliente, rodovia ou lote"
               />
             ),
           },

@@ -1,3 +1,4 @@
+import { aplicarBusca } from "@/lib/busca";
 import { lerCatalogoDaUrl, UUID } from "@/modules/financeiro/_shared/listas-na-url";
 import {
   STATUS_OS,
@@ -105,12 +106,7 @@ export interface ConsultaFiltravelOs<T> {
   gte: (coluna: string, valor: string) => T;
   lte: (coluna: string, valor: string) => T;
   in: (coluna: string, valores: readonly string[]) => T;
-  or: (filtro: string) => T;
-}
-
-/** Padrão ilike do termo, sem os caracteres que quebram o `or()` do PostgREST. */
-export function padraoBuscaOs(termo: string): string {
-  return `%${termo.replace(/[,()"'\\%*]/g, "").trim()}%`;
+  like: (coluna: string, padrao: string) => T;
 }
 
 /**
@@ -127,14 +123,10 @@ export function aplicarFiltrosServicos<T extends ConsultaFiltravelOs<T>>(
   if (filtros.tipo) consulta = consulta.eq("tipo", filtros.tipo);
   if (filtros.conclusaoDe) consulta = consulta.gte("data_conclusao", filtros.conclusaoDe);
   if (filtros.conclusaoAte) consulta = consulta.lte("data_conclusao", filtros.conclusaoAte);
-  if (filtros.busca) {
-    const padrao = padraoBuscaOs(filtros.busca);
-    if (padrao !== "%%") {
-      consulta = consulta.or(
-        `numero.ilike.${padrao},numero_legado.ilike.${padrao},descricao.ilike.${padrao}`,
-      );
-    }
-  }
+  // Busca universal (src/lib/busca.ts): número, defeito, causa, equipamento
+  // (código, placa, marca), centro, peças, custo e datas, pela coluna computada
+  // `busca(ordens_servico)`.
+  consulta = aplicarBusca(consulta, filtros.busca);
   return consulta;
 }
 

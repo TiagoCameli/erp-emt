@@ -103,7 +103,7 @@ export function filtrosDescritos(filtros: FiltrosFretes, fretes: readonly FreteL
   if (filtros.destinoId) lista.push(["Destino", nome("destinoId", filtros.destinoId, "destinoNome")]);
   if (filtros.de) lista.push(["Data início", diaBR(filtros.de)]);
   if (filtros.ate) lista.push(["Data fim", diaBR(filtros.ate)]);
-  if (filtros.busca) lista.push(["Nota Fiscal", filtros.busca]);
+  if (filtros.busca) lista.push(["Busca", filtros.busca]);
   return lista;
 }
 
