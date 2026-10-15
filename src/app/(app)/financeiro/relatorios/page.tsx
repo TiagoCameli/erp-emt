@@ -17,7 +17,10 @@ import {
   listarFornecedores,
 } from "@/modules/financeiro/lancamentos/queries";
 import {
+  aVencerEm30Dias,
   cartoesDoDre,
+  paraCentavos,
+  paraReais,
   rotuloMes,
 } from "@/modules/financeiro/relatorios/calculo";
 import {
@@ -83,6 +86,7 @@ import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
+import { AgingPrazos } from "@/modules/financeiro/relatorios/components/aging-prazos";
 import { DrePonte } from "@/modules/financeiro/relatorios/components/dre-ponte";
 import { ponteDoResultado } from "@/modules/financeiro/relatorios/ponte-do-resultado";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
@@ -110,6 +114,7 @@ import {
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   normalizarRelatorio,
+  PERGUNTA_DO_RELATORIO,
   type RelatorioId,
 } from "@/modules/financeiro/relatorios/relatorios";
 import { SeletorFornecedor } from "@/modules/financeiro/relatorios/components/seletor-fornecedor";
@@ -132,6 +137,7 @@ import {
   listarCentrosCustoParaFiltro,
   listarFornecedoresComLancamentos,
   mesCorrente,
+  mesFechado,
   mesesDeCompetencia,
   posicaoBancaria,
   primeirosMesesDosCentros,
@@ -155,13 +161,17 @@ function primeiro(valor: string | string[] | undefined): string | undefined {
 
 /** Faixa de cabeçalho de cada relatório: título e, opcionalmente, controles. */
 function SecaoRelatorio({
+  relatorio,
   titulo,
   descricao,
   exportar,
   controles,
   children,
 }: {
+  /** Qual relatório: dá a pergunta que abre a seção. */
+  relatorio: RelatorioId;
   titulo: string;
+  /** Como a conta é feita. Fica recolhido sob a pergunta. */
   descricao: React.ReactNode;
   /**
    * Qual relatório esta seção mostra. Presente, desenha "Exportar Excel" ao
@@ -183,7 +193,18 @@ function SecaoRelatorio({
           <h2 className="text-secao font-semibold text-foreground">
             {titulo}
           </h2>
-          <p className="text-detalhe text-muted-foreground">{descricao}</p>
+          <p className="text-corpo text-foreground">
+            {PERGUNTA_DO_RELATORIO[relatorio]}
+          </p>
+          {/* A regra da conta continua na tela (regime, janela, o que entra e
+              o que fica fora), mas recolhida: quem abre o relatório quer a
+              resposta primeiro, e a explicação quando duvidar do número. */}
+          <details className="group mt-1 max-w-4xl text-detalhe text-muted-foreground">
+            <summary className="foco-anel w-fit cursor-pointer rounded-sm select-none hover:text-foreground">
+              Como a conta é feita
+            </summary>
+            <p className="pt-1">{descricao}</p>
+          </details>
         </div>
         {exportar || controles ? (
           <div className="flex shrink-0 items-center gap-2">
@@ -565,19 +586,56 @@ async function ConteudoAging({
   const dados = await aging();
   const semDados =
     dados.totalAPagar === 0 && dados.totalAReceber === 0;
+  // Centavos, para "vencido + próximos 30 dias" fechar com a tabela.
+  const pagar30 = paraReais(
+    paraCentavos(dados.vencidoAPagar) + paraCentavos(aVencerEm30Dias(dados.prazosAPagar)),
+  );
+  const receber30 = paraReais(
+    paraCentavos(dados.vencidoAReceber) + paraCentavos(aVencerEm30Dias(dados.prazosAReceber)),
+  );
+  const longoPrazoAPagar =
+    dados.prazosAPagar.find((p) => p.prazo === "acima_60")?.valor ?? 0;
   return (
     <>
       <GradeKpis id="financeiro.relatorios.aging" titulo="Aging">
+        {/* O cartão que responde a pergunta do dia vem primeiro: o que sai do
+            caixa até o fim do mês que vem, contando o que já venceu. */}
         <KPICard
+          idCard="pagar-30-dias"
+          titulo="Pagar nos próximos 30 dias"
+          valor={<MoneyText valor={pagar30} />}
+          detalhe={
+            dados.vencidoAPagar > 0 ? (
+              <>
+                Inclui <MoneyText valor={dados.vencidoAPagar} /> já vencido
+              </>
+            ) : (
+              "Nada vencido"
+            )
+          }
+        />
+        <KPICard
+          idCard="receber-30-dias"
+          titulo="Receber nos próximos 30 dias"
+          valor={<MoneyText valor={receber30} />}
+          detalhe={
+            dados.totalAReceber === 0
+              ? "Nenhuma parcela a receber lançada: medição faturada entra aqui quando vira lançamento"
+              : `Inclui ${formatarBRL(dados.vencidoAReceber)} já vencido`
+          }
+        />
+        <KPICard
+          idCard="a-pagar"
           titulo="A pagar em aberto"
           valor={<MoneyText valor={dados.totalAPagar} />}
           detalhe={
             <>
-              Vencido <MoneyText valor={dados.vencidoAPagar} />
+              <MoneyText valor={longoPrazoAPagar} /> vencem depois de 60 dias
             </>
           }
         />
         <KPICard
+          idCard="a-receber"
           titulo="A receber em aberto"
           valor={<MoneyText valor={dados.totalAReceber} />}
           detalhe={
@@ -587,6 +645,20 @@ async function ConteudoAging({
           }
         />
       </GradeKpis>
+      {!semDados ? (
+        <GradeKpis id="financeiro.relatorios.aging.agenda" titulo="Agenda" vao="amplo">
+          <ItemGrade titulo="Agenda do que está em aberto" idCard="agenda" larguraPadrao={12}>
+            <div className="flex flex-col rounded-lg border border-border bg-card p-4">
+              <AgingPrazos
+                vencidoAPagar={dados.vencidoAPagar}
+                vencidoAReceber={dados.vencidoAReceber}
+                prazosAPagar={dados.prazosAPagar}
+                prazosAReceber={dados.prazosAReceber}
+              />
+            </div>
+          </ItemGrade>
+        </GradeKpis>
+      ) : null}
       {semDados ? (
         <EmptyState
           icone={BarChart3}
@@ -1389,6 +1461,7 @@ async function ConteudoExtratoFornecedor({
 
   return (
     <SecaoRelatorio
+          relatorio="extrato-fornecedor"
       titulo="Extrato por fornecedor"
       descricao="Lançamentos a pagar dos fornecedores escolhidos, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra. Os cartões somam o que está em aberto nas parcelas e acompanham os filtros da tabela."
       exportar="extrato-fornecedor"
@@ -1470,14 +1543,19 @@ export default async function RelatoriosPage({
   // recorte em vez de jogá-lo fora.
   const periodoInvestimentos = lerPeriodoInvestimentos(params);
 
-  const periodoDre = lerPeriodoDaUrl(params, mesCorrente());
-  const filtrosCustoGrupo = lerFiltrosCustoGrupo(params, mesCorrente());
+  // DRE, custo por grupo e custo por centro abrem no ÚLTIMO MÊS FECHADO, não
+  // no mês corrente: no dia 15 o mês corrente tem metade das notas e nenhuma
+  // medição, e o primeiro número da tela parecia uma queda que não houve. Os
+  // três usam o mesmo padrão para continuarem fechando entre si, e o Excel
+  // (actions.ts) lê o mesmo `mesFechado`.
+  const periodoDre = lerPeriodoDaUrl(params, mesFechado());
+  const filtrosCustoGrupo = lerFiltrosCustoGrupo(params, mesFechado());
 
   // O relatório de centro de custo tem contrato de URL próprio (4 modos de
   // período + filtros de análise), lido pelo mesmo padrão do de lançamentos.
   const { filtros: filtrosCustoCc, erroDoModo } = lerFiltrosCustoCc(
     params,
-    mesCorrente(),
+    mesFechado(),
   );
 
   // As opções dos seletores só são lidas na aba que as usa: as outras cinco não
@@ -1578,6 +1656,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "fluxo-caixa" ? (
         <SecaoRelatorio
+          relatorio="fluxo-caixa"
           exportar={relatorio}
           titulo="Fluxo de caixa"
           descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. Empréstimos tomados e amortizações entram em série própria, separados do operacional. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O saldo projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
@@ -1609,6 +1688,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "dre" ? (
         <SecaoRelatorio
+          relatorio="dre"
           exportar={relatorio}
           titulo="DRE gerencial"
           descricao="Regime de COMPETÊNCIA: receitas e despesas por categoria no MÊS DE REFERÊNCIA do lançamento, com o resultado. O período aceita um mês, uma janela (o trimestre, o ano) ou tudo."
@@ -1625,6 +1705,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "custo-grupo" && opcoesCustoGrupo ? (
         <SecaoRelatorio
+          relatorio="custo-grupo"
           exportar={relatorio}
           titulo="Custo por grupo de insumo"
           descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo."
@@ -1656,6 +1737,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "aging" ? (
         <SecaoRelatorio
+          relatorio="aging"
           exportar={relatorio}
           titulo="Aging de vencimentos"
           descricao="Regime de CAIXA: parcelas em aberto por faixa de vencimento, a pagar e a receber."
@@ -1666,6 +1748,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "posicao-bancaria" ? (
         <SecaoRelatorio
+          relatorio="posicao-bancaria"
           exportar={relatorio}
           titulo="Posição bancária"
           descricao="Saldo por conta: saldo inicial mais o efeito das parcelas pagas."
@@ -1676,6 +1759,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "rateio-indireto" ? (
         <SecaoRelatorio
+          relatorio="rateio-indireto"
           titulo="Rateio do custo indireto"
           descricao="O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado distribuído nas obras pelo custo direto de cada uma no mês. Quem fecha o mês ajusta os percentuais e confirma. Os lançamentos não mudam: o rateio aparece nos relatórios de custo."
         >
@@ -1688,6 +1772,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "socios-ligadas" ? (
         <SecaoRelatorio
+          relatorio="socios-ligadas"
           titulo="Sócios e ligadas"
           descricao="O que foi para os sócios (James e Tiago) e para as empresas ligadas (Amazônia, Juruá FM). Distribuição a sócio e mútuo ficam fora do resultado e do custo das obras; aqui está quanto saiu, quanto voltou e o saldo."
         >
@@ -1697,6 +1782,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "aquisicoes" ? (
         <SecaoRelatorio
+          relatorio="aquisicoes"
           titulo="Equipamentos e consórcios"
           descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada."
         >
@@ -1706,6 +1792,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "custos-indiretos" ? (
         <SecaoRelatorio
+          relatorio="custos-indiretos"
           titulo="Custos indiretos"
           descricao={
             <>
@@ -1725,6 +1812,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "investimentos" ? (
         <SecaoRelatorio
+          relatorio="investimentos"
           exportar={relatorio}
           titulo="Investimentos"
           descricao="Dinheiro aplicado (CDB, fundo) na subconta de investimentos de cada conta. Aplicar não é despesa: o dinheiro só muda de bolso e continua da empresa, por isso fica fora do custo, do DRE e do fluxo de caixa."
@@ -1736,6 +1824,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "custo-cc" && opcoesCustoCc ? (
         <SecaoRelatorio
+          relatorio="custo-cc"
           exportar={relatorio}
           titulo="Custo por centro de custo"
           descricao="Regime de COMPETÊNCIA: custo por centro de custo pelo MÊS DE REFERÊNCIA do lançamento (é o gasto da obra no mês, não o que saiu do caixa). Clique num centro para ver os lançamentos dele, com o mesmo filtro."
@@ -1763,6 +1852,7 @@ export default async function RelatoriosPage({
 
       {relatorio === "custo-receita" && centrosParaCustoReceita ? (
         <SecaoRelatorio
+          relatorio="custo-receita"
           exportar={relatorio}
           titulo="Custo x receita por centro de custo"
           descricao="Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Os centros do custo e os da receita são escolhidos separadamente: é o custo de um conjunto contra a receita de outro. Conta só categoria de natureza operacional, e a receita é a líquida (a retenção aparece ao lado)."

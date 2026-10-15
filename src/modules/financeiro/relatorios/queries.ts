@@ -32,6 +32,7 @@ import {
 import type { RecorteCustoGrupo } from "@/modules/financeiro/relatorios/drill";
 import {
   agregarAging,
+  agregarPrazoAVencer,
   agruparDrePorNatureza,
   paraCentavos,
   paraReais,
@@ -40,6 +41,8 @@ import {
   type AgingFaixa,
   type BlocoDre,
   type LinhaFaixaAging,
+  type LinhaPrazoAVencer,
+  type PrazoFaixa,
 } from "@/modules/financeiro/relatorios/calculo";
 import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
@@ -299,6 +302,9 @@ export interface Aging {
   /** Vencido = tudo fora de "a_vencer". */
   vencidoAPagar: number;
   vencidoAReceber: number;
+  /** O "a vencer" de cada lado, quebrado pelo prazo. */
+  prazosAPagar: PrazoFaixa[];
+  prazosAReceber: PrazoFaixa[];
 }
 
 /**
@@ -324,16 +330,23 @@ export async function aging(): Promise<Aging> {
 
   const aPagar: LinhaFaixaAging[] = [];
   const aReceber: LinhaFaixaAging[] = [];
+  const prazoAPagar: LinhaPrazoAVencer[] = [];
+  const prazoAReceber: LinhaPrazoAVencer[] = [];
 
   for (const linha of data ?? []) {
     const item: LinhaFaixaAging = {
       faixa: linha.faixa_aging,
       valor: linha.total,
     };
-    if (linha.tipo === "a_receber") {
-      aReceber.push(item);
-    } else {
-      aPagar.push(item);
+    const receber = linha.tipo === "a_receber";
+    (receber ? aReceber : aPagar).push(item);
+    // O banco já manda o prazo do que está a vencer; vencido fica de fora,
+    // porque tem as faixas próprias acima.
+    if (linha.faixa_aging === "a_vencer") {
+      (receber ? prazoAReceber : prazoAPagar).push({
+        prazo: linha.faixa_prazo,
+        valor: linha.total,
+      });
     }
   }
 
@@ -347,6 +360,8 @@ export async function aging(): Promise<Aging> {
     totalAReceber: totalAging(listaAReceber),
     vencidoAPagar: vencidoAging(listaAPagar),
     vencidoAReceber: vencidoAging(listaAReceber),
+    prazosAPagar: agregarPrazoAVencer(prazoAPagar),
+    prazosAReceber: agregarPrazoAVencer(prazoAReceber),
   };
 }
 
@@ -1077,6 +1092,17 @@ export async function extratoPorFornecedor({
 /** Mês corrente "YYYY-MM" no fuso de Rio Branco, default do seletor do DRE. */
 export function mesCorrente(): string {
   return dataHojeISO().slice(0, 7);
+}
+
+/**
+ * O último mês FECHADO ("YYYY-MM"), padrão do DRE, do custo por grupo e do
+ * custo por centro, na tela e no Excel. No meio do mês o corrente tem metade
+ * das notas e nenhuma medição, e abrir nele mostrava uma queda que não houve.
+ */
+export function mesFechado(): string {
+  const [ano, mes] = mesCorrente().split("-").map(Number);
+  const anterior = new Date(Date.UTC(ano, mes - 2, 1));
+  return anterior.toISOString().slice(0, 7);
 }
 
 // =====================================================================
