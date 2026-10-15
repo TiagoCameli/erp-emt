@@ -245,7 +245,11 @@ export function SaidasTabela({
         acoesLinha={
           temAcoes
             ? (saida) =>
-                saida.excluida ? (
+                saida.vinculo ? (
+                  <DropdownMenuItem disabled>
+                    {saida.vinculo === "frete" ? "Veio de um frete: altere no Frete" : "É de uma transferência: altere em Transferências"}
+                  </DropdownMenuItem>
+                ) : saida.excluida ? (
                   podeExcluir ? (
                     <DropdownMenuItem onSelect={() => void restaurar(saida)}>
                       <RotateCcw />

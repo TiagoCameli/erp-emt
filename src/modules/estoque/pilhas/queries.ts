@@ -17,6 +17,9 @@ export interface PilhaLinha {
   /** Escolhido no cadastro. Nulo só nas pilhas criadas antes de 15/10 22h, até serem editadas. */
   insumoId: string | null;
   insumoNome: string | null;
+  /** A localidade do Frete. Nula só nas pilhas criadas antes de 15/10 23h, até serem editadas. */
+  localidadeId: string | null;
+  localidadeNome: string | null;
   unidade: string | null;
 }
 
@@ -26,7 +29,7 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("estoque_pilhas")
-      .select("id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla))")
+      .select("id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla)), localidade_id, localidades(nome)")
       .order("nome")
       .order("id")
       .range(de, ate),
@@ -43,6 +46,8 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
     totalEntrada: Number(linha.total_entrada),
     insumoId: linha.insumo_id,
     insumoNome: linha.insumos?.nome ?? null,
+    localidadeId: linha.localidade_id,
+    localidadeNome: linha.localidades?.nome?.trim() ?? null,
     unidade: linha.insumos?.unidades_medida?.sigla ?? null,
   }));
 }

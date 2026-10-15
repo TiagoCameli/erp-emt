@@ -24,7 +24,7 @@ import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 
 const ID_FORM = "form-pilha-estoque";
 
-const PADRAO: PilhaInput = { nome: "", insumoId: "", observacoes: "" };
+const PADRAO: PilhaInput = { nome: "", localidadeId: "", insumoId: "", observacoes: "" };
 
 export interface PilhaFormDrawerProps {
   aberto: boolean;
@@ -33,13 +33,15 @@ export interface PilhaFormDrawerProps {
   pilha?: PilhaLinha | null;
   /** Insumos ativos, com a unidade do cadastro. */
   insumos: InsumoOpcao[];
+  /** Localidades ativas (as mesmas de origem e destino do Frete). */
+  localidades: { id: string; nome: string }[];
 }
 
 /**
  * Criação e edição da pilha: nome, insumo e observações. A unidade é a do cadastro do
  * insumo, por isso o insumo aparece com ela. Depois da primeira entrada o insumo não troca.
  */
-export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: PilhaFormDrawerProps) {
+export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos, localidades }: PilhaFormDrawerProps) {
   const editando = Boolean(pilha);
   // Saída só existe depois de entrada: entrou alguma coisa = tem movimento.
   const insumoTravado = (pilha?.totalEntrada ?? 0) > 0;
@@ -49,18 +51,29 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: Pilh
     defaultValues: PADRAO,
   });
   const salvando = form.formState.isSubmitting;
-  const insumoId = useWatch({ control: form.control, name: "insumoId" });
+  const [insumoId, localidadeId] = useWatch({ control: form.control, name: ["insumoId", "localidadeId"] });
 
   React.useEffect(() => {
     if (!aberto) return;
     form.reset(
-      pilha ? { nome: pilha.nome, insumoId: pilha.insumoId ?? "", observacoes: pilha.observacoes ?? "" } : PADRAO,
+      pilha
+        ? {
+            nome: pilha.nome,
+            localidadeId: pilha.localidadeId ?? "",
+            insumoId: pilha.insumoId ?? "",
+            observacoes: pilha.observacoes ?? "",
+          }
+        : PADRAO,
     );
   }, [aberto, pilha, form]);
 
   const opcoesInsumos = React.useMemo(
     () => insumos.map((i) => ({ valor: i.id, rotulo: i.unidade ? `${i.nome} · ${i.unidade}` : i.nome })),
     [insumos],
+  );
+  const opcoesLocalidades = React.useMemo(
+    () => localidades.map((l) => ({ valor: l.id, rotulo: l.nome })),
+    [localidades],
   );
   const insumo = insumos.find((i) => i.id === insumoId) ?? null;
   const unidade = insumo ? insumo.unidade : insumoId && insumoId === pilha?.insumoId ? pilha.unidade : null;
@@ -112,6 +125,30 @@ export function PilhaFormDrawer({ aberto, onAbertoChange, pilha, insumos }: Pilh
             placeholder="Brita 1 — Canteiro km 50"
             disabled={salvando}
             {...form.register("nome")}
+          />
+        </CampoFormulario>
+
+        <CampoFormulario
+          id="pilha-local"
+          rotulo="Local"
+          obrigatorio
+          ajuda={
+            insumoTravado
+              ? "A pilha já teve entrada: o local não troca mais"
+              : "O frete que chega neste local entra nesta pilha"
+          }
+          erro={erros.localidadeId?.message}
+        >
+          <Combobox
+            id="pilha-local"
+            valor={localidadeId ?? ""}
+            rotuloDoValor={pilha?.localidadeNome ?? undefined}
+            onValorChange={(valor) => form.setValue("localidadeId", valor, { shouldDirty: true, shouldValidate: true })}
+            opcoes={opcoesLocalidades}
+            placeholder="Selecione o local"
+            buscaPlaceholder="Buscar local"
+            vazioTexto="Nenhum local ativo. Cadastre em Cadastros › Localidades"
+            disabled={salvando || insumoTravado}
           />
         </CampoFormulario>
 

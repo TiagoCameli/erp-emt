@@ -5,6 +5,7 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { PilhasAcoesCabecalho } from "@/modules/estoque/pilhas/components/pilhas-acoes-cabecalho";
 import { PilhasTabela } from "@/modules/estoque/pilhas/components/pilhas-tabela";
 import { listarPilhas } from "@/modules/estoque/pilhas/queries";
+import { listarLocalidadesAtivas } from "@/modules/frete/fretes/queries";
 import { listarInsumosAtivos, type InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 
 const RECURSO = "estoque.pilhas" as const;
@@ -23,9 +24,11 @@ export default async function PaginaPilhasEstoque() {
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
 
   // Insumos (3 mil+) só para quem preenche o formulário.
-  const [pilhas, insumos] = await Promise.all([
+  const preenche = podeCriar || podeEditar;
+  const [pilhas, insumos, localidades] = await Promise.all([
     listarPilhas(),
-    podeCriar || podeEditar ? listarInsumosAtivos() : Promise.resolve<InsumoOpcao[]>([]),
+    preenche ? listarInsumosAtivos() : Promise.resolve<InsumoOpcao[]>([]),
+    preenche ? listarLocalidadesAtivas() : Promise.resolve([]),
   ]);
 
   return (
@@ -33,12 +36,13 @@ export default async function PaginaPilhasEstoque() {
       <PageHeader
         modulo="Estoque"
         titulo="Pilhas"
-        descricao="Pilhas de agregado. A entrada e a saída são feitas nas abas Entradas e Saídas; a pilha que zera fica inativa"
-        acoes={<PilhasAcoesCabecalho podeCriar={podeCriar} insumos={insumos} />}
+        descricao="Pilhas de agregado. O frete que chega no local entra sozinho na pilha; a pilha que zera fica inativa"
+        acoes={<PilhasAcoesCabecalho podeCriar={podeCriar} insumos={insumos} localidades={localidades} />}
       />
       <PilhasTabela
         pilhas={pilhas}
         insumos={insumos}
+        localidades={localidades}
         podeEditar={podeEditar}
         podeExcluir={temPermissao(usuario, RECURSO, "excluir")}
       />
