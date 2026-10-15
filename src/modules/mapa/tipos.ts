@@ -235,6 +235,13 @@ export interface TanqueMapa {
   localidadeId: string | null;
   /** Tanque de comboio (meloza): anda com a máquina, não tem local fixo. */
   equipamentoId: string | null;
+  /** Ponto próprio no mapa (null = ainda sem lugar). */
+  pos: Posicao | null;
+  capacidade: number | null;
+  nivel: number | null;
+  unidade: string;
+  /** O que está dentro (combustível ou material). */
+  insumo: string;
 }
 
 /** Depósito do almoxarifado: fica no mapa pelo local onde está. */
@@ -242,7 +249,19 @@ export interface DepositoMapa {
   id: string;
   nome: string;
   localidadeId: string | null;
+  pos: Posicao | null;
 }
+
+/** Pilha de agregado do Estoque (areia, brita...). */
+export interface PilhaMapa {
+  id: string;
+  nome: string;
+  saldo: number;
+  pos: Posicao | null;
+}
+
+/** Tanque, pilha ou depósito: o que o mapa põe no lugar pela mesma RPC. */
+export type AlvoObjeto = "tanque" | "pilha" | "deposito";
 
 /** Local do cadastro que ainda não tem ponto no mapa. */
 export interface LocalSemPosicao {
@@ -302,6 +321,7 @@ export interface EstadoMapa {
   obras: ObraMapa[];
   tanques: TanqueMapa[];
   depositos: DepositoMapa[];
+  pilhas: PilhaMapa[];
   localidadesSemPosicao: LocalSemPosicao[];
 }
 

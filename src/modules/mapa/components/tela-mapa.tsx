@@ -42,6 +42,7 @@ import {
   marcarEstado,
   moverEquipamentos,
   moverPessoas,
+  posicionarObjeto,
   posicionarObra,
   recarregarEstado,
   tirarObra,
@@ -67,6 +68,7 @@ import {
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import { FichaLocal } from "@/modules/mapa/components/ficha-local";
+import { FichaObjeto } from "@/modules/mapa/components/ficha-objeto";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import { rotaPelaEstrada } from "@/modules/mapa/components/rota-estrada";
 import {
@@ -96,6 +98,7 @@ import {
   type TrechoMedido,
 } from "@/modules/mapa/geo";
 import { extrasPorLocal } from "@/modules/mapa/dados";
+import { objetosDoEstoque } from "@/modules/mapa/objetos";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
@@ -223,9 +226,12 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const [localFicha, setLocalFicha] = React.useState<string | null>(null);
   // Ficha da obra (tocar no nome dela no mapa).
   const [obraFicha, setObraFicha] = React.useState<string | null>(null);
+  // Ficha do tanque, pilha ou depósito (nome no mapa ou lista "sem lugar").
+  const [objetoFicha, setObjetoFicha] = React.useState<string | null>(null);
   const abrirFicha = React.useCallback((alvo: Alvo) => {
     setLocalFicha(null);
     setObraFicha(null);
+    setObjetoFicha(null);
     setFicha(alvo);
   }, []);
   // Obra sendo desenhada (pavimentação = linha, edificação = polígono) e, ao concluir, a
@@ -262,12 +268,17 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => true,
   );
   const painelAberto =
-    listaAberta || ficha !== null || localFicha !== null || obraFicha !== null;
+    listaAberta ||
+    ficha !== null ||
+    localFicha !== null ||
+    obraFicha !== null ||
+    objetoFicha !== null;
   const alternarPainel = () => {
     if (painelAberto) {
       setFicha(null);
       setLocalFicha(null);
       setObraFicha(null);
+      setObjetoFicha(null);
     }
     gravarPainel(!painelAberto);
   };
@@ -419,6 +430,30 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => estado.obras.flatMap((o) => (o.pos ? [{ ...o, pos: o.pos }] : [])),
     [estado.obras],
   );
+  const objetos = React.useMemo(
+    () => objetosDoEstoque(estado.tanques, estado.pilhas, estado.depositos),
+    [estado.tanques, estado.pilhas, estado.depositos],
+  );
+  const objetosNoMapa = React.useMemo(
+    () => objetos.flatMap((o) => (o.pos ? [{ ...o, pos: o.pos }] : [])),
+    [objetos],
+  );
+  const objetosSemLugar = React.useMemo(
+    () =>
+      objetos
+        .filter((o) => !o.pos)
+        .map((o) => ({
+          id: o.id,
+          nome: o.nome,
+          tipo:
+            o.alvo === "tanque"
+              ? "tanque"
+              : o.alvo === "pilha"
+                ? "pilha"
+                : "depósito",
+        })),
+    [objetos],
+  );
   const rotulosObra = React.useMemo(
     () =>
       estado.obras.flatMap((o) => {
@@ -501,6 +536,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       extrasDoLocal,
       obras: obrasNoMapa,
       rotulosObra,
+      objetos: objetosNoMapa,
       anelGiro,
       desenho: desenhoFinal
         ? { forma: desenho?.forma ?? "trecho", pontos: desenhoFinal.pontos }
@@ -527,6 +563,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     extrasDoLocal,
     obrasNoMapa,
     rotulosObra,
+    objetosNoMapa,
     anelGiro,
     desenho,
     desenhoFinal,
@@ -721,14 +758,21 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     const r =
       colocando.tipo === "obra"
         ? await posicionarObra({ obraId: colocando.obra.id, lng, lat })
-        : await colocarLocal({
-            localidadeId: colocando.localidadeId,
-            nome: colocando.nome,
-            tipos: colocando.tipos,
-            vincular: colocando.vincular,
-            lng,
-            lat,
-          });
+        : colocando.tipo === "objeto"
+          ? await posicionarObjeto({
+              alvo: colocando.alvo,
+              id: colocando.id,
+              lng,
+              lat,
+            })
+          : await colocarLocal({
+              localidadeId: colocando.localidadeId,
+              nome: colocando.nome,
+              tipos: colocando.tipos,
+              vincular: colocando.vincular,
+              lng,
+              lat,
+            });
     const ok = aplicar(
       r,
       colocando.tipo === "obra"
@@ -755,6 +799,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const clicarLocal = React.useCallback((id: string) => {
     setFicha(null);
     setObraFicha(null);
+    setObjetoFicha(null);
     setRaioPrevio(null);
     setLocalFicha(id);
   }, []);
@@ -762,7 +807,15 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const clicarObra = React.useCallback((id: string) => {
     setFicha(null);
     setLocalFicha(null);
+    setObjetoFicha(null);
     setObraFicha(id);
+  }, []);
+
+  const clicarObjeto = React.useCallback((id: string) => {
+    setFicha(null);
+    setLocalFicha(null);
+    setObraFicha(null);
+    setObjetoFicha(id);
   }, []);
 
   const comecarDesenho = React.useCallback(
@@ -834,6 +887,10 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     },
     [desenho, desenhoFinal, aplicar, cancelarDesenho],
   );
+
+  const objetoDaFicha = objetoFicha
+    ? (objetos.find((o) => o.id === objetoFicha) ?? null)
+    : null;
 
   const obraDaFicha = obraFicha
     ? (estado.obras.find((o) => o.id === obraFicha) ?? null)
@@ -1266,6 +1323,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             onClicarMapa={clicarMapa}
             onClicarLocal={clicarLocal}
             onClicarObra={clicarObra}
+            onClicarObjeto={clicarObjeto}
             onGirarPrevia={girarPeloAnel}
             onGirarFim={soltarAnel}
             onMotor={aoMotor}
@@ -1472,6 +1530,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
+            objetosSemLugar={objetosSemLugar}
+            onEscolherObjeto={clicarObjeto}
           >
             {equipamentoFicha ? (
               <FichaEquipamento
@@ -1582,6 +1642,21 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
                   })
                 }
               />
+            ) : objetoDaFicha ? (
+              <FichaObjeto
+                key={objetoDaFicha.id}
+                objeto={objetoDaFicha}
+                podeEditar={permissoes.editar}
+                onFechar={() => setObjetoFicha(null)}
+                onMover={() =>
+                  escolherNoMapa({
+                    tipo: "objeto",
+                    alvo: objetoDaFicha.alvo,
+                    id: objetoDaFicha.id,
+                    rotulo: objetoDaFicha.nome,
+                  })
+                }
+              />
             ) : obraDaFicha ? (
               <FichaObra
                 key={obraDaFicha.id}
@@ -1663,9 +1738,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
           descricao={
             colocando.tipo === "obra"
               ? "A obra fica marcada neste ponto do mapa."
-              : colocando.localidadeId
-                ? "O local fica neste ponto do mapa."
-                : `Cria o local ${colocando.nome ?? ""} (${(colocando.tipos ?? ["outro"]).map((t) => rotuloTipoLocalidade(t).toLowerCase()).join(", ")}) neste ponto${colocando.vincular ? ` e liga ${colocando.vincular.alvo === "tanque" ? "o tanque" : "o depósito"} a ele` : ""}.`
+              : colocando.tipo === "objeto"
+                ? "Fica neste ponto do mapa. O cadastro continua no Estoque."
+                : colocando.localidadeId
+                  ? "O local fica neste ponto do mapa."
+                  : `Cria o local ${colocando.nome ?? ""} (${(colocando.tipos ?? ["outro"]).map((t) => rotuloTipoLocalidade(t).toLowerCase()).join(", ")}) neste ponto${colocando.vincular ? ` e liga ${colocando.vincular.alvo === "tanque" ? "o tanque" : "o depósito"} a ele` : ""}.`
           }
           textoConfirmar="Confirmar"
           conteudo={

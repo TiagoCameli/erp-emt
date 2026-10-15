@@ -20,6 +20,7 @@ import {
   marcarEstadoSchema,
   moverEquipamentosSchema,
   moverPessoasSchema,
+  posicionarObjetoSchema,
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
@@ -646,6 +647,38 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Põe ou move um tanque, pilha ou depósito do Estoque no ponto tocado. */
+export async function posicionarObjeto(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = posicionarObjetoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_objeto_posicionar", {
+      p_alvo: v.alvo,
+      p_id: v.id,
+      p_lng: v.lng,
+      p_lat: v.lat,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.objetoPosicionar",
+        error,
+        mensagemDaRpc(error, "Não foi possível pôr no mapa"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.objetoPosicionar",
+      erro,
+      `Não foi possível pôr no mapa: ${textoDoErro(erro)}`,
     );
   }
 }

@@ -17,6 +17,7 @@ import {
   criarIluminacao,
   ID_GIRO,
   ID_LOCAIS,
+  ID_OBJETOS,
   ID_OBRAS,
   ID_PESSOAS,
   montarCamadas,
@@ -107,6 +108,8 @@ export interface MapaEmtProps {
   onClicarLocal: (id: string) => void;
   /** Toque no nome de uma obra (abre a ficha da obra). */
   onClicarObra: (id: string) => void;
+  /** Toque no nome de um tanque, pilha ou depósito (abre a ficha dele). */
+  onClicarObjeto: (id: string) => void;
   /** Arrastando o anel de giro: o rumo apontado (prévia). */
   onGirarPrevia: (id: string, rumo: number) => void;
   /** Soltou o anel de giro: grava o rumo. */
@@ -861,12 +864,14 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         return;
       }
       const rotulo = motor
-        .pegar(x, y, [ID_OBRAS, ID_LOCAIS])
+        .pegar(x, y, [ID_OBJETOS, ID_OBRAS, ID_LOCAIS])
         .find((i) => i.object) as
         | { object?: { id?: unknown }; layer?: { id: string } | null }
         | undefined;
       if (rotulo && typeof rotulo.object?.id === "string") {
         if (rotulo.layer?.id === ID_OBRAS) p.onClicarObra(rotulo.object.id);
+        else if (rotulo.layer?.id === ID_OBJETOS)
+          p.onClicarObjeto(rotulo.object.id);
         else p.onClicarLocal(rotulo.object.id);
         return;
       }

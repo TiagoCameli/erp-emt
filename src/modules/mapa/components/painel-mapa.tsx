@@ -51,6 +51,9 @@ export interface PainelMapaProps {
   onEscolherEquipamento: (equipamento: EquipamentoMapa) => void;
   onEscolherPessoa: (pessoa: PessoaMapa) => void;
   onAdicionarAlugada: () => void;
+  /** Tanques, pilhas e depósitos do Estoque que ainda não têm lugar no mapa. */
+  objetosSemLugar: { id: string; nome: string; tipo: string }[];
+  onEscolherObjeto: (id: string) => void;
   children?: React.ReactNode;
 }
 
@@ -112,6 +115,8 @@ export function PainelMapa({
   onEscolherEquipamento,
   onEscolherPessoa,
   onAdicionarAlugada,
+  objetosSemLugar,
+  onEscolherObjeto,
   children,
 }: PainelMapaProps) {
   const total = ORDEM_ESTADOS.reduce((s, k) => s + contagens[k], 0);
@@ -174,6 +179,34 @@ export function PainelMapa({
       {children}
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        {objetosSemLugar.length > 0 ? (
+          <section>
+            <h3 className="mb-1 flex items-center justify-between text-legenda font-medium text-muted-foreground">
+              <span>Tanques, pilhas e depósitos sem lugar</span>
+              <Badge variant="secondary" className="text-legenda">
+                {objetosSemLugar.length}
+              </Badge>
+            </h3>
+            <ul className="flex flex-col">
+              {objetosSemLugar.map((o) => (
+                <li key={o.id}>
+                  <button
+                    type="button"
+                    onClick={() => onEscolherObjeto(o.id)}
+                    className="flex w-full items-baseline justify-between gap-2 rounded-md px-2 py-1.5 text-left text-detalhe hover:bg-muted"
+                  >
+                    <span className="min-w-0 truncate text-foreground">
+                      {o.nome}
+                    </span>
+                    <span className="shrink-0 text-legenda text-muted-foreground">
+                      {o.tipo}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {semPosicao.length > 0 ? (
           <section>
             <h3 className="mb-1 flex items-center justify-between text-legenda font-medium text-muted-foreground">

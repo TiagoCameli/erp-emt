@@ -351,11 +351,23 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       ehExterno: t.eh_externo === true,
       localidadeId: textoOuNulo(t.localidade_id),
       equipamentoId: textoOuNulo(t.equipamento_id),
+      pos: posicao(t.lng, t.lat),
+      capacidade: numeroOuNulo(t.capacidade),
+      nivel: numeroOuNulo(t.nivel),
+      unidade: texto(t.unidade) || "L",
+      insumo: texto(t.insumo),
     })),
     depositos: lista(b.depositos).map((d) => ({
       id: texto(d.id),
       nome: texto(d.nome),
       localidadeId: textoOuNulo(d.localidade_id),
+      pos: posicao(d.lng, d.lat),
+    })),
+    pilhas: lista(b.pilhas).map((p) => ({
+      id: texto(p.id),
+      nome: texto(p.nome),
+      saldo: numero(p.saldo),
+      pos: posicao(p.lng, p.lat),
     })),
     localidadesSemPosicao: lista(b.localidades_sem_posicao).map((l) => ({
       id: texto(l.id),
