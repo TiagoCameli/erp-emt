@@ -368,7 +368,7 @@ function CartaoSaldoProjetado({
     <KPICard
       idCard="saldo-projetado"
       titulo={`Disponível projetado em ${rotuloMes(saldo.mes)}`}
-      valor={<MoneyText valor={saldo.valor} />}
+      valor={<ValorAnimado valor={saldo.valor} />}
       detalhe={
         <>
           {saldo.valorComAplicado !== null ? (
@@ -500,7 +500,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           idCard="operacao"
           titulo="Geração operacional"
-          valor={<MoneyText valor={grupos.operacao.liquido} />}
+          valor={<ValorAnimado valor={grupos.operacao.liquido} />}
           detalhe={
             <DetalheDoGrupo
               grupo={grupos.operacao}
@@ -512,7 +512,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           idCard="investimento"
           titulo="Investimento (CAPEX)"
-          valor={<MoneyText valor={grupos.investimento.liquido} />}
+          valor={<ValorAnimado valor={grupos.investimento.liquido} />}
           detalhe={
             <>
               Pago <MoneyText valor={grupos.investimento.saida.realizado} />,
@@ -524,7 +524,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           idCard="socios"
           titulo="Sócios e mútuo"
-          valor={<MoneyText valor={grupos.socios.liquido} />}
+          valor={<ValorAnimado valor={grupos.socios.liquido} />}
           detalhe={
             <DetalheDoGrupo
               grupo={grupos.socios}
@@ -536,7 +536,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           idCard="divida"
           titulo="Dívida"
-          valor={<MoneyText valor={grupos.divida.liquido} />}
+          valor={<ValorAnimado valor={grupos.divida.liquido} />}
           detalhe={
             <DetalheDoGrupo
               grupo={grupos.divida}
@@ -548,7 +548,7 @@ async function ConteudoFluxoCaixa({
         <KPICard
           idCard="aplicacao"
           titulo="Aplicações"
-          valor={<MoneyText valor={grupos.aplicacao.liquido} />}
+          valor={<ValorAnimado valor={grupos.aplicacao.liquido} />}
           detalhe={
             <DetalheDoGrupo
               grupo={grupos.aplicacao}
@@ -860,13 +860,13 @@ async function ConteudoPosicaoBancaria({
         <KPICard
           idCard="disponivel"
           titulo="Disponível"
-          valor={<MoneyText valor={resumo.disponivel} />}
+          valor={<ValorAnimado valor={resumo.disponivel} />}
           detalhe={`${resumo.contasDisponiveis} conta(s) corrente e caixa: o que paga boleto hoje`}
         />
         <KPICard
           idCard="aplicado"
           titulo="Aplicado"
-          valor={<MoneyText valor={resumo.aplicado} />}
+          valor={<ValorAnimado valor={resumo.aplicado} />}
           detalhe={
             <>
               {resumo.contasAplicadas} subconta(s) de investimento; com o
