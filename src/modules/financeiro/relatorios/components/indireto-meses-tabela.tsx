@@ -32,6 +32,14 @@ export function coresDasObras(meses: readonly MesDoIndireto[]): Map<string, stri
   );
 }
 
+/** "009 58% · 007 24% · +2 · sem obra", sem separador sobrando quando falta parte. */
+export function legendaDaReparticao(mes: MesDoIndireto): string {
+  const partes = mes.obras.slice(0, 3).map((o) => `${nomeCurto(o.centro)} ${formatarPercentual(o.pct, 0)}`);
+  if (mes.obras.length > 3) partes.push(`+${mes.obras.length - 3}`);
+  if (mes.naoRateado > 0) partes.push(mes.obras.length === 0 ? "tudo sem obra" : "sem obra");
+  return partes.join(" · ");
+}
+
 function Reparticao({ mes, cores }: { mes: MesDoIndireto; cores: ReadonlyMap<string, string> }) {
   if (mes.total === 0) return <span className="text-muted-foreground">—</span>;
   const naoRateadoPct = mes.total === 0 ? 0 : (mes.naoRateado / mes.total) * 100;
@@ -43,14 +51,7 @@ function Reparticao({ mes, cores }: { mes: MesDoIndireto; cores: ReadonlyMap<str
         ))}
         {naoRateadoPct > 0 ? <span className="bg-destructive/60" style={{ width: `${naoRateadoPct}%` }} /> : null}
       </div>
-      <span className="text-legenda text-muted-foreground">
-        {mes.obras
-          .slice(0, 3)
-          .map((o) => `${nomeCurto(o.centro)} ${formatarPercentual(o.pct, 0)}`)
-          .join(" · ")}
-        {mes.obras.length > 3 ? ` · +${mes.obras.length - 3}` : ""}
-        {mes.naoRateado > 0 ? " · sem obra" : ""}
-      </span>
+      <span className="text-legenda text-muted-foreground">{legendaDaReparticao(mes)}</span>
     </div>
   );
 }
@@ -116,7 +117,8 @@ export function IndiretoMesesTabela({
                   )}
                   {m.indiretoAcimaDoDireto.length > 0 ? (
                     <span className="block text-legenda text-destructive">
-                      {m.indiretoAcimaDoDireto.map((o) => nomeCurto(o.centro)).join(", ")} recebe mais indireto que o próprio custo direto
+                      {m.indiretoAcimaDoDireto.map((o) => nomeCurto(o.centro)).join(", ")}{" "}
+                      {m.indiretoAcimaDoDireto.length === 1 ? "recebe" : "recebem"} mais indireto que o próprio custo direto
                     </span>
                   ) : null}
                 </td>
