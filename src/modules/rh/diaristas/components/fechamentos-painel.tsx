@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronRight, Loader2, Pencil } from "lucide-react";
 import { toast } from "@/components/canonicos/toast";
 
 import { Combobox, MoneyText } from "@/components/canonicos";
@@ -17,20 +17,62 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatarData } from "@/lib/formatadores";
+import { cn } from "@/lib/utils";
 import { fecharDiarias } from "@/modules/rh/diaristas/actions";
 import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
-import type { FechamentoPendente } from "@/modules/rh/diaristas/queries";
+import type {
+  DiariaLista,
+  FechamentoPendente,
+  FuncaoDiaria,
+} from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
+import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
+import { DiariaFormDrawer } from "./diaria-form-drawer";
 
 export interface FechamentosPainelProps {
   fechamentos: FechamentoPendente[];
   /** Formas ativas: quem fecha escolhe por qual o pagamento sai. */
   formasPagamento: FormaPagamentoOpcao[];
+  /** Todas as diárias da página: o painel mostra as em aberto de cada linha. */
+  diarias: DiariaLista[];
+  diaristas: DiaristaOpcao[];
+  obras: ObraOpcao[];
+  funcoes: FuncaoDiaria[];
+  /** Mostra o Editar de cada diária. O banco confere de novo ao salvar. */
+  podeEditar: boolean;
+}
+
+/**
+ * As diárias em aberto que compõem um fechamento: mesmo diarista, mesma
+ * competência e ainda sem lançamento. É o mesmo corte de
+ * `listarFechamentosPendentes`, então a soma delas é o total da linha.
+ */
+export function diariasDoFechamento(
+  diarias: DiariaLista[],
+  fechamento: FechamentoPendente,
+): DiariaLista[] {
+  return diarias
+    .filter(
+      (d) =>
+        d.lancamentoId === null &&
+        d.colaboradorId === fechamento.colaboradorId &&
+        d.competencia === fechamento.competencia,
+    )
+    .sort((a, b) => a.data.localeCompare(b.data));
+}
+
+/** Período da diária: um dia só ou "início a fim". */
+function rotuloPeriodo(diaria: DiariaLista): string {
+  return diaria.dataFim && diaria.dataFim !== diaria.data
+    ? `${formatarData(diaria.data)} a ${formatarData(diaria.dataFim)}`
+    : formatarData(diaria.data);
 }
 
 /** Texto plural das diárias de um fechamento. */
 function rotuloDiarias(qtd: number): string {
-  return qtd === 1 ? "1 diária" : `${qtd} diárias`;
+  const texto = qtd.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  return qtd === 1 ? "1 diária" : `${texto} diárias`;
 }
 
 /**
@@ -47,12 +89,26 @@ function rotuloDiarias(qtd: number): string {
  * Quem recebe e a categoria do custo NÃO são perguntados: o banco deriva os dois
  * do cadastro do colaborador (trigger `trg_rh_completar_lancamento`). Perguntar o
  * que já está cadastrado é convite a divergir do cadastro.
+ *
+ * Cada linha abre a lista das diárias que ela soma, com Editar em cada uma: é
+ * antes de fechar que se confere e corrige, e achar a diária na tabela de baixo
+ * pedia filtrar por diarista e mês.
  */
 export function FechamentosPainel({
   fechamentos,
   formasPagamento,
+  diarias,
+  diaristas,
+  obras,
+  funcoes,
+  podeEditar,
 }: FechamentosPainelProps) {
   const router = useRouter();
+  const [expandidos, setExpandidos] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  const [drawerAberto, setDrawerAberto] = React.useState(false);
+  const [emEdicao, setEmEdicao] = React.useState<DiariaLista | null>(null);
   const [aberto, setAberto] = React.useState(false);
   const [alvo, setAlvo] = React.useState<FechamentoPendente | null>(null);
   const [dataVencimento, setDataVencimento] = React.useState("");
@@ -61,6 +117,20 @@ export function FechamentosPainel({
 
   const podeFechar =
     dataVencimento.trim() !== "" && formaPagamentoId !== "" && !fechando;
+
+  function alternar(chave: string) {
+    setExpandidos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
+    });
+  }
+
+  function abrirEdicao(diaria: DiariaLista) {
+    setEmEdicao(diaria);
+    setDrawerAberto(true);
+  }
 
   function pedirFechamento(fechamento: FechamentoPendente) {
     setAlvo(fechamento);
@@ -107,37 +177,117 @@ export function FechamentosPainel({
   return (
     <>
       <ul className="divide-border divide-y rounded-lg border">
-        {fechamentos.map((fechamento) => (
-          <li
-            key={`${fechamento.colaboradorId}|${fechamento.competencia}`}
-            className="flex items-center justify-between gap-4 p-4"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">
-                {fechamento.colaboradorNome}
-              </p>
-              <p className="text-detalhe text-muted-foreground tabular-nums">
-                {formatarCompetencia(fechamento.competencia)} -{" "}
-                {rotuloDiarias(fechamento.qtdDiarias)}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-4">
-              <MoneyText
-                valor={fechamento.total}
-                className="font-medium"
-              />
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => pedirFechamento(fechamento)}
-              >
-                <CheckCircle2 />
-                Fechar diárias
-              </Button>
-            </div>
-          </li>
-        ))}
+        {fechamentos.map((fechamento) => {
+          const chave = `${fechamento.colaboradorId}|${fechamento.competencia}`;
+          const expandido = expandidos.has(chave);
+          const itens = expandido
+            ? diariasDoFechamento(diarias, fechamento)
+            : [];
+          const idLista = `diarias-${chave}`;
+
+          return (
+            <li key={chave}>
+              <div className="flex items-center justify-between gap-4 p-4">
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 text-left"
+                  aria-expanded={expandido}
+                  aria-controls={idLista}
+                  onClick={() => alternar(chave)}
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-4 shrink-0 text-muted-foreground transition-transform",
+                      expandido && "rotate-90",
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">
+                      {fechamento.colaboradorNome}
+                    </span>
+                    <span className="text-detalhe block text-muted-foreground tabular-nums">
+                      {formatarCompetencia(fechamento.competencia)} -{" "}
+                      {rotuloDiarias(fechamento.qtdDiarias)}
+                    </span>
+                  </span>
+                </button>
+                <div className="flex shrink-0 items-center gap-4">
+                  <MoneyText
+                    valor={fechamento.total}
+                    className="font-medium"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => pedirFechamento(fechamento)}
+                  >
+                    <CheckCircle2 />
+                    Fechar diárias
+                  </Button>
+                </div>
+              </div>
+
+              {expandido ? (
+                <ul
+                  id={idLista}
+                  className="divide-border bg-muted/30 divide-y border-t"
+                >
+                  {itens.map((diaria) => (
+                    <li
+                      key={diaria.id}
+                      className="flex items-center justify-between gap-4 py-2 pr-4 pl-10"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm tabular-nums">
+                          {rotuloPeriodo(diaria)}
+                        </p>
+                        <p className="text-detalhe truncate text-muted-foreground">
+                          {[
+                            diaria.funcaoNome,
+                            diaria.obraNome ?? "Sem obra",
+                            diaria.qtdDiarias != null
+                              ? rotuloDiarias(diaria.qtdDiarias)
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" - ")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <MoneyText valor={diaria.valor} className="text-sm" />
+                        {podeEditar && diaria.alteravel ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`Editar diária de ${rotuloPeriodo(diaria)}`}
+                            onClick={() => abrirEdicao(diaria)}
+                          >
+                            <Pencil />
+                            Editar
+                          </Button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
+
+      {podeEditar ? (
+        <DiariaFormDrawer
+          aberto={drawerAberto}
+          onAbertoChange={setDrawerAberto}
+          diaristas={diaristas}
+          obras={obras}
+          funcoes={funcoes}
+          diaria={emEdicao}
+        />
+      ) : null}
 
       <Dialog open={aberto} onOpenChange={trocarAberto}>
         <DialogContent showCloseButton={false} className="sm:max-w-md">

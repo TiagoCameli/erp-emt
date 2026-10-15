@@ -57,6 +57,11 @@ export default async function PaginaDiaristas() {
           <FechamentosPainel
             fechamentos={fechamentos}
             formasPagamento={formasPagamento}
+            diarias={diarias}
+            diaristas={diaristas}
+            obras={obras}
+            funcoes={funcoes}
+            podeEditar={podeEditar}
           />
         </section>
       ) : null}
