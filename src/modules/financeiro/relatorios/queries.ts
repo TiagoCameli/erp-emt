@@ -51,6 +51,7 @@ import {
   type SociosLigadasRelatorio,
 } from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
+import type { FornecedorRankingLinha } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import type { CustoIndiretoLinha } from "@/modules/financeiro/relatorios/custos-indiretos";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
 import {
@@ -1092,6 +1093,40 @@ export async function extratoPorFornecedor({
       lancamentos.reduce((soma, l) => soma + paraCentavos(l.valor), 0),
     ),
   };
+}
+
+/**
+ * Ranking de fornecedores: uma linha por fornecedor, agregada no banco
+ * (`fn_rel_fornecedores_ranking`). `inicio`/`fim` recortam o lançado
+ * (competência) e o pago (data do pagamento); o em aberto é a posição de hoje.
+ * Fim exclusivo; ponta ausente = sem limite.
+ *
+ * Lê em páginas: em 15/10/2026 são 848 fornecedores com movimento, perto do
+ * teto de 1000 linhas do PostgREST.
+ */
+export async function rankingFornecedores({
+  inicio,
+  fim,
+}: { inicio?: string; fim?: string }): Promise<FornecedorRankingLinha[]> {
+  const supabase = await createClient();
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .rpc("fn_rel_fornecedores_ranking", { p_inicio: inicio, p_fim: fim })
+      .range(de, ate),
+  );
+  if (erro) {
+    throw new Error("Não foi possível carregar o ranking de fornecedores");
+  }
+  return linhas.map((l) => ({
+    fornecedorId: l.fornecedor_id,
+    nome: l.nome,
+    lancamentos: Number(l.lancamentos),
+    lancado: Number(l.comprado),
+    pago: Number(l.pago),
+    emAberto: Number(l.em_aberto),
+    vencido: Number(l.vencido),
+    proximos30: Number(l.proximos_30),
+  }));
 }
 
 /** Mês corrente "YYYY-MM" no fuso de Rio Branco, default do seletor do DRE. */

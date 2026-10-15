@@ -13,6 +13,7 @@ import type {
   FluxoCaixa,
   PosicaoBancaria,
 } from "@/modules/financeiro/relatorios/queries";
+import type { FornecedorRankingLinha } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import type {
   CentroSocioLigada,
   SociosLigadasRelatorio,
@@ -730,4 +731,30 @@ export function abasSociosLigadas(dados: SociosLigadasRelatorio): EscritaDeAba[]
       rotuloTotal: `Total (${dados.ligadas.length} empresa(s))`,
     }),
   ];
+}
+
+/* ------------------------------------------------------------------ */
+/* Ranking de fornecedores                                            */
+/* ------------------------------------------------------------------ */
+
+export function abaRankingFornecedores(
+  linhas: FornecedorRankingLinha[],
+  recorte: string,
+): EscritaDeAba {
+  const colunas: ColunaRelatorio<FornecedorRankingLinha>[] = [
+    { cabecalho: "Fornecedor", largura: 44, tipo: "texto", celula: (l) => l.nome },
+    { cabecalho: "Lançamentos no período", largura: 14, tipo: "inteiro", celula: (l) => l.lancamentos, somar: true },
+    { cabecalho: "Lançado no período", largura: 18, tipo: "dinheiro", celula: (l) => l.lancado, somar: true },
+    { cabecalho: "Pago no período", largura: 18, tipo: "dinheiro", celula: (l) => l.pago, somar: true },
+    { cabecalho: "Em aberto hoje", largura: 18, tipo: "dinheiro", celula: (l) => l.emAberto, somar: true },
+    { cabecalho: "Vencido", largura: 16, tipo: "dinheiro", celula: (l) => l.vencido, somar: true },
+    { cabecalho: "Vence em 30 dias", largura: 16, tipo: "dinheiro", celula: (l) => l.proximos30, somar: true },
+  ];
+  return aba({
+    nome: "Fornecedores",
+    titulo: `Fornecedores · lançado e pago: ${recorte} · em aberto: posição de hoje`,
+    colunas,
+    linhas,
+    rotuloTotal: `Total (${linhas.length} fornecedor(es))`,
+  });
 }

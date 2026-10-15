@@ -51,6 +51,7 @@ import {
   periodoDoModo as periodoDoModoSimples,
   periodoFechado,
   pontasDaRpc,
+  type PeriodoNaUrl,
   type ModoPeriodo,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
 import {
@@ -90,6 +91,9 @@ import { AgingPrazos } from "@/modules/financeiro/relatorios/components/aging-pr
 import { DrePonte } from "@/modules/financeiro/relatorios/components/dre-ponte";
 import { ponteDoResultado } from "@/modules/financeiro/relatorios/ponte-do-resultado";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
+import { FiltrosRankingFornecedoresBarra } from "@/modules/financeiro/relatorios/components/filtros-ranking-fornecedores-barra";
+import { RankingFornecedores } from "@/modules/financeiro/relatorios/components/ranking-fornecedores";
+import { lerPeriodoFornecedores } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
 import type { SaldoProjetado } from "@/modules/financeiro/relatorios/fluxo-caixa";
@@ -124,6 +128,7 @@ import {
   custoPorGrupo,
   custoReceita,
   investimentos,
+  rankingFornecedores,
   relatorioSociosLigadas,
   aquisicoes,
   custosIndiretos,
@@ -1435,37 +1440,64 @@ async function ConteudoCustoGrupo({
 
 async function ConteudoExtratoFornecedor({
   fornecedorIds,
+  periodoRanking,
   podeVerLancamentos,
 }: {
   fornecedorIds: string[];
+  /** O período do ranking (lido da URL); não recorta o extrato de um fornecedor. */
+  periodoRanking: PeriodoNaUrl;
   podeVerLancamentos: boolean;
 }) {
+  // Sem fornecedor escolhido, a seção abre no RANKING, agregado no banco: a
+  // versão anterior trazia os 6.710 lançamentos a pagar para o navegador e não
+  // respondia a quem a EMT deve mais. O extrato vira o clique num fornecedor.
+  if (fornecedorIds.length === 0) {
+    const periodo = periodoDoModoSimples(periodoRanking);
+    const [fornecedores, ranking] = await Promise.all([
+      listarFornecedoresComLancamentos(),
+      rankingFornecedores(pontasDaRpc(periodo)),
+    ]);
+    return (
+      <SecaoRelatorio
+        relatorio="extrato-fornecedor"
+        titulo="Fornecedores"
+        descricao="Uma linha por fornecedor, somada no banco. Lançado é o valor dos documentos a pagar com mês de referência no período; pago é o que saiu da conta no período (parcelas pagas, pelo líquido, pela data do pagamento). Em aberto, vencido e vence em 30 dias são a posição de hoje, pelas parcelas não pagas nem canceladas, e não mudam com o período. Cancelados ficam de fora. O nome do fornecedor abre o extrato dele."
+        exportar="extrato-fornecedor"
+        controles={<SeletorFornecedor fornecedores={fornecedores} valores={[]} />}
+      >
+        <FiltrosRankingFornecedoresBarra filtros={periodoRanking} />
+        <RankingFornecedores
+          linhas={ranking}
+          descricaoPeriodo={descreverPeriodo(periodo, periodoRanking.modo)}
+        />
+      </SecaoRelatorio>
+    );
+  }
+
   const [fornecedores, extrato] = await Promise.all([
     listarFornecedoresComLancamentos(),
     extratoPorFornecedor({ fornecedorIds }),
   ]);
 
-  if (fornecedores.length === 0) {
-    return (
-      <EmptyState
-        icone={BarChart3}
-        titulo="Sem fornecedores com lançamentos"
-        descricao="Quando houver lançamentos a pagar de fornecedores, o extrato aparece aqui."
-      />
-    );
-  }
-
   return (
     <SecaoRelatorio
-          relatorio="extrato-fornecedor"
+      relatorio="extrato-fornecedor"
       titulo="Extrato por fornecedor"
       descricao="Lançamentos a pagar dos fornecedores escolhidos, do vencimento mais recente para o mais antigo. A coluna Mês de referência é o mês em que o custo entra. Os cartões somam o que está em aberto nas parcelas e acompanham os filtros da tabela."
       exportar="extrato-fornecedor"
       controles={
-        <SeletorFornecedor
-          fornecedores={fornecedores}
-          valores={extrato.fornecedorIds}
-        />
+        <>
+          <a
+            href="/financeiro/relatorios?rel=extrato-fornecedor"
+            className="foco-anel rounded-sm text-detalhe text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Ver todos os fornecedores
+          </a>
+          <SeletorFornecedor
+            fornecedores={fornecedores}
+            valores={extrato.fornecedorIds}
+          />
+        </>
       }
     >
       {/* Os cartões moram DENTRO da tabela agora: eles somam as linhas que
@@ -1882,6 +1914,7 @@ export default async function RelatoriosPage({
       {relatorio === "extrato-fornecedor" ? (
         <ConteudoExtratoFornecedor
           fornecedorIds={fornecedorIds}
+          periodoRanking={lerPeriodoFornecedores(params, mesCorrente())}
           podeVerLancamentos={podeVerLancamentos}
         />
       ) : null}

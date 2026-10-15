@@ -11681,6 +11681,19 @@ export type Database = {
           mes: string;
         }[];
       };
+      fn_rel_fornecedores_ranking: {
+        Args: { p_fim?: string; p_inicio?: string };
+        Returns: {
+          comprado: number;
+          em_aberto: number;
+          fornecedor_id: string | null;
+          lancamentos: number;
+          nome: string;
+          pago: number;
+          proximos_30: number;
+          vencido: number;
+        }[];
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
