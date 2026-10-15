@@ -105,6 +105,11 @@ import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
 import { AgingPrazos } from "@/modules/financeiro/relatorios/components/aging-prazos";
 import { DrePonte } from "@/modules/financeiro/relatorios/components/dre-ponte";
+import {
+  Revelar,
+  RevelarGrafico,
+  ValorAnimado,
+} from "@/modules/financeiro/relatorios/components/movimento";
 import { ponteDoResultado } from "@/modules/financeiro/relatorios/ponte-do-resultado";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { FiltrosRankingFornecedoresBarra } from "@/modules/financeiro/relatorios/components/filtros-ranking-fornecedores-barra";
@@ -272,7 +277,11 @@ function SecaoRelatorio({
           </div>
         ) : null}
       </div>
-      {children}
+      {/* O conteúdo entra subindo de leve, com a chave do relatório: trocar de
+          relatório refaz a entrada, e o olho percebe que a tela mudou. */}
+      <Revelar chave={relatorio} className="flex flex-col gap-4">
+        {children}
+      </Revelar>
     </section>
   );
 }
@@ -303,7 +312,7 @@ function PainelGrafico({
     <GradeKpis id={id} titulo={tituloGrade} vao="amplo">
       <ItemGrade titulo={titulo} idCard="grafico" larguraPadrao={12}>
         <div className="flex flex-col rounded-lg border border-border bg-card p-4">
-          {children}
+          <RevelarGrafico className="flex flex-1 flex-col">{children}</RevelarGrafico>
         </div>
       </ItemGrade>
       {depois}
@@ -568,7 +577,7 @@ async function ConteudoDre({
         <KPICard
           idCard="receita-operacional"
           titulo="Receita operacional"
-          valor={<MoneyText valor={cartoes.receitaOperacional} />}
+          valor={<ValorAnimado valor={cartoes.receitaOperacional} />}
           detalhe={
             dre.operacional.retencaoReceitas > 0 ? (
               <>
@@ -583,19 +592,19 @@ async function ConteudoDre({
         <KPICard
           idCard="despesa-operacional"
           titulo="Despesa operacional"
-          valor={<MoneyText valor={cartoes.despesaOperacional} />}
+          valor={<ValorAnimado valor={cartoes.despesaOperacional} />}
           detalhe="Sem investimentos e sem movimentação"
         />
         <KPICard
           idCard="resultado-financeiro"
           titulo="Resultado financeiro"
-          valor={<MoneyText valor={cartoes.resultadoFinanceiro} />}
+          valor={<ValorAnimado valor={cartoes.resultadoFinanceiro} />}
           detalhe="Juros e rendimentos menos tarifas e juros pagos"
         />
         <KPICard
           idCard="resultado-periodo"
           titulo="Resultado do período"
-          valor={<MoneyText valor={cartoes.resultadoDoPeriodo} />}
+          valor={<ValorAnimado valor={cartoes.resultadoDoPeriodo} />}
           detalhe={`${cartoes.resultadoDoPeriodo >= 0 ? "Superávit" : "Déficit"}${margemDoPeriodo(cartoes)} · ${descricao}`}
         />
       </GradeKpis>
@@ -662,7 +671,7 @@ async function ConteudoAging({
         <KPICard
           idCard="pagar-30-dias"
           titulo="Pagar nos próximos 30 dias"
-          valor={<MoneyText valor={pagar30} />}
+          valor={<ValorAnimado valor={pagar30} />}
           detalhe={
             dados.vencidoAPagar > 0 ? (
               <>
@@ -676,7 +685,7 @@ async function ConteudoAging({
         <KPICard
           idCard="receber-30-dias"
           titulo="Receber nos próximos 30 dias"
-          valor={<MoneyText valor={receber30} />}
+          valor={<ValorAnimado valor={receber30} />}
           detalhe={
             dados.totalAReceber === 0
               ? "Nenhuma parcela a receber lançada: medição faturada entra aqui quando vira lançamento"
@@ -686,7 +695,7 @@ async function ConteudoAging({
         <KPICard
           idCard="a-pagar"
           titulo="A pagar em aberto"
-          valor={<MoneyText valor={dados.totalAPagar} />}
+          valor={<ValorAnimado valor={dados.totalAPagar} />}
           detalhe={
             <>
               <MoneyText valor={longoPrazoAPagar} /> vencem depois de 60 dias
@@ -696,7 +705,7 @@ async function ConteudoAging({
         <KPICard
           idCard="a-receber"
           titulo="A receber em aberto"
-          valor={<MoneyText valor={dados.totalAReceber} />}
+          valor={<ValorAnimado valor={dados.totalAReceber} />}
           detalhe={
             <>
               Vencido <MoneyText valor={dados.vencidoAReceber} />
@@ -907,7 +916,7 @@ async function ConteudoResultadoObra({ mes }: { mes: string }) {
         <KPICard
           idCard="ano"
           titulo={`Resultado ${rotulos.ano.toLowerCase().replace(/^\d{4}/, mes.slice(0, 4))}`}
-          valor={<MoneyText valor={r.totalObras.ano.resultado} />}
+          valor={<ValorAnimado valor={r.totalObras.ano.resultado} />}
           detalhe={
             r.totalObras.ano.margem === null
               ? "Sem receita no ano"
@@ -917,7 +926,7 @@ async function ConteudoResultadoObra({ mes }: { mes: string }) {
         <KPICard
           idCard="mes"
           titulo={`Resultado de ${mesPorExtenso(mes)}`}
-          valor={<MoneyText valor={r.totalObras.mes.resultado} />}
+          valor={<ValorAnimado valor={r.totalObras.mes.resultado} />}
           detalhe={
             r.totalObras.mes.receita === 0
               ? "Sem medição no mês"
@@ -927,7 +936,7 @@ async function ConteudoResultadoObra({ mes }: { mes: string }) {
         <KPICard
           idCard="inicio"
           titulo="Resultado desde o início"
-          valor={<MoneyText valor={r.totalObras.inicio.resultado} />}
+          valor={<ValorAnimado valor={r.totalObras.inicio.resultado} />}
           detalhe={
             r.totalObras.inicio.margem === null
               ? "Sem receita"
@@ -1117,7 +1126,7 @@ async function ConteudoInvestimentos({
       <GradeKpis id="financeiro.relatorios.investimentos" titulo="Investimentos">
         <KPICard
           titulo="Saldo aplicado"
-          valor={<MoneyText valor={dados.saldoAplicado} />}
+          valor={<ValorAnimado valor={dados.saldoAplicado} />}
           detalhe={
             dados.subcontasOcultas > 0
               ? `Sem ${dados.subcontasOcultas} subconta(s) que você não pode ver`
@@ -1127,13 +1136,13 @@ async function ConteudoInvestimentos({
         <KPICard
           idCard="aplicado"
           titulo={temPeriodo ? "Aplicado no período" : "Aplicado (total)"}
-          valor={<MoneyText valor={dados.aplicadoPeriodo} />}
+          valor={<ValorAnimado valor={dados.aplicadoPeriodo} />}
           detalhe="Da conta para a subconta"
         />
         <KPICard
           idCard="resgatado"
           titulo={temPeriodo ? "Resgatado no período" : "Resgatado (total)"}
-          valor={<MoneyText valor={dados.resgatadoPeriodo} />}
+          valor={<ValorAnimado valor={dados.resgatadoPeriodo} />}
           detalhe="Da subconta de volta para a conta"
         />
         <KPICard
@@ -1367,7 +1376,7 @@ async function ConteudoCustoCc({
       <GradeKpis id="financeiro.relatorios.custo-cc" titulo="Custo por centro">
         <KPICard
           titulo="Custo total"
-          valor={<MoneyText valor={custo.total} />}
+          valor={<ValorAnimado valor={custo.total} />}
           detalhe={
             filtros.modo === "vida" && primeiroMes
               ? `Desde ${rotuloMes(primeiroMes)}, o primeiro lançamento ${
@@ -1386,14 +1395,14 @@ async function ConteudoCustoCc({
         {maior ? (
           <KPICard
             titulo="Maior centro de custo"
-            valor={<MoneyText valor={maior.valor} />}
+            valor={<ValorAnimado valor={maior.valor} />}
             detalhe={maior.nome}
           />
         ) : null}
         {custoAnterior ? (
           <KPICard
             titulo="Período anterior"
-            valor={<MoneyText valor={custoAnterior.total} />}
+            valor={<ValorAnimado valor={custoAnterior.total} />}
             detalhe={`Variação de ${formatarBRL(custo.total - custoAnterior.total)}`}
           />
         ) : null}
@@ -1515,7 +1524,7 @@ async function ConteudoCustoReceita({
       <GradeKpis id="financeiro.relatorios.custo-receita" titulo="Custo x receita">
         <KPICard
           titulo="Receita líquida"
-          valor={<MoneyText valor={total.receitaLiquida} />}
+          valor={<ValorAnimado valor={total.receitaLiquida} />}
           detalhe={
             total.retencao > 0
               ? `Retido ${formatarBRL(total.retencao)}, somando ${formatarBRL(total.receitaFaturada)}`
@@ -1524,12 +1533,12 @@ async function ConteudoCustoReceita({
         />
         <KPICard
           titulo="Custo"
-          valor={<MoneyText valor={total.custo} />}
+          valor={<ValorAnimado valor={total.custo} />}
           detalhe={`${porMesDoRelatorio.length} ${porMesDoRelatorio.length === 1 ? "mês de referência" : "meses de referência"}`}
         />
         <KPICard
           titulo="Resultado"
-          valor={<MoneyText valor={total.resultado} />}
+          valor={<ValorAnimado valor={total.resultado} />}
           detalhe={
             total.resultado >= 0
               ? "Receita líquida menos custo"
@@ -1648,13 +1657,13 @@ async function ConteudoCustoGrupo({
       <GradeKpis id="financeiro.relatorios.custo-grupo" titulo="Custo por grupo">
         <KPICard
           titulo="Custo total"
-          valor={<MoneyText valor={custo.total} />}
+          valor={<ValorAnimado valor={custo.total} />}
           detalhe={descricaoPeriodo}
         />
         {maior ? (
           <KPICard
             titulo="Maior grupo"
-            valor={<MoneyText valor={maior.valor} />}
+            valor={<ValorAnimado valor={maior.valor} />}
             detalhe={maior.nome}
           />
         ) : null}
