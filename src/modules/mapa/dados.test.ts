@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extrasPorLocal,
   paraEstadoMapa,
   poligonosDaArea,
   pontosDoTracado,
@@ -158,6 +159,95 @@ describe("paraEstadoMapa", () => {
     expect(estado.localidades.map((l) => l.id)).toEqual(["l1"]);
     expect(estado.areas[0].poligonos[0][0]).toHaveLength(4);
     expect(estado.areas[0].centro).toEqual([0.5, 0.3]);
+  });
+
+  it("lê obras, tanques, depósitos e locais sem ponto (v1.7), e tolera a RPC antiga sem eles", () => {
+    const estado = paraEstadoMapa({
+      ...bruto,
+      obras: [
+        {
+          id: "o1",
+          nome: "003 - Ramal",
+          cor: null,
+          tipo_obra: "rodovia",
+          no_mapa: true,
+          lng: "-72.7",
+          lat: -7.63,
+        },
+        {
+          id: "o2",
+          nome: "Juruá FM",
+          cor: "#3E7744",
+          tipo_obra: "outra",
+          no_mapa: false,
+          lng: null,
+          lat: null,
+        },
+      ],
+      tanques: [
+        {
+          id: "t1",
+          nome: "Tanque Patio Colorado",
+          apelido: null,
+          uso: "combustivel",
+          eh_externo: false,
+          localidade_id: "l1",
+          equipamento_id: null,
+        },
+      ],
+      depositos: [
+        { id: "d1", nome: "Almoxarifado Central", localidade_id: null },
+      ],
+      localidades_sem_posicao: [{ id: "l9", nome: "Escola", tipo: "canteiro" }],
+    });
+    if (!estado) throw new Error("estado nulo");
+    expect(estado.obras[0]).toEqual({
+      id: "o1",
+      nome: "003 - Ramal",
+      cor: null,
+      tipoObra: "rodovia",
+      noMapa: true,
+      pos: [-72.7, -7.63],
+    });
+    expect(estado.obras[1].pos).toBeNull();
+    expect(estado.tanques[0].localidadeId).toBe("l1");
+    expect(estado.tanques[0].apelido).toBe("");
+    expect(estado.depositos[0].localidadeId).toBeNull();
+    expect(estado.localidadesSemPosicao).toEqual([
+      { id: "l9", nome: "Escola", tipo: "canteiro", tipos: ["canteiro"] },
+    ]);
+    const antigo = paraEstadoMapa(bruto);
+    expect(antigo?.obras).toEqual([]);
+    expect(antigo?.tanques).toEqual([]);
+  });
+
+  it("resume o que está em cada local, sem contar tanque de comboio", () => {
+    const t = (
+      id: string,
+      localidadeId: string | null,
+      equipamentoId: string | null = null,
+    ) => ({
+      id,
+      nome: id,
+      apelido: "",
+      uso: "combustivel",
+      ehExterno: false,
+      localidadeId,
+      equipamentoId,
+    });
+    const extras = extrasPorLocal(
+      [
+        t("a", "l1"),
+        t("b", "l1"),
+        t("c", "l2"),
+        t("meloza", "l1", "eq1"),
+        t("solto", null),
+      ],
+      [{ id: "d1", nome: "Almox", localidadeId: "l2" }],
+    );
+    expect(extras.get("l1")).toBe("2 tanques");
+    expect(extras.get("l2")).toBe("1 tanque · 1 depósito");
+    expect(extras.size).toBe(2);
   });
 
   it("recusa formato inesperado", () => {

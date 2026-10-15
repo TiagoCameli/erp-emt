@@ -26,9 +26,13 @@ describe("normalizarRelatorio", () => {
     expect(normalizarRelatorio("aquisicoes")).toBe("aquisicoes");
   });
 
-  it("Custos indiretos é um relatório da navegação", () => {
-    expect(RELATORIOS).toContain("custos-indiretos");
-    expect(normalizarRelatorio("custos-indiretos")).toBe("custos-indiretos");
+  it("Indireto e Resultado por obra são relatórios da navegação; os ids antigos não", () => {
+    expect(RELATORIOS).toContain("indireto");
+    expect(RELATORIOS).toContain("resultado-obra");
+    expect(normalizarRelatorio("indireto")).toBe("indireto");
+    for (const antigo of ["custos-indiretos", "rateio-indireto", "custo-receita"]) {
+      expect(RELATORIOS).not.toContain(antigo);
+    }
   });
 
   it("o padrão é um relatório que existe", () => {

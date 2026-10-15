@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { idSchema, idSchemaCom } from "@/lib/id";
-import { ESTADOS_MAQUINA, TIPOS_ALUGUEL } from "@/modules/mapa/tipos";
+import {
+  ESTADOS_MAQUINA,
+  TIPOS_ALUGUEL,
+  TIPOS_LOCAL,
+} from "@/modules/mapa/tipos";
 
 /**
  * O que as Server Actions do Mapa aceitam. Toda regra de negócio (zona, estado imposto, quem
@@ -215,3 +219,112 @@ export const locacaoFormSchema = z.strictObject({
   novaPlaca: z.string().trim().max(20),
 });
 export type LocacaoFormInput = z.infer<typeof locacaoFormSchema>;
+
+/** Põe uma obra ativa do cadastro num ponto do mapa (o Mapa não cria obra). */
+export const posicionarObraSchema = z.strictObject({
+  obraId: idSchemaCom("Obra inválida"),
+  lng: longitudeSchema,
+  lat: latitudeSchema,
+});
+export type PosicionarObraInput = z.infer<typeof posicionarObraSchema>;
+
+/**
+ * Local no ponto tocado: `localidadeId` dá ponto a um local que já existe; sem ele, cria um
+ * local novo (nome e tipo). `vincular` liga um tanque ou depósito do Estoque a esse local.
+ */
+export const colocarLocalSchema = z
+  .strictObject({
+    localidadeId: idSchemaCom("Local inválido").optional(),
+    nome: z.string().trim().max(TEXTO_CURTO).optional(),
+    tipos: z
+      .array(z.enum(TIPOS_LOCAL, { error: "Tipo de local inválido" }))
+      .min(1, { error: "Escolha ao menos um tipo" })
+      .optional(),
+    lng: longitudeSchema,
+    lat: latitudeSchema,
+    vincular: z
+      .strictObject({
+        alvo: z.enum(["tanque", "deposito"]),
+        id: idSchemaCom("Cadastro inválido"),
+      })
+      .optional(),
+  })
+  .refine((v) => v.localidadeId || (v.nome && v.tipos), {
+    error: "Informe o nome e o tipo do local",
+  });
+export type ColocarLocalInput = z.infer<typeof colocarLocalSchema>;
+
+/** Liga um tanque ou depósito a um local que já está no mapa (sem tocar no mapa). */
+export const vincularLocalSchema = z.strictObject({
+  alvo: z.enum(["tanque", "deposito"]),
+  id: idSchemaCom("Cadastro inválido"),
+  localidadeId: idSchemaCom("Local inválido"),
+});
+export type VincularLocalInput = z.infer<typeof vincularLocalSchema>;
+
+/** Raio da área do local, em metros; null volta ao padrão da configuração. */
+export const raioLocalSchema = z.strictObject({
+  localidadeId: idSchemaCom("Local inválido"),
+  raioM: z
+    .number({ error: "Raio inválido" })
+    .min(10, { error: "Raio mínimo de 10 m" })
+    .max(5000, { error: "Raio máximo de 5 km" })
+    .nullable(),
+});
+export type RaioLocalInput = z.infer<typeof raioLocalSchema>;
+
+/** Rumo da máquina em graus (qualquer valor; o banco normaliza para 0..360); null = segue a pista. */
+export const girarEquipamentoSchema = z.strictObject({
+  equipamentoId: idSchemaCom("Equipamento inválido"),
+  rumo: z.number({ error: "Rumo inválido" }).finite().nullable(),
+});
+export type GirarEquipamentoInput = z.infer<typeof girarEquipamentoSchema>;
+
+/** Nome e tipos de um local (sem mexer no ponto). */
+export const editarLocalSchema = z.strictObject({
+  localidadeId: idSchemaCom("Local inválido"),
+  nome: z
+    .string()
+    .trim()
+    .min(1, { error: "Informe o nome do local" })
+    .max(TEXTO_CURTO),
+  tipos: z
+    .array(z.enum(TIPOS_LOCAL, { error: "Tipo de local inválido" }))
+    .min(1, { error: "Escolha ao menos um tipo" }),
+});
+export type EditarLocalInput = z.infer<typeof editarLocalSchema>;
+
+const coordenadaSchema = z.tuple([longitudeSchema, latitudeSchema]);
+
+/**
+ * Desenho da obra: pavimentação = linha (início, curvas, fim; km inicial e final obrigatórios no
+ * banco) ou edificação = polígono com 4 cantos ou mais (o fechamento é montado aqui).
+ */
+export const desenharObraSchema = z.discriminatedUnion("forma", [
+  z.strictObject({
+    forma: z.literal("trecho"),
+    obraId: idSchemaCom("Obra inválida"),
+    pontos: z
+      .array(coordenadaSchema)
+      .min(2, { error: "Toque o ponto inicial e o final" })
+      .max(5000),
+    rodovia: z.string().trim().max(TEXTO_CURTO).optional(),
+    kmInicial: z.number({ error: "Km inicial inválido" }).finite(),
+    kmFinal: z.number({ error: "Km final inválido" }).finite(),
+    substituir: z.boolean(),
+  }),
+  z.strictObject({
+    forma: z.literal("area"),
+    obraId: idSchemaCom("Obra inválida"),
+    pontos: z
+      .array(coordenadaSchema)
+      .min(4, { error: "Toque ao menos 4 cantos" })
+      .max(500),
+    substituir: z.boolean(),
+  }),
+]);
+export type DesenharObraInput = z.infer<typeof desenharObraSchema>;
+
+export const tirarObraSchema = z.strictObject({
+  obraId: idSchemaCom("Obra inválida"),
+});

@@ -9,11 +9,19 @@ import { createClient } from "@/lib/supabase/server";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
 import {
   assinalarOperadorSchema,
+  colocarLocalSchema,
+  desenharObraSchema,
+  editarLocalSchema,
   encerrarLocacaoSchema,
+  girarEquipamentoSchema,
   iniciarLocacaoSchema,
   marcarEstadoSchema,
   moverEquipamentosSchema,
   moverPessoasSchema,
+  posicionarObraSchema,
+  raioLocalSchema,
+  tirarObraSchema,
+  vincularLocalSchema,
 } from "@/modules/mapa/schemas";
 import type { EstadoMapa } from "@/modules/mapa/tipos";
 
@@ -322,6 +330,286 @@ export async function encerrarLocacao(dados: unknown): Promise<ResultadoMapa> {
       "mapa.locacaoEncerrar",
       erro,
       `Não foi possível encerrar a locação: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** "Adicionar obra": põe uma obra ativa do cadastro no ponto tocado. */
+export async function posicionarObra(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = posicionarObraSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_obra_posicionar", {
+      p_obra: v.obraId,
+      p_lng: v.lng,
+      p_lat: v.lat,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.obraPosicionar",
+        error,
+        mensagemDaRpc(error, "Não foi possível pôr a obra no mapa"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.obraPosicionar",
+      erro,
+      `Não foi possível pôr a obra no mapa: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * "Adicionar localização" no ponto tocado: dá ponto a um local existente ou cria um local novo
+ * (criar pede mapa.mapa/criar) e, se veio `vincular`, liga o tanque ou depósito a ele. São duas
+ * RPCs: se a segunda falhar, o local fica no mapa e o erro diz que faltou o vínculo.
+ */
+export async function colocarLocal(dados: unknown): Promise<ResultadoMapa> {
+  const validado = colocarLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  const bloqueio = await semPermissao(v.localidadeId ? "editar" : "criar");
+  if (bloqueio)
+    return {
+      erro: v.localidadeId
+        ? bloqueio
+        : "Sem permissão para criar locais no Mapa",
+    };
+  try {
+    const supabase = await createClient();
+    const { data: id, error } = await supabase.rpc("fn_mapa_local_editar", {
+      p_id: v.localidadeId ?? null,
+      p_nome: v.nome ?? null,
+      p_tipos: v.tipos ?? null,
+      p_lng: v.lng,
+      p_lat: v.lat,
+    });
+    if (error || !id)
+      return erroAcao(
+        "mapa.localSalvar",
+        error,
+        mensagemDaRpc(error, "Não foi possível salvar o local"),
+      );
+    if (v.vincular) {
+      const { error: erroVinculo } = await supabase.rpc(
+        "fn_mapa_vincular_local",
+        { p_alvo: v.vincular.alvo, p_id: v.vincular.id, p_localidade: id },
+      );
+      if (erroVinculo)
+        return erroAcao(
+          "mapa.vincularLocal",
+          erroVinculo,
+          `O local ficou no mapa, mas o vínculo falhou: ${mensagemDaRpc(erroVinculo, "tente ligar de novo")}`,
+        );
+    }
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.localSalvar",
+      erro,
+      `Não foi possível salvar o local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Liga um tanque ou depósito do Estoque a um local que já está no mapa. */
+export async function vincularLocal(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = vincularLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_vincular_local", {
+      p_alvo: v.alvo,
+      p_id: v.id,
+      p_localidade: v.localidadeId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.vincularLocal",
+        error,
+        mensagemDaRpc(error, "Não foi possível ligar ao local"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.vincularLocal",
+      erro,
+      `Não foi possível ligar ao local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Tamanho da área de um local (raio em metros); null volta ao padrão. */
+export async function ajustarRaioLocal(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = raioLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_local_raio", {
+      p_id: v.localidadeId,
+      p_raio: v.raioM,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.localRaio",
+        error,
+        mensagemDaRpc(error, "Não foi possível mudar a área do local"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.localRaio",
+      erro,
+      `Não foi possível mudar a área do local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Rumo da máquina no mapa; null volta a seguir a pista. Não é movimentação. */
+export async function girarEquipamento(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = girarEquipamentoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_girar_equipamento", {
+      p_id: v.equipamentoId,
+      p_heading: v.rumo,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.girar",
+        error,
+        mensagemDaRpc(error, "Não foi possível girar a máquina"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.girar",
+      erro,
+      `Não foi possível girar a máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Nome e tipos do local (a posição muda pelo "Mover no mapa", em `colocarLocal`). */
+export async function editarLocal(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = editarLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_local_editar", {
+      p_id: v.localidadeId,
+      p_nome: v.nome,
+      p_tipos: v.tipos,
+      p_lng: null,
+      p_lat: null,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.localEditar",
+        error,
+        mensagemDaRpc(error, "Não foi possível salvar o local"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.localEditar",
+      erro,
+      `Não foi possível salvar o local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Obra desenhada: pavimentação vira trecho (linha com km inicial e final), edificação vira área
+ * (polígono; o ponto de fechamento é repetido aqui). `substituir` desativa o desenho que a obra
+ * já tinha; sem ele, acrescenta.
+ */
+export async function desenharObra(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = desenharObraSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  const geojson =
+    v.forma === "trecho"
+      ? { type: "LineString", coordinates: v.pontos }
+      : { type: "Polygon", coordinates: [[...v.pontos, v.pontos[0]]] };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_obra_desenhar", {
+      p_obra: v.obraId,
+      p_forma: v.forma,
+      p_geojson: geojson as Json,
+      p_rodovia: v.forma === "trecho" ? (v.rodovia ?? null) : null,
+      p_km_inicial: v.forma === "trecho" ? v.kmInicial : null,
+      p_km_final: v.forma === "trecho" ? v.kmFinal : null,
+      p_substituir: v.substituir,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.obraDesenhar",
+        error,
+        mensagemDaRpc(error, "Não foi possível salvar o desenho da obra"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.obraDesenhar",
+      erro,
+      `Não foi possível salvar o desenho da obra: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Tira a obra do mapa: ponto, trechos e área de edificação. O cadastro da obra fica. */
+export async function tirarObra(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = tirarObraSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_obra_tirar", {
+      p_obra: validado.data.obraId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.obraTirar",
+        error,
+        mensagemDaRpc(error, "Não foi possível tirar a obra do mapa"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.obraTirar",
+      erro,
+      `Não foi possível tirar a obra do mapa: ${textoDoErro(erro)}`,
     );
   }
 }

@@ -9,7 +9,7 @@ import {
   MoneyText,
   PageHeader,
 } from "@/components/canonicos";
-import { formatarBRL, formatarData, formatarMesAno, formatarPercentual } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarPercentual } from "@/lib/formatadores";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   listarCategorias,
@@ -61,13 +61,27 @@ import {
 import {
   aplicarIndireto,
   ID_NAO_RATEADO,
-  margemPorObra,
   rateioPermitidoNoCustoCc,
   type IndiretoDoPeriodo,
-  margemPorObraPermitida,
   mesDoRateio,
 } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
-import { MargemPorObraTabela } from "@/modules/financeiro/relatorios/components/margem-por-obra-tabela";
+import {
+  conferencia,
+  frasesDoResultado,
+  JANELAS,
+  lucroEPrejuizo,
+  mesPorExtenso,
+  nomeCurto,
+  rotulosDasJanelas,
+} from "@/modules/financeiro/relatorios/resultado-por-obra";
+import { recorteDoIndireto } from "@/modules/financeiro/relatorios/indireto-por-mes";
+import { ResultadoPorObraTabela } from "@/modules/financeiro/relatorios/components/resultado-por-obra-tabela";
+import {
+  MatrizResultadoObra,
+  PonteObrasDreQuadro,
+} from "@/modules/financeiro/relatorios/components/resultado-por-obra-quadros";
+import { IndiretoMesesTabela } from "@/modules/financeiro/relatorios/components/indireto-meses-tabela";
+import { BarraProporcional } from "@/modules/financeiro/relatorios/components/barra-proporcional";
 import {
   porCentro,
   porMes,
@@ -85,6 +99,8 @@ import { AgingGrafico } from "@/modules/financeiro/relatorios/components/aging-g
 import { AgingTabela } from "@/modules/financeiro/relatorios/components/aging-tabela";
 import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo-cc-grafico";
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
+import { CustoGrupoHistoria } from "@/modules/financeiro/relatorios/components/custo-grupo-historia";
+import { mesesDoPeriodo } from "@/modules/financeiro/relatorios/custo-grupo-comparacao";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
 import { AgingPrazos } from "@/modules/financeiro/relatorios/components/aging-prazos";
@@ -110,7 +126,6 @@ import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/componen
 import { SociosLigadasRelatorioTela } from "@/modules/financeiro/relatorios/components/socios-ligadas-relatorio";
 import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
 import { CustosIndiretosTabela } from "@/modules/financeiro/relatorios/components/custos-indiretos-tabela";
-import { anoDoIndireto } from "@/modules/financeiro/relatorios/custos-indiretos";
 import { RateioIndiretoTabela } from "@/modules/financeiro/relatorios/components/rateio-indireto-tabela";
 import Link from "next/link";
 import { FiltrosInvestimentosBarra } from "@/modules/financeiro/relatorios/components/filtros-investimentos-barra";
@@ -126,6 +141,7 @@ import {
 import { RelatoriosNav } from "@/modules/financeiro/relatorios/components/relatorios-nav";
 import {
   normalizarRelatorio,
+  queryDoIdAntigo,
   PERGUNTA_DO_RELATORIO,
   type RelatorioId,
 } from "@/modules/financeiro/relatorios/relatorios";
@@ -134,15 +150,16 @@ import {
   aging,
   custoPorCentroCusto,
   custoPorGrupo,
+  custoPorGrupoMensal,
   custoReceita,
   investimentos,
   rankingFornecedores,
   relatorioSociosLigadas,
   aquisicoes,
-  custosIndiretos,
   rateioIndiretoDoMes,
+  carregarResultadoPorObra,
+  carregarIndiretoDoAno,
   indiretoDoPeriodo,
-  indiretoDosMeses,
   dreGerencial,
   extratoPorFornecedor,
   fluxoCaixa,
@@ -165,11 +182,48 @@ interface RelatoriosPageProps {
     fornecedor?: string | string[];
     mes_rateio?: string | string[];
     ano_indireto?: string | string[];
+    mes_obra?: string | string[];
+    visao?: string | string[];
   }>;
 }
 
 function primeiro(valor: string | string[] | undefined): string | undefined {
   return Array.isArray(valor) ? valor[0] : valor;
+}
+
+/** A query da página como `URLSearchParams`, repetindo chave de valor múltiplo. */
+function paraUrlSearchParams(
+  params: Record<string, string | string[] | undefined>,
+): URLSearchParams {
+  const saida = new URLSearchParams();
+  for (const [chave, valor] of Object.entries(params)) {
+    for (const v of Array.isArray(valor) ? valor : valor === undefined ? [] : [valor]) {
+      saida.append(chave, v);
+    }
+  }
+  return saida;
+}
+
+/**
+ * As duas visões do Resultado por obra. "Cruzar centros" é o antigo Custo x
+ * receita inteiro: o custo de um conjunto de centros contra a receita de outro,
+ * pedido do dono, que a visão por obra não substitui.
+ */
+function VisaoResultadoObra({ cruzar }: { cruzar: boolean }) {
+  const classe = (ativo: boolean) =>
+    ativo
+      ? "rounded-md border border-foreground bg-foreground px-2.5 py-1 text-detalhe text-background"
+      : "rounded-md border border-border px-2.5 py-1 text-detalhe text-muted-foreground hover:text-foreground";
+  return (
+    <nav aria-label="Visão do resultado por obra" className="flex gap-1">
+      <Link className={classe(!cruzar)} aria-current={!cruzar ? "page" : undefined} href="/financeiro/relatorios?rel=resultado-obra">
+        Por obra
+      </Link>
+      <Link className={classe(cruzar)} aria-current={cruzar ? "page" : undefined} href="/financeiro/relatorios?rel=resultado-obra&visao=cruzar">
+        Cruzar centros
+      </Link>
+    </nav>
+  );
 }
 
 /** Faixa de cabeçalho de cada relatório: título e, opcionalmente, controles. */
@@ -869,29 +923,6 @@ function somarMeses(mes: string, n: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-/**
- * Rateio do indireto de um mês. Abre no mês anterior ao corrente, que é o que
- * se fecha; as setas andam de mês em mês pela URL (`mes_rateio`).
- */
-async function ConteudoRateioIndireto({ mes, podeAjustar }: { mes: string; podeAjustar: boolean }) {
-  const rateio = await rateioIndiretoDoMes(mes);
-  const href = (m: string) => `/financeiro/relatorios?rel=rateio-indireto&mes_rateio=${m}`;
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3 text-corpo">
-        <Link className="text-primary hover:underline" href={href(somarMeses(mes, -1))}>← mês anterior</Link>
-        <span className="font-medium">{formatarMesAno(`${mes}-01`)}</span>
-        <Link className="text-primary hover:underline" href={href(somarMeses(mes, 1))}>próximo mês →</Link>
-      </div>
-      {rateio.linhas.length === 0 && rateio.custoIndiretoMes === 0 ? (
-        <EmptyState icone={BarChart3} titulo="Sem custo indireto neste mês" descricao="Escritório Central, Manutenção/Documentação de Equipamentos e 002 Equipamentos Colorado não tiveram custo no mês." />
-      ) : (
-        <RateioIndiretoTabela key={`${mes}-${rateio.status}`} rateio={rateio} podeAjustar={podeAjustar} />
-      )}
-    </div>
-  );
-}
-
 async function ConteudoSociosLigadas() {
   const dados = await relatorioSociosLigadas();
   if (dados.socios.length === 0 && dados.ligadas.length === 0) {
@@ -911,21 +942,249 @@ async function ConteudoAquisicoes({ podeVerLancamentos }: { podeVerLancamentos: 
   return <AquisicoesTabela linhas={await aquisicoes()} podeVerLancamentos={podeVerLancamentos} />;
 }
 
-/**
- * Custos indiretos de um ano. Abre no ano corrente; as setas andam de ano em
- * ano pela URL (`ano_indireto`).
- */
-async function ConteudoCustosIndiretos({ ano }: { ano: number }) {
-  const linhas = await custosIndiretos(ano);
-  const href = (a: number) => `/financeiro/relatorios?rel=custos-indiretos&ano_indireto=${a}`;
+/** Navegação de mês em mês pela URL, como no rateio. */
+function SetasDeMes({
+  mes,
+  href,
+  ultimo,
+}: {
+  mes: string;
+  href: (m: string) => string;
+  /** yyyy-MM: depois dele a seta some. */
+  ultimo?: string;
+}) {
+  const proximo = somarMeses(mes, 1);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-3 text-corpo">
-        <Link className="text-primary hover:underline" href={href(ano - 1)}>← ano anterior</Link>
-        <span className="font-medium tabular-nums">{ano}</span>
-        <Link className="text-primary hover:underline" href={href(ano + 1)}>próximo ano →</Link>
+    <div className="flex items-center gap-3 text-corpo">
+      <Link className="text-primary hover:underline" href={href(somarMeses(mes, -1))}>← mês anterior</Link>
+      <span className="font-medium">{mesPorExtenso(mes)}</span>
+      {ultimo === undefined || proximo <= ultimo ? (
+        <Link className="text-primary hover:underline" href={href(proximo)}>próximo mês →</Link>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Resultado por obra: o mês escolhido (padrão o último fechado), o ano até ele
+ * e desde o início até ele. Nada depois do mês entra, então previsto de mês
+ * futuro nunca soma.
+ */
+async function ConteudoResultadoObra({ mes }: { mes: string }) {
+  const { resultado: r, ponte } = await carregarResultadoPorObra(mes);
+
+  if (r.obras.length === 0 && r.foraDoRateio.length === 0) {
+    return (
+      <EmptyState
+        icone={BarChart3}
+        titulo="Nenhuma obra com receita ou custo até este mês"
+        descricao="O resultado aparece quando um lançamento a pagar ou a receber de uma obra recebe mês de referência."
+      />
+    );
+  }
+
+  const rotulos = rotulosDasJanelas(mes);
+  const frases = frasesDoResultado(r, formatarBRL);
+  const { prejuizo } = lucroEPrejuizo(r.obras, "ano");
+  const diferencas = JANELAS.map((j) => conferencia(r, j)).filter((d) => Math.round(d * 100) !== 0);
+
+  return (
+    <>
+      <div className="flex max-w-4xl flex-col gap-1 text-corpo text-foreground">
+        {frases.map((f) => (
+          <p key={f}>{f}</p>
+        ))}
       </div>
-      <CustosIndiretosTabela ano={ano} linhas={linhas} mesCorrente={mesCorrente()} />
+
+      <GradeKpis id="financeiro.relatorios.resultado-obra" titulo="Resultado por obra">
+        <KPICard
+          idCard="ano"
+          titulo={`Resultado ${rotulos.ano.toLowerCase().replace(/^\d{4}/, mes.slice(0, 4))}`}
+          valor={<MoneyText valor={r.totalObras.ano.resultado} />}
+          detalhe={
+            r.totalObras.ano.margem === null
+              ? "Sem receita no ano"
+              : `Margem de ${formatarPercentual(r.totalObras.ano.margem, 1)} sobre ${formatarBRL(r.totalObras.ano.receita)} de receita`
+          }
+        />
+        <KPICard
+          idCard="mes"
+          titulo={`Resultado de ${mesPorExtenso(mes)}`}
+          valor={<MoneyText valor={r.totalObras.mes.resultado} />}
+          detalhe={
+            r.totalObras.mes.receita === 0
+              ? "Sem medição no mês"
+              : `Receita de ${formatarBRL(r.totalObras.mes.receita)}`
+          }
+        />
+        <KPICard
+          idCard="inicio"
+          titulo="Resultado desde o início"
+          valor={<MoneyText valor={r.totalObras.inicio.resultado} />}
+          detalhe={
+            r.totalObras.inicio.margem === null
+              ? "Sem receita"
+              : `Margem de ${formatarPercentual(r.totalObras.inicio.margem, 1)}`
+          }
+        />
+        <KPICard
+          idCard="vermelho"
+          titulo="Obras no vermelho no ano"
+          valor={String(prejuizo.length)}
+          detalhe={prejuizo.length === 0 ? "Todas com resultado positivo" : prejuizo.map((o) => nomeCurto(o.nome)).join(", ")}
+        />
+      </GradeKpis>
+
+      <ResultadoPorObraTabela obras={r.obras} total={r.totalObras} rotulos={rotulos} />
+
+      <div className="flex flex-col gap-1 text-detalhe text-muted-foreground">
+        {r.foraDoRateio.map((o) => (
+          <p key={o.centroId}>
+            {o.nome} fica fora do rateio (unidade própria): resultado de {formatarBRL(o.ano.resultado)} no ano e{" "}
+            {formatarBRL(o.inicio.resultado)} desde o início, sem indireto.
+          </p>
+        ))}
+        {r.naoRateado.inicio > 0 ? (
+          <p>
+            Indireto sem obra para receber (mês sem obra com custo): {formatarBRL(r.naoRateado.ano)} no ano,{" "}
+            {formatarBRL(r.naoRateado.inicio)} desde o início.
+          </p>
+        ) : null}
+        {r.receitaNosIndiretos.inicio !== 0 ? (
+          <p>
+            Receita lançada direto num centro indireto: {formatarBRL(r.receitaNosIndiretos.inicio)} desde o início.
+          </p>
+        ) : null}
+        {diferencas.length > 0 ? (
+          <p className="text-destructive">
+            A soma desta tela não fecha com o custo x receita da empresa ({diferencas.map(formatarBRL).join(", ")}):
+            o rateio de algum mês não distribuiu exatamente o custo dos indiretos.
+          </p>
+        ) : (
+          <p>
+            Obras, fora do rateio e indireto sem obra somam {formatarBRL(r.totalGeral.ano.resultado)} no ano: o
+            resultado de todos os centros, sem rateio.
+          </p>
+        )}
+      </div>
+
+      <section className="flex flex-col gap-2">
+        <h3 className="text-corpo font-medium text-foreground">Resultado mês a mês ({mes.slice(0, 4)})</h3>
+        <p className="text-detalhe text-muted-foreground">
+          Com o indireto rateado. A receita chega por medição: o mês de medição sobe, o mês sem ela fica negativo.
+        </p>
+        <MatrizResultadoObra
+          obras={r.obras}
+          meses={r.mesesDoAno}
+          totalPorMes={r.totalObrasPorMes}
+          totalAno={r.totalObras.ano.resultado}
+        />
+      </section>
+
+      <PonteObrasDreQuadro ponte={ponte} periodo={rotulos.ano.toLowerCase()} />
+    </>
+  );
+}
+
+/**
+ * Indireto: uma linha por mês do ano e, no mês aberto, as categorias e o
+ * ajuste dos percentuais (o mesmo "Salvar ajuste" e "Confirmar mês" do antigo
+ * Rateio do indireto).
+ */
+async function ConteudoIndireto({
+  ano,
+  mesAberto,
+  podeAjustar,
+}: {
+  ano: number;
+  mesAberto: string;
+  podeAjustar: boolean;
+}) {
+  const [{ meses, categorias }, rateioAberto] = await Promise.all([
+    carregarIndiretoDoAno(ano),
+    rateioIndiretoDoMes(mesAberto),
+  ]);
+  const href = (m: string) =>
+    `/financeiro/relatorios?rel=indireto&ano_indireto=${m.slice(0, 4)}&mes_rateio=${m}`;
+  const hrefAno = (a: number) => `/financeiro/relatorios?rel=indireto&ano_indireto=${a}`;
+  const doMes = meses.find((m) => m.mes === mesAberto);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3 text-corpo">
+        <Link className="text-primary hover:underline" href={hrefAno(ano - 1)}>← ano anterior</Link>
+        <span className="font-medium tabular-nums">{ano}</span>
+        <Link className="text-primary hover:underline" href={hrefAno(ano + 1)}>próximo ano →</Link>
+      </div>
+
+      {meses.length === 0 ? (
+        <EmptyState
+          icone={BarChart3}
+          titulo={`Sem custo indireto em ${ano}`}
+          descricao="Escritório Central, Manutenção/Documentação de Equipamentos e 002 Equipamentos Colorado não tiveram custo no ano."
+        />
+      ) : (
+        <IndiretoMesesTabela meses={meses} aberto={mesAberto} href={href} mesCorrente={mesCorrente()} />
+      )}
+
+      <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
+        <SetasDeMes mes={mesAberto} href={href} />
+        {doMes && doMes.categorias.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-corpo font-medium text-foreground">
+              O que compôs o indireto de {mesPorExtenso(mesAberto)}
+            </h3>
+            <ul className="flex max-w-3xl flex-col gap-1">
+              {doMes.categorias.slice(0, 8).map((c, i) => (
+                <li key={c.categoriaId ?? c.categoria} className="grid grid-cols-[minmax(0,14rem)_1fr_auto] items-center gap-3 text-detalhe">
+                  <span className="truncate" title={c.categoria}>{c.categoria}</span>
+                  <BarraProporcional valor={c.total} maximo={doMes.categorias[0].total} ordem={i} />
+                  <span className="tabular-nums">
+                    <MoneyText valor={c.total} />{" "}
+                    <span className="text-muted-foreground">({formatarPercentual(c.pct, 0)})</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {doMes.categorias.length > 8 ? (
+              <p className="text-legenda text-muted-foreground">
+                Mais {doMes.categorias.length - 8} categorias na tabela do ano, abaixo.
+              </p>
+            ) : null}
+            {Math.round(doMes.diferencaCategorias * 100) !== 0 ? (
+              <p className="text-detalhe text-destructive">
+                As categorias somam {formatarBRL(doMes.total - doMes.diferencaCategorias)}, e o rateio distribui{" "}
+                {formatarBRL(doMes.total)}.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <h3 className="text-corpo font-medium text-foreground">Como o indireto de {mesPorExtenso(mesAberto)} foi repartido</h3>
+        {rateioAberto.linhas.length === 0 && rateioAberto.custoIndiretoMes === 0 ? (
+          <EmptyState
+            icone={BarChart3}
+            titulo="Sem custo indireto neste mês"
+            descricao="Escritório Central, Manutenção/Documentação de Equipamentos e 002 Equipamentos Colorado não tiveram custo no mês."
+          />
+        ) : (
+          <RateioIndiretoTabela
+            key={`${mesAberto}-${rateioAberto.status}`}
+            rateio={rateioAberto}
+            podeAjustar={podeAjustar}
+          />
+        )}
+      </section>
+
+      {categorias.length > 0 ? (
+        <details className="group rounded-lg border border-border p-4">
+          <summary className="foco-anel w-fit cursor-pointer rounded-sm text-corpo font-medium select-none">
+            O ano por centro e por categoria
+          </summary>
+          <div className="pt-3">
+            <CustosIndiretosTabela ano={ano} linhas={categorias} mesCorrente={mesCorrente()} />
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -1321,18 +1580,14 @@ async function ConteudoCustoReceita({
     );
   }
 
-  // Margem por obra só sem corte de centro: com corte, custo e receita são de
-  // conjuntos diferentes e "a margem da obra" deixa de ser uma pergunta.
-  const semCorteDeCentro = centrosCusto.length === 0 && centrosReceita.length === 0;
-  const [linhas, indireto] = await Promise.all([
-    custoReceita({
-      meses,
-      centrosCusto,
-      centrosReceita,
-      incluirInvestimento,
-    }),
-    margemPorObraPermitida({ semCorteDeCentro, incluirInvestimento }) ? indiretoDosMeses(meses) : Promise.resolve(null),
-  ]);
+  // A margem por obra, com o indireto rateado, mora na visão "Por obra" desde
+  // 15/10/2026. Esta visão é a de cruzar conjuntos de centros, sem rateio.
+  const linhas = await custoReceita({
+    meses,
+    centrosCusto,
+    centrosReceita,
+    incluirInvestimento,
+  });
 
   if (linhas.length === 0) {
     return (
@@ -1348,16 +1603,6 @@ async function ConteudoCustoReceita({
   const porMesDoRelatorio = porMes(linhas);
   const custos = porCentro(linhas, "a_pagar");
   const receitas = porCentro(linhas, "a_receber");
-  const margens = indireto
-    ? margemPorObra(
-        new Map(receitas.map((r) => [r.centroCustoId, { nome: r.nome, receita: r.total }])),
-        new Map(custos.map((c) => [c.centroCustoId, c.total])),
-        indireto.porObra,
-        new Set([...indireto.indiretos, ...(indireto.fora ?? [])]),
-        new Map(custos.map((c) => [c.centroCustoId, c.nome])),
-      )
-    : [];
-
   return (
     <>
       <GradeKpis id="financeiro.relatorios.custo-receita" titulo="Custo x receita">
@@ -1437,22 +1682,6 @@ async function ConteudoCustoReceita({
         <CustoReceitaGrafico meses={porMesDoRelatorio} />
       </PainelGrafico>
 
-      {margens.length > 0 ? (
-        <GradeKpis id="financeiro.relatorios.custo-receita.margem" titulo="Margem por obra" vao="amplo">
-          <ItemGrade titulo="Margem por obra" idCard="margem-por-obra" larguraPadrao={12}>
-            <div className="flex flex-col gap-3">
-              <h3 className="text-corpo font-medium text-foreground">Margem por obra</h3>
-              <p className="text-detalhe text-muted-foreground">
-                O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado rateado nas obras pelo custo direto de cada uma, mês a mês.
-                {indireto && indireto.naoRateado > 0
-                  ? ` ${formatarBRL(indireto.naoRateado)} de indireto ficaram sem obra para receber (mês sem obra com custo).`
-                  : ""}
-              </p>
-              <MargemPorObraTabela linhas={margens} />
-            </div>
-          </ItemGrade>
-        </GradeKpis>
-      ) : null}
     </>
   );
 }
@@ -1474,7 +1703,18 @@ async function ConteudoCustoGrupo({
   recorte: RecorteCustoGrupo;
   podeVerLancamentos: boolean;
 }) {
-  const custo = await custoPorGrupo({ ...pontasDaRpc(periodo), ...recorte });
+  // O período anterior de mesmo tamanho e a série mensal contam onde o custo
+  // sobe. Período aberto (tudo, "de X em diante") não tem nem um nem outro.
+  const anteriorPeriodo = periodoAnterior(periodo);
+  const meses = mesesDoPeriodo(periodo);
+  const pontas = pontasDaRpc(periodo);
+  const [custo, anterior, serie] = await Promise.all([
+    custoPorGrupo({ ...pontas, ...recorte }),
+    anteriorPeriodo ? custoPorGrupo({ ...pontasDaRpc(anteriorPeriodo), ...recorte }) : null,
+    meses.length > 1 && meses.length <= 36 && pontas.inicio && pontas.fim
+      ? custoPorGrupoMensal({ ...recorte, inicio: pontas.inicio, fim: pontas.fim })
+      : [],
+  ]);
 
   const descricaoPeriodo = descreverPeriodo(periodo, modo);
   const temRecorte =
@@ -1517,6 +1757,13 @@ async function ConteudoCustoGrupo({
           detalhe="Abra o grupo para ver subcategoria e insumo"
         />
       </GradeKpis>
+      <CustoGrupoHistoria
+        custo={custo}
+        anterior={anterior}
+        descricaoPeriodo={descricaoPeriodo}
+        descricaoAnterior={anteriorPeriodo ? descreverPeriodo(anteriorPeriodo) : null}
+        serie={serie}
+      />
       <GradeKpis id="financeiro.relatorios.custo-grupo.tabela" titulo="Tabela do custo por grupo" vao="amplo">
         <ItemGrade titulo="Tabela do custo por grupo" idCard="tabela" larguraPadrao={12}>
           <CustoGrupoTabela
@@ -1636,7 +1883,26 @@ export default async function RelatoriosPage({
   );
 
   const params = await searchParams;
+
+  // Ids que deixaram de existir em 15/10/2026 (Custo x receita, Custos
+  // indiretos, Rateio do indireto): o link antigo cai no relatório novo, na
+  // mesma rota e com o resto da query. O destino não redireciona de novo, então
+  // a query lembrada pela sessão não prende ninguém num laço.
+  const queryNova = queryDoIdAntigo(paraUrlSearchParams(params));
+  if (queryNova !== null) {
+    redirect(`/financeiro/relatorios?${queryNova}`);
+  }
+
   const relatorio: RelatorioId = normalizarRelatorio(primeiro(params.rel));
+  const cruzarCentros =
+    relatorio === "resultado-obra" && primeiro(params.visao) === "cruzar";
+  const recorteIndireto = recorteDoIndireto(
+    primeiro(params.ano_indireto),
+    primeiro(params.mes_rateio),
+    mesFechado(),
+  );
+  // Abre no último mês fechado; anda até o corrente, nunca para o futuro.
+  const mesObra = [mesDoRateio(primeiro(params.mes_obra), mesFechado()), mesCorrente()].sort()[0];
 
   // O relatório de investimentos virou a aba Financeiro > Aplicações (25/09/2026),
   // que mostra o mesmo movimento mais a posição do extrato e o rendimento. Quem
@@ -1715,10 +1981,10 @@ export default async function RelatoriosPage({
    * relatório (todos) e a ponta aberta da janela ("de julho em diante" termina no
    * último mês que existe, não no fim dos tempos).
    */
-  const mesesDisponiveis =
-    relatorio === "custo-receita" ? await mesesDeCompetencia() : [];
-  const centrosParaCustoReceita =
-    relatorio === "custo-receita" ? await listarCentrosCustoParaFiltro() : null;
+  const mesesDisponiveis = cruzarCentros ? await mesesDeCompetencia() : [];
+  const centrosParaCustoReceita = cruzarCentros
+    ? await listarCentrosCustoParaFiltro()
+    : null;
 
   /**
    * Fluxo de caixa: o cadastro de centros, para a escada dos dois lados.
@@ -1829,7 +2095,7 @@ export default async function RelatoriosPage({
           relatorio="custo-grupo"
           exportar={relatorio}
           titulo="Custo por grupo de insumo"
-          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo."
+          descricao="Regime de COMPETÊNCIA: Material, Mão de obra, Equipamentos e Outros pelo MÊS DE REFERÊNCIA. Abra o grupo para chegar na subcategoria e no insumo; a linha Sem insumo (lançamento sem item de ordem de compra) abre pela categoria financeira do rateio. A comparação é contra o período anterior de mesmo tamanho, com o mesmo centro e categoria; em O que mais subiu entram os grupos com insumo e as categorias do Sem insumo. Com o mesmo período, centro e categoria, o total fecha com o Custo por centro de custo, menos o rateio sem categoria lançado em centro de empresa ligada: aqui o centro de empresa ligada fica fora pela raiz, lá ele entra quando o rateio não tem categoria (em 2026, dois 13º no centro Amazônia, R$ 1.621,00)."
         >
           <FiltrosCustoGrupoBarra
             filtros={filtrosCustoGrupo}
@@ -1878,19 +2144,6 @@ export default async function RelatoriosPage({
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "rateio-indireto" ? (
-        <SecaoRelatorio
-          relatorio="rateio-indireto"
-          titulo="Rateio do custo indireto"
-          descricao="O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado distribuído nas obras pelo custo direto de cada uma no mês. Quem fecha o mês ajusta os percentuais e confirma. Os lançamentos não mudam: o rateio aparece nos relatórios de custo."
-        >
-          <ConteudoRateioIndireto
-            mes={mesDoRateio(primeiro(params.mes_rateio), somarMeses(mesCorrente(), -1))}
-            podeAjustar={temPermissao(usuario, "financeiro.competencias", "aprovar")}
-          />
-        </SecaoRelatorio>
-      ) : null}
-
       {relatorio === "socios-ligadas" ? (
         <SecaoRelatorio
           relatorio="socios-ligadas"
@@ -1906,28 +2159,23 @@ export default async function RelatoriosPage({
         <SecaoRelatorio
           relatorio="aquisicoes"
           titulo="Equipamentos e consórcios"
-          descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada."
+          descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada. A quitação é o vencimento da última parcela em aberto. No consórcio com cota cadastrada em Financeiro › Dívidas, o a pagar e as parcelas que restam vêm do cronograma da cota. Seguro-garantia e caução lançados com a categoria Investimentos não são máquina e ficam fora."
         >
           <ConteudoAquisicoes podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "custos-indiretos" ? (
+      {relatorio === "indireto" ? (
         <SecaoRelatorio
-          relatorio="custos-indiretos"
-          titulo="Custos indiretos"
-          descricao={
-            <>
-              O que compõe o custo indireto (Escritório Central, Manutenção/Documentação de Equipamentos e 002 - Equipamentos Colorado). É o mesmo valor que o{" "}
-              <Link className="text-primary hover:underline" href="/financeiro/relatorios?rel=rateio-indireto">
-                Rateio do indireto
-              </Link>{" "}
-              distribui entre as obras.
-            </>
-          }
+          relatorio="indireto"
+          exportar={relatorio}
+          titulo="Indireto"
+          descricao="O custo do Escritório Central, da Manutenção/Documentação de Equipamentos e do 002 Equipamentos Colorado, mês a mês, e como ele foi repartido entre as obras: pelo custo direto de cada uma no mês, salvo quando quem fecha o mês ajusta os percentuais e confirma. Os lançamentos não mudam: o rateio aparece no Resultado por obra e no Custo por centro de custo. A categoria que mais pesou fica na linha do mês porque um salto de imposto ou de parcelamento no Escritório Central vira, pelo rateio, custo das obras."
         >
-          <ConteudoCustosIndiretos
-            ano={anoDoIndireto(primeiro(params.ano_indireto), Number(mesCorrente().slice(0, 4)))}
+          <ConteudoIndireto
+            ano={recorteIndireto.ano}
+            mesAberto={recorteIndireto.mes}
+            podeAjustar={temPermissao(usuario, "financeiro.competencias", "aprovar")}
           />
         </SecaoRelatorio>
       ) : null}
@@ -1972,35 +2220,55 @@ export default async function RelatoriosPage({
         </SecaoRelatorio>
       ) : null}
 
-      {relatorio === "custo-receita" && centrosParaCustoReceita ? (
+      {relatorio === "resultado-obra" ? (
         <SecaoRelatorio
-          relatorio="custo-receita"
+          relatorio="resultado-obra"
           exportar={relatorio}
-          titulo="Custo x receita por centro de custo"
-          descricao="Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Os centros do custo e os da receita são escolhidos separadamente: é o custo de um conjunto contra a receita de outro. Conta só categoria de natureza operacional, e a receita é a líquida (a retenção aparece ao lado)."
+          titulo="Resultado por obra"
+          descricao={
+            cruzarCentros
+              ? "Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Os centros do custo e os da receita são escolhidos separadamente: é o custo de um conjunto contra a receita de outro, sem rateio do indireto. Conta só categoria de natureza operacional na receita, e a receita é a líquida (a retenção aparece ao lado)."
+              : "Regime de COMPETÊNCIA, pelo MÊS DE REFERÊNCIA do lançamento. Receita líquida (só natureza operacional) menos custo direto da obra (tudo menos movimentação, distribuição, mútuo e investimento) menos o indireto rateado mês a mês pelo custo direto (ou pelo ajuste confirmado no relatório Indireto). As três janelas terminam no mês escolhido, que abre no último mês fechado: mês futuro (previsto) nunca entra. Centros de sócio, empresa ligada, empréstimos, investimento e imobilizado ficam fora; 001 Carretas EMT é unidade própria e aparece à parte, sem indireto."
+          }
+          controles={<VisaoResultadoObra cruzar={cruzarCentros} />}
         >
-          <FiltrosCustoReceitaBarra
-            filtros={filtrosCustoReceita}
-            centrosCusto={cadastrosCustoReceita?.custo ?? centrosParaCustoReceita}
-            centrosReceita={
-              cadastrosCustoReceita?.receita ?? centrosParaCustoReceita
-            }
-          />
-          <ConteudoCustoReceita
-            centrosCusto={centrosEfetivos(
-              centrosParaCustoReceita,
-              filtrosCustoReceita.centrosCusto,
-              filtrosCustoReceita.etapasCusto,
-            )}
-            centrosReceita={centrosEfetivos(
-              centrosParaCustoReceita,
-              filtrosCustoReceita.centrosReceita,
-              filtrosCustoReceita.etapasReceita,
-            )}
-            meses={mesesCustoReceita}
-            incluirInvestimento={filtrosCustoReceita.incluirInvestimento}
-            podeVerLancamentos={podeVerLancamentos}
-          />
+          {cruzarCentros && centrosParaCustoReceita ? (
+            <>
+            <FiltrosCustoReceitaBarra
+              filtros={filtrosCustoReceita}
+              centrosCusto={cadastrosCustoReceita?.custo ?? centrosParaCustoReceita}
+              centrosReceita={
+                cadastrosCustoReceita?.receita ?? centrosParaCustoReceita
+              }
+            />
+            <ConteudoCustoReceita
+              centrosCusto={centrosEfetivos(
+                centrosParaCustoReceita,
+                filtrosCustoReceita.centrosCusto,
+                filtrosCustoReceita.etapasCusto,
+              )}
+              centrosReceita={centrosEfetivos(
+                centrosParaCustoReceita,
+                filtrosCustoReceita.centrosReceita,
+                filtrosCustoReceita.etapasReceita,
+              )}
+              meses={mesesCustoReceita}
+              incluirInvestimento={filtrosCustoReceita.incluirInvestimento}
+              podeVerLancamentos={podeVerLancamentos}
+            />
+            </>
+          ) : (
+            <>
+              <SetasDeMes
+                mes={mesObra}
+                href={(m) => `/financeiro/relatorios?rel=resultado-obra&mes_obra=${m}`}
+                ultimo={mesCorrente()}
+              />
+              <ConteudoResultadoObra
+                mes={mesObra}
+              />
+            </>
+          )}
         </SecaoRelatorio>
       ) : null}
 

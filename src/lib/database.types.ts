@@ -3093,6 +3093,7 @@ export type Database = {
           motivo_exclusao: string | null;
           nota_fiscal: string | null;
           observacoes: string | null;
+          pilha_id: string | null;
           oc_item_id: string | null;
           oc_numero: string | null;
           ordem_compra_id: string | null;
@@ -3115,6 +3116,7 @@ export type Database = {
           motivo_exclusao?: string | null;
           nota_fiscal?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           oc_item_id?: string | null;
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
@@ -3137,6 +3139,7 @@ export type Database = {
           motivo_exclusao?: string | null;
           nota_fiscal?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           oc_item_id?: string | null;
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
@@ -3147,6 +3150,13 @@ export type Database = {
           valor_unitario?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_entradas_pilha_id_fkey";
+            columns: ["pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_entradas_tanque_id_fkey";
             columns: ["tanque_id"];
@@ -3212,6 +3222,63 @@ export type Database = {
           },
         ];
       };
+      estoque_pilhas: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          insumo_atual_id: string | null;
+          nome: string;
+          observacoes: string | null;
+          saldo: number;
+          total_entrada: number;
+          updated_at: string;
+          zerada_em: string | null;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          insumo_atual_id?: string | null;
+          nome: string;
+          observacoes?: string | null;
+          saldo?: number;
+          total_entrada?: number;
+          updated_at?: string;
+          zerada_em?: string | null;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          insumo_atual_id?: string | null;
+          nome?: string;
+          observacoes?: string | null;
+          saldo?: number;
+          total_entrada?: number;
+          updated_at?: string;
+          zerada_em?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_pilhas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_pilhas_insumo_atual_id_fkey";
+            columns: ["insumo_atual_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       estoque_saida_camadas: {
         Row: {
           created_at: string;
@@ -3268,6 +3335,7 @@ export type Database = {
           insumo_id: string;
           motivo_exclusao: string | null;
           observacoes: string | null;
+          pilha_id: string | null;
           quantidade: number;
           tanque_id: string | null;
           updated_at: string;
@@ -3286,6 +3354,7 @@ export type Database = {
           insumo_id: string;
           motivo_exclusao?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           quantidade: number;
           tanque_id?: string | null;
           updated_at?: string;
@@ -3304,12 +3373,20 @@ export type Database = {
           insumo_id?: string;
           motivo_exclusao?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           quantidade?: number;
           tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_saidas_pilha_id_fkey";
+            columns: ["pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_saidas_tanque_id_fkey";
             columns: ["tanque_id"];
@@ -10105,7 +10182,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_almox_recalcular_saldo: {
-        Args: { p_deposito: string; p_insumo: string };
+        Args: { p_deposito: string; p_insumo: string; p_pilha: string; p_tanque: string };
         Returns: undefined;
       };
       fn_almox_registrar_entrada: {
@@ -10481,6 +10558,7 @@ export type Database = {
           p_nota_fiscal?: string;
           p_observacoes?: string;
           p_oc_item?: string;
+          p_pilha?: string;
           p_quantidade: number;
           p_tanque: string;
           p_valor_unitario: number;
@@ -10495,6 +10573,7 @@ export type Database = {
           p_id: string;
           p_insumo: string;
           p_observacoes?: string;
+          p_pilha?: string;
           p_quantidade: number;
           p_tanque: string;
         };
@@ -11137,6 +11216,22 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_girar_equipamento: {
+        Args: { p_id: string; p_heading: number | null };
+        Returns: undefined;
+      };
+      fn_mapa_local_editar: {
+        Args: { p_id: string | null; p_nome: string | null; p_tipos: string[] | null; p_lng: number | null; p_lat: number | null };
+        Returns: string;
+      };
+      fn_mapa_local_raio: {
+        Args: { p_id: string; p_raio: number | null };
+        Returns: undefined;
+      };
+      fn_mapa_local_salvar: {
+        Args: { p_id: string | null; p_nome: string | null; p_tipo: string | null; p_lng: number; p_lat: number };
+        Returns: string;
+      };
       fn_mapa_locacao_encerrar: {
         Args: { p_equipamento: string; p_fim?: string | null; p_medicao_fim?: number | null; p_motivo?: string | null };
         Returns: undefined;
@@ -11171,13 +11266,37 @@ export type Database = {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
       };
+      fn_mapa_obra_desenhar: {
+        Args: {
+          p_obra: string;
+          p_forma: string;
+          p_geojson: Json;
+          p_rodovia: string | null;
+          p_km_inicial: number | null;
+          p_km_final: number | null;
+          p_substituir: boolean;
+        };
+        Returns: string;
+      };
+      fn_mapa_obra_posicionar: {
+        Args: { p_obra: string; p_lng: number; p_lat: number };
+        Returns: undefined;
+      };
       fn_mapa_mover_equipamentos: {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
       };
+      fn_mapa_obra_tirar: {
+        Args: { p_obra: string };
+        Returns: undefined;
+      };
       fn_mapa_resolver_destino: {
         Args: { p_lng: number; p_lat: number };
         Returns: Json;
+      };
+      fn_mapa_vincular_local: {
+        Args: { p_alvo: string; p_id: string; p_localidade: string };
+        Returns: undefined;
       };
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string };
@@ -11644,6 +11763,23 @@ export type Database = {
         Args: { p_fim: string; p_inicio: string };
         Returns: { centro_id: string | null; indireto: number; nao_rateado: number }[];
       };
+      fn_rel_rateio_indireto_meses: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: {
+          centro: string | null;
+          centro_id: string | null;
+          custo_direto: number;
+          custo_indireto_mes: number;
+          indireto: number;
+          mes: string;
+          nao_rateado: number;
+          status: string;
+        }[];
+      };
+      fn_rel_obras_ponte_dre: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: { termo: string; valor: number }[];
+      };
       fn_rateio_indireto_salvar: {
         Args: { p_confirmar: boolean; p_mes: string; p_motivo: string; p_percentuais: Json };
         Returns: undefined;
@@ -11707,6 +11843,59 @@ export type Database = {
           pago: number;
           proximos_30: number;
           vencido: number;
+        }[];
+      };
+      fn_rel_custo_sem_insumo_por_categoria: {
+        Args: {
+          p_categoria?: string;
+          p_centro_custo?: string;
+          p_fim?: string;
+          p_incluir_investimento?: boolean;
+          p_inicio?: string;
+        };
+        Returns: {
+          categoria_id: string | null;
+          categoria_nome: string;
+          total: number;
+        }[];
+      };
+      fn_rel_custo_por_grupo_mensal: {
+        Args: {
+          p_categoria?: string;
+          p_centro_custo?: string;
+          p_fim: string;
+          p_incluir_investimento?: boolean;
+          p_inicio: string;
+        };
+        Returns: {
+          grupo_id: string | null;
+          grupo_nome: string;
+          mes: string;
+          total: number;
+        }[];
+      };
+      fn_rel_aquisicoes_quitacao: {
+        Args: never;
+        Returns: {
+          a_pagar: number;
+          centro: string;
+          centro_id: string;
+          descricao: string | null;
+          divida: string | null;
+          fornecedor: string | null;
+          grupo: string;
+          lancamento_id: string | null;
+          lancamentos: number;
+          numero: string | null;
+          pago: number;
+          parcelas: number | null;
+          parcelas_abertas: number;
+          parcelas_pagas: number | null;
+          primeira_competencia: string | null;
+          proximo_vencimento: string | null;
+          tipo: string;
+          ultimo_vencimento: string | null;
+          valor: number;
         }[];
       };
       fn_rel_socios_ligadas: {

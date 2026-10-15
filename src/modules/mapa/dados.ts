@@ -1,5 +1,6 @@
 import type {
   AreaMapa,
+  DepositoMapa,
   EquipamentoForaDoMapa,
   EquipamentoMapa,
   EstadoEfetivo,
@@ -9,6 +10,7 @@ import type {
   LocalidadeMapa,
   Modelo3d,
   PessoaMapa,
+  TanqueMapa,
   Posicao,
   Propriedade,
   TipoAluguel,
@@ -155,7 +157,8 @@ function equipamento(e: Linha): EquipamentoMapa {
     propriedade: propriedade(e.propriedade),
     modelo3d: texto(e.modelo_3d) || "generico",
     pos: posicao(e.lng, e.lat),
-    heading: numero(e.heading),
+    heading: numeroOuNulo(e.heading) ?? 0,
+    rumoManual: numeroOuNulo(e.heading),
     fontePosicao: e.fonte_posicao === "gps" ? "gps" : "manual",
     estado: estadoEfetivo(e.estado),
     estadoDesde: textoOuNulo(e.estado_desde),
@@ -274,6 +277,16 @@ function modelo(m: Linha): Modelo3d {
 }
 
 /** Converte o JSON da RPC no estado tipado da tela, ou null quando o formato não é o esperado. */
+/** Lista de tipos do local; a RPC antiga (sem `tipos`) vira a lista só com o `tipo`. */
+function tiposDoLocal(tipos: unknown, tipo: unknown): string[] {
+  const lista = Array.isArray(tipos)
+    ? tipos.filter((t): t is string => typeof t === "string" && t !== "")
+    : [];
+  if (lista.length > 0) return lista;
+  const principal = texto(tipo);
+  return principal ? [principal] : [];
+}
+
 export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
   const b = objeto(bruto);
   if (!b || !Array.isArray(b.equipamentos) || !Array.isArray(b.trechos))
@@ -311,6 +324,8 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
         obraId: textoOuNulo(l.obra_id),
         fornecedorId: textoOuNulo(l.fornecedor_id),
         pos,
+        raioM: numeroOuNulo(l.raio_m),
+        tipos: tiposDoLocal(l.tipos, l.tipo),
       };
       return [item];
     }),
@@ -319,5 +334,65 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       id: texto(f.id),
       nome: texto(f.nome),
     })),
+    obras: lista(b.obras).map((o) => ({
+      id: texto(o.id),
+      nome: texto(o.nome),
+      cor: textoOuNulo(o.cor),
+      tipoObra: texto(o.tipo_obra),
+      noMapa: o.no_mapa === true,
+      pos: posicao(o.lng, o.lat),
+    })),
+    tanques: lista(b.tanques).map((t) => ({
+      id: texto(t.id),
+      nome: texto(t.nome),
+      apelido: texto(t.apelido),
+      uso: texto(t.uso),
+      ehExterno: t.eh_externo === true,
+      localidadeId: textoOuNulo(t.localidade_id),
+      equipamentoId: textoOuNulo(t.equipamento_id),
+    })),
+    depositos: lista(b.depositos).map((d) => ({
+      id: texto(d.id),
+      nome: texto(d.nome),
+      localidadeId: textoOuNulo(d.localidade_id),
+    })),
+    localidadesSemPosicao: lista(b.localidades_sem_posicao).map((l) => ({
+      id: texto(l.id),
+      nome: texto(l.nome),
+      tipo: texto(l.tipo),
+      tipos: tiposDoLocal(l.tipos, l.tipo),
+    })),
   };
+}
+
+/**
+ * Segunda linha do rótulo de cada local: quantos tanques e depósitos estão ali
+ * ("2 tanques · 1 depósito"). Tanque de comboio (meloza) anda com a máquina e não conta.
+ */
+export function extrasPorLocal(
+  tanques: readonly TanqueMapa[],
+  depositos: readonly DepositoMapa[],
+): Map<string, string> {
+  const contagem = new Map<string, { tanques: number; depositos: number }>();
+  const somar = (id: string | null, campo: "tanques" | "depositos") => {
+    if (!id) return;
+    const atual = contagem.get(id) ?? { tanques: 0, depositos: 0 };
+    atual[campo] += 1;
+    contagem.set(id, atual);
+  };
+  for (const t of tanques)
+    if (!t.equipamentoId) somar(t.localidadeId, "tanques");
+  for (const d of depositos) somar(d.localidadeId, "depositos");
+  const extras = new Map<string, string>();
+  for (const [id, c] of contagem) {
+    const partes: string[] = [];
+    if (c.tanques)
+      partes.push(`${c.tanques} ${c.tanques === 1 ? "tanque" : "tanques"}`);
+    if (c.depositos)
+      partes.push(
+        `${c.depositos} ${c.depositos === 1 ? "depósito" : "depósitos"}`,
+      );
+    extras.set(id, partes.join(" · "));
+  }
+  return extras;
 }

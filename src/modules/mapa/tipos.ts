@@ -74,8 +74,10 @@ export interface EquipamentoMapa {
   modelo3d: string;
   /** Null enquanto ninguém posicionou (estado `sem_posicao`). */
   pos: Posicao | null;
-  /** Graus a partir do norte, sentido horário. */
+  /** Graus a partir do norte, sentido horário: o rumo desenhado (manual ou o da pista). */
   heading: number;
+  /** Rumo escolhido na ficha; null = segue o traçado no km da máquina. */
+  rumoManual: number | null;
   fontePosicao: "manual" | "gps";
   estado: EstadoEfetivo;
   estadoDesde: string | null;
@@ -190,6 +192,64 @@ export interface LocalidadeMapa {
   obraId: string | null;
   fornecedorId: string | null;
   pos: Posicao;
+  /** Todos os tipos do local (pátio, jazida, oficina...); o primeiro é o principal (`tipo`). */
+  tipos: string[];
+  /** Raio da área do local, em metros; null = o padrão da configuração (snapLocalM). */
+  raioM: number | null;
+}
+
+/** Tipos de local aceitos pelo cadastro (CHECK de `localidades.tipo`). */
+export const TIPOS_LOCAL = [
+  "oficina",
+  "patio",
+  "sede",
+  "deposito",
+  "canteiro",
+  "alojamento",
+  "usina",
+  "pulmao",
+  "pedreira",
+  "jazida",
+  "terreno",
+  "outro",
+] as const;
+export type TipoLocal = (typeof TIPOS_LOCAL)[number];
+
+/** Obra ativa do cadastro; `pos` é o ponto dela no mapa (null enquanto ninguém pôs). */
+export interface ObraMapa {
+  id: string;
+  nome: string;
+  cor: string | null;
+  tipoObra: string;
+  noMapa: boolean;
+  pos: Posicao | null;
+}
+
+/** Tanque do Estoque: fica no mapa pelo local onde está (`localidadeId`). */
+export interface TanqueMapa {
+  id: string;
+  nome: string;
+  apelido: string;
+  uso: string;
+  ehExterno: boolean;
+  localidadeId: string | null;
+  /** Tanque de comboio (meloza): anda com a máquina, não tem local fixo. */
+  equipamentoId: string | null;
+}
+
+/** Depósito do almoxarifado: fica no mapa pelo local onde está. */
+export interface DepositoMapa {
+  id: string;
+  nome: string;
+  localidadeId: string | null;
+}
+
+/** Local do cadastro que ainda não tem ponto no mapa. */
+export interface LocalSemPosicao {
+  id: string;
+  nome: string;
+  tipo: string;
+  tipos: string[];
 }
 
 export interface FrenteHoje {
@@ -239,6 +299,10 @@ export interface EstadoMapa {
   localidades: LocalidadeMapa[];
   frentesHoje: FrenteHoje[];
   fornecedores: FornecedorOpcao[];
+  obras: ObraMapa[];
+  tanques: TanqueMapa[];
+  depositos: DepositoMapa[];
+  localidadesSemPosicao: LocalSemPosicao[];
 }
 
 /** O que a pessoa pode fazer na tela, decidido no servidor pelo catálogo de permissões. */

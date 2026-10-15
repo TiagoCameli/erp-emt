@@ -64,11 +64,17 @@ type LinhaCusto =
       carregando: boolean;
       sub: SubcategoriaCusto;
     }
-  | { tipo: "insumo"; id: string; insumo: LinhaInsumo };
+  | { tipo: "insumo"; id: string; insumo: LinhaInsumo }
+  | {
+      tipo: "categoria";
+      id: string;
+      categoria: NonNullable<GrupoCusto["categorias"]>[number];
+    };
 
 function valorDaLinha(linha: LinhaCusto): number {
   if (linha.tipo === "grupo") return linha.grupo.valor;
   if (linha.tipo === "sub") return linha.sub.valor;
+  if (linha.tipo === "categoria") return linha.categoria.valor;
   return linha.insumo.valor;
 }
 
@@ -181,6 +187,15 @@ export function CustoGrupoTabela({
         grupo,
       });
       if (!aberto) continue;
+      // A linha "Sem insumo" não tem subcategoria de insumo: abre pela
+      // categoria financeira, que é o que diz para onde foi esse dinheiro.
+      for (const categoria of grupo.categorias ?? []) {
+        linhas.push({
+          tipo: "categoria",
+          id: `categoria:${categoria.categoriaId ?? "sem"}`,
+          categoria,
+        });
+      }
       for (const sub of grupo.subcategorias) {
         const subAberta = subsAbertas.has(sub.categoriaId);
         const carregados = insumos[sub.categoriaId];
@@ -232,7 +247,8 @@ export function CustoGrupoTabela({
             const { grupo, chave, aberto } = linha;
             return (
               <div className="flex items-center gap-1.5 text-left">
-                {grupo.subcategorias.length > 0 ? (
+                {grupo.subcategorias.length > 0 ||
+                (grupo.categorias?.length ?? 0) > 0 ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -280,6 +296,29 @@ export function CustoGrupoTabela({
                     {grupo.nome}
                   </span>
                 )}
+              </div>
+            );
+          }
+          if (linha.tipo === "categoria") {
+            // Sem link de propósito: a categoria daqui é a do RATEIO (caindo
+            // na do lançamento), e o filtro `categoria=` da lista de lançamentos
+            // olha só o lançamento. Em 2026 são 110 rateios (R$ 1,70 mi) com
+            // categoria própria, e a lista não fecharia com a célula. O link do
+            // grupo "Sem insumo", acima, continua fechando.
+            const { categoria } = linha;
+            return (
+              <div
+                className={cn(
+                  "pl-12 text-left",
+                  categoria.categoriaId === null && "italic text-muted-foreground",
+                )}
+                title={
+                  categoria.categoriaId === null
+                    ? "Rateio sem categoria financeira, nem no rateio nem no lançamento"
+                    : undefined
+                }
+              >
+                {categoria.nome}
               </div>
             );
           }
@@ -393,7 +432,7 @@ export function CustoGrupoTabela({
       idDaLinha={(linha) => linha.id}
       semPaginacao
       classeDaLinha={(linha) =>
-        linha.tipo === "sub" ? "bg-surface/40" : undefined
+        linha.tipo === "sub" || linha.tipo === "categoria" ? "bg-surface/40" : undefined
       }
       rodape={{
         nome: (

@@ -42,8 +42,12 @@ import {
   abaFluxoCaixa,
   abaPosicaoBancaria,
   abaRankingFornecedores,
+  abasIndireto,
+  abasResultadoObra,
   abasSociosLigadas,
 } from "@/modules/financeiro/relatorios/planilha-abas";
+import { recorteDoIndireto } from "@/modules/financeiro/relatorios/indireto-por-mes";
+import { mesDoRateio } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 import {
   montarPlanilhaDeRelatorio,
   nomeArquivoDeRelatorio,
@@ -51,6 +55,8 @@ import {
 } from "@/modules/financeiro/relatorios/planilha-relatorio";
 import {
   aging,
+  carregarIndiretoDoAno,
+  carregarResultadoPorObra,
   investimentos,
   custoPorCentroCusto,
   custoPorGrupo,
@@ -72,6 +78,10 @@ import { lerPeriodoInvestimentos } from "@/modules/financeiro/relatorios/investi
 import type { RelatorioId } from "@/modules/financeiro/relatorios/relatorios";
 
 const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function primeiroValor(valor: string | string[] | undefined): string | undefined {
+  return Array.isArray(valor) ? valor[0] : valor;
+}
 
 /** Todo mês presente no período tem que ser um mês de verdade. */
 function periodoValido(periodo: PeriodoCompetencia): boolean {
@@ -176,7 +186,7 @@ export async function gerarPlanilhaDoRelatorio(
       return { erro: "Este relatório ainda não tem exportação" };
     }
 
-    const workbook = montarPlanilhaDeRelatorio([escrita]);
+    const workbook = montarPlanilhaDeRelatorio(Array.isArray(escrita) ? escrita : [escrita]);
     const conteudo = await workbook.xlsx.writeBuffer();
 
     return {
@@ -202,7 +212,7 @@ export async function gerarPlanilhaDoRelatorio(
 async function abaDoRelatorio(
   relatorio: RelatorioId,
   params: ParametrosUrl,
-): Promise<EscritaDeAba | null> {
+): Promise<EscritaDeAba | EscritaDeAba[] | null> {
   switch (relatorio) {
     case "fluxo-caixa": {
       const filtros = lerFiltrosFluxoCaixa(params);
@@ -316,7 +326,12 @@ async function abaDoRelatorio(
       );
     }
 
-    case "custo-receita": {
+    case "resultado-obra": {
+      if (params.visao !== "cruzar") {
+        // O mesmo mês da tela: o último fechado, até o corrente.
+        const mes = [mesDoRateio(primeiroValor(params.mes_obra), mesFechado()), mesCorrente()].sort()[0];
+        return abasResultadoObra((await carregarResultadoPorObra(mes)).resultado);
+      }
       const meses = await mesesDeCompetencia();
       const { filtros, mesesEfetivos } = lerFiltrosCustoReceita(params, meses);
       // A escada de centro tem de virar a lista efetiva aqui também: passar
@@ -367,6 +382,16 @@ async function abaDoRelatorio(
       );
     }
 
+    case "indireto": {
+      // O mesmo recorte da tela.
+      const { ano } = recorteDoIndireto(
+        primeiroValor(params.ano_indireto),
+        primeiroValor(params.mes_rateio),
+        mesFechado(),
+      );
+      return abasIndireto(ano, (await carregarIndiretoDoAno(ano)).meses);
+    }
+
     case "socios-ligadas": {
       // Três abas (sócios, sócios mês a mês, ligadas) numa escrita só: o
       // contrato desta função é uma escrita por relatório.
@@ -376,8 +401,6 @@ async function abaDoRelatorio(
       };
     }
     case "aquisicoes":
-    case "custos-indiretos":
-    case "rateio-indireto":
       // Sem botão de exportar na tela (a tabela é curta: um centro por sócio e
       // por empresa ligada). Volta a ter caso próprio se a planilha for pedida.
       return null;

@@ -48,7 +48,7 @@ export interface SaidaFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   saida: SaidaLinha | null;
-  /** Depósitos e tanques de material. */
+  /** Depósitos, tanques de material e pilhas. */
   locais: Opcao[];
   /** Só o que já entrou pelo Estoque: combustível e peças saem pelos módulos deles. */
   materiais: InsumoOpcao[];
@@ -144,7 +144,7 @@ export function SaidaFormDrawer({
       }
     >
       <form id={ID_FORM} onSubmit={submeterComAviso(form, aoEnviar)} className={classesFormulario} noValidate>
-        <CampoFormulario id="saida-local" rotulo="Depósito ou tanque" obrigatorio erro={erros.local?.message}>
+        <CampoFormulario id="saida-local" rotulo="Local" obrigatorio erro={erros.local?.message}>
           <Combobox
             id="saida-local"
             valor={local ?? ""}
@@ -154,7 +154,7 @@ export function SaidaFormDrawer({
               if (valor !== local) form.setValue("insumoId", "", { shouldDirty: true });
             }}
             opcoes={opcoesLocais}
-            placeholder="Selecione o depósito ou o tanque"
+            placeholder="Selecione o depósito, o tanque ou a pilha"
             disabled={salvando}
           />
         </CampoFormulario>
@@ -163,7 +163,7 @@ export function SaidaFormDrawer({
           id="saida-material"
           rotulo="Material"
           obrigatorio
-          ajuda={local ? undefined : "Escolha o depósito ou o tanque primeiro"}
+          ajuda={local ? undefined : "Escolha o local primeiro"}
           erro={erros.insumoId?.message}
         >
           <Combobox

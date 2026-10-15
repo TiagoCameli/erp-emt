@@ -22,7 +22,7 @@ import { entradaSchema, saidaSchema, type EntradaInput, type SaidaInput } from "
 type Aba = "estoque.entradas" | "estoque.saidas";
 type Tabela = "estoque_entradas" | "estoque_saidas";
 
-const ROTAS = ["/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
+const ROTAS = ["/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/pilhas"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
@@ -63,7 +63,7 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
 
     const supabase = await createClient();
     // Os tipos gerados não aceitam null nos argumentos; a RPC aceita (p_id nulo = criar,
-    // item de OC nulo = avulsa, insumo e valor nulos = os da OC; depósito OU tanque).
+    // item de OC nulo = avulsa, insumo e valor nulos = os da OC; depósito OU tanque OU pilha).
     const { error } = await supabase.rpc("fn_estoque_salvar_entrada", {
       p_id: id as unknown as string,
       p_deposito: d.depositoId as unknown as string,
@@ -75,6 +75,7 @@ export async function salvarEntrada(id: string | null, dados: EntradaInput): Pro
       p_oc_item: d.ocItemId ?? undefined,
       p_nota_fiscal: d.notaFiscal ?? undefined,
       p_observacoes: d.observacoes ?? undefined,
+      p_pilha: d.pilhaId ?? undefined,
     });
 
     if (error) {
@@ -113,6 +114,7 @@ export async function salvarSaida(id: string | null, dados: SaidaInput): Promise
       p_data: d.data,
       p_centro_custo: d.centroCustoId,
       p_observacoes: d.observacoes ?? undefined,
+      p_pilha: d.pilhaId ?? undefined,
     });
 
     if (error) {

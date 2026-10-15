@@ -5,15 +5,19 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart3 } from "lucide-react";
 
 import { DataTable, EmptyState, MoneyText } from "@/components/canonicos";
-import { formatarMesAno } from "@/lib/formatadores";
+import { formatarBRL, formatarData, formatarMesAno } from "@/lib/formatadores";
+import { cn } from "@/lib/utils";
 import {
   agruparEquipamentos,
   consorciosDe,
+  divergenciaDaCota,
+  resumirQuitacao,
   rotuloParcelas,
   somarAquisicoes,
   type AquisicaoLinha,
   type TotaisAquisicao,
 } from "@/modules/financeiro/relatorios/aquisicoes";
+import { BarraProporcional } from "@/modules/financeiro/relatorios/components/barra-proporcional";
 import { LinkDrill } from "@/modules/financeiro/relatorios/components/link-drill";
 import { detalheLancamento, drillAquisicao } from "@/modules/financeiro/relatorios/drill";
 
@@ -66,6 +70,94 @@ function Secao({ titulo, nota, children }: { titulo: string; nota?: string; chil
         {nota ? <p className="text-detalhe text-muted-foreground">{nota}</p> : null}
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Mês da última parcela em aberto; "quitado" quando não sobra nada. */
+function Quitacao({ linha }: { linha: AquisicaoLinha }) {
+  if (Math.round(linha.aPagar * 100) <= 0) {
+    return <span className="text-muted-foreground">quitado</span>;
+  }
+  return (
+    <span className="tabular-nums" title={linha.proximoVencimento ? `Próxima parcela em ${formatarData(linha.proximoVencimento)}` : undefined}>
+      {formatarMesAno(linha.ultimoVencimento)}
+    </span>
+  );
+}
+
+/**
+ * O topo do relatório: quanto falta pagar das máquinas e dos consórcios, até
+ * quando, e o que ainda não está em Financeiro > Dívidas.
+ */
+function ResumoQuitacao({ linhas }: { linhas: AquisicaoLinha[] }) {
+  const r = React.useMemo(() => resumirQuitacao(linhas), [linhas]);
+  const total = r.equipamentos.aPagar + r.consorcios.aPagar;
+  if (r.maiores.length === 0) {
+    return <p className="text-corpo text-foreground">Nenhuma máquina nem cota de consórcio com saldo a pagar.</p>;
+  }
+  const maximo = r.maiores[0]?.aPagar ?? 0;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex max-w-4xl flex-col gap-1">
+        <p className="text-corpo text-foreground">
+          Faltam <strong className="font-semibold tabular-nums">{formatarBRL(total)}</strong> para quitar máquinas e
+          consórcios:{" "}
+          {r.equipamentos.bens > 0 ? (
+            <>
+              <span className="tabular-nums">{formatarBRL(r.equipamentos.aPagar)}</span> em {r.equipamentos.bens}{" "}
+              {r.equipamentos.bens === 1 ? "bem" : "bens"}
+              {r.equipamentos.quitacao ? <> até {formatarMesAno(r.equipamentos.quitacao)}</> : null}
+            </>
+          ) : null}
+          {r.equipamentos.bens > 0 && r.consorcios.cotas > 0 ? " e " : null}
+          {r.consorcios.cotas > 0 ? (
+            <>
+              <span className="tabular-nums">{formatarBRL(r.consorcios.aPagar)}</span> em {r.consorcios.cotas}{" "}
+              {r.consorcios.cotas === 1 ? "cota" : "cotas"} de consórcio
+              {r.consorcios.quitacao ? <> até {formatarMesAno(r.consorcios.quitacao)}</> : null}
+            </>
+          ) : null}
+          .
+        </p>
+        {r.foraDeDividas.nomes.length > 0 ? (
+          <p className="text-detalhe text-muted-foreground">
+            <span className="tabular-nums">{formatarBRL(r.foraDeDividas.aPagar)}</span> são de{" "}
+            {r.foraDeDividas.nomes.length} {r.foraDeDividas.nomes.length === 1 ? "bem financiado" : "bens financiados"} que
+            ainda não {r.foraDeDividas.nomes.length === 1 ? "está" : "estão"} em Financeiro › Dívidas: o saldo vem das
+            parcelas do lançamento, sem o contrato para conferir juros e saldo devedor.
+          </p>
+        ) : null}
+      </div>
+      <ul className="flex flex-col gap-2">
+        {r.maiores.map((l, i) => (
+          <li
+            key={l.tipo === "consorcio" ? `cota:${l.lancamentoId}` : `bem:${l.centroId}`}
+            className="grid grid-cols-[minmax(0,1fr)_8.5rem] items-center gap-x-3 gap-y-1 md:grid-cols-[minmax(12rem,20rem)_minmax(0,1fr)_8.5rem_7rem]"
+          >
+            <span className="min-w-0 truncate text-detalhe text-foreground" title={l.descricao ?? l.centro}>
+              {l.tipo === "consorcio" ? (l.descricao ?? l.numero ?? "Cota de consórcio") : l.centro}
+            </span>
+            <BarraProporcional
+              valor={l.aPagar}
+              maximo={maximo}
+              ordem={i}
+              cor={l.tipo === "consorcio" ? "bg-chart-3" : "bg-chart-2"}
+              className="col-span-2 row-start-2 md:col-span-1 md:col-start-2 md:row-start-1"
+            />
+            <MoneyText valor={l.aPagar} className="text-right text-detalhe font-medium text-foreground" />
+            <span
+              className={cn(
+                "hidden text-right text-detalhe md:block",
+                l.divida === null ? "text-chart-2" : "text-muted-foreground",
+              )}
+              title={l.divida === null ? "Não está em Financeiro › Dívidas" : undefined}
+            >
+              até {formatarMesAno(l.ultimoVencimento)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -148,6 +240,15 @@ function TabelaEquipamentos({ linhas, podeVerLancamentos }: AquisicoesTabelaProp
       ...colunasDinheiro<LinhaEquipamento>(totaisDaLinhaEquipamento, (r) =>
         r.tipo === "grupo" ? "font-medium" : undefined,
       ),
+      {
+        id: "quitacao",
+        header: "Quitação",
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) =>
+          row.original.tipo === "bem" ? <Quitacao linha={row.original.linha} /> : null,
+      },
     ],
     [podeVerLancamentos],
   );
@@ -223,6 +324,24 @@ function TabelaConsorcios({ linhas, podeVerLancamentos }: AquisicoesTabelaProps)
         cell: ({ row }) => <span className="tabular-nums">{rotuloParcelas(row.original)}</span>,
       },
       ...colunasDinheiro<LinhaConsorcio>((l) => l),
+      {
+        id: "restam",
+        header: "Restam",
+        size: 90,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => (
+          <span className="tabular-nums">{row.original.parcelasAbertas || ""}</span>
+        ),
+      },
+      {
+        id: "quitacao",
+        header: "Quitação",
+        size: 120,
+        enableSorting: false,
+        meta: { alinharDireita: true, atomico: true },
+        cell: ({ row }) => <Quitacao linha={row.original} />,
+      },
     ],
     [podeVerLancamentos],
   );
@@ -255,8 +374,10 @@ export function AquisicoesTabela({ linhas, podeVerLancamentos }: AquisicoesTabel
       />
     );
   }
+  const divergentes = consorciosDe(linhas).filter((l) => divergenciaDaCota(l) !== 0);
   return (
     <div className="flex flex-col gap-6">
+      <ResumoQuitacao linhas={linhas} />
       {temEquipamento ? (
         <Secao titulo="Equipamentos adquiridos">
           <TabelaEquipamentos linhas={linhas} podeVerLancamentos={podeVerLancamentos} />
@@ -265,7 +386,13 @@ export function AquisicoesTabela({ linhas, podeVerLancamentos }: AquisicoesTabel
       {temConsorcio ? (
         <Secao
           titulo="Consórcios"
-          nota="Cotas ainda a contemplar ficam em Aquisição de Equipamentos › Consórcios a contemplar; contemplada, a cota vai para a etapa do bem."
+          nota={`Cotas ainda a contemplar ficam em Aquisição de Equipamentos › Consórcios a contemplar; contemplada, a cota vai para a etapa do bem. O a pagar e as parcelas que restam vêm do cronograma da cota em Financeiro › Dívidas.${
+            divergentes.length > 0
+              ? ` Em ${divergentes.length} cota(s) o cronograma difere do lançamento (${divergentes
+                  .map((l) => `${l.numero ?? "cota"}: ${formatarBRL(Math.abs(divergenciaDaCota(l)))}`)
+                  .join("; ")}).`
+              : ""
+          }`}
         >
           <TabelaConsorcios linhas={linhas} podeVerLancamentos={podeVerLancamentos} />
         </Secao>

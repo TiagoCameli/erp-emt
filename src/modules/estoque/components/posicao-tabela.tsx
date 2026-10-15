@@ -27,6 +27,12 @@ export const ROTULO_ORIGEM: Record<OrigemPosicao, string> = {
 };
 
 /** Onde o material se movimenta: só a origem "estoque" entra e sai por este módulo. */
+const ROTULO_LOCAL: Record<PosicaoLinha["localTipo"], string> = {
+  deposito: "(depósito)",
+  tanque: "(tanque)",
+  pilha: "(pilha)",
+};
+
 const MOVIMENTA_EM: Record<OrigemPosicao, string> = {
   estoque: "Estoque",
   combustivel: "Combustível",
@@ -60,7 +66,7 @@ export function PosicaoTabela({ linhas }: PosicaoTabelaProps) {
             textoPesquisavel(
               linha.insumoNome,
               linha.localNome,
-              linha.localTipo === "tanque" ? "tanque" : "deposito",
+              linha.localTipo,
               ROTULO_ORIGEM[linha.origem],
               linha.quantidade,
               linha.unidade,
@@ -101,7 +107,7 @@ export function PosicaoTabela({ linhas }: PosicaoTabelaProps) {
           <span>
             {row.original.localNome}
             <span className="ml-1 text-muted-foreground">
-              {row.original.localTipo === "tanque" ? "(tanque)" : "(depósito)"}
+              {ROTULO_LOCAL[row.original.localTipo]}
             </span>
           </span>
         ),

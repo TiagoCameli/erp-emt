@@ -27,6 +27,7 @@ const AVULSA: EntradaInput = {
   ocItemId: null,
   depositoId: DEPOSITO,
   tanqueId: null,
+  pilhaId: null,
   insumoId: INSUMO,
   quantidade: 10,
   valorUnitario: 6.3947,
@@ -38,6 +39,7 @@ const AVULSA: EntradaInput = {
 const SAIDA: SaidaInput = {
   depositoId: DEPOSITO,
   tanqueId: null,
+  pilhaId: null,
   insumoId: INSUMO,
   quantidade: 3,
   data: "2026-10-13",
@@ -82,6 +84,7 @@ describe("actions do estoque", () => {
       p_oc_item: undefined,
       p_nota_fiscal: "123",
       p_observacoes: undefined,
+      p_pilha: undefined,
     });
   });
 
@@ -122,6 +125,7 @@ describe("actions do estoque", () => {
       p_data: "2026-10-13",
       p_centro_custo: CENTRO,
       p_observacoes: undefined,
+      p_pilha: undefined,
     });
   });
 
@@ -133,6 +137,27 @@ describe("actions do estoque", () => {
       "fn_estoque_salvar_saida",
       expect.objectContaining({ p_deposito: null, p_tanque: OC_ITEM }),
     );
+  });
+
+  it("entrada e saída de pilha vão só com a pilha", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    rpc.mockResolvedValue({ data: ID, error: null });
+    await salvarEntrada(null, { ...AVULSA, depositoId: null, pilhaId: OC_ITEM });
+    expect(rpc).toHaveBeenCalledWith(
+      "fn_estoque_salvar_entrada",
+      expect.objectContaining({ p_deposito: null, p_tanque: null, p_pilha: OC_ITEM }),
+    );
+    await salvarSaida(null, { ...SAIDA, depositoId: null, pilhaId: OC_ITEM });
+    expect(rpc).toHaveBeenCalledWith(
+      "fn_estoque_salvar_saida",
+      expect.objectContaining({ p_deposito: null, p_tanque: null, p_pilha: OC_ITEM }),
+    );
+  });
+
+  it("depósito e pilha juntos não chegam à RPC", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    expect("erro" in (await salvarEntrada(null, { ...AVULSA, pilhaId: OC_ITEM }))).toBe(true);
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("depósito e tanque juntos (ou nenhum) não chegam à RPC", async () => {

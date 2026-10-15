@@ -19,6 +19,7 @@ import type {
   EquipamentoMapa,
   LocalidadeMapa,
   Modelo3d,
+  ObraMapa,
   PessoaMapa,
   Posicao,
 } from "@/modules/mapa/tipos";
@@ -37,11 +38,28 @@ export const ARQUIVO_BONECO = "/mapa-modelos/boneco.glb";
 /** Prefixos de id das camadas clicáveis: é por eles que o ponteiro sabe o que pegou. */
 export const PREFIXO_MAQUINA = "maq-";
 export const ID_PESSOAS = "pessoas";
+/** Rótulo do local: tocar nele abre a ficha do local (área). */
+export const ID_LOCAIS = "locais-nome";
 
 /** Quantas vezes o tamanho real a miniatura aparece (fixo no terreno, em metros). */
 export const ESCALA_MAQUINA = 3;
 const FONTE = "Inter, Helvetica, Arial, sans-serif";
 const BRANCO: Rgb = [255, 255, 255];
+
+/** Obra que já tem ponto (a cena só leva essas). */
+export type ObraNoMapa = ObraMapa & { pos: Posicao };
+
+export interface RotuloObra {
+  id: string;
+  nome: string;
+  pos: Posicao;
+}
+
+/** Nome da obra: tocar nele abre a ficha da obra. */
+export const ID_OBRAS = "obras-nome";
+
+/** Verde EMT: obra sem cor própria no cadastro. */
+const VERDE_EMT: Rgb = [62, 119, 68];
 
 export interface Cena {
   /** Só os que têm posição (quem não tem fica na lista do painel). */
@@ -51,6 +69,14 @@ export interface Cena {
   marcos: { km: number; pos: Posicao }[];
   areas: AreaMapa[];
   localidades: LocalidadeMapa[];
+  /** Segunda linha do rótulo do local: o que está ali ("2 tanques · 1 depósito"). */
+  extrasDoLocal: ReadonlyMap<string, string>;
+  /** Obras com ponto no mapa (o pino). */
+  obras: ObraNoMapa[];
+  /** Nome de cada obra no mapa: no ponto, no meio do trecho ou no centro da área (clicável). */
+  rotulosObra: RotuloObra[];
+  /** Obra sendo desenhada (pavimentação = linha, edificação = polígono): o rascunho. */
+  desenho: { forma: "trecho" | "area"; pontos: Posicao[] } | null;
   modelos: ReadonlyMap<string, Modelo3d>;
   snapLocalM: number;
   selecao: ReadonlySet<string>;
@@ -134,7 +160,10 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<AreaMapa>({
         id: "areas-nome",
-        data: cena.areas.filter((a) => a.centro),
+        // Área de edificação de uma obra leva o nome da obra (rótulo da obra, clicável).
+        data: cena.areas.filter(
+          (a) => a.centro && !(a.tipo === "edificacao" && a.obraId),
+        ),
         getPosition: (d) => d.centro ?? [0, 0],
         getText: (d) => d.nome,
         getSize: 12,
@@ -193,7 +222,7 @@ export function montarCamadas(cena: Cena): Layer[] {
       id: "locais-zona",
       data: cena.localidades,
       getPosition: (d) => d.pos,
-      getRadius: cena.snapLocalM,
+      getRadius: (d) => d.raioM ?? cena.snapLocalM,
       radiusUnits: "meters",
       filled: true,
       getFillColor: [42, 120, 214, 30],
@@ -203,10 +232,13 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: false,
     }),
     new TextLayer<LocalidadeMapa>({
-      id: "locais-nome",
+      id: ID_LOCAIS,
       data: cena.localidades,
       getPosition: (d) => d.pos,
-      getText: (d) => d.nome,
+      getText: (d) => {
+        const extra = cena.extrasDoLocal.get(d.id);
+        return extra ? `${d.nome}\n${extra}` : d.nome;
+      },
       getSize: 12,
       getColor: BRANCO,
       background: true,
@@ -215,9 +247,83 @@ export function montarCamadas(cena: Cena): Layer[] {
       getPixelOffset: [0, -22],
       fontFamily: FONTE,
       characterSet: "auto",
-      pickable: false,
+      pickable: true,
     }),
   );
+
+  // Obras: pino na cor da obra e o nome num rótulo verde, acima do pino.
+  camadas.push(
+    new ScatterplotLayer<ObraNoMapa>({
+      id: "obras-pino",
+      data: cena.obras,
+      getPosition: (d) => d.pos,
+      getRadius: 9,
+      radiusUnits: "pixels",
+      filled: true,
+      getFillColor: (d) => (d.cor ? hexParaRgb(d.cor, VERDE_EMT) : VERDE_EMT),
+      stroked: true,
+      getLineColor: BRANCO,
+      lineWidthMinPixels: 2,
+      pickable: false,
+    }),
+    new TextLayer<RotuloObra>({
+      id: ID_OBRAS,
+      data: cena.rotulosObra,
+      getPosition: (d) => d.pos,
+      getText: (d) => d.nome,
+      getSize: 13,
+      getColor: BRANCO,
+      background: true,
+      getBackgroundColor: [...VERDE_EMT, 230],
+      backgroundPadding: [6, 3],
+      getPixelOffset: [0, -24],
+      fontFamily: FONTE,
+      characterSet: "auto",
+      pickable: true,
+    }),
+  );
+
+  // Rascunho da obra sendo desenhada: a linha (fechada, na edificação) e os pontos tocados.
+  if (cena.desenho && cena.desenho.pontos.length > 0) {
+    const { forma, pontos } = cena.desenho;
+    const caminho =
+      forma === "area" && pontos.length >= 3 ? [...pontos, pontos[0]] : pontos;
+    if (forma === "area" && pontos.length >= 3)
+      camadas.push(
+        new PolygonLayer<{ anel: Posicao[] }>({
+          id: "desenho-area",
+          data: [{ anel: caminho }],
+          getPolygon: (d) => d.anel,
+          filled: true,
+          getFillColor: [74, 58, 167, 60],
+          stroked: false,
+          pickable: false,
+        }),
+      );
+    camadas.push(
+      new PathLayer<{ caminho: Posicao[] }>({
+        id: "desenho-linha",
+        data: [{ caminho }],
+        getPath: (d) => d.caminho,
+        getColor: [255, 255, 255, 230],
+        getWidth: 4,
+        widthUnits: "pixels",
+        pickable: false,
+      }),
+      new ScatterplotLayer<{ pos: Posicao; i: number }>({
+        id: "desenho-pontos",
+        data: pontos.map((pos, i) => ({ pos, i })),
+        getPosition: (d) => d.pos,
+        getRadius: 6,
+        radiusUnits: "pixels",
+        getFillColor: (d) => (d.i === 0 ? [62, 119, 68] : [255, 255, 255]),
+        stroked: true,
+        getLineColor: [31, 31, 31],
+        lineWidthMinPixels: 2,
+        pickable: false,
+      }),
+    );
+  }
 
   // Anel e rótulos desenham por cima do que já está na tela (sem teste de profundidade): no
   // chão eles sumiriam atrás do corpo da máquina, que fica na frente para a câmera.

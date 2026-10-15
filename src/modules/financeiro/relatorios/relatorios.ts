@@ -23,26 +23,24 @@ export type RelatorioId =
   | "posicao-bancaria"
   | "investimentos"
   | "custo-cc"
-  | "custo-receita"
+  | "resultado-obra"
   | "custo-grupo"
   | "extrato-fornecedor"
   | "socios-ligadas"
   | "aquisicoes"
-  | "custos-indiretos"
-  | "rateio-indireto";
+  | "indireto";
 
 /** Ordem dos relatórios na navegação. */
 export const RELATORIOS: readonly RelatorioId[] = [
   "dre",
-  "custo-receita",
+  "resultado-obra",
   "custo-cc",
   "fluxo-caixa",
   "posicao-bancaria",
   "aging",
   "investimentos",
   "custo-grupo",
-  "custos-indiretos",
-  "rateio-indireto",
+  "indireto",
   "extrato-fornecedor",
   "aquisicoes",
   "socios-ligadas",
@@ -58,14 +56,14 @@ export const GRUPOS_RELATORIOS: readonly {
   titulo: string;
   relatorios: readonly RelatorioId[];
 }[] = [
-  { titulo: "Resultado", relatorios: ["dre", "custo-receita", "custo-cc"] },
+  { titulo: "Resultado", relatorios: ["dre", "resultado-obra", "custo-cc"] },
   {
     titulo: "Caixa",
     relatorios: ["fluxo-caixa", "posicao-bancaria", "aging", "investimentos"],
   },
   {
     titulo: "Custo",
-    relatorios: ["custo-grupo", "custos-indiretos", "rateio-indireto", "extrato-fornecedor"],
+    relatorios: ["custo-grupo", "indireto", "extrato-fornecedor"],
   },
   { titulo: "Patrimônio e sócios", relatorios: ["aquisicoes", "socios-ligadas"] },
 ];
@@ -76,15 +74,14 @@ export const GRUPOS_RELATORIOS: readonly {
  */
 export const PERGUNTA_DO_RELATORIO: Record<RelatorioId, string> = {
   dre: "A empresa deu lucro no período? Quanto de cada real recebido sobrou?",
-  "custo-receita": "Quanto cada obra faturou, quanto custou e qual a margem?",
-  "custo-cc": "Onde o dinheiro foi gasto, centro por centro?",
+  "resultado-obra": "Quais obras dão lucro, quais estão no vermelho, e quanto?",
+  "custo-cc": "Onde o dinheiro foi gasto, filtrando por centro, categoria, fornecedor e forma?",
   "fluxo-caixa": "Quanto a operação gerou, para onde foi o resto e como fica o saldo nos próximos meses?",
   "posicao-bancaria": "Quanto há disponível e aplicado hoje, e cada conta bate com o extrato?",
   aging: "Quanto está vencido e quanto vence nos próximos dias?",
   investimentos: "Quanto está aplicado e quanto rendeu?",
   "custo-grupo": "O custo foi para material, mão de obra ou equipamento?",
-  "custos-indiretos": "Quanto custa manter o escritório e a manutenção, mês a mês?",
-  "rateio-indireto": "Quanto do custo indireto cada obra carrega neste mês?",
+  indireto: "Quanto custou o escritório e a manutenção em cada mês, e quanto disso cada obra carrega?",
   "extrato-fornecedor": "Quanto devo e quanto já paguei a cada fornecedor?",
   aquisicoes: "Quanto custou cada máquina e quanto falta pagar?",
   "socios-ligadas": "Quanto foi para os sócios e para as empresas ligadas, e quanto voltou?",
@@ -94,6 +91,9 @@ export const RELATORIO_PADRAO: RelatorioId = "fluxo-caixa";
 
 /** Nome do parâmetro que diz QUAL relatório está aberto. */
 export const PARAM_RELATORIO = "rel";
+
+/** Visão do Resultado por obra: o padrão (por obra) ou "cruzar" centros. */
+export const PARAM_VISAO = "visao";
 
 /**
  * O que, nesta tela, é NAVEGAÇÃO e não filtro — para o "Limpar filtros" não
@@ -111,9 +111,49 @@ export const PARAM_RELATORIO = "rel";
  * implementação só de "apagar filtro", que é o que impede a lista de filtros de
  * cada tela sair de sincronia.
  */
-export const PARAMS_DE_NAVEGACAO: readonly string[] = [PARAM_RELATORIO];
+export const PARAMS_DE_NAVEGACAO: readonly string[] = [PARAM_RELATORIO, PARAM_VISAO];
 
 const IDS_VALIDOS = new Set<string>(RELATORIOS);
+
+/**
+ * Os ids que deixaram de existir em 15/10/2026, quando Custo x receita virou
+ * Resultado por obra e Custos indiretos + Rateio do indireto viraram Indireto.
+ * Link antigo e favorito continuam abrindo o relatório certo (a página
+ * redireciona, na MESMA rota, para o id novo: não há laço pela memória de
+ * filtros da sessão, porque o destino não redireciona de novo).
+ */
+export const ID_ANTIGO: Readonly<Record<string, RelatorioId>> = {
+  "custo-receita": "resultado-obra",
+  "custos-indiretos": "indireto",
+  "rateio-indireto": "indireto",
+};
+
+/**
+ * A query do id novo a partir da de um id antigo, ou `null` se `rel` não é
+ * antigo. Custo x receita com centro, etapa, meses ou investimento escolhidos
+ * abre na visão "Cruzar centros", que é aquele relatório inteiro; sem filtro,
+ * abre no resultado por obra.
+ */
+export function queryDoIdAntigo(params: URLSearchParams): string | null {
+  const antigo = params.get(PARAM_RELATORIO);
+  const novo = antigo ? ID_ANTIGO[antigo] : undefined;
+  if (!novo) return null;
+  const saida = new URLSearchParams(params);
+  saida.set(PARAM_RELATORIO, novo);
+  const filtrosDoCruzar = [
+    "centro_custo",
+    "centro_receita",
+    "etapa_custo",
+    "etapa_receita",
+    "mes_ref",
+    "com_investimento",
+  ];
+  if (antigo === "custo-receita" && filtrosDoCruzar.some((p) => saida.has(p))) {
+    saida.set(PARAM_VISAO, "cruzar");
+  }
+  return saida.toString();
+}
+
 
 /** Normaliza o parâmetro `rel` num RelatorioId, com fallback no padrão. */
 export function normalizarRelatorio(valor: string | undefined): RelatorioId {

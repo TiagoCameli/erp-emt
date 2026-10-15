@@ -3,14 +3,20 @@
 import * as React from "react";
 import {
   Box,
+  Compass,
+  HardHat,
   Layers,
+  MapPinPlus,
   MousePointer2,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Satellite,
   Tag,
   Users,
+  X,
 } from "lucide-react";
 
 import {
@@ -26,12 +32,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
+  ajustarRaioLocal,
   assinalarOperador,
+  colocarLocal,
+  desenharObra,
+  editarLocal,
   encerrarLocacao,
+  girarEquipamento,
   marcarEstado,
   moverEquipamentos,
   moverPessoas,
+  posicionarObra,
   recarregarEstado,
+  tirarObra,
+  vincularLocal,
   type ResultadoMapa,
 } from "@/modules/mapa/actions";
 import {
@@ -44,14 +58,24 @@ import {
   type ConfirmacaoTransferencia,
   type Pendente,
 } from "@/modules/mapa/components/dialogo-transferencia";
+import {
+  DialogoAdicionarLocal,
+  DialogoAdicionarObra,
+  DialogoConcluirDesenho,
+  type PedidoColocar,
+} from "@/modules/mapa/components/dialogos-adicionar";
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
+import { FichaLocal } from "@/modules/mapa/components/ficha-local";
+import { FichaObra } from "@/modules/mapa/components/ficha-obra";
+import { rotaPelaEstrada } from "@/modules/mapa/components/rota-estrada";
 import {
   MapaEmt,
   type Alvo,
   type ArrasteSolto,
   type CenaBase,
   type Foco,
+  type GiroMapa,
   type ModoFundo,
   type TipoMotor,
 } from "@/modules/mapa/components/mapa-emt";
@@ -65,15 +89,19 @@ import {
   marcosKm,
   medirTrecho,
   pontoNoKm,
+  extensaoKm,
+  posicaoDoNomeDaObra,
   resolverDestino,
   type ContextoDestino,
   type TrechoMedido,
 } from "@/modules/mapa/geo";
-import { ORDEM_ESTADOS } from "@/modules/mapa/rotulos";
+import { extrasPorLocal } from "@/modules/mapa/dados";
+import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
   type ConfigGoogle,
   type EquipamentoMapa,
+  type ObraMapa,
   type EstadoEfetivo,
   type EstadoMapa,
   type PermissoesMapa,
@@ -155,10 +183,12 @@ function normalizar(texto: string): string {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
+/** Rumo desenhado: o escolhido na ficha ganha; sem ele, o da pista no km da máquina. */
 function headingNoTrecho(
   e: EquipamentoMapa,
   medidos: ReadonlyMap<string, TrechoMedido>,
 ): number {
+  if (e.rumoManual !== null) return e.rumoManual;
   if (e.trechoId && e.km !== null) {
     const m = medidos.get(e.trechoId);
     if (m) return pontoNoKm(m, e.km).heading;
@@ -186,6 +216,41 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => new Set(),
   );
   const [ficha, setFicha] = React.useState<Alvo | null>(null);
+  // Ficha do local (tocar no nome dele no mapa); some quando outra ficha abre.
+  const [localFicha, setLocalFicha] = React.useState<string | null>(null);
+  // Ficha da obra (tocar no nome dela no mapa).
+  const [obraFicha, setObraFicha] = React.useState<string | null>(null);
+  const abrirFicha = React.useCallback((alvo: Alvo) => {
+    setLocalFicha(null);
+    setObraFicha(null);
+    setFicha(alvo);
+  }, []);
+  // Obra sendo desenhada (pavimentação = linha, edificação = polígono) e, ao concluir, a
+  // linha final (pela estrada, quando o serviço de rotas responde) esperando a confirmação.
+  const [desenho, setDesenho] = React.useState<{
+    obra: ObraMapa;
+    forma: "trecho" | "area";
+    substituir: boolean;
+    pontos: Posicao[];
+  } | null>(null);
+  const [desenhoFinal, setDesenhoFinal] = React.useState<{
+    pontos: Posicao[];
+    seguiuEstrada: boolean;
+  } | null>(null);
+  const [concluindo, setConcluindo] = React.useState(false);
+  // Prévias que valem mais que o banco até gravar: raio do local e rumo da máquina.
+  const [raioPrevio, setRaioPrevio] = React.useState<{
+    id: string;
+    raioM: number;
+  } | null>(null);
+  const [rumoPrevio, setRumoPrevio] = React.useState<{
+    id: string;
+    rumo: number;
+  } | null>(null);
+  const timerGiro = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [giroMapa, setGiroMapa] = React.useState<GiroMapa | null>(null);
+  const girarMapa = (delta: number | null) =>
+    setGiroMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
   // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado). A ficha
   // mora na lateral, então ficha aberta mostra a lateral mesmo com a lista recolhida.
   const listaAberta = React.useSyncExternalStore(
@@ -193,9 +258,14 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     lerPainel,
     () => true,
   );
-  const painelAberto = listaAberta || ficha !== null;
+  const painelAberto =
+    listaAberta || ficha !== null || localFicha !== null || obraFicha !== null;
   const alternarPainel = () => {
-    if (painelAberto) setFicha(null);
+    if (painelAberto) {
+      setFicha(null);
+      setLocalFicha(null);
+      setObraFicha(null);
+    }
     gravarPainel(!painelAberto);
   };
   const [hover, setHover] = React.useState<string | null>(null);
@@ -207,6 +277,13 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const [mostrarAreas, setMostrarAreas] = React.useState(true);
   const [filtros, setFiltros] = React.useState<FiltrosMapa>(FILTROS_VAZIOS);
   const [posicionando, setPosicionando] = React.useState<string | null>(null);
+  // "Adicionar obra" / "Adicionar localização": diálogo aberto, pedido esperando o toque no
+  // mapa e o ponto tocado esperando a confirmação.
+  const [adicionando, setAdicionando] = React.useState<"obra" | "local" | null>(
+    null,
+  );
+  const [colocando, setColocando] = React.useState<PedidoColocar | null>(null);
+  const [pontoColocar, setPontoColocar] = React.useState<Posicao | null>(null);
   const [pendente, setPendente] = React.useState<Pendente | null>(null);
   const [pendentePessoa, setPendentePessoa] = React.useState<{
     pessoa: PessoaMapa;
@@ -331,15 +408,49 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     return mapa;
   }, [pendente, pendentePessoa, estado.pessoas]);
 
+  const extrasDoLocal = React.useMemo(
+    () => extrasPorLocal(estado.tanques, estado.depositos),
+    [estado.tanques, estado.depositos],
+  );
+  const obrasNoMapa = React.useMemo(
+    () => estado.obras.flatMap((o) => (o.pos ? [{ ...o, pos: o.pos }] : [])),
+    [estado.obras],
+  );
+  const rotulosObra = React.useMemo(
+    () =>
+      estado.obras.flatMap((o) => {
+        const pos = posicaoDoNomeDaObra(
+          o.pos,
+          trechosMedidos.filter((t) => t.trecho.obraId === o.id),
+          estado.areas.filter(
+            (a) => a.obraId === o.id && a.tipo === "edificacao",
+          ),
+        );
+        return pos ? [{ id: o.id, nome: o.nome, pos }] : [];
+      }),
+    [estado.obras, estado.areas, trechosMedidos],
+  );
+  const desenhoDe = React.useCallback(
+    (obraId: string) => ({
+      trechos: estado.trechos.filter((t) => t.obraId === obraId).length,
+      areas: estado.areas.filter(
+        (a) => a.obraId === obraId && a.tipo === "edificacao",
+      ).length,
+    }),
+    [estado.trechos, estado.areas],
+  );
+
   const cena = React.useMemo<CenaBase>(() => {
     const equipamentos = filtrados.flatMap((e) => {
       const pos = posicoesPendentes.get(e.id) ?? e.pos;
       if (!pos) return [];
       const item = pendente?.itens.find((i) => i.equipamento.id === e.id);
       const heading =
-        item && item.destino.tipo === "trecho"
-          ? item.destino.heading
-          : headingNoTrecho(e, medidosPorId);
+        rumoPrevio?.id === e.id
+          ? rumoPrevio.rumo
+          : item && item.destino.tipo === "trecho" && e.rumoManual === null
+            ? item.destino.heading
+            : headingNoTrecho(e, medidosPorId);
       return [{ ...e, pos, heading }];
     });
     const idsNaCena = new Set(equipamentos.map((e) => e.id));
@@ -361,7 +472,19 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       trechos: trechosMedidos,
       marcos,
       areas: estado.areas,
-      localidades: estado.localidades,
+      localidades: raioPrevio
+        ? estado.localidades.map((l) =>
+            l.id === raioPrevio.id ? { ...l, raioM: raioPrevio.raioM } : l,
+          )
+        : estado.localidades,
+      extrasDoLocal,
+      obras: obrasNoMapa,
+      rotulosObra,
+      desenho: desenhoFinal
+        ? { forma: desenho?.forma ?? "trecho", pontos: desenhoFinal.pontos }
+        : desenho
+          ? { forma: desenho.forma, pontos: desenho.pontos }
+          : null,
       modelos,
       snapLocalM: estado.config.snapLocalM,
       mostrarPessoas,
@@ -377,6 +500,13 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     estado.equipamentos,
     estado.areas,
     estado.localidades,
+    raioPrevio,
+    rumoPrevio,
+    extrasDoLocal,
+    obrasNoMapa,
+    rotulosObra,
+    desenho,
+    desenhoFinal,
     estado.config.snapLocalM,
     trechosMedidos,
     marcos,
@@ -464,9 +594,9 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
           return new Set([alvo.id]);
         });
       }
-      setFicha(alvo);
+      abrirFicha(alvo);
     },
-    [multi],
+    [multi, abrirFicha],
   );
 
   const soltar = React.useCallback(
@@ -523,6 +653,14 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
 
   const clicarMapa = React.useCallback(
     (pos: Posicao) => {
+      if (desenho) {
+        setDesenho((d) => (d ? { ...d, pontos: [...d.pontos, pos] } : d));
+        return;
+      }
+      if (colocando) {
+        setPontoColocar(pos);
+        return;
+      }
       if (!posicionandoEquipamento) return;
       setPendente({
         modo: "posicionar",
@@ -537,8 +675,202 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         ],
       });
     },
-    [posicionandoEquipamento, ctxDestino],
+    [posicionandoEquipamento, ctxDestino, colocando, desenho],
   );
+
+  const escolherNoMapa = React.useCallback((pedido: PedidoColocar) => {
+    setAdicionando(null);
+    setPosicionando(null);
+    setColocando(pedido);
+    toast.info(
+      `Toque no mapa onde fica ${pedido.tipo === "obra" ? pedido.obra.nome : pedido.rotulo}.`,
+    );
+  }, []);
+
+  const cancelarColocar = React.useCallback(() => {
+    setColocando(null);
+    setPontoColocar(null);
+  }, []);
+
+  const confirmarColocar = React.useCallback(async (): Promise<boolean> => {
+    if (!colocando || !pontoColocar) return true;
+    const [lng, lat] = pontoColocar;
+    const r =
+      colocando.tipo === "obra"
+        ? await posicionarObra({ obraId: colocando.obra.id, lng, lat })
+        : await colocarLocal({
+            localidadeId: colocando.localidadeId,
+            nome: colocando.nome,
+            tipos: colocando.tipos,
+            vincular: colocando.vincular,
+            lng,
+            lat,
+          });
+    const ok = aplicar(
+      r,
+      colocando.tipo === "obra"
+        ? `${colocando.obra.nome} no mapa`
+        : `${colocando.rotulo} no mapa`,
+    );
+    if (ok) cancelarColocar();
+    return ok;
+  }, [colocando, pontoColocar, aplicar, cancelarColocar]);
+
+  const ligarAoLocal = React.useCallback(
+    async (
+      alvo: "tanque" | "deposito",
+      id: string,
+      localidadeId: string,
+    ): Promise<boolean> => {
+      const r = await vincularLocal({ alvo, id, localidadeId });
+      const local = estado.localidades.find((l) => l.id === localidadeId);
+      return aplicar(r, `Ligado a ${local?.nome ?? "local"}`);
+    },
+    [aplicar, estado.localidades],
+  );
+
+  const clicarLocal = React.useCallback((id: string) => {
+    setFicha(null);
+    setObraFicha(null);
+    setRaioPrevio(null);
+    setLocalFicha(id);
+  }, []);
+
+  const clicarObra = React.useCallback((id: string) => {
+    setFicha(null);
+    setLocalFicha(null);
+    setObraFicha(id);
+  }, []);
+
+  const comecarDesenho = React.useCallback(
+    (obra: ObraMapa, forma: "trecho" | "area", substituir: boolean) => {
+      setAdicionando(null);
+      setPosicionando(null);
+      setColocando(null);
+      setDesenhoFinal(null);
+      setDesenho({ obra, forma, substituir, pontos: [] });
+      toast.info(
+        forma === "trecho"
+          ? `Toque o ponto inicial de ${obra.nome}, as curvas e o ponto final; depois Concluir.`
+          : `Toque os cantos de ${obra.nome} em volta (4 ou mais); depois Concluir.`,
+      );
+    },
+    [],
+  );
+
+  const cancelarDesenho = React.useCallback(() => {
+    setDesenho(null);
+    setDesenhoFinal(null);
+  }, []);
+
+  const concluirDesenho = React.useCallback(async () => {
+    if (!desenho) return;
+    if (desenho.forma === "area") {
+      setDesenhoFinal({ pontos: desenho.pontos, seguiuEstrada: false });
+      return;
+    }
+    setConcluindo(true);
+    try {
+      const pelaEstrada = await rotaPelaEstrada(desenho.pontos);
+      setDesenhoFinal({
+        pontos: pelaEstrada ?? desenho.pontos,
+        seguiuEstrada: pelaEstrada !== null,
+      });
+    } finally {
+      setConcluindo(false);
+    }
+  }, [desenho]);
+
+  const salvarDesenho = React.useCallback(
+    async (dados: {
+      rodovia: string;
+      kmInicial: number;
+      kmFinal: number;
+    }): Promise<boolean> => {
+      if (!desenho || !desenhoFinal) return true;
+      const r =
+        desenho.forma === "trecho"
+          ? await desenharObra({
+              forma: "trecho",
+              obraId: desenho.obra.id,
+              pontos: desenhoFinal.pontos,
+              rodovia: dados.rodovia || undefined,
+              kmInicial: dados.kmInicial,
+              kmFinal: dados.kmFinal,
+              substituir: desenho.substituir,
+            })
+          : await desenharObra({
+              forma: "area",
+              obraId: desenho.obra.id,
+              pontos: desenhoFinal.pontos,
+              substituir: desenho.substituir,
+            });
+      const ok = aplicar(r, `${desenho.obra.nome} desenhada no mapa`);
+      if (ok) cancelarDesenho();
+      return ok;
+    },
+    [desenho, desenhoFinal, aplicar, cancelarDesenho],
+  );
+
+  const obraDaFicha = obraFicha
+    ? (estado.obras.find((o) => o.id === obraFicha) ?? null)
+    : null;
+
+  const localDaFicha = localFicha
+    ? (estado.localidades.find((l) => l.id === localFicha) ?? null)
+    : null;
+  const itensDoLocal = localDaFicha
+    ? [
+        ...estado.tanques
+          .filter((t) => t.localidadeId === localDaFicha.id)
+          .map((t) => `Tanque: ${t.nome}`),
+        ...estado.depositos
+          .filter((d) => d.localidadeId === localDaFicha.id)
+          .map((d) => `Depósito: ${d.nome}`),
+      ]
+    : [];
+
+  const salvarRaio = React.useCallback(
+    async (id: string, raioM: number | null): Promise<boolean> => {
+      setSalvando(true);
+      try {
+        const r = await ajustarRaioLocal({ localidadeId: id, raioM });
+        return aplicar(
+          r,
+          raioM === null ? "Área voltou ao padrão" : "Área do local salva",
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [aplicar],
+  );
+
+  /**
+   * Girar a máquina: o mapa mostra na hora e grava 600 ms depois do último toque (vários
+   * toques de 15° viram uma gravação só). null volta a seguir a pista e grava direto.
+   */
+  const girar = (e: EquipamentoMapa, delta: number | null) => {
+    if (timerGiro.current) clearTimeout(timerGiro.current);
+    const gravar = async (rumo: number | null) => {
+      const r = await girarEquipamento({ equipamentoId: e.id, rumo });
+      if ("erro" in r) toast.error(r.erro);
+      else if (r.estado) setEstado(r.estado);
+      setRumoPrevio(null);
+    };
+    if (delta === null) {
+      setRumoPrevio(null);
+      void gravar(null);
+      return;
+    }
+    const base =
+      rumoPrevio?.id === e.id
+        ? rumoPrevio.rumo
+        : headingNoTrecho(e, medidosPorId);
+    const rumo = (((base + delta) % 360) + 360) % 360;
+    setRumoPrevio({ id: e.id, rumo });
+    timerGiro.current = setTimeout(() => void gravar(rumo), 600);
+  };
 
   const confirmarTransferencia = React.useCallback(
     async ({ data, motivo, estadoLivre, ajuste }: ConfirmacaoTransferencia) => {
@@ -713,18 +1045,21 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         else nova.add(e.id);
         return nova;
       });
-      setFicha({ tipo: "equipamento", id: e.id });
+      abrirFicha({ tipo: "equipamento", id: e.id });
       if (e.pos) focar(e.pos, 15);
     },
-    [focar, multi],
+    [focar, multi, abrirFicha],
   );
 
-  const iniciarPosicionar = React.useCallback((e: EquipamentoMapa) => {
-    setPosicionando(e.id);
-    setFicha({ tipo: "equipamento", id: e.id });
-    setSelecao(new Set([e.id]));
-    toast.info(`Toque no mapa onde está ${e.codigo}.`);
-  }, []);
+  const iniciarPosicionar = React.useCallback(
+    (e: EquipamentoMapa) => {
+      setPosicionando(e.id);
+      abrirFicha({ tipo: "equipamento", id: e.id });
+      setSelecao(new Set([e.id]));
+      toast.info(`Toque no mapa onde está ${e.codigo}.`);
+    },
+    [abrirFicha],
+  );
 
   const aoIniciarLocacao = React.useCallback(
     (
@@ -743,11 +1078,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         : null;
       if (alvo) {
         setPosicionando(alvo.id);
-        setFicha({ tipo: "equipamento", id: alvo.id });
+        abrirFicha({ tipo: "equipamento", id: alvo.id });
         setSelecao(new Set([alvo.id]));
       }
     },
-    [estado.equipamentos],
+    [estado.equipamentos, abrirFicha],
   );
 
   const aoMotor = React.useCallback((tipo: TipoMotor, aviso: string | null) => {
@@ -839,6 +1174,30 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         idTabela="mapa-frota-filtros"
         filtros={filtrosDaBarra}
         onLimparFiltros={() => setFiltros(FILTROS_VAZIOS)}
+        acoes={
+          permissoes.editar ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAdicionando("obra")}
+              >
+                <HardHat />
+                Adicionar obra
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAdicionando("local")}
+              >
+                <MapPinPlus />
+                Adicionar localização
+              </Button>
+            </>
+          ) : undefined
+        }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
         <div className="relative h-[48dvh] shrink-0 overflow-hidden rounded-lg border border-border md:h-auto md:min-h-0 md:flex-1">
@@ -851,13 +1210,21 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             fundo={fundo}
             inclinado={inclinado}
             podeArrastar={permissoes.editar && !pendente && !pendentePessoa}
-            modoPosicionar={posicionando !== null && !pendente}
+            modoPosicionar={
+              (desenho !== null && desenhoFinal === null) ||
+              ((posicionando !== null || colocando !== null) &&
+                !pendente &&
+                !pontoColocar)
+            }
             foco={foco}
+            giroMapa={giroMapa}
             centroInicial={centroInicial}
             onSelecionar={selecionar}
             onHover={setHover}
             onSoltar={soltar}
             onClicarMapa={clicarMapa}
+            onClicarLocal={clicarLocal}
+            onClicarObra={clicarObra}
             onMotor={aoMotor}
           />
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
@@ -868,6 +1235,39 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               {botaoAlternar(inclinado, "3D", Box, () =>
                 setInclinado((v) => !v),
               )}
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(-30)}
+                title="Girar o mapa para a esquerda"
+                aria-label="Girar o mapa para a esquerda"
+                className="bg-background/95 backdrop-blur"
+              >
+                <RotateCcw className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(30)}
+                title="Girar o mapa para a direita"
+                aria-label="Girar o mapa para a direita"
+                className="bg-background/95 backdrop-blur"
+              >
+                <RotateCw className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => girarMapa(null)}
+                title="Norte para cima"
+                className="bg-background/95 backdrop-blur"
+              >
+                <Compass className="size-3" />
+                <span className="max-sm:sr-only">Norte</span>
+              </Button>
               {permissoes.editar
                 ? botaoAlternar(multi, "Seleção múltipla", MousePointer2, () =>
                     setMulti((v) => !v),
@@ -919,6 +1319,79 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               </Button>
             </div>
           </div>
+          {desenho && !desenhoFinal ? (
+            <div className="absolute inset-x-2 bottom-10 flex justify-center">
+              <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-background/95 py-1 pr-1 pl-3 text-detalhe shadow-sm backdrop-blur">
+                <span>
+                  {desenho.forma === "trecho" ? "Pavimentação" : "Edificação"}{" "}
+                  de <strong>{desenho.obra.nome}</strong>:{" "}
+                  {desenho.pontos.length === 0
+                    ? desenho.forma === "trecho"
+                      ? "toque o ponto inicial"
+                      : "toque o primeiro canto"
+                    : `${desenho.pontos.length} ${desenho.pontos.length === 1 ? "ponto" : "pontos"}`}
+                </span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  disabled={desenho.pontos.length === 0}
+                  onClick={() =>
+                    setDesenho((d) =>
+                      d ? { ...d, pontos: d.pontos.slice(0, -1) } : d,
+                    )
+                  }
+                >
+                  Desfazer
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  disabled={
+                    concluindo ||
+                    desenho.pontos.length < (desenho.forma === "trecho" ? 2 : 4)
+                  }
+                  onClick={() => void concluirDesenho()}
+                >
+                  Concluir
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={cancelarDesenho}
+                  aria-label="Cancelar"
+                >
+                  <X className="size-3" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {colocando && !pontoColocar ? (
+            <div className="absolute inset-x-2 bottom-10 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-background/95 py-1 pr-1 pl-3 text-detalhe shadow-sm backdrop-blur">
+                <span>
+                  Toque no mapa onde fica{" "}
+                  <strong>
+                    {colocando.tipo === "obra"
+                      ? colocando.obra.nome
+                      : colocando.rotulo}
+                  </strong>
+                </span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={cancelarColocar}
+                  aria-label="Cancelar"
+                >
+                  <X className="size-3" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {/* No canto de cima para não cobrir o logo nem a atribuição do Google (ficam embaixo). */}
           {motor ? (
             <div
@@ -952,14 +1425,29 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             onCancelarPosicionar={() => setPosicionando(null)}
             onEscolherEquipamento={escolherEquipamento}
             onEscolherPessoa={(p) => {
-              setFicha({ tipo: "pessoa", id: p.id });
+              abrirFicha({ tipo: "pessoa", id: p.id });
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
           >
             {equipamentoFicha ? (
               <FichaEquipamento
-                equipamento={equipamentoFicha}
+                equipamento={
+                  rumoPrevio?.id === equipamentoFicha.id
+                    ? {
+                        ...equipamentoFicha,
+                        heading: rumoPrevio.rumo,
+                        rumoManual: rumoPrevio.rumo,
+                      }
+                    : {
+                        ...equipamentoFicha,
+                        heading: headingNoTrecho(
+                          equipamentoFicha,
+                          medidosPorId,
+                        ),
+                      }
+                }
+                onGirar={(delta) => girar(equipamentoFicha, delta)}
                 pessoas={estado.pessoas}
                 permissoes={permissoes}
                 selecionados={selecao.size}
@@ -1012,12 +1500,140 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
                   </p>
                 ) : null}
               </section>
+            ) : localDaFicha ? (
+              <FichaLocal
+                key={localDaFicha.id}
+                local={localDaFicha}
+                itens={itensDoLocal}
+                padraoM={estado.config.snapLocalM}
+                podeEditar={permissoes.editar}
+                salvando={salvando}
+                onFechar={() => {
+                  setLocalFicha(null);
+                  setRaioPrevio(null);
+                }}
+                onPrevia={(raioM) =>
+                  setRaioPrevio(
+                    raioM === null ? null : { id: localDaFicha.id, raioM },
+                  )
+                }
+                onSalvar={(raioM) => salvarRaio(localDaFicha.id, raioM)}
+                onSalvarDados={async (nome, tipos) => {
+                  setSalvando(true);
+                  try {
+                    const r = await editarLocal({
+                      localidadeId: localDaFicha.id,
+                      nome,
+                      tipos,
+                    });
+                    return aplicar(r, `${nome} salvo`);
+                  } finally {
+                    setSalvando(false);
+                  }
+                }}
+                onMover={() =>
+                  escolherNoMapa({
+                    tipo: "local",
+                    rotulo: localDaFicha.nome,
+                    localidadeId: localDaFicha.id,
+                  })
+                }
+              />
+            ) : obraDaFicha ? (
+              <FichaObra
+                key={obraDaFicha.id}
+                obra={obraDaFicha}
+                desenho={desenhoDe(obraDaFicha.id)}
+                podeEditar={permissoes.editar}
+                salvando={salvando}
+                onFechar={() => setObraFicha(null)}
+                onDesenhar={(forma) => {
+                  const d = desenhoDe(obraDaFicha.id);
+                  comecarDesenho(
+                    obraDaFicha,
+                    forma,
+                    forma === "trecho" ? d.trechos > 0 : d.areas > 0,
+                  );
+                }}
+                onMoverPonto={() =>
+                  escolherNoMapa({ tipo: "obra", obra: obraDaFicha })
+                }
+                onTirar={async () => {
+                  const r = await tirarObra({ obraId: obraDaFicha.id });
+                  const ok = aplicar(r, `${obraDaFicha.nome} saiu do mapa`);
+                  if (ok) setObraFicha(null);
+                  return ok;
+                }}
+              />
             ) : null}
           </PainelMapa>
         </div>
       </div>
 
       {/* Montados só enquanto há pedido: cada arraste/pedido nasce com os campos limpos. */}
+      {adicionando === "obra" ? (
+        <DialogoAdicionarObra
+          obras={estado.obras}
+          desenhoDe={desenhoDe}
+          onCancelar={() => setAdicionando(null)}
+          onEscolher={(obra, forma, substituir) =>
+            forma === "ponto"
+              ? escolherNoMapa({ tipo: "obra", obra })
+              : comecarDesenho(obra, forma, substituir)
+          }
+        />
+      ) : null}
+      {desenho && desenhoFinal ? (
+        <DialogoConcluirDesenho
+          obra={desenho.obra}
+          forma={desenho.forma}
+          extensaoKm={extensaoKm(desenhoFinal.pontos)}
+          seguiuEstrada={desenhoFinal.seguiuEstrada}
+          substituir={desenho.substituir}
+          onCancelar={() => setDesenhoFinal(null)}
+          onConfirmar={salvarDesenho}
+        />
+      ) : null}
+      {adicionando === "local" ? (
+        <DialogoAdicionarLocal
+          localidades={estado.localidades}
+          semPosicao={estado.localidadesSemPosicao}
+          tanques={estado.tanques}
+          depositos={estado.depositos}
+          podeCriar={permissoes.criar}
+          onCancelar={() => setAdicionando(null)}
+          onEscolherNoMapa={escolherNoMapa}
+          onLigar={ligarAoLocal}
+        />
+      ) : null}
+      {colocando && pontoColocar ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setPontoColocar(null);
+          }}
+          titulo={
+            colocando.tipo === "obra"
+              ? `Pôr ${colocando.obra.nome} aqui?`
+              : `Pôr ${colocando.rotulo} aqui?`
+          }
+          descricao={
+            colocando.tipo === "obra"
+              ? "A obra fica marcada neste ponto do mapa."
+              : colocando.localidadeId
+                ? "O local fica neste ponto do mapa."
+                : `Cria o local ${colocando.nome ?? ""} (${(colocando.tipos ?? ["outro"]).map((t) => rotuloTipoLocalidade(t).toLowerCase()).join(", ")}) neste ponto${colocando.vincular ? ` e liga ${colocando.vincular.alvo === "tanque" ? "o tanque" : "o depósito"} a ele` : ""}.`
+          }
+          textoConfirmar="Confirmar"
+          conteudo={
+            <p className="text-detalhe text-muted-foreground">
+              {pontoColocar[1].toFixed(5)}, {pontoColocar[0].toFixed(5)}.
+              Cancelar volta para escolher outro ponto.
+            </p>
+          }
+          onConfirmar={confirmarColocar}
+        />
+      ) : null}
       {pendente ? (
         <DialogoTransferencia
           pendente={pendente}

@@ -4,7 +4,6 @@ import {
   aplicarIndireto,
   ID_NAO_RATEADO,
   janelasContiguas,
-  margemPorObra,
   rateioPermitidoNoCustoCc,
 } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 import type { FiltrosCustoCc } from "@/modules/financeiro/relatorios/filtros-custo-cc";
@@ -112,45 +111,6 @@ describe("aplicarIndireto", () => {
   });
 });
 
-describe("margemPorObra", () => {
-  it("margem sem e com indireto por obra, sem os indiretos, pela receita", () => {
-    const linhas = margemPorObra(
-      new Map([
-        [OBRA_A, { nome: "Obra A", receita: 2000 }],
-        [OBRA_B, { nome: "Obra B", receita: 5000 }],
-      ]),
-      new Map([
-        [OBRA_A, 1000.1],
-        [OBRA_B, 4000],
-        [ESCRITORIO, 300.2],
-        [OBRA_C, 50],
-      ]),
-      new Map([
-        [OBRA_A, 199.9],
-        [OBRA_B, 100.3],
-      ]),
-      INDIRETOS,
-      new Map([[OBRA_C, "Obra C"]]),
-    );
-
-    expect(linhas.map((l) => l.centroId)).toEqual([OBRA_B, OBRA_A, OBRA_C]);
-
-    const a = linhas.find((l) => l.centroId === OBRA_A)!;
-    expect(a.receita).toBe(2000);
-    expect(a.custoDireto).toBe(1000.1);
-    expect(a.indireto).toBe(199.9);
-    expect(a.resultadoSem).toBe(999.9);
-    expect(a.resultadoCom).toBe(800);
-    expect(a.margemSem).toBeCloseTo(49.995, 6);
-    expect(a.margemCom).toBeCloseTo(40, 6);
-
-    const c = linhas.find((l) => l.centroId === OBRA_C)!;
-    expect(c.nome).toBe("Obra C");
-    expect(c.margemSem).toBeNull();
-    expect(c.margemCom).toBeNull();
-    expect(c.resultadoCom).toBe(-50);
-  });
-});
 
 describe("janelasContiguas", () => {
   it("meses marcados soltos viram janelas [inicio, fim) sem cobrir o buraco", () => {
@@ -203,15 +163,8 @@ describe("rateioPermitidoNoCustoCc", () => {
   });
 });
 
-import { margemPorObraPermitida, mesDoRateio } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
+import { mesDoRateio } from "@/modules/financeiro/relatorios/indireto-nos-relatorios";
 
-describe("margemPorObraPermitida", () => {
-  it("só sem corte de centro e sem incluir investimentos (o rateio é sempre sem CAPEX)", () => {
-    expect(margemPorObraPermitida({ semCorteDeCentro: true, incluirInvestimento: false })).toBe(true);
-    expect(margemPorObraPermitida({ semCorteDeCentro: true, incluirInvestimento: true })).toBe(false);
-    expect(margemPorObraPermitida({ semCorteDeCentro: false, incluirInvestimento: false })).toBe(false);
-  });
-});
 
 describe("mesDoRateio", () => {
   it("aceita yyyy-MM válido e cai no padrão com mês inexistente", () => {

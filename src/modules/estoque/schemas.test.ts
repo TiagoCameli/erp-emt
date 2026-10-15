@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { entradaDoForm, entradaFormSchema, saidaDoForm, saidaFormSchema } from "@/modules/estoque/schemas";
+import {
+  entradaDoForm,
+  entradaFormSchema,
+  entradaSchema,
+  saidaDoForm,
+  saidaFormSchema,
+  saidaSchema,
+} from "@/modules/estoque/schemas";
 
 const DEPOSITO = "11111111-1111-4111-8111-111111111111";
 const INSUMO = "22222222-2222-4222-8222-222222222222";
@@ -45,10 +52,23 @@ describe("schemas do estoque", () => {
     expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, data: "" }).success).toBe(false);
   });
 
-  it("o local é depósito ou tanque; outra coisa é recusada", () => {
+  it("o local é depósito, tanque ou pilha; outra coisa é recusada", () => {
     expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: "" }).success).toBe(false);
     expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: DEPOSITO }).success).toBe(false);
     expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: `tanque:${DEPOSITO}` }).success).toBe(true);
+    expect(entradaFormSchema.safeParse({ ...FORM_AVULSA, local: `pilha:${DEPOSITO}` }).success).toBe(true);
+  });
+
+  it("entrada numa pilha vai só com a pilha", () => {
+    const d = entradaDoForm({ ...FORM_AVULSA, local: `pilha:${DEPOSITO}` });
+    expect([d.depositoId, d.tanqueId, d.pilhaId]).toEqual([null, null, DEPOSITO]);
+    expect(entradaSchema.safeParse(d).success).toBe(true);
+  });
+
+  it("a action recusa dois locais ao mesmo tempo", () => {
+    const d = entradaDoForm(FORM_AVULSA);
+    expect(entradaSchema.safeParse({ ...d, pilhaId: DEPOSITO }).success).toBe(false);
+    expect(saidaSchema.safeParse({ ...saidaDoForm(FORM_SAIDA), pilhaId: DEPOSITO }).success).toBe(false);
   });
 
   it("converte o formulário avulso para números e nulos", () => {
@@ -56,6 +76,7 @@ describe("schemas do estoque", () => {
       ocItemId: null,
       depositoId: DEPOSITO,
       tanqueId: null,
+      pilhaId: null,
       insumoId: INSUMO,
       quantidade: 1234.5,
       valorUnitario: 6.3947,
@@ -80,6 +101,7 @@ describe("schemas do estoque", () => {
     expect(saidaDoForm(FORM_SAIDA)).toEqual({
       depositoId: null,
       tanqueId: DEPOSITO,
+      pilhaId: null,
       insumoId: INSUMO,
       quantidade: 2.5,
       data: "2026-10-13",
