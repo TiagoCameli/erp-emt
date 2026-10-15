@@ -44,7 +44,12 @@ import {
   type LinhaPrazoAVencer,
   type PrazoFaixa,
 } from "@/modules/financeiro/relatorios/calculo";
-import type { SocioLigadaLinha } from "@/modules/financeiro/relatorios/socios-ligadas";
+import {
+  montarSociosLigadas,
+  type SocioLigadaLinha,
+  type SocioLigadaMes,
+  type SociosLigadasRelatorio,
+} from "@/modules/financeiro/relatorios/socios-ligadas";
 import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes";
 import type { CustoIndiretoLinha } from "@/modules/financeiro/relatorios/custos-indiretos";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
@@ -1416,6 +1421,39 @@ export async function sociosLigadas(inicio: string, fim: string): Promise<SocioL
     devolvido: Number(l.devolvido),
     saldo: Number(l.saldo),
   }));
+}
+
+/**
+ * Mês a mês de cada centro de sócio e de empresa ligada, com a parte ainda em
+ * aberto (medida pela parcela). Fim exclusivo. Fecha com `sociosLigadas` no
+ * mesmo período.
+ */
+export async function sociosLigadasMensal(inicio: string, fim: string): Promise<SocioLigadaMes[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_socios_ligadas_mensal", {
+    p_inicio: inicio,
+    p_fim: fim,
+  });
+  if (error) {
+    throw new Error("Não foi possível carregar o mês a mês de sócios e ligadas");
+  }
+  return (data ?? []).map((l) => ({
+    centroId: l.centro_id,
+    mes: l.mes.slice(0, 7),
+    enviado: Number(l.enviado),
+    enviadoAberto: Number(l.enviado_aberto),
+    devolvido: Number(l.devolvido),
+    devolvidoAberto: Number(l.devolvido_aberto),
+  }));
+}
+
+/** Os dois juntos, prontos para a tela e para a planilha. */
+export async function relatorioSociosLigadas(): Promise<SociosLigadasRelatorio> {
+  const [centros, meses] = await Promise.all([
+    sociosLigadas("1900-01-01", "2100-01-01"),
+    sociosLigadasMensal("1900-01-01", "2100-01-01"),
+  ]);
+  return montarSociosLigadas(centros, meses, mesCorrente());
 }
 
 

@@ -95,7 +95,7 @@ import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fl
 import type { SaldoProjetado } from "@/modules/financeiro/relatorios/fluxo-caixa";
 import { PosicaoBancariaTabela } from "@/modules/financeiro/relatorios/components/posicao-bancaria-tabela";
 import { BotaoExportarRelatorio } from "@/modules/financeiro/relatorios/components/botao-exportar-relatorio";
-import { SociosLigadasTabela } from "@/modules/financeiro/relatorios/components/socios-ligadas-tabela";
+import { SociosLigadasRelatorioTela } from "@/modules/financeiro/relatorios/components/socios-ligadas-relatorio";
 import { AquisicoesTabela } from "@/modules/financeiro/relatorios/components/aquisicoes-tabela";
 import { CustosIndiretosTabela } from "@/modules/financeiro/relatorios/components/custos-indiretos-tabela";
 import { anoDoIndireto } from "@/modules/financeiro/relatorios/custos-indiretos";
@@ -124,7 +124,7 @@ import {
   custoPorGrupo,
   custoReceita,
   investimentos,
-  sociosLigadas,
+  relatorioSociosLigadas,
   aquisicoes,
   custosIndiretos,
   rateioIndiretoDoMes,
@@ -795,12 +795,8 @@ async function ConteudoRateioIndireto({ mes, podeAjustar }: { mes: string; podeA
 }
 
 async function ConteudoSociosLigadas() {
-  const ano = Number(mesCorrente().slice(0, 4));
-  const [doAno, acumulado] = await Promise.all([
-    sociosLigadas(`${ano}-01-01`, `${ano + 1}-01-01`),
-    sociosLigadas("1900-01-01", "2100-01-01"),
-  ]);
-  if (acumulado.length === 0) {
+  const dados = await relatorioSociosLigadas();
+  if (dados.socios.length === 0 && dados.ligadas.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
@@ -809,7 +805,7 @@ async function ConteudoSociosLigadas() {
       />
     );
   }
-  return <SociosLigadasTabela ano={ano} doAno={doAno} acumulado={acumulado} />;
+  return <SociosLigadasRelatorioTela dados={dados} />;
 }
 
 async function ConteudoAquisicoes({ podeVerLancamentos }: { podeVerLancamentos: boolean }) {
@@ -1774,7 +1770,8 @@ export default async function RelatoriosPage({
         <SecaoRelatorio
           relatorio="socios-ligadas"
           titulo="Sócios e ligadas"
-          descricao="O que foi para os sócios (James e Tiago) e para as empresas ligadas (Amazônia, Juruá FM). Distribuição a sócio e mútuo ficam fora do resultado e do custo das obras; aqui está quanto saiu, quanto voltou e o saldo."
+          descricao="Regime de competência (o mês de referência do lançamento), por centro raiz de tipo Sócio e Empresa ligada, contando o rateio cuja categoria é de natureza distribuição (sócio) ou mútuo (ligada). Distribuição e mútuo ficam fora do resultado e do custo das obras; o total retirado fecha com o bloco de distribuição do DRE. Em aberto é a parte do rateio cujas parcelas ainda não foram pagas. O saldo da ligada é o enviado (a pagar) menos o devolvido (a receber), desde o primeiro lançamento."
+          exportar="socios-ligadas"
         >
           <ConteudoSociosLigadas />
         </SecaoRelatorio>

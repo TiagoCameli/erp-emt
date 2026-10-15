@@ -40,6 +40,7 @@ import {
   abaExtratoFornecedor,
   abaFluxoCaixa,
   abaPosicaoBancaria,
+  abasSociosLigadas,
 } from "@/modules/financeiro/relatorios/planilha-abas";
 import {
   montarPlanilhaDeRelatorio,
@@ -62,6 +63,7 @@ import {
   mesesDeCompetencia,
   posicaoBancaria,
   primeirosMesesDosCentros,
+  relatorioSociosLigadas,
 } from "@/modules/financeiro/relatorios/queries";
 import { lerPeriodoInvestimentos } from "@/modules/financeiro/relatorios/investimentos";
 import type { RelatorioId } from "@/modules/financeiro/relatorios/relatorios";
@@ -362,7 +364,14 @@ async function abaDoRelatorio(
       );
     }
 
-    case "socios-ligadas":
+    case "socios-ligadas": {
+      // Três abas (sócios, sócios mês a mês, ligadas) numa escrita só: o
+      // contrato desta função é uma escrita por relatório.
+      const abas = abasSociosLigadas(await relatorioSociosLigadas());
+      return (workbook) => {
+        for (const escrever of abas) escrever(workbook);
+      };
+    }
     case "aquisicoes":
     case "custos-indiretos":
     case "rateio-indireto":

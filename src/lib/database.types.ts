@@ -11670,6 +11670,17 @@ export type Database = {
           total: number;
         }[];
       };
+      fn_rel_socios_ligadas_mensal: {
+        Args: { p_fim: string; p_inicio: string };
+        Returns: {
+          centro_id: string;
+          devolvido: number;
+          devolvido_aberto: number;
+          enviado: number;
+          enviado_aberto: number;
+          mes: string;
+        }[];
+      };
       fn_rel_socios_ligadas: {
         Args: { p_fim: string; p_inicio: string };
         Returns: {
