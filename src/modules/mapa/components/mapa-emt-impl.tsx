@@ -526,7 +526,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         motor = criarMotorTiles(el, centroInicial, p.inclinado, p.fundo);
         propsRef.current.onMotor(
           "tiles",
-          "Sem chave do Google Maps (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY): mapa com tiles da Esri.",
+          "Sem chave do Google Maps (NEXT_GOOGLE_MAPS_API_KEY): mapa com tiles da Esri.",
         );
       }
       if (cancelado) {
