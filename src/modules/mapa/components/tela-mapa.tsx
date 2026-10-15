@@ -96,6 +96,36 @@ const ROTULO_MOTOR: Record<TipoMotor, string> = {
 
 /** Cruzeiro do Sul e os lotes da BR-364, quando não há trecho cadastrado para enquadrar. */
 const CHAVE_PAINEL = "erp-emt:mapa:painel";
+const assinantesPainel = new Set<() => void>();
+/** Reserva para quando o storage não existe (aba privada): vale só nesta visita. */
+let painelNaMemoria: boolean | null = null;
+
+function lerPainel(): boolean {
+  try {
+    const valor = window.localStorage.getItem(CHAVE_PAINEL);
+    if (valor !== null) return valor !== "fechado";
+  } catch {
+    // sem storage: cai na memória
+  }
+  return painelNaMemoria ?? true;
+}
+
+function gravarPainel(aberto: boolean): void {
+  painelNaMemoria = aberto;
+  try {
+    window.localStorage.setItem(CHAVE_PAINEL, aberto ? "aberto" : "fechado");
+  } catch {
+    // sem storage: fica a memória
+  }
+  for (const avisar of assinantesPainel) avisar();
+}
+
+function assinarPainel(avisar: () => void): () => void {
+  assinantesPainel.add(avisar);
+  return () => {
+    assinantesPainel.delete(avisar);
+  };
+}
 
 const CENTRO_PADRAO: { pos: Posicao; zoom: number } = {
   pos: [-72.47, -7.745],
@@ -156,33 +186,18 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     () => new Set(),
   );
   const [ficha, setFicha] = React.useState<Alvo | null>(null);
-  // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado).
-  const [painelAberto, setPainelAberto] = React.useState(true);
-  React.useEffect(() => {
-    try {
-      if (window.localStorage.getItem(CHAVE_PAINEL) === "fechado")
-        setPainelAberto(false);
-    } catch {
-      // sem storage (aba privada): fica aberto
-    }
-  }, []);
-  const alternarPainel = React.useCallback(() => {
-    setPainelAberto((aberto) => {
-      try {
-        window.localStorage.setItem(
-          CHAVE_PAINEL,
-          aberto ? "fechado" : "aberto",
-        );
-      } catch {
-        // sem storage: vale só nesta visita
-      }
-      return !aberto;
-    });
-  }, []);
-  // Tocar numa máquina ou pessoa abre a ficha, que mora na lateral: a lateral abre junto.
-  React.useEffect(() => {
-    if (ficha) setPainelAberto(true);
-  }, [ficha]);
+  // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado). A ficha
+  // mora na lateral, então ficha aberta mostra a lateral mesmo com a lista recolhida.
+  const listaAberta = React.useSyncExternalStore(
+    assinarPainel,
+    lerPainel,
+    () => true,
+  );
+  const painelAberto = listaAberta || ficha !== null;
+  const alternarPainel = () => {
+    if (painelAberto) setFicha(null);
+    gravarPainel(!painelAberto);
+  };
   const [hover, setHover] = React.useState<string | null>(null);
   const [fundo, setFundo] = React.useState<ModoFundo>("mapa");
   const [inclinado, setInclinado] = React.useState(true);
