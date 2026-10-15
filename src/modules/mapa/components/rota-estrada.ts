@@ -1,3 +1,4 @@
+import { tirarRetornoDasPontas } from "@/modules/mapa/geo";
 import type { Posicao } from "@/modules/mapa/tipos";
 
 /**
@@ -7,10 +8,15 @@ import type { Posicao } from "@/modules/mapa/tipos";
  *    Cloud pode ter: a Directions virou serviço antigo em março de 2025 e não se ativa em projeto
  *    novo. O Tiago ativou a Routes API e a pôs na chave restrita em 15/10/2026.
  * 2. Directions (`DirectionsService`), como reserva para projeto antigo que ainda a tenha.
+ * 3. Roteador público do OpenStreetMap (OSRM), quando o Google não responde: em 15/10/2026 a Routes
+ *    API recusava a chave do ERP (`API_KEY_INVALID`) e o Tiago pediu a linha pela estrada mesmo
+ *    assim. Vão só as coordenadas tocadas. É servidor público, sem garantia: se cair, segue.
  *
- * Sem nenhuma das duas (ou sem Google na página, no motor de tiles), volta null e quem chama usa
- * os pontos tocados.
+ * O que vier passa por `tirarRetornoDasPontas` (o roteador às vezes contorna uma rotatória na
+ * ponta). Sem nenhum (ou sem rede), volta null e quem chama usa os pontos tocados.
  */
+
+const OSRM = "https://router.project-osrm.org/route/v1/driving";
 
 const ll = (p: Posicao) => ({ lat: p[1], lng: p[0] });
 
@@ -59,21 +65,50 @@ async function pelaDirections(
   return caminho.map((p) => [p.lng(), p.lat()]);
 }
 
+async function peloOsm(pontos: readonly Posicao[]): Promise<Posicao[] | null> {
+  const coordenadas = pontos
+    .slice(0, 100)
+    .map((p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`)
+    .join(";");
+  const resposta = await fetch(
+    `${OSRM}/${coordenadas}?overview=full&geometries=geojson`,
+    { signal: AbortSignal.timeout(15000) },
+  );
+  if (!resposta.ok) return null;
+  const corpo = (await resposta.json()) as {
+    code?: string;
+    routes?: { geometry?: { coordinates?: unknown } }[];
+  };
+  const coords = corpo.routes?.[0]?.geometry?.coordinates;
+  if (corpo.code !== "Ok" || !Array.isArray(coords)) return null;
+  const caminho = coords.filter(
+    (c): c is Posicao =>
+      Array.isArray(c) &&
+      c.length >= 2 &&
+      typeof c[0] === "number" &&
+      typeof c[1] === "number",
+  );
+  return caminho.length >= 2 ? caminho.map((c) => [c[0], c[1]]) : null;
+}
+
 export async function rotaPelaEstrada(
   pontos: readonly Posicao[],
 ): Promise<Posicao[] | null> {
   if (pontos.length < 2 || typeof window === "undefined") return null;
   const g = (window as unknown as { google?: typeof google }).google;
-  if (!g?.maps?.importLibrary) return null;
-  try {
-    const rota = await pelaRoutesApi(g, pontos);
-    if (rota) return rota;
-  } catch {
-    // Routes API fora da chave ou fora do ar: tenta o serviço antigo
+  const tentativas: (() => Promise<Posicao[] | null>)[] = [];
+  if (g?.maps?.importLibrary) {
+    tentativas.push(() => pelaRoutesApi(g, pontos));
+    tentativas.push(() => pelaDirections(g, pontos));
   }
-  try {
-    return await pelaDirections(g, pontos);
-  } catch {
-    return null;
+  tentativas.push(() => peloOsm(pontos));
+  for (const tentar of tentativas) {
+    try {
+      const rota = await tentar();
+      if (rota) return tirarRetornoDasPontas(rota);
+    } catch {
+      // serviço fora da chave ou fora do ar: tenta o próximo
+    }
   }
+  return null;
 }
