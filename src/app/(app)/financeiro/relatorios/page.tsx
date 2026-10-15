@@ -83,6 +83,8 @@ import { CustoCcGrafico } from "@/modules/financeiro/relatorios/components/custo
 import { CustoGrupoTabela } from "@/modules/financeiro/relatorios/components/custo-grupo-tabela";
 import { CustoCcTabela } from "@/modules/financeiro/relatorios/components/custo-cc-tabela";
 import { DreTabela } from "@/modules/financeiro/relatorios/components/dre-tabela";
+import { DrePonte } from "@/modules/financeiro/relatorios/components/dre-ponte";
+import { ponteDoResultado } from "@/modules/financeiro/relatorios/ponte-do-resultado";
 import { ExtratoFornecedorTabela } from "@/modules/financeiro/relatorios/components/extrato-fornecedor-tabela";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
 import { FluxoCaixaGrafico } from "@/modules/financeiro/relatorios/components/fluxo-caixa-grafico";
@@ -438,6 +440,16 @@ function temLancamentoNoDre(dre: DreGerencial): boolean {
   );
 }
 
+/** Margem sobre a receita líquida, para o cartão do resultado dizer o tamanho dele. */
+function margemDoPeriodo(cartoes: {
+  receitaOperacional: number;
+  resultadoDoPeriodo: number;
+}): string {
+  if (cartoes.receitaOperacional <= 0) return "";
+  const margem = (cartoes.resultadoDoPeriodo / cartoes.receitaOperacional) * 100;
+  return ` de ${formatarPercentual(margem, 1)}`;
+}
+
 async function ConteudoDre({
   periodo,
   podeVerLancamentos,
@@ -504,7 +516,7 @@ async function ConteudoDre({
           idCard="resultado-periodo"
           titulo="Resultado do período"
           valor={<MoneyText valor={cartoes.resultadoDoPeriodo} />}
-          detalhe={`${cartoes.resultadoDoPeriodo >= 0 ? "Superávit" : "Déficit"} · ${descricao}`}
+          detalhe={`${cartoes.resultadoDoPeriodo >= 0 ? "Superávit" : "Déficit"}${margemDoPeriodo(cartoes)} · ${descricao}`}
         />
       </GradeKpis>
       {/* Indicador e não cartão: os quatro de cima fecham entre si, e um quinto
@@ -525,6 +537,13 @@ async function ConteudoDre({
         />
       ) : (
         <GradeKpis id="financeiro.relatorios.dre.tabela" titulo="Tabela do DRE" vao="amplo">
+          {/* A mesma conta da tabela, contada em ordem de leitura: da receita
+              bruta ao resultado, e depois para onde o resultado foi. */}
+          <ItemGrade titulo="Ponte do resultado" idCard="ponte" larguraPadrao={12}>
+            <div className="flex flex-col rounded-lg border border-border bg-card p-4">
+              <DrePonte ponte={ponteDoResultado(dre)} />
+            </div>
+          </ItemGrade>
           <ItemGrade titulo="Tabela do DRE" idCard="tabela" larguraPadrao={12}>
             <DreTabela
               dre={dre}
