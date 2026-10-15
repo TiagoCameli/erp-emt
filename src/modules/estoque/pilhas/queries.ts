@@ -14,7 +14,8 @@ export interface PilhaLinha {
   saldo: number;
   /** Soma das entradas, para "saldo de quanto entrou". */
   totalEntrada: number;
-  /** O material da pilha (o da última entrada, depois de zerada). */
+  /** Escolhido no cadastro. Nulo só nas pilhas criadas antes de 15/10 22h, até serem editadas. */
+  insumoId: string | null;
   insumoNome: string | null;
   unidade: string | null;
 }
@@ -25,7 +26,7 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("estoque_pilhas")
-      .select("id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumos(nome, unidades_medida(sigla))")
+      .select("id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla))")
       .order("nome")
       .order("id")
       .range(de, ate),
@@ -40,6 +41,7 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
     zeradaEm: linha.zerada_em,
     saldo: Number(linha.saldo),
     totalEntrada: Number(linha.total_entrada),
+    insumoId: linha.insumo_id,
     insumoNome: linha.insumos?.nome ?? null,
     unidade: linha.insumos?.unidades_medida?.sigla ?? null,
   }));

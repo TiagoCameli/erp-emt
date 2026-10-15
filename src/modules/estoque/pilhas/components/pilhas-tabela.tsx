@@ -21,6 +21,7 @@ import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { filtrarFacetado } from "@/modules/_shared/filtros-facetados";
 import { excluirPilha } from "@/modules/estoque/pilhas/actions";
 import type { PilhaLinha } from "@/modules/estoque/pilhas/queries";
+import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 import { PilhaFormDrawer } from "./pilha-form-drawer";
 
 type FiltroStatus = "ativas" | "inativas" | "todas";
@@ -55,6 +56,8 @@ function Restante({ pilha }: { pilha: PilhaLinha }) {
 
 export interface PilhasTabelaProps {
   pilhas: PilhaLinha[];
+  /** Para o formulário de edição; vazio para quem não edita. */
+  insumos: InsumoOpcao[];
   podeEditar: boolean;
   podeExcluir: boolean;
 }
@@ -64,7 +67,7 @@ export interface PilhasTabelaProps {
  * ativa se a saída que a zerou for excluída). Excluir vai para a lixeira; pilha com
  * movimento está em uso e a FK recusa.
  */
-export function PilhasTabela({ pilhas, podeEditar, podeExcluir }: PilhasTabelaProps) {
+export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: PilhasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativas", ["ativas", "inativas", "todas"]);
   const [editando, setEditando] = React.useState<PilhaLinha | null>(null);
@@ -119,9 +122,17 @@ export function PilhasTabela({ pilhas, podeEditar, podeExcluir }: PilhasTabelaPr
       },
       {
         accessorKey: "insumoNome",
-        header: "Material",
-        size: 240,
-        cell: ({ row }) => row.original.insumoNome ?? <span className="text-muted-foreground">Sem entrada</span>,
+        header: "Insumo",
+        size: 260,
+        cell: ({ row }) =>
+          row.original.insumoNome ? (
+            <span>
+              {row.original.insumoNome}
+              {row.original.unidade ? <span className="ml-1 text-muted-foreground">· {row.original.unidade}</span> : null}
+            </span>
+          ) : (
+            <StatusBadge status="pendente_aprovacao" rotulo="Defina o insumo" />
+          ),
       },
       {
         accessorKey: "saldo",
@@ -180,7 +191,7 @@ export function PilhasTabela({ pilhas, podeEditar, podeExcluir }: PilhasTabelaPr
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, material ou observação" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, insumo ou observação" />,
           },
           {
             id: "status",
@@ -246,6 +257,7 @@ export function PilhasTabela({ pilhas, podeEditar, podeExcluir }: PilhasTabelaPr
             if (!aberto) setEditando(null);
           }}
           pilha={editando}
+          insumos={insumos}
         />
       ) : null}
 

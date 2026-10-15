@@ -44,6 +44,8 @@ export interface LocalOpcao {
   id: string;
   nome: string;
   ativo: boolean;
+  /** Só na pilha: o insumo escolhido no cadastro dela. */
+  insumoId: string | null;
 }
 
 /**
@@ -60,16 +62,26 @@ export async function listarLocais(): Promise<LocalOpcao[]> {
       supabase.from("tanques").select("id, nome, ativo").eq("uso", "material").order("nome").order("id").range(de, ate),
     ),
     todasAsLinhas((de, ate) =>
-      supabase.from("estoque_pilhas").select("id, nome, ativo").order("nome").order("id").range(de, ate),
+      supabase.from("estoque_pilhas").select("id, nome, ativo, insumo_id").order("nome").order("id").range(de, ate),
     ),
   ]);
   if (depositos.erro || tanques.erro || pilhas.erro) {
     throw new Error("Não foi possível carregar os depósitos, tanques e pilhas");
   }
   return [
-    ...depositos.linhas.map((d) => ({ id: codificarLocal("deposito", d.id), nome: d.nome, ativo: d.ativo })),
-    ...tanques.linhas.map((t) => ({ id: codificarLocal("tanque", t.id), nome: `${t.nome} (tanque)`, ativo: t.ativo })),
-    ...pilhas.linhas.map((p) => ({ id: codificarLocal("pilha", p.id), nome: `${p.nome} (pilha)`, ativo: p.ativo })),
+    ...depositos.linhas.map((d) => ({ id: codificarLocal("deposito", d.id), nome: d.nome, ativo: d.ativo, insumoId: null })),
+    ...tanques.linhas.map((t) => ({
+      id: codificarLocal("tanque", t.id),
+      nome: `${t.nome} (tanque)`,
+      ativo: t.ativo,
+      insumoId: null,
+    })),
+    ...pilhas.linhas.map((p) => ({
+      id: codificarLocal("pilha", p.id),
+      nome: `${p.nome} (pilha)`,
+      ativo: p.ativo,
+      insumoId: p.insumo_id,
+    })),
   ];
 }
 

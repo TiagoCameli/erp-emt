@@ -32,29 +32,47 @@ export type FaixaAgingRecorte =
 export type TipoLancamentoRecorte = "a_pagar" | "a_receber";
 
 /**
- * As quatro séries do fluxo de caixa, as mesmas que `fn_rel_fluxo_caixa` devolve
- * em `tipo` (coluna `serie_fluxo` de `vw_parcelas_caixa`). Desde a D1
- * (03/10/2026) a movimentação que passa pela conta entra no caixa, mas em série
- * própria: `emprestimo_tomado` é a entrada de movimentação rateada no centro de
- * Empréstimos, e `amortizacao` é a saída de movimentação. Os resgates antigos de
- * aplicação ficam em `a_receber`.
+ * Os cinco grupos do fluxo de caixa, pela NATUREZA da categoria (15/10/2026), os
+ * mesmos que `fn_rel_fluxo_caixa` devolve em `grupo` (coluna `grupo_fluxo` de
+ * `vw_parcelas_caixa`):
+ *
+ * - `operacao`: natureza operacional ou financeira, o dinheiro da obra;
+ * - `investimento`: CAPEX (equipamento, consórcio, terreno);
+ * - `socios`: distribuição a sócio e mútuo com empresa ligada;
+ * - `divida`: empréstimo tomado e amortização (movimentação no centro raiz
+ *   financeiro);
+ * - `aplicacao`: resgate e aplicação manuais (outra movimentação).
+ *
+ * A origem `aplicacao` (rendimento, ajuste de abertura) fica fora de todos: é
+ * variação dentro da subconta, não passou pela conta corrente.
+ *
+ * Até 15/10 o fluxo separava por `tipo` em quatro séries, e "Entradas
+ * operacionais" levava R$ 9,03 mi de resgate de aplicação enquanto "Saídas
+ * operacionais" levava CAPEX, distribuição e mútuo.
  */
-export type SerieFluxo =
-  | "a_pagar"
-  | "a_receber"
-  | "emprestimo_tomado"
-  | "amortizacao";
+export type GrupoFluxo =
+  | "operacao"
+  | "investimento"
+  | "socios"
+  | "divida"
+  | "aplicacao";
 
-export const SERIES_FLUXO: readonly SerieFluxo[] = [
-  "a_pagar",
-  "a_receber",
-  "emprestimo_tomado",
-  "amortizacao",
+export const GRUPOS_FLUXO: readonly GrupoFluxo[] = [
+  "operacao",
+  "investimento",
+  "socios",
+  "divida",
+  "aplicacao",
 ];
 
-/** O tipo do lançamento de cada série: a saída é a pagar, a entrada a receber. */
-export function tipoDaSerie(serie: SerieFluxo): TipoLancamentoRecorte {
-  return serie === "a_pagar" || serie === "amortizacao" ? "a_pagar" : "a_receber";
+/** O lado do caixa: entrada é a receber, saída é a pagar. */
+export type SentidoFluxo = "entrada" | "saida";
+
+export const SENTIDOS_FLUXO: readonly SentidoFluxo[] = ["entrada", "saida"];
+
+/** O tipo do lançamento de cada sentido. */
+export function tipoDoSentido(sentido: SentidoFluxo): TipoLancamentoRecorte {
+  return sentido === "saida" ? "a_pagar" : "a_receber";
 }
 
 export type Recorte =
@@ -66,12 +84,19 @@ export type Recorte =
   | {
       tipo: "fluxo";
       mes: string;
-      realizado: boolean;
       /**
-       * A série clicada. Ausente = as quatro, que é o que a URL antiga (sem o
+       * Pago (`true`) ou ainda previsto (`false`). Ausente = as duas situações,
+       * que é o que a barra do gráfico soma num mês que mistura as duas (o mês
+       * corrente, ou um mês passado com parcela atrasada).
+       */
+      realizado?: boolean;
+      /**
+       * O grupo clicado. Ausente = os cinco, que é o que a URL antiga (sem o
        * quarto pedaço) sempre quis dizer: o mês inteiro do caixa.
        */
-      serie?: SerieFluxo;
+      grupo?: GrupoFluxo;
+      /** O lado clicado. Ausente = entradas e saídas. */
+      sentido?: SentidoFluxo;
     }
   | { tipo: "conta_paga" };
 
@@ -101,13 +126,36 @@ const ROTULO_FAIXA: Record<FaixaAgingRecorte, string> = {
   v_60_mais: "vencidas mais de 60 dias",
 };
 
-/** Como cada série aparece no chip do recorte, depois do mês. */
-const ROTULO_SERIE: Record<SerieFluxo, string> = {
-  a_pagar: "saídas operacionais",
-  a_receber: "entradas operacionais",
-  emprestimo_tomado: "empréstimos tomados",
-  amortizacao: "amortizações",
+/** Como cada grupo aparece no chip do recorte, por lado. */
+const ROTULO_GRUPO: Record<GrupoFluxo, Record<SentidoFluxo | "ambos", string>> = {
+  operacao: {
+    entrada: "entradas da operação",
+    saida: "saídas da operação",
+    ambos: "operação",
+  },
+  investimento: {
+    entrada: "venda de investimento",
+    saida: "investimento (CAPEX)",
+    ambos: "investimento (CAPEX)",
+  },
+  socios: {
+    entrada: "devolvido por sócios e ligadas",
+    saida: "enviado a sócios e ligadas",
+    ambos: "sócios e mútuo",
+  },
+  divida: {
+    entrada: "empréstimos tomados",
+    saida: "amortizações",
+    ambos: "dívida",
+  },
+  aplicacao: {
+    entrada: "resgates de aplicação",
+    saida: "aplicações",
+    ambos: "aplicações",
+  },
 };
+
+const SITUACOES = ["realizado", "previsto", "todos"] as const;
 
 /**
  * Lê e valida o `recorte` da URL. Qualquer coisa fora do contrato volta
@@ -131,15 +179,24 @@ export function lerRecorte(
     return { tipo: "aging", faixa, tipoLancamento };
   }
 
-  if (partes[0] === "fluxo" && (partes.length === 3 || partes.length === 4)) {
+  if (partes[0] === "fluxo" && partes.length >= 3 && partes.length <= 5) {
     const mes = partes[1];
     if (!MES.test(mes)) return undefined;
-    if (partes[2] !== "realizado" && partes[2] !== "previsto") return undefined;
-    const realizado = partes[2] === "realizado";
-    if (partes.length === 3) return { tipo: "fluxo", mes, realizado };
-    const serie = partes[3] as SerieFluxo;
-    if (!SERIES_FLUXO.includes(serie)) return undefined;
-    return { tipo: "fluxo", mes, realizado, serie };
+    const situacao = partes[2] as (typeof SITUACOES)[number];
+    if (!SITUACOES.includes(situacao)) return undefined;
+    const recorte: Extract<Recorte, { tipo: "fluxo" }> = { tipo: "fluxo", mes };
+    if (situacao !== "todos") recorte.realizado = situacao === "realizado";
+    if (partes.length >= 4) {
+      const grupo = partes[3] as GrupoFluxo;
+      if (!GRUPOS_FLUXO.includes(grupo)) return undefined;
+      recorte.grupo = grupo;
+    }
+    if (partes.length === 5) {
+      const sentido = partes[4] as SentidoFluxo;
+      if (!SENTIDOS_FLUXO.includes(sentido)) return undefined;
+      recorte.sentido = sentido;
+    }
+    return recorte;
   }
 
   return undefined;
@@ -155,8 +212,20 @@ export function escreverRecorte(recorte: Recorte): string {
     case "aging":
       return `aging:${recorte.faixa}:${recorte.tipoLancamento}`;
     case "fluxo": {
-      const base = `fluxo:${recorte.mes}:${recorte.realizado ? "realizado" : "previsto"}`;
-      return recorte.serie ? `${base}:${recorte.serie}` : base;
+      const situacao =
+        recorte.realizado === undefined
+          ? "todos"
+          : recorte.realizado
+            ? "realizado"
+            : "previsto";
+      const partes = ["fluxo", recorte.mes, situacao];
+      // O sentido só existe dentro de um grupo: sem grupo, a URL não tem onde
+      // pô-lo, e a lista abriria os dois lados com o chip dizendo um.
+      if (recorte.grupo) {
+        partes.push(recorte.grupo);
+        if (recorte.sentido) partes.push(recorte.sentido);
+      }
+      return partes.join(":");
     }
     case "conta_paga":
       return "conta_paga";
@@ -176,10 +245,15 @@ export function rotuloRecorte(recorte: Recorte): string {
       return `Parcelas ${tipo} ${ROTULO_FAIXA[recorte.faixa]}`;
     }
     case "fluxo": {
-      const base = recorte.realizado
-        ? `Parcelas pagas em ${rotuloMes(recorte.mes)}`
-        : `Parcelas previstas para ${rotuloMes(recorte.mes)}`;
-      return recorte.serie ? `${base}, ${ROTULO_SERIE[recorte.serie]}` : base;
+      const base =
+        recorte.realizado === undefined
+          ? `Caixa de ${rotuloMes(recorte.mes)}`
+          : recorte.realizado
+            ? `Parcelas pagas em ${rotuloMes(recorte.mes)}`
+            : `Parcelas previstas para ${rotuloMes(recorte.mes)}`;
+      return recorte.grupo
+        ? `${base}, ${ROTULO_GRUPO[recorte.grupo][recorte.sentido ?? "ambos"]}`
+        : base;
     }
     case "conta_paga":
       return "Parcelas pagas";

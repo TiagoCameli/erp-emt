@@ -1,9 +1,10 @@
 import type { Natureza } from "@/modules/financeiro/relatorios/calculo";
 import {
   escreverRecorte,
-  tipoDaSerie,
+  tipoDoSentido,
   type FaixaAgingRecorte,
-  type SerieFluxo,
+  type GrupoFluxo,
+  type SentidoFluxo,
   type TipoLancamentoRecorte,
 } from "@/modules/financeiro/lancamentos/recorte";
 
@@ -337,16 +338,18 @@ export function drillGrupoInsumo({
 }
 
 /**
- * Fluxo de caixa: a barra de um mês. Regime de CAIXA, então o mês vai no recorte
- * (que reusa a expressão de `fn_rel_fluxo_caixa`) e NÃO como `mes`, que é
- * competência.
+ * Fluxo de caixa: um pedaço de um mês. Regime de CAIXA, então o mês vai no
+ * recorte (que reusa a expressão de `fn_rel_fluxo_caixa`) e NÃO como `mes`, que
+ * é competência.
  *
- * A SÉRIE viaja no recorte (`fluxo:mes:situação:série`) desde que o fluxo ganhou
- * quatro (D1, 03/10/2026): clicar em "Amortizações" tem de abrir só as
- * prestações de empréstimo, e não as saídas operacionais do mesmo mês. O `tipo`
- * vai junto, derivado da série, para a barra de filtros da lista mostrar o lado
- * certo. Nenhum filtro de natureza viaja: o caixa inclui movimentação, e a série
- * já diz qual parte dela.
+ * O GRUPO e o LADO viajam no recorte (`fluxo:mes:situação:grupo:lado`) desde
+ * que o fluxo passou a separar pela natureza (15/10/2026): clicar no CAPEX de
+ * março abre só as parcelas de equipamento, e não as saídas da obra do mesmo
+ * mês. O `tipo` vai junto, derivado do lado, para a barra de filtros da lista
+ * mostrar o lado certo.
+ *
+ * A situação AUSENTE soma pago e previsto, que é o que a barra do gráfico soma:
+ * o mês corrente tem os dois, e um mês passado com parcela atrasada também.
  *
  * Os CENTROS do lado clicado viajam junto, e é o que faz a lista abrir com o
  * mesmo total da barra: com centro escolhido, a barra soma a FATIA do rateio, e a
@@ -356,23 +359,26 @@ export function drillGrupoInsumo({
  */
 export function drillFluxoCaixa({
   mes,
-  serie,
+  grupo,
+  sentido,
   realizado,
   centroIds,
 }: {
   mes: string;
-  serie: SerieFluxo;
-  realizado: boolean;
+  grupo: GrupoFluxo;
+  sentido: SentidoFluxo;
+  /** Ausente = pago e previsto juntos. */
+  realizado?: boolean;
   /**
-   * Centros JÁ EFETIVOS do lado clicado: os do custo quando a barra é de saída
-   * (a pagar e amortização), os da receita quando é de entrada. Vazio = o
-   * relatório não filtrou aquele lado, e a lista abre sem recorte de centro.
+   * Centros JÁ EFETIVOS do lado clicado: os do custo quando é saída, os da
+   * receita quando é entrada. Vazio = o relatório não filtrou aquele lado, e a
+   * lista abre sem recorte de centro.
    */
   centroIds?: string[];
 }): string {
   return montar({
-    tipo: tipoDaSerie(serie),
-    recorte: escreverRecorte({ tipo: "fluxo", mes, realizado, serie }),
+    tipo: tipoDoSentido(sentido),
+    recorte: escreverRecorte({ tipo: "fluxo", mes, realizado, grupo, sentido }),
     centro: lista(centroIds),
   });
 }

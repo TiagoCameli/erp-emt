@@ -36,18 +36,29 @@ describe("lerRecorte", () => {
     });
   });
 
-  it("lê a série do fluxo quando ela vem no quarto pedaço", () => {
-    expect(lerRecorte("fluxo:2026-11:previsto:amortizacao")).toEqual({
+  it("lê o grupo no quarto pedaço e o lado no quinto", () => {
+    expect(lerRecorte("fluxo:2026-11:previsto:divida:saida")).toEqual({
       tipo: "fluxo",
       mes: "2026-11",
       realizado: false,
-      serie: "amortizacao",
+      grupo: "divida",
+      sentido: "saida",
     });
-    expect(lerRecorte("fluxo:2026-07:realizado:emprestimo_tomado")).toEqual({
+    expect(lerRecorte("fluxo:2026-07:realizado:investimento")).toEqual({
       tipo: "fluxo",
       mes: "2026-07",
       realizado: true,
-      serie: "emprestimo_tomado",
+      grupo: "investimento",
+    });
+  });
+
+  it("situação `todos` é pago e previsto juntos: sem `realizado`", () => {
+    // É o que a barra do gráfico soma: o mês corrente tem os dois.
+    expect(lerRecorte("fluxo:2026-10:todos:operacao:entrada")).toEqual({
+      tipo: "fluxo",
+      mes: "2026-10",
+      grupo: "operacao",
+      sentido: "entrada",
     });
   });
 
@@ -70,7 +81,12 @@ describe("lerRecorte", () => {
     "fluxo:2026-07:talvez",
     "fluxo:2026-07",
     "fluxo:2026-07:realizado:banana",
-    "fluxo:2026-07:realizado:a_pagar:extra",
+    // As séries antigas não são grupo: link de antes de 15/10 não vira recorte
+    // errado, vira recorte nenhum.
+    "fluxo:2026-07:realizado:a_pagar",
+    "fluxo:2026-07:realizado:amortizacao",
+    "fluxo:2026-07:realizado:operacao:banana",
+    "fluxo:2026-07:realizado:operacao:saida:extra",
     "conta_paga:extra",
   ])("recusa %s", (entrada) => {
     expect(lerRecorte(entrada as string | undefined)).toBeUndefined();
@@ -88,8 +104,10 @@ describe("escreverRecorte", () => {
       "aging:a_vencer:a_pagar",
       "fluxo:2026-01:previsto",
       "fluxo:2026-12:realizado",
-      "fluxo:2026-12:realizado:a_pagar",
-      "fluxo:2026-11:previsto:amortizacao",
+      "fluxo:2026-12:realizado:operacao",
+      "fluxo:2026-11:previsto:divida:saida",
+      "fluxo:2026-10:todos:investimento:saida",
+      "fluxo:2026-10:todos",
       "conta_paga",
     ]) {
       const recorte = lerRecorte(texto);
@@ -126,9 +144,21 @@ describe("rotuloRecorte", () => {
         tipo: "fluxo",
         mes: "2026-11",
         realizado: false,
-        serie: "amortizacao",
+        grupo: "divida",
+        sentido: "saida",
       }),
     ).toBe("Parcelas previstas para 11/2026, amortizações");
+    expect(
+      rotuloRecorte({
+        tipo: "fluxo",
+        mes: "2026-10",
+        grupo: "socios",
+        sentido: "saida",
+      }),
+    ).toBe("Caixa de 10/2026, enviado a sócios e ligadas");
+    expect(
+      rotuloRecorte({ tipo: "fluxo", mes: "2026-10", grupo: "investimento" }),
+    ).toBe("Caixa de 10/2026, investimento (CAPEX)");
     expect(rotuloRecorte({ tipo: "conta_paga" })).toBe("Parcelas pagas");
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   aplicarRecorteNoEmbed,
-  aplicarSerieDoFluxo,
+  aplicarGrupoDoFluxo,
   recorteNoEmbed,
   somarDias,
   type ConsultaComEmbed,
@@ -10,8 +10,6 @@ import {
 
 const HOJE = "2026-09-01";
 const CONTA = "44444444-4444-4444-4444-444444444444";
-const CATEGORIA = "11111111-1111-4111-8111-111111111111";
-const OUTRA_CATEGORIA = "22222222-2222-4222-8222-222222222222";
 
 /**
  * Dublê do builder do PostgREST: registra a chamada em vez de ir ao banco.
@@ -84,6 +82,18 @@ describe("recorteNoEmbed: fluxo de caixa", () => {
       coluna: "status",
       operador: "not.in",
       valor: ["pago", "cancelado"],
+    });
+  });
+
+  it("sem situação, pago e previsto juntos: só a cancelada fica fora", () => {
+    // É o clique na barra do gráfico, que soma as duas metades do mês.
+    expect(
+      recorteNoEmbed({ tipo: "fluxo", mes: "2026-10" }, { hojeISO: HOJE }),
+    ).toEqual({
+      condicoes: [
+        { coluna: "mes_fluxo", operador: "eq", valor: "2026-10-01" },
+        { coluna: "status", operador: "neq", valor: "cancelado" },
+      ],
     });
   });
 });
@@ -221,90 +231,73 @@ describe("aplicarRecorteNoEmbed", () => {
   });
 });
 
-describe("aplicarSerieDoFluxo", () => {
-  const TOMADO = "33333333-3333-4333-8333-333333333333";
+describe("aplicarGrupoDoFluxo", () => {
+  const INVEST = "55555555-5555-4555-8555-555555555555";
+  const SOCIO = "66666666-6666-4666-8666-666666666666";
+  const MUTUO = "77777777-7777-4777-8777-777777777777";
+  const MOV = "88888888-8888-4888-8888-888888888888";
+  const DIVIDA = "99999999-9999-4999-8999-999999999999";
   const contexto = {
-    categoriasDeMovimentacao: [CATEGORIA, OUTRA_CATEGORIA],
-    idsEmprestimoTomado: [TOMADO],
+    categorias: {
+      investimento: [INVEST],
+      socios: [SOCIO, MUTUO],
+      movimentacao: [MOV],
+    },
+    idsDoGrupo: [DIVIDA],
   };
-  const naoMovimentacao = `categoria_id.is.null,categoria_id.not.in.(${CATEGORIA},${OUTRA_CATEGORIA})`;
 
-  it("sem série, traz as quatro e tira só a movimentação de origem aplicação", () => {
-    // Desde a D1 a movimentação entra no caixa; o ajuste de aplicação continua
-    // fora do fluxo, como em `serie_fluxo`.
-    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), undefined, contexto);
-    expect(consulta?.chamadas).toEqual([
-      `or - ${naoMovimentacao},origem.neq.aplicacao`,
-    ]);
+  it("sem grupo, traz os cinco e tira a origem aplicação", () => {
+    // Rendimento e ajuste de abertura mudam o saldo da subconta, não passam
+    // pela conta corrente: fora do fluxo, como `grupo_fluxo` nulo.
+    const consulta = aplicarGrupoDoFluxo(new ConsultaFalsa(), undefined, undefined, contexto);
+    expect(consulta?.chamadas).toEqual(["neq origem aplicacao"]);
   });
 
-  it("saída operacional deixa passar o lançamento SEM categoria", () => {
+  it("operação é o complemento das outras naturezas, inclusive SEM categoria", () => {
     // `not.in` sozinho descartaria o lançamento de categoria nula (em SQL,
-    // `null not in (...)` é nulo e não passa no where).
-    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), "a_pagar", contexto);
+    // `null not in (...)` é nulo e não passa no where), e a view o trata como
+    // operacional.
+    const consulta = aplicarGrupoDoFluxo(new ConsultaFalsa(), "operacao", "saida", contexto);
     expect(consulta?.chamadas).toEqual([
-      "eq tipo a_pagar",
-      `or - ${naoMovimentacao}`,
-    ]);
-  });
-
-  it("amortização é a saída de movimentação que não veio de aplicação", () => {
-    const consulta = aplicarSerieDoFluxo(
-      new ConsultaFalsa(),
-      "amortizacao",
-      contexto,
-    );
-    expect(consulta?.chamadas).toEqual([
-      "eq tipo a_pagar",
-      `in categoria_id (${CATEGORIA},${OUTRA_CATEGORIA})`,
       "neq origem aplicacao",
+      "eq tipo a_pagar",
+      `or - categoria_id.is.null,categoria_id.not.in.(${INVEST},${SOCIO},${MUTUO},${MOV})`,
     ]);
   });
 
-  it("empréstimo tomado vai pelos ids que a RPC classificou", () => {
-    const consulta = aplicarSerieDoFluxo(
-      new ConsultaFalsa(),
-      "emprestimo_tomado",
-      contexto,
-    );
-    expect(consulta?.chamadas).toEqual([
-      "eq tipo a_receber",
-      `in id (${TOMADO})`,
-    ]);
-  });
-
-  it("entrada operacional inclui o resgate antigo e tira tomado e aplicação", () => {
-    const consulta = aplicarSerieDoFluxo(
-      new ConsultaFalsa(),
-      "a_receber",
-      contexto,
-    );
-    expect(consulta?.chamadas).toEqual([
-      "eq tipo a_receber",
-      `or - ${naoMovimentacao},and(origem.neq.aplicacao,id.not.in.(${TOMADO}))`,
-    ]);
-  });
-
-  it("sem empréstimo tomado no mês, a entrada só tira a aplicação", () => {
-    const consulta = aplicarSerieDoFluxo(new ConsultaFalsa(), "a_receber", {
-      ...contexto,
-      idsEmprestimoTomado: [],
-    });
-    expect(consulta?.chamadas).toEqual([
-      "eq tipo a_receber",
-      `or - ${naoMovimentacao},origem.neq.aplicacao`,
-    ]);
-  });
-
-  it("série que com certeza está vazia devolve null, não a lista inteira", () => {
-    const vazio = { categoriasDeMovimentacao: [], idsEmprestimoTomado: [] };
-    expect(aplicarSerieDoFluxo(new ConsultaFalsa(), "amortizacao", vazio)).toBeNull();
+  it("CAPEX e sócios vão pela categoria da natureza", () => {
     expect(
-      aplicarSerieDoFluxo(new ConsultaFalsa(), "emprestimo_tomado", vazio),
-    ).toBeNull();
-    // Sem categoria de movimentação, a saída operacional é o tipo inteiro.
+      aplicarGrupoDoFluxo(new ConsultaFalsa(), "investimento", "saida", contexto)?.chamadas,
+    ).toEqual(["neq origem aplicacao", "eq tipo a_pagar", `in categoria_id (${INVEST})`]);
     expect(
-      aplicarSerieDoFluxo(new ConsultaFalsa(), "a_pagar", vazio)?.chamadas,
-    ).toEqual(["eq tipo a_pagar"]);
+      aplicarGrupoDoFluxo(new ConsultaFalsa(), "socios", "entrada", contexto)?.chamadas,
+    ).toEqual([
+      "neq origem aplicacao",
+      "eq tipo a_receber",
+      `in categoria_id (${SOCIO},${MUTUO})`,
+    ]);
+  });
+
+  it("dívida e aplicação vão pelos ids que a RPC classificou", () => {
+    // O que separa uma da outra é o rateio no centro raiz financeiro, que o
+    // filtro do pai não alcança.
+    expect(
+      aplicarGrupoDoFluxo(new ConsultaFalsa(), "divida", "saida", contexto)?.chamadas,
+    ).toEqual(["neq origem aplicacao", "eq tipo a_pagar", `in id (${DIVIDA})`]);
+  });
+
+  it("grupo que com certeza está vazio devolve null, não a lista inteira", () => {
+    const vazio = {
+      categorias: { investimento: [], socios: [], movimentacao: [] },
+      idsDoGrupo: [],
+    };
+    expect(aplicarGrupoDoFluxo(new ConsultaFalsa(), "investimento", undefined, vazio)).toBeNull();
+    expect(aplicarGrupoDoFluxo(new ConsultaFalsa(), "socios", undefined, vazio)).toBeNull();
+    expect(aplicarGrupoDoFluxo(new ConsultaFalsa(), "divida", undefined, vazio)).toBeNull();
+    expect(aplicarGrupoDoFluxo(new ConsultaFalsa(), "aplicacao", undefined, vazio)).toBeNull();
+    // Sem nenhuma outra natureza cadastrada, a operação é o lado inteiro.
+    expect(
+      aplicarGrupoDoFluxo(new ConsultaFalsa(), "operacao", "entrada", vazio)?.chamadas,
+    ).toEqual(["neq origem aplicacao", "eq tipo a_receber"]);
   });
 });

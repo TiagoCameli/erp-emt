@@ -19,6 +19,13 @@ export function codificarLocal(tipo: TipoLocal, id: string): string {
   return `${tipo}:${id}`;
 }
 
+/** Opção do campo "Local" na entrada. A pilha leva o insumo dela: a entrada só pode ser dele. */
+export interface LocalFormOpcao {
+  id: string;
+  nome: string;
+  insumoId?: string | null;
+}
+
 export interface LocalDecodificado {
   depositoId: string | null;
   tanqueId: string | null;

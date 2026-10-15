@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
+import type { LocalFormOpcao } from "@/modules/estoque/calculo";
 import type { ItemOcDisponivel } from "@/modules/estoque/queries";
 import type { InsumoOpcao, Opcao } from "@/modules/manutencao/almoxarifado/queries";
 import { EntradaFormDrawer } from "./entrada-form-drawer";
@@ -12,7 +13,7 @@ import { SaidaFormDrawer } from "./saida-form-drawer";
 
 export interface EntradasAcoesCabecalhoProps {
   podeCriar: boolean;
-  locais: Opcao[];
+  locais: LocalFormOpcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
 }

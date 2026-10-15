@@ -77,7 +77,9 @@ import {
 } from "@/modules/financeiro/lancamentos/natureza-no-embed";
 import {
   aplicarRecorteNoEmbed,
-  aplicarSerieDoFluxo,
+  aplicarGrupoDoFluxo,
+  grupoPorIds,
+  type ContextoDoGrupo,
   recorteNoEmbed,
   type ConsultaComEmbed,
 } from "@/modules/financeiro/lancamentos/recorte-no-embed";
@@ -820,38 +822,49 @@ async function saldoInicialDaConta(
 }
 
 /**
- * As categorias de natureza `movimentacao`.
+ * As categorias que separam os grupos do fluxo de caixa, por natureza.
  *
- * Desde a D1 (03/10/2026) a movimentação que passa pela conta ENTRA no caixa, e
- * o aging e a conta paga não filtram natureza. Só o recorte do fluxo ainda lê
- * esta lista: é ela que separa as séries (a saída de movimentação é
- * `amortizacao`) e tira o ajuste de aplicação, como `serie_fluxo` faz no banco.
  * A regra mora na CATEGORIA do lançamento, então o filtro do embed (que é de
- * parcela) não a alcança: ela vira um filtro do pai, por lista de ids, curta
- * (4 hoje), ao contrário da de lançamentos.
+ * parcela) não a alcança: ela vira um filtro do pai, por lista de ids de
+ * categoria (dezenas), ao contrário da de lançamentos. A operação é o
+ * complemento das três listas, inclusive a categoria nula.
  */
-async function idsDeCategoriaDeMovimentacao(
+async function categoriasDosGruposDoFluxo(
   supabase: ClienteSupabase,
-): Promise<string[]> {
+): Promise<ContextoDoGrupo["categorias"]> {
   const { data, error } = await supabase
     .from("categorias_financeiras")
-    .select("id")
-    .eq("natureza", "movimentacao");
+    .select("id, natureza")
+    .in("natureza", ["investimento", "distribuicao", "mutuo", "movimentacao"]);
 
   if (error) {
     throw new Error(
-      `Não foi possível ler as categorias de movimentação: ${error.message}`,
+      `Não foi possível ler as categorias do fluxo de caixa: ${error.message}`,
     );
   }
-  return (data ?? []).map((categoria) => categoria.id);
+  const categorias = {
+    investimento: [] as string[],
+    socios: [] as string[],
+    movimentacao: [] as string[],
+  };
+  for (const categoria of data ?? []) {
+    if (categoria.natureza === "investimento") {
+      categorias.investimento.push(categoria.id);
+    } else if (categoria.natureza === "movimentacao") {
+      categorias.movimentacao.push(categoria.id);
+    } else {
+      categorias.socios.push(categoria.id);
+    }
+  }
+  return categorias;
 }
 
 /**
  * O filtro de natureza pronto para a consulta, ou `null` quando a URL não pediu
  * corte de natureza. Lê o cadastro de categorias (dezenas de linhas) uma vez.
  *
- * Função PRÓPRIA, e não a `idsDeCategoriaDeMovimentacao` acima: aquela serve o
- * recorte do fluxo de caixa, que separa séries; esta serve os drills de
+ * Função PRÓPRIA, e não a `categoriasDosGruposDoFluxo` acima: aquela serve o
+ * recorte do fluxo de caixa, que separa grupos; esta serve os drills de
  * resultado. São perguntas diferentes, e dividir a função amarraria uma à
  * outra no dia em que uma das regras mudar.
  */
@@ -890,23 +903,26 @@ async function valoresDoRecorte(
   recorte: Recorte,
   contaBancariaId?: string,
 ): Promise<Map<string, number>> {
-  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
-    p_tipo_recorte: recorte.tipo,
-    // `undefined` e não `null`: os parâmetros da RPC são opcionais com default
-    // null no banco, e é assim que os tipos gerados os descrevem.
-    p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
-    // No fluxo, a série clicada (as quatro de `fn_rel_fluxo_caixa`); ausente
-    // traz todas. No aging, o tipo do lançamento.
-    p_tipo_lancamento:
-      recorte.tipo === "aging"
-        ? recorte.tipoLancamento
-        : recorte.tipo === "fluxo"
-          ? recorte.serie
-          : undefined,
-    p_mes: recorte.tipo === "fluxo" ? recorte.mes : undefined,
-    p_realizado: recorte.tipo === "fluxo" ? recorte.realizado : undefined,
-    p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
-  });
+  // O fluxo tem RPC própria desde que passou a separar pela natureza
+  // (15/10/2026): o grupo e o lado clicados; ausentes trazem todos, e a
+  // situação ausente traz pago e previsto.
+  const { data, error } =
+    recorte.tipo === "fluxo"
+      ? await supabase.rpc("fn_lancamentos_do_fluxo", {
+          p_mes: recorte.mes,
+          p_realizado: recorte.realizado,
+          p_grupo: recorte.grupo,
+          p_sentido: recorte.sentido,
+        })
+      : await supabase.rpc("fn_lancamentos_do_recorte", {
+          p_tipo_recorte: recorte.tipo,
+          // `undefined` e não `null`: os parâmetros da RPC são opcionais com
+          // default null no banco, e é assim que os tipos gerados os descrevem.
+          p_faixa: recorte.tipo === "aging" ? recorte.faixa : undefined,
+          p_tipo_lancamento:
+            recorte.tipo === "aging" ? recorte.tipoLancamento : undefined,
+          p_conta: recorte.tipo === "conta_paga" ? contaBancariaId : undefined,
+        });
 
   if (error) {
     // A mensagem do banco vai junto: sem ela a falha chega como "não foi
@@ -923,27 +939,28 @@ async function valoresDoRecorte(
 }
 
 /**
- * Os lançamentos da série `emprestimo_tomado` no mês e situação do recorte.
+ * Os lançamentos do grupo `divida` ou `aplicacao` no mês, situação e lado do
+ * recorte.
  *
- * É a mesma RPC da medida, perguntada pela outra série: o que separa empréstimo
- * tomado de resgate é o rateio no centro de Empréstimos, e repetir a subida da
- * árvore aqui seria a segunda cópia da regra. Poucos ids (um por contrato
- * liberado no mês), então cabem no filtro do pai.
+ * É a mesma RPC da medida: o que separa dívida de aplicação é o rateio no centro
+ * raiz financeiro, e repetir a subida da árvore aqui seria a segunda cópia da
+ * regra. Poucos ids (um contrato, umas prestações, um resgate por mês), então
+ * cabem no filtro do pai.
  */
-async function idsDeEmprestimoTomado(
+async function idsDoGrupoDoFluxo(
   supabase: ClienteSupabase,
   recorte: Extract<Recorte, { tipo: "fluxo" }>,
 ): Promise<string[]> {
-  const { data, error } = await supabase.rpc("fn_lancamentos_do_recorte", {
-    p_tipo_recorte: "fluxo",
-    p_tipo_lancamento: "emprestimo_tomado",
+  const { data, error } = await supabase.rpc("fn_lancamentos_do_fluxo", {
     p_mes: recorte.mes,
     p_realizado: recorte.realizado,
+    p_grupo: recorte.grupo,
+    p_sentido: recorte.sentido,
   });
 
   if (error) {
     throw new Error(
-      `Não foi possível ler os empréstimos tomados do recorte: ${error.message}`,
+      `Não foi possível ler os lançamentos do grupo do recorte: ${error.message}`,
     );
   }
   return [...new Set((data ?? []).map((linha) => linha.lancamento_id))];
@@ -1042,10 +1059,8 @@ interface FiltrosResolvidos {
   saldoInicialData: string | null;
   /** O corte de natureza pelo rateio, quando a URL pediu. */
   naturezaDoFiltro: FiltroDeNatureza | null;
-  /** Só no recorte do fluxo: as categorias que separam as séries. */
-  categoriasDeMovimentacao: string[];
-  /** Só no recorte do fluxo com série de entrada. Ver `idsDeEmprestimoTomado`. */
-  idsEmprestimoTomado: string[];
+  /** Só no recorte do fluxo: o que separa os grupos. Ver `ContextoDoGrupo`. */
+  grupoDoFluxo: ContextoDoGrupo | null;
   revisaoDoFiltro: RevisaoNoEmbed | null;
 }
 
@@ -1148,19 +1163,17 @@ async function resolverFiltros(
     params.recorte?.tipo === "conta_paga" && params.contaBancariaId
       ? saldoInicialDaConta(supabase, params.contaBancariaId)
       : null;
-  // As categorias de natureza `movimentacao` (4 hoje), só para o fluxo: desde
-  // a D1 o caixa inclui movimentação, e o aging e a conta paga não filtram
-  // natureza. O fluxo ainda precisa delas para separar as séries.
+  // O que separa os grupos do fluxo, só para o fluxo: as categorias por
+  // natureza e, para dívida e aplicação, os poucos lançamentos do grupo. O
+  // aging e a conta paga não filtram natureza.
   const recorteFluxo =
     params.recorte?.tipo === "fluxo" ? params.recorte : null;
-  const categoriasDeMovimentacaoP = recorteFluxo
-    ? idsDeCategoriaDeMovimentacao(supabase)
-    : [];
-  const idsEmprestimoTomadoP =
-    recorteFluxo &&
-    (recorteFluxo.serie === "a_receber" ||
-      recorteFluxo.serie === "emprestimo_tomado")
-      ? idsDeEmprestimoTomado(supabase, recorteFluxo)
+  const categoriasDoFluxoP = recorteFluxo
+    ? categoriasDosGruposDoFluxo(supabase)
+    : null;
+  const idsDoGrupoP =
+    recorteFluxo && grupoPorIds(recorteFluxo.grupo)
+      ? idsDoGrupoDoFluxo(supabase, recorteFluxo)
       : [];
   // O corte de natureza dos drills de resultado. Disparado junto com as outras
   // leituras e esperado logo abaixo, fora da desestruturação de propósito: é
@@ -1186,8 +1199,8 @@ async function resolverFiltros(
     { subarvore: subarvoreCentro, valores: valoresCentro },
     valoresRecorte,
     saldoInicialData,
-    categoriasDeMovimentacao,
-    idsEmprestimoTomado,
+    categoriasDoFluxo,
+    idsDoGrupo,
     naturezaDoFiltro,
   ] = await Promise.all([
     idsAtrasoP,
@@ -1195,8 +1208,8 @@ async function resolverFiltros(
     centroP,
     valoresRecorteP,
     saldoInicialDataP,
-    categoriasDeMovimentacaoP,
-    idsEmprestimoTomadoP,
+    categoriasDoFluxoP,
+    idsDoGrupoP,
     naturezaDoFiltroP,
   ]);
   if (naturezaContraditoria) return null;
@@ -1214,15 +1227,19 @@ async function resolverFiltros(
   // a resposta certa é lista vazia, não a lista inteira.
   if (subarvoreCentro && subarvoreCentro.length === 0) return null;
 
-  // Série do fluxo que com certeza não tem lançamento: lista vazia, sem ir ao
-  // banco de novo. Mesma condição em que `aplicarSerieDoFluxo` devolve null.
-  if (
-    (recorteFluxo?.serie === "amortizacao" &&
-      categoriasDeMovimentacao.length === 0) ||
-    (recorteFluxo?.serie === "emprestimo_tomado" &&
-      idsEmprestimoTomado.length === 0)
-  ) {
-    return null;
+  // Grupo do fluxo que com certeza não tem lançamento: lista vazia, sem ir ao
+  // banco de novo. Mesma condição em que `aplicarGrupoDoFluxo` devolve null.
+  const grupoDoFluxo: ContextoDoGrupo | null = categoriasDoFluxo
+    ? { categorias: categoriasDoFluxo, idsDoGrupo }
+    : null;
+  if (recorteFluxo && grupoDoFluxo) {
+    const { grupo } = recorteFluxo;
+    const vazio =
+      (grupo === "investimento" &&
+        grupoDoFluxo.categorias.investimento.length === 0) ||
+      (grupo === "socios" && grupoDoFluxo.categorias.socios.length === 0) ||
+      (grupoPorIds(grupo) && idsDoGrupo.length === 0);
+    if (vazio) return null;
   }
 
   return {
@@ -1232,8 +1249,7 @@ async function resolverFiltros(
     valoresRecorte,
     saldoInicialData,
     naturezaDoFiltro,
-    categoriasDeMovimentacao,
-    idsEmprestimoTomado,
+    grupoDoFluxo,
     revisaoDoFiltro,
   };
 }
@@ -1277,8 +1293,7 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
     subarvoreCentro,
     saldoInicialData,
     naturezaDoFiltro,
-    categoriasDeMovimentacao,
-    idsEmprestimoTomado,
+    grupoDoFluxo,
     revisaoDoFiltro,
   } = resolvidos;
   if (idsFiltrados) consulta = consulta.in("id", idsFiltrados);
@@ -1316,16 +1331,18 @@ function aplicarFiltrosLancamentos<T extends ConsultaFiltravelLancamentos<T>>(
         contaBancariaId: params.contaBancariaId,
       }),
     );
-    // Só o fluxo separa por série. Aging e conta paga não filtram natureza:
+    // Só o fluxo separa por grupo. Aging e conta paga não filtram natureza:
     // desde a D1 a movimentação que passa pela conta é caixa.
-    if (params.recorte.tipo === "fluxo") {
+    if (params.recorte.tipo === "fluxo" && grupoDoFluxo) {
       consulta =
-        aplicarSerieDoFluxo(consulta, params.recorte.serie, {
-          categoriasDeMovimentacao,
-          idsEmprestimoTomado,
-        }) ??
+        aplicarGrupoDoFluxo(
+          consulta,
+          params.recorte.grupo,
+          params.recorte.sentido,
+          grupoDoFluxo,
+        ) ??
         // `resolverFiltros` já devolve vazio antes de chegar aqui; a trava
-        // garante que série vazia nunca vira "sem filtro".
+        // garante que grupo vazio nunca vira "sem filtro".
         consulta.in("id", []);
     }
   }

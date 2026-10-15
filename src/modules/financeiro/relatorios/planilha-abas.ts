@@ -1,4 +1,6 @@
 import { formatarMesAno } from "@/lib/formatadores";
+import type { GrupoFluxo } from "@/modules/financeiro/lancamentos/recorte";
+import { classeDaConta } from "@/modules/financeiro/relatorios/posicao-bancaria";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
 import type { MesDoIndireto } from "@/modules/financeiro/relatorios/indireto-por-mes";
 import { ROTULO_STATUS_RATEIO } from "@/modules/financeiro/relatorios/rateio-indireto";
@@ -62,64 +64,39 @@ function fracao(parte: number, todo: number): number | null {
 /* Fluxo de caixa                                                     */
 /* ------------------------------------------------------------------ */
 
-const COLUNAS_FLUXO: ColunaRelatorio<FluxoCaixa["meses"][number]>[] = [
+type MesFluxo = FluxoCaixa["meses"][number];
+
+/**
+ * Uma coluna por grupo e lado, com o nome que o lado tem naquele grupo. Total
+ * do mês (pago mais previsto), como a barra do gráfico; quem precisa separar
+ * pago de previsto clica na barra.
+ */
+const COLUNAS_DOS_GRUPOS: ReadonlyArray<
+  [GrupoFluxo, "entrada" | "saida", string]
+> = [
+  ["operacao", "entrada", "Operação: entrou"],
+  ["operacao", "saida", "Operação: saiu"],
+  ["investimento", "saida", "CAPEX: pago"],
+  ["investimento", "entrada", "CAPEX: vendido"],
+  ["socios", "saida", "Sócios e mútuo: enviado"],
+  ["socios", "entrada", "Sócios e mútuo: devolvido"],
+  ["divida", "entrada", "Dívida: tomada"],
+  ["divida", "saida", "Dívida: amortizada"],
+  ["aplicacao", "entrada", "Aplicações: resgatado"],
+  ["aplicacao", "saida", "Aplicações: aplicado"],
+];
+
+const COLUNAS_FLUXO: ColunaRelatorio<MesFluxo>[] = [
   { cabecalho: "Mês", largura: 12, tipo: "texto", celula: (l) => l.rotulo },
-  {
-    cabecalho: "Entradas operacionais realizadas",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.aReceberRealizado,
-    somar: true,
-  },
-  {
-    cabecalho: "Entradas operacionais projetadas",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.aReceberProjetado,
-    somar: true,
-  },
-  {
-    cabecalho: "Empréstimos tomados realizados",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.emprestimoTomadoRealizado,
-    somar: true,
-  },
-  {
-    cabecalho: "Empréstimos tomados projetados",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.emprestimoTomadoProjetado,
-    somar: true,
-  },
-  {
-    cabecalho: "Saídas operacionais realizadas",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.aPagarRealizado,
-    somar: true,
-  },
-  {
-    cabecalho: "Saídas operacionais projetadas",
-    largura: 22,
-    tipo: "dinheiro",
-    celula: (l) => l.aPagarProjetado,
-    somar: true,
-  },
-  {
-    cabecalho: "Amortizações realizadas",
-    largura: 20,
-    tipo: "dinheiro",
-    celula: (l) => l.amortizacaoRealizado,
-    somar: true,
-  },
-  {
-    cabecalho: "Amortizações projetadas",
-    largura: 20,
-    tipo: "dinheiro",
-    celula: (l) => l.amortizacaoProjetado,
-    somar: true,
-  },
+  ...COLUNAS_DOS_GRUPOS.map(
+    ([grupo, sentido, cabecalho]): ColunaRelatorio<MesFluxo> => ({
+      cabecalho,
+      largura: 20,
+      tipo: "dinheiro",
+      celula: (l) => l.grupos[grupo][sentido].total,
+      somar: true,
+    }),
+  ),
   {
     cabecalho: "Líquido do mês",
     largura: 16,
@@ -130,12 +107,18 @@ const COLUNAS_FLUXO: ColunaRelatorio<FluxoCaixa["meses"][number]>[] = [
     somar: true,
   },
   {
-    cabecalho: "Saldo projetado",
-    largura: 18,
+    cabecalho: "Disponível projetado",
+    largura: 20,
     tipo: "dinheiro",
     // NÃO soma: é saldo acumulado, e o total de uma coluna de saldos não
     // significa nada. Vazio em mês passado, como na tela.
     celula: (l) => l.saldoAcumulado,
+  },
+  {
+    cabecalho: "Disponível mais aplicado",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (l) => l.saldoComAplicado,
   },
 ];
 
@@ -331,6 +314,15 @@ const COLUNAS_POSICAO: ColunaRelatorio<PosicaoBancaria["contas"][number]>[] = [
   { cabecalho: "Conta", largura: 30, tipo: "texto", celula: (c) => c.nome },
   { cabecalho: "Banco", largura: 18, tipo: "texto", celula: (c) => c.banco },
   {
+    // Disponível ou aplicado: o filtro do Excel separa o que paga boleto do
+    // que está em investimento, que é o primeiro corte que quem recebe faz.
+    cabecalho: "Classe",
+    largura: 14,
+    tipo: "texto",
+    celula: (c) =>
+      classeDaConta(c.tipo) === "aplicado" ? "Aplicado" : "Disponível",
+  },
+  {
     cabecalho: "Saldo inicial",
     largura: 18,
     tipo: "dinheiro",
@@ -365,6 +357,33 @@ const COLUNAS_POSICAO: ColunaRelatorio<PosicaoBancaria["contas"][number]>[] = [
     largura: 18,
     tipo: "dinheiro",
     celula: (c) => c.saldoAtual,
+    somar: true,
+  },
+  {
+    cabecalho: "Último extrato em",
+    largura: 16,
+    tipo: "data",
+    celula: (c) => dataDeRelatorioParaCelula(c.extrato?.data ?? null),
+  },
+  {
+    // Não soma: saldos de datas diferentes não se somam.
+    cabecalho: "Saldo do extrato",
+    largura: 18,
+    tipo: "dinheiro",
+    celula: (c) => c.extrato?.saldoExtrato ?? null,
+  },
+  {
+    cabecalho: "Lançado depois do extrato",
+    largura: 22,
+    tipo: "dinheiro",
+    celula: (c) => c.extrato?.movimentoDepois ?? null,
+    somar: true,
+  },
+  {
+    cabecalho: "Diferença na data do extrato",
+    largura: 24,
+    tipo: "dinheiro",
+    celula: (c) => c.extrato?.diferencaNaData ?? null,
     somar: true,
   },
 ];
