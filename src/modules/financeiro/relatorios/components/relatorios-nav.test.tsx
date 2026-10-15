@@ -87,12 +87,20 @@ describe("RelatoriosNav em Relatórios", () => {
     expect(navegador.replace).toEqual([`${RELATORIOS}?rel=aquisicoes`]);
   });
 
-  it("Custos indiretos abre rel=custos-indiretos", () => {
+  it("Indireto abre rel=indireto", () => {
     render(<RelatoriosNav ativo="dre" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Custos indiretos/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Indireto$/ }));
 
-    expect(navegador.replace).toEqual([`${RELATORIOS}?rel=custos-indiretos`]);
+    expect(navegador.replace).toEqual([`${RELATORIOS}?rel=indireto`]);
+  });
+
+  it("Resultado por obra abre rel=resultado-obra", () => {
+    render(<RelatoriosNav ativo="dre" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Resultado por obra/ }));
+
+    expect(navegador.replace).toEqual([`${RELATORIOS}?rel=resultado-obra`]);
   });
 });
 

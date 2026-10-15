@@ -1,5 +1,13 @@
 import { formatarMesAno } from "@/lib/formatadores";
 import type { LinhaCustoReceita } from "@/modules/financeiro/relatorios/custo-receita";
+import type { MesDoIndireto } from "@/modules/financeiro/relatorios/indireto-por-mes";
+import { ROTULO_STATUS_RATEIO } from "@/modules/financeiro/relatorios/rateio-indireto";
+import {
+  rotulosDasJanelas,
+  type Janela,
+  type ResultadoPorObra,
+  type Valores,
+} from "@/modules/financeiro/relatorios/resultado-por-obra";
 import type {
   Investimentos,
   LinhaAplicacao,
@@ -757,4 +765,133 @@ export function abaRankingFornecedores(
     linhas,
     rotuloTotal: `Total (${linhas.length} fornecedor(es))`,
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Resultado por obra                                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Uma linha por obra com as três janelas lado a lado, e uma aba com o
+ * resultado de cada mês do ano. Fora do rateio e o indireto sem obra entram
+ * como linhas próprias, para a soma da planilha fechar com a empresa.
+ */
+export function abasResultadoObra(r: ResultadoPorObra): EscritaDeAba[] {
+  const rotulos = rotulosDasJanelas(r.mes);
+  type Linha = { nome: string; papel: string } & Record<Janela, Valores>;
+  const semValor = (indireto: number): Valores => ({
+    receita: 0,
+    direto: 0,
+    indireto,
+    resultado: -indireto,
+    margem: null,
+  });
+  const linhas: Linha[] = [
+    ...r.obras.map((o) => ({ nome: o.nome, papel: "Obra", mes: o.mes, ano: o.ano, inicio: o.inicio })),
+    ...r.foraDoRateio.map((o) => ({ nome: o.nome, papel: "Fora do rateio", mes: o.mes, ano: o.ano, inicio: o.inicio })),
+    ...(r.naoRateado.inicio !== 0
+      ? [{
+          nome: "Indireto sem obra",
+          papel: "Indireto",
+          mes: semValor(r.naoRateado.mes),
+          ano: semValor(r.naoRateado.ano),
+          inicio: semValor(r.naoRateado.inicio),
+        }]
+      : []),
+  ];
+  const colunasDa = (j: Janela, rotulo: string): ColunaRelatorio<Linha>[] => [
+    { cabecalho: `Receita · ${rotulo}`, largura: 18, tipo: "dinheiro", celula: (l) => l[j].receita, somar: true },
+    { cabecalho: `Custo direto · ${rotulo}`, largura: 18, tipo: "dinheiro", celula: (l) => l[j].direto, somar: true },
+    { cabecalho: `Indireto · ${rotulo}`, largura: 16, tipo: "dinheiro", celula: (l) => l[j].indireto, somar: true },
+    { cabecalho: `Resultado · ${rotulo}`, largura: 18, tipo: "dinheiro", celula: (l) => l[j].resultado, somar: true },
+    // Margem não soma: percentual de cada linha.
+    { cabecalho: `Margem · ${rotulo}`, largura: 12, tipo: "percentual", celula: (l) => (l[j].margem === null ? null : l[j].margem / 100) },
+  ];
+  const porObra = aba({
+    nome: "Resultado por obra",
+    titulo: `Resultado por obra · competência · ${rotulos.ano.toLowerCase()} · indireto rateado`,
+    colunas: [
+      { cabecalho: "Obra", largura: 44, tipo: "texto", celula: (l) => l.nome },
+      { cabecalho: "Papel", largura: 14, tipo: "texto", celula: (l) => l.papel },
+      ...colunasDa("mes", rotulos.mes.replace(/^Só /, "")),
+      ...colunasDa("ano", rotulos.ano),
+      ...colunasDa("inicio", "desde o início"),
+    ],
+    linhas,
+    rotuloTotal: "Total (a empresa, sem rateio)",
+  });
+
+  type LinhaMatriz = { nome: string; porMes: number[]; ano: number };
+  const matriz = aba<LinhaMatriz>({
+    nome: "Mês a mês",
+    titulo: `Resultado por obra, mês a mês · ${r.mes.slice(0, 4)} até ${formatarMesAno(`${r.mes}-01`)} · indireto rateado`,
+    colunas: [
+      { cabecalho: "Obra", largura: 44, tipo: "texto", celula: (l) => l.nome },
+      ...r.mesesDoAno.map(
+        (m, i): ColunaRelatorio<LinhaMatriz> => ({
+          cabecalho: formatarMesAno(`${m}-01`),
+          largura: 14,
+          tipo: "dinheiro",
+          celula: (l) => l.porMes[i] ?? 0,
+          somar: true,
+        }),
+      ),
+      { cabecalho: "No ano", largura: 16, tipo: "dinheiro", celula: (l) => l.ano, somar: true },
+    ],
+    linhas: r.obras.map((o) => ({ nome: o.nome, porMes: o.porMesDoAno, ano: o.ano.resultado })),
+    rotuloTotal: "Obras",
+  });
+  return [porObra, matriz];
+}
+
+/* ------------------------------------------------------------------ */
+/* Indireto                                                           */
+/* ------------------------------------------------------------------ */
+
+export function abasIndireto(
+  ano: number,
+  meses: readonly MesDoIndireto[],
+): EscritaDeAba[] {
+  const porMes = aba<MesDoIndireto>({
+    nome: "Indireto por mês",
+    titulo: `Indireto · ${ano} · competência`,
+    colunas: [
+      { cabecalho: "Mês", largura: 10, tipo: "texto", celula: (m) => formatarMesAno(`${m.mes}-01`) },
+      { cabecalho: "Indireto", largura: 18, tipo: "dinheiro", celula: (m) => m.total, somar: true },
+      { cabecalho: "Sem obra", largura: 14, tipo: "dinheiro", celula: (m) => m.naoRateado, somar: true },
+      { cabecalho: "Rateio", largura: 16, tipo: "texto", celula: (m) => ROTULO_STATUS_RATEIO[m.status] },
+      { cabecalho: "Categoria que mais pesou", largura: 32, tipo: "texto", celula: (m) => m.categorias[0]?.categoria ?? null },
+      { cabecalho: "Valor dela", largura: 16, tipo: "dinheiro", celula: (m) => m.categorias[0]?.total ?? null },
+    ],
+    linhas: [...meses],
+    rotuloTotal: "Total do ano",
+  });
+  type LinhaRateio = { mes: string; centro: string; custoDireto: number; indireto: number; pct: number };
+  const rateio = aba<LinhaRateio>({
+    nome: "Rateio por obra",
+    titulo: `Indireto repartido entre as obras · ${ano}`,
+    colunas: [
+      { cabecalho: "Mês", largura: 10, tipo: "texto", celula: (l) => formatarMesAno(`${l.mes}-01`) },
+      { cabecalho: "Obra", largura: 44, tipo: "texto", celula: (l) => l.centro },
+      { cabecalho: "Custo direto", largura: 18, tipo: "dinheiro", celula: (l) => l.custoDireto, somar: true },
+      { cabecalho: "Indireto", largura: 18, tipo: "dinheiro", celula: (l) => l.indireto, somar: true },
+      { cabecalho: "Parte do mês", largura: 12, tipo: "percentual", celula: (l) => l.pct / 100 },
+    ],
+    linhas: meses.flatMap((m) => m.obras.map((o) => ({ mes: m.mes, ...o }))),
+    rotuloTotal: "Total",
+  });
+  type LinhaCategoria = { mes: string; categoria: string; total: number; pct: number };
+  const categorias = aba<LinhaCategoria>({
+    nome: "Por categoria",
+    titulo: `Indireto por categoria · ${ano}`,
+    colunas: [
+      { cabecalho: "Mês", largura: 10, tipo: "texto", celula: (l) => formatarMesAno(`${l.mes}-01`) },
+      { cabecalho: "Categoria", largura: 36, tipo: "texto", celula: (l) => l.categoria },
+      { cabecalho: "Valor", largura: 18, tipo: "dinheiro", celula: (l) => l.total, somar: true },
+      { cabecalho: "Parte do mês", largura: 12, tipo: "percentual", celula: (l) => l.pct / 100 },
+    ],
+    linhas: meses.flatMap((m) => m.categorias.map((c) => ({ mes: m.mes, ...c }))),
+    rotuloTotal: "Total",
+  });
+  return [porMes, rateio, categorias];
 }

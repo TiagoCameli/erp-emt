@@ -36,6 +36,7 @@ import {
   agruparDrePorNatureza,
   paraCentavos,
   paraReais,
+  proximoMes,
   totalAging,
   vencidoAging,
   type AgingFaixa,
@@ -54,6 +55,21 @@ import type { AquisicaoLinha } from "@/modules/financeiro/relatorios/aquisicoes"
 import type { FornecedorRankingLinha } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import type { CustoIndiretoLinha } from "@/modules/financeiro/relatorios/custos-indiretos";
 import type { RateioDoMes, StatusRateio } from "@/modules/financeiro/relatorios/rateio-indireto";
+import {
+  resultadoPorObra,
+  type LinhaRateioMes,
+  type PapelRateio,
+  type ResultadoPorObra,
+} from "@/modules/financeiro/relatorios/resultado-por-obra";
+import {
+  ponteObrasDre as montarPonteObrasDre,
+  type PonteObrasDre,
+  type TermosPonteDre,
+} from "@/modules/financeiro/relatorios/ponte-obras-dre";
+import {
+  indiretoPorMes,
+  type MesDoIndireto,
+} from "@/modules/financeiro/relatorios/indireto-por-mes";
 import {
   janelasContiguas,
   type IndiretoDoPeriodo,
@@ -1533,11 +1549,22 @@ export async function aquisicoes(): Promise<AquisicaoLinha[]> {
  */
 export async function custosIndiretos(ano: number): Promise<CustoIndiretoLinha[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_rel_custos_indiretos", { p_ano: ano });
-  if (error) {
+  // Paginado: 683 linhas em 2026 (mês x etapa x categoria, com as 61 máquinas
+  // da manutenção), e o PostgREST corta em mil sem avisar. A ordem é a chave do
+  // agrupamento da RPC, para as páginas não se sobreporem.
+  const { linhas: data, erro } = await todasAsLinhas((de, ate) =>
+    supabase
+      .rpc("fn_rel_custos_indiretos", { p_ano: ano })
+      .order("mes")
+      .order("centro_id")
+      .order("categoria_id", { nullsFirst: true })
+      .order("categoria")
+      .range(de, ate),
+  );
+  if (erro) {
     throw new Error("Não foi possível carregar o relatório de custos indiretos");
   }
-  return (data ?? []).map((l) => ({
+  return data.map((l) => ({
     mes: l.mes,
     raizId: l.raiz_id,
     raiz: l.raiz,
@@ -1594,11 +1621,6 @@ export async function indiretoDoPeriodo(
   return indiretoDasJanelas([{ inicio, fim }]);
 }
 
-/** O mesmo, para meses soltos: uma chamada por janela contígua, somadas em centavos. */
-export async function indiretoDosMeses(meses: readonly string[]): Promise<IndiretoDoPeriodo> {
-  return indiretoDasJanelas(janelasContiguas(meses));
-}
-
 async function indiretoDasJanelas(
   janelas: readonly { inicio: string; fim: string }[],
 ): Promise<IndiretoDoPeriodo> {
@@ -1628,4 +1650,129 @@ async function indiretoDasJanelas(
     // Unidade própria (001 Carretas EMT): não rateia nem recebe, e fica fora da margem por obra.
     fora: new Set((centros.data ?? []).filter((c) => c.papel_rateio === "fora").map((c) => c.id)),
   };
+}
+
+
+// =====================================================================
+// Resultado por obra e Indireto (15/10/2026)
+// =====================================================================
+
+/**
+ * O rateio do indireto mês a mês numa janela [inicio, fim), uma chamada só.
+ * É `fn_rateio_indireto_mes` por baixo, o mesmo número que o Tiago ajusta.
+ */
+export async function rateioIndiretoDosMeses(
+  inicio: string,
+  fim: string,
+): Promise<LinhaRateioMes[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_rateio_indireto_meses", {
+    p_inicio: inicio,
+    p_fim: fim,
+  });
+  if (error) throw new Error("Não foi possível carregar o rateio do indireto");
+  return (data ?? []).map((l) => ({
+    mes: l.mes.slice(0, 7),
+    centroId: l.centro_id,
+    centro: l.centro,
+    custoDireto: Number(l.custo_direto),
+    indireto: Number(l.indireto),
+    status: l.status,
+    naoRateado: Number(l.nao_rateado),
+    custoIndiretoMes: Number(l.custo_indireto_mes),
+  }));
+}
+
+/** Papel de cada centro raiz no rateio: indireto (rateia) ou fora (não entra). */
+export async function papeisDoRateio(): Promise<Map<string, PapelRateio>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("centros_custo")
+    .select("id, papel_rateio")
+    .not("papel_rateio", "is", null);
+  if (error) throw new Error("Não foi possível carregar os centros do rateio");
+  return new Map(
+    (data ?? [])
+      .filter((c) => c.papel_rateio === "indireto" || c.papel_rateio === "fora")
+      .map((c) => [c.id, c.papel_rateio as PapelRateio]),
+  );
+}
+
+/** Os termos que levam do custo e da receita operacionais do DRE aos das obras. */
+export async function ponteObrasDre(inicio: string, fim: string): Promise<TermosPonteDre> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_rel_obras_ponte_dre", {
+    p_inicio: inicio,
+    p_fim: fim,
+  });
+  if (error) throw new Error("Não foi possível carregar a conferência com o DRE");
+  const termo = (nome: string) => Number((data ?? []).find((t) => t.termo === nome)?.valor ?? 0);
+  return {
+    custoForaDasObras: termo("custo_operacional_fora_das_obras"),
+    receitaForaDasObras: termo("receita_operacional_fora_das_obras"),
+    financeiraNasObras: termo("despesa_financeira_nas_obras"),
+    cronogramaOperacional: termo("cronograma_reclassificado_operacional"),
+  };
+}
+
+/** O primeiro mês da busca do "desde o início": antes disso o ERP não tem lançamento. */
+const INICIO_DA_HISTORIA = "2020-01";
+
+/** Os meses yyyy-MM de `de` até `ate`, inclusive. */
+function mesesEntre(de: string, ate: string): string[] {
+  const meses: string[] = [];
+  for (let m = de; m <= ate; m = proximoMes(m).slice(0, 7)) meses.push(m);
+  return meses;
+}
+
+/**
+ * Tudo que o Resultado por obra mostra, para a tela e a planilha lerem do mesmo
+ * lugar: as três janelas até `mes` e a ponte com o DRE no ano até `mes`.
+ */
+export async function carregarResultadoPorObra(
+  mes: string,
+): Promise<{ resultado: ResultadoPorObra; ponte: PonteObrasDre }> {
+  const [linhas, papeis] = await Promise.all([
+    custoReceita({ meses: mesesEntre(INICIO_DA_HISTORIA, mes) }),
+    papeisDoRateio(),
+  ]);
+  // O rateio só nos meses em que algum indireto teve custo: cada mês do rateio
+  // relê o custo x receita inteiro, e os anos sem lançamento seriam dezenas de
+  // meses calculados para devolver zero.
+  const mesesComIndireto = [
+    ...new Set(
+      linhas
+        .filter((l) => l.tipo === "a_pagar" && papeis.get(l.centroCustoId) === "indireto")
+        .map((l) => l.mes),
+    ),
+  ];
+  const inicioDoAno = `${mes.slice(0, 4)}-01-01`;
+  const fimDoMes = proximoMes(mes);
+  const [rateios, dre, termos] = await Promise.all([
+    Promise.all(janelasContiguas(mesesComIndireto).map((j) => rateioIndiretoDosMeses(j.inicio, j.fim))),
+    dreGerencial({ inicio: inicioDoAno, fim: fimDoMes }),
+    ponteObrasDre(inicioDoAno, fimDoMes),
+  ]);
+  const resultado = resultadoPorObra({ mes, linhas, rateio: rateios.flat(), papeis });
+  return {
+    resultado,
+    ponte: montarPonteObrasDre({
+      dre: { receita: dre.operacional.totalReceitas, custo: dre.operacional.totalDespesas },
+      obras: { receita: resultado.totalGeral.ano.receita, custo: resultado.totalGeral.ano.custo },
+      termos,
+    }),
+  };
+}
+
+/** O Indireto de um ano: uma linha por mês, e as linhas cruas para o detalhe. */
+export async function carregarIndiretoDoAno(ano: number): Promise<{
+  meses: MesDoIndireto[];
+  rateio: LinhaRateioMes[];
+  categorias: CustoIndiretoLinha[];
+}> {
+  const [rateio, categorias] = await Promise.all([
+    rateioIndiretoDosMeses(`${ano}-01-01`, `${ano + 1}-01-01`),
+    custosIndiretos(ano),
+  ]);
+  return { meses: indiretoPorMes(rateio, categorias), rateio, categorias };
 }
