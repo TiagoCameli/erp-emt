@@ -44,7 +44,10 @@ import {
   lerPreferenciasTabela,
   preferenciasVazias,
 } from "@/components/canonicos/preferencias-tabela";
-import { moverNaOrdem, ordemDaGrade } from "@/components/canonicos/layout-grade";
+import {
+  moverNaOrdem,
+  ordemDaGrade,
+} from "@/components/canonicos/layout-grade";
 import { useGrades } from "@/components/canonicos/provedor-grades";
 import {
   buscarPreferenciaTabela,
@@ -142,7 +145,9 @@ function CampoFiltro({
         "flex max-w-full min-w-0 flex-col gap-1",
         larguraEscolhida === null && largura,
       )}
-      style={larguraEscolhida === null ? undefined : { width: larguraEscolhida }}
+      style={
+        larguraEscolhida === null ? undefined : { width: larguraEscolhida }
+      }
     >
       {rotulo === null ? null : (
         <span className="truncate text-legenda leading-none tracking-wide text-muted-foreground uppercase">
@@ -256,13 +261,19 @@ export function BlocoFiltros({
         // mesmo quando o vizinho não tem rótulo em cima (filtro não canônico, que
         // não lê o contexto).
         personalizacao ? (
-          <CamposPersonalizaveis campos={campos} personalizacao={personalizacao} />
+          <CamposPersonalizaveis
+            campos={campos}
+            personalizacao={personalizacao}
+          />
         ) : (
           // No celular cada filtro ocupa a linha inteira: o trilho de largura
           // fixa do computador deixava meio campo vazio ao lado.
           <div className="flex flex-wrap items-end gap-2 max-md:[&>*]:w-full!">
             {campos.map((campo) => (
-              <ContextoRotuloFiltro.Provider key={campo.id} value={campo.rotulo}>
+              <ContextoRotuloFiltro.Provider
+                key={campo.id}
+                value={campo.rotulo}
+              >
                 {campo.elemento}
               </ContextoRotuloFiltro.Provider>
             ))}
@@ -304,7 +315,9 @@ function CamposPersonalizaveis({
 
   const [ordemArrasto, setOrdemArrasto] = React.useState<string[] | null>(null);
   const [arrastando, setArrastando] = React.useState<string | null>(null);
-  const [previa, setPrevia] = React.useState<{ id: string; px: number } | null>(null);
+  const [previa, setPrevia] = React.useState<{ id: string; px: number } | null>(
+    null,
+  );
 
   const idsDaTela = campos.map((campo) => campo.id);
   const ordem = ordemArrasto ?? ordemDaGrade(idsDaTela, personalizacao.ordem);
@@ -322,7 +335,10 @@ function CamposPersonalizaveis({
 
     function aoMover(e: PointerEvent) {
       const px = Math.round((inicial + e.clientX - inicioX) / 8) * 8;
-      ultimo = Math.min(LARGURA_FILTRO_MAXIMA, Math.max(LARGURA_FILTRO_MINIMA, px));
+      ultimo = Math.min(
+        LARGURA_FILTRO_MAXIMA,
+        Math.max(LARGURA_FILTRO_MINIMA, px),
+      );
       setPrevia({ id, px: ultimo });
     }
     function aoSoltar() {
@@ -372,9 +388,15 @@ function CamposPersonalizaveis({
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed border-border bg-surface px-3 py-2 print:hidden">
           <p className="text-legenda text-muted-foreground">
             <span className="font-medium text-foreground">Filtros: </span>
-            arraste pelo <GripVertical className="inline size-3.5 align-text-bottom" aria-hidden /> para
-            mudar a ordem e puxe a borda direita para mudar a largura.
-            {personalizacao.onOcultar ? " O que sair da barra volta pelo menu Filtros." : null}
+            arraste pelo{" "}
+            <GripVertical
+              className="inline size-3.5 align-text-bottom"
+              aria-hidden
+            />{" "}
+            para mudar a ordem e puxe a borda direita para mudar a largura.
+            {personalizacao.onOcultar
+              ? " O que sair da barra volta pelo menu Filtros."
+              : null}
           </p>
           <Button
             type="button"
@@ -389,7 +411,10 @@ function CamposPersonalizaveis({
         </div>
       ) : null}
       <div
-        className={cn("flex flex-wrap items-end gap-2", editando && "gap-y-6 pt-3")}
+        className={cn(
+          "flex flex-wrap items-end gap-2",
+          editando && "gap-y-6 pt-3",
+        )}
         onDragOver={arrastando ? (e) => e.preventDefault() : undefined}
         onDrop={(e) => {
           if (!arrastando) return;
@@ -410,7 +435,8 @@ function CamposPersonalizaveis({
               data-filtro-barra={id}
               className={cn(
                 "relative max-w-full min-w-0",
-                editando && "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
+                editando &&
+                  "rounded-md outline-1 outline-offset-4 outline-muted-foreground/50 outline-dashed",
                 arrastando === id && "opacity-50",
               )}
               onDragOver={editando ? (e) => aoPassarPorCima(e, id) : undefined}
@@ -433,12 +459,18 @@ function CamposPersonalizaveis({
                       aria-label={`Arrastar o filtro ${campo.rotulo}`}
                       className="flex size-5 cursor-grab items-center justify-center rounded-sm text-muted-foreground hover:bg-surface hover:text-foreground active:cursor-grabbing"
                       onDragStart={(e) => {
-                        const item = e.currentTarget.closest<HTMLElement>("[data-filtro-barra]");
+                        const item = e.currentTarget.closest<HTMLElement>(
+                          "[data-filtro-barra]",
+                        );
                         e.dataTransfer.effectAllowed = "move";
                         e.dataTransfer.setData("text/plain", id);
                         if (item) {
                           const caixa = item.getBoundingClientRect();
-                          e.dataTransfer.setDragImage(item, e.clientX - caixa.left, e.clientY - caixa.top);
+                          e.dataTransfer.setDragImage(
+                            item,
+                            e.clientX - caixa.left,
+                            e.clientY - caixa.top,
+                          );
                         }
                         setArrastando(id);
                         setOrdemArrasto(ordem);
@@ -1392,6 +1424,11 @@ export interface BarraFiltrosConfiguravelProps {
    * escrita desfazer a primeira (ver use-filtros-url.test.tsx).
    */
   onLimparFiltros?: () => void;
+  /**
+   * Botões da tela ao lado do menu "Filtros", à direita da barra. Para a tela que não tem
+   * cabeçalho onde a ação da página morar (o Mapa, que deu o cabeçalho para o mapa).
+   */
+  acoes?: React.ReactNode;
 }
 
 /**
@@ -1410,10 +1447,13 @@ export function BarraFiltrosConfiguravel({
   idTabela,
   filtros,
   onLimparFiltros,
+  acoes,
 }: BarraFiltrosConfiguravelProps) {
   const [escolha, setEscolha] = React.useState<Record<string, boolean>>({});
   const [ordemFiltros, setOrdemFiltros] = React.useState<string[]>([]);
-  const [largurasFiltros, setLargurasFiltros] = React.useState<Record<string, number>>({});
+  const [largurasFiltros, setLargurasFiltros] = React.useState<
+    Record<string, number>
+  >({});
 
   const idsFiltros = React.useMemo(
     () => filtros.map((filtro) => filtro.id),
@@ -1514,7 +1554,11 @@ export function BarraFiltrosConfiguravel({
     const divergentes = Object.entries(visiveis).filter(
       ([chave, valor]) => valor !== (ocultosPorPadrao[chave] ?? true),
     );
-    if (divergentes.length === 0 && ordem.length === 0 && Object.keys(larguras).length === 0) {
+    if (
+      divergentes.length === 0 &&
+      ordem.length === 0 &&
+      Object.keys(larguras).length === 0
+    ) {
       enfileirar(() => limparPreferenciaTabela(idTabela));
       return;
     }
@@ -1601,15 +1645,18 @@ export function BarraFiltrosConfiguravel({
           ) : undefined
         }
         acoesDireita={
-          <MenuFiltros
-            filtros={filtros.map((filtro) => ({
-              id: filtro.id,
-              rotulo: filtro.rotulo,
-              fixo: filtro.fixo,
-              visivel: visivel(filtro.id),
-            }))}
-            onAlternar={alternar}
-          />
+          <>
+            {acoes}
+            <MenuFiltros
+              filtros={filtros.map((filtro) => ({
+                id: filtro.id,
+                rotulo: filtro.rotulo,
+                fixo: filtro.fixo,
+                visivel: visivel(filtro.id),
+              }))}
+              onAlternar={alternar}
+            />
+          </>
         }
       />
     </div>

@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { idSchema, idSchemaCom } from "@/lib/id";
-import { ESTADOS_MAQUINA, TIPOS_ALUGUEL } from "@/modules/mapa/tipos";
+import {
+  ESTADOS_MAQUINA,
+  TIPOS_ALUGUEL,
+  TIPOS_LOCAL,
+} from "@/modules/mapa/tipos";
 
 /**
  * O que as Server Actions do Mapa aceitam. Toda regra de negócio (zona, estado imposto, quem
@@ -215,3 +219,42 @@ export const locacaoFormSchema = z.strictObject({
   novaPlaca: z.string().trim().max(20),
 });
 export type LocacaoFormInput = z.infer<typeof locacaoFormSchema>;
+
+/** Põe uma obra ativa do cadastro num ponto do mapa (o Mapa não cria obra). */
+export const posicionarObraSchema = z.strictObject({
+  obraId: idSchemaCom("Obra inválida"),
+  lng: longitudeSchema,
+  lat: latitudeSchema,
+});
+export type PosicionarObraInput = z.infer<typeof posicionarObraSchema>;
+
+/**
+ * Local no ponto tocado: `localidadeId` dá ponto a um local que já existe; sem ele, cria um
+ * local novo (nome e tipo). `vincular` liga um tanque ou depósito do Estoque a esse local.
+ */
+export const colocarLocalSchema = z
+  .strictObject({
+    localidadeId: idSchemaCom("Local inválido").optional(),
+    nome: z.string().trim().max(TEXTO_CURTO).optional(),
+    tipo: z.enum(TIPOS_LOCAL, { error: "Tipo de local inválido" }).optional(),
+    lng: longitudeSchema,
+    lat: latitudeSchema,
+    vincular: z
+      .strictObject({
+        alvo: z.enum(["tanque", "deposito"]),
+        id: idSchemaCom("Cadastro inválido"),
+      })
+      .optional(),
+  })
+  .refine((v) => v.localidadeId || (v.nome && v.tipo), {
+    error: "Informe o nome e o tipo do local",
+  });
+export type ColocarLocalInput = z.infer<typeof colocarLocalSchema>;
+
+/** Liga um tanque ou depósito a um local que já está no mapa (sem tocar no mapa). */
+export const vincularLocalSchema = z.strictObject({
+  alvo: z.enum(["tanque", "deposito"]),
+  id: idSchemaCom("Cadastro inválido"),
+  localidadeId: idSchemaCom("Local inválido"),
+});
+export type VincularLocalInput = z.infer<typeof vincularLocalSchema>;

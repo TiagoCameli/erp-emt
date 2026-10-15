@@ -3,7 +3,9 @@
 import * as React from "react";
 import {
   Box,
+  HardHat,
   Layers,
+  MapPinPlus,
   MousePointer2,
   PanelRightClose,
   PanelRightOpen,
@@ -11,6 +13,7 @@ import {
   Satellite,
   Tag,
   Users,
+  X,
 } from "lucide-react";
 
 import {
@@ -27,11 +30,14 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   assinalarOperador,
+  colocarLocal,
   encerrarLocacao,
   marcarEstado,
   moverEquipamentos,
   moverPessoas,
+  posicionarObra,
   recarregarEstado,
+  vincularLocal,
   type ResultadoMapa,
 } from "@/modules/mapa/actions";
 import {
@@ -44,6 +50,11 @@ import {
   type ConfirmacaoTransferencia,
   type Pendente,
 } from "@/modules/mapa/components/dialogo-transferencia";
+import {
+  DialogoAdicionarLocal,
+  DialogoAdicionarObra,
+  type PedidoColocar,
+} from "@/modules/mapa/components/dialogos-adicionar";
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import {
@@ -69,7 +80,8 @@ import {
   type ContextoDestino,
   type TrechoMedido,
 } from "@/modules/mapa/geo";
-import { ORDEM_ESTADOS } from "@/modules/mapa/rotulos";
+import { extrasPorLocal } from "@/modules/mapa/dados";
+import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
   type ConfigGoogle,
@@ -207,6 +219,13 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const [mostrarAreas, setMostrarAreas] = React.useState(true);
   const [filtros, setFiltros] = React.useState<FiltrosMapa>(FILTROS_VAZIOS);
   const [posicionando, setPosicionando] = React.useState<string | null>(null);
+  // "Adicionar obra" / "Adicionar localização": diálogo aberto, pedido esperando o toque no
+  // mapa e o ponto tocado esperando a confirmação.
+  const [adicionando, setAdicionando] = React.useState<"obra" | "local" | null>(
+    null,
+  );
+  const [colocando, setColocando] = React.useState<PedidoColocar | null>(null);
+  const [pontoColocar, setPontoColocar] = React.useState<Posicao | null>(null);
   const [pendente, setPendente] = React.useState<Pendente | null>(null);
   const [pendentePessoa, setPendentePessoa] = React.useState<{
     pessoa: PessoaMapa;
@@ -331,6 +350,15 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     return mapa;
   }, [pendente, pendentePessoa, estado.pessoas]);
 
+  const extrasDoLocal = React.useMemo(
+    () => extrasPorLocal(estado.tanques, estado.depositos),
+    [estado.tanques, estado.depositos],
+  );
+  const obrasNoMapa = React.useMemo(
+    () => estado.obras.flatMap((o) => (o.pos ? [{ ...o, pos: o.pos }] : [])),
+    [estado.obras],
+  );
+
   const cena = React.useMemo<CenaBase>(() => {
     const equipamentos = filtrados.flatMap((e) => {
       const pos = posicoesPendentes.get(e.id) ?? e.pos;
@@ -362,6 +390,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       marcos,
       areas: estado.areas,
       localidades: estado.localidades,
+      extrasDoLocal,
+      obras: obrasNoMapa,
       modelos,
       snapLocalM: estado.config.snapLocalM,
       mostrarPessoas,
@@ -377,6 +407,8 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
     estado.equipamentos,
     estado.areas,
     estado.localidades,
+    extrasDoLocal,
+    obrasNoMapa,
     estado.config.snapLocalM,
     trechosMedidos,
     marcos,
@@ -523,6 +555,10 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
 
   const clicarMapa = React.useCallback(
     (pos: Posicao) => {
+      if (colocando) {
+        setPontoColocar(pos);
+        return;
+      }
       if (!posicionandoEquipamento) return;
       setPendente({
         modo: "posicionar",
@@ -537,7 +573,58 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         ],
       });
     },
-    [posicionandoEquipamento, ctxDestino],
+    [posicionandoEquipamento, ctxDestino, colocando],
+  );
+
+  const escolherNoMapa = React.useCallback((pedido: PedidoColocar) => {
+    setAdicionando(null);
+    setPosicionando(null);
+    setColocando(pedido);
+    toast.info(
+      `Toque no mapa onde fica ${pedido.tipo === "obra" ? pedido.obra.nome : pedido.rotulo}.`,
+    );
+  }, []);
+
+  const cancelarColocar = React.useCallback(() => {
+    setColocando(null);
+    setPontoColocar(null);
+  }, []);
+
+  const confirmarColocar = React.useCallback(async (): Promise<boolean> => {
+    if (!colocando || !pontoColocar) return true;
+    const [lng, lat] = pontoColocar;
+    const r =
+      colocando.tipo === "obra"
+        ? await posicionarObra({ obraId: colocando.obra.id, lng, lat })
+        : await colocarLocal({
+            localidadeId: colocando.localidadeId,
+            nome: colocando.nome,
+            tipo: colocando.tipoLocal,
+            vincular: colocando.vincular,
+            lng,
+            lat,
+          });
+    const ok = aplicar(
+      r,
+      colocando.tipo === "obra"
+        ? `${colocando.obra.nome} no mapa`
+        : `${colocando.rotulo} no mapa`,
+    );
+    if (ok) cancelarColocar();
+    return ok;
+  }, [colocando, pontoColocar, aplicar, cancelarColocar]);
+
+  const ligarAoLocal = React.useCallback(
+    async (
+      alvo: "tanque" | "deposito",
+      id: string,
+      localidadeId: string,
+    ): Promise<boolean> => {
+      const r = await vincularLocal({ alvo, id, localidadeId });
+      const local = estado.localidades.find((l) => l.id === localidadeId);
+      return aplicar(r, `Ligado a ${local?.nome ?? "local"}`);
+    },
+    [aplicar, estado.localidades],
   );
 
   const confirmarTransferencia = React.useCallback(
@@ -839,6 +926,30 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         idTabela="mapa-frota-filtros"
         filtros={filtrosDaBarra}
         onLimparFiltros={() => setFiltros(FILTROS_VAZIOS)}
+        acoes={
+          permissoes.editar ? (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAdicionando("obra")}
+              >
+                <HardHat />
+                Adicionar obra
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAdicionando("local")}
+              >
+                <MapPinPlus />
+                Adicionar localização
+              </Button>
+            </>
+          ) : undefined
+        }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
         <div className="relative h-[48dvh] shrink-0 overflow-hidden rounded-lg border border-border md:h-auto md:min-h-0 md:flex-1">
@@ -851,7 +962,11 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
             fundo={fundo}
             inclinado={inclinado}
             podeArrastar={permissoes.editar && !pendente && !pendentePessoa}
-            modoPosicionar={posicionando !== null && !pendente}
+            modoPosicionar={
+              (posicionando !== null || colocando !== null) &&
+              !pendente &&
+              !pontoColocar
+            }
             foco={foco}
             centroInicial={centroInicial}
             onSelecionar={selecionar}
@@ -919,6 +1034,30 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               </Button>
             </div>
           </div>
+          {colocando && !pontoColocar ? (
+            <div className="absolute inset-x-2 bottom-10 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full border border-border bg-background/95 py-1 pr-1 pl-3 text-detalhe shadow-sm backdrop-blur">
+                <span>
+                  Toque no mapa onde fica{" "}
+                  <strong>
+                    {colocando.tipo === "obra"
+                      ? colocando.obra.nome
+                      : colocando.rotulo}
+                  </strong>
+                </span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={cancelarColocar}
+                  aria-label="Cancelar"
+                >
+                  <X className="size-3" />
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {/* No canto de cima para não cobrir o logo nem a atribuição do Google (ficam embaixo). */}
           {motor ? (
             <div
@@ -1018,6 +1157,53 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
       </div>
 
       {/* Montados só enquanto há pedido: cada arraste/pedido nasce com os campos limpos. */}
+      {adicionando === "obra" ? (
+        <DialogoAdicionarObra
+          obras={estado.obras}
+          onCancelar={() => setAdicionando(null)}
+          onEscolherNoMapa={(obra) => escolherNoMapa({ tipo: "obra", obra })}
+        />
+      ) : null}
+      {adicionando === "local" ? (
+        <DialogoAdicionarLocal
+          localidades={estado.localidades}
+          semPosicao={estado.localidadesSemPosicao}
+          tanques={estado.tanques}
+          depositos={estado.depositos}
+          podeCriar={permissoes.criar}
+          onCancelar={() => setAdicionando(null)}
+          onEscolherNoMapa={escolherNoMapa}
+          onLigar={ligarAoLocal}
+        />
+      ) : null}
+      {colocando && pontoColocar ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setPontoColocar(null);
+          }}
+          titulo={
+            colocando.tipo === "obra"
+              ? `Pôr ${colocando.obra.nome} aqui?`
+              : `Pôr ${colocando.rotulo} aqui?`
+          }
+          descricao={
+            colocando.tipo === "obra"
+              ? "A obra fica marcada neste ponto do mapa."
+              : colocando.localidadeId
+                ? "O local fica neste ponto do mapa."
+                : `Cria o local ${colocando.nome ?? ""} (${rotuloTipoLocalidade(colocando.tipoLocal ?? "outro").toLowerCase()}) neste ponto${colocando.vincular ? ` e liga ${colocando.vincular.alvo === "tanque" ? "o tanque" : "o depósito"} a ele` : ""}.`
+          }
+          textoConfirmar="Confirmar"
+          conteudo={
+            <p className="text-detalhe text-muted-foreground">
+              {pontoColocar[1].toFixed(5)}, {pontoColocar[0].toFixed(5)}.
+              Cancelar volta para escolher outro ponto.
+            </p>
+          }
+          onConfirmar={confirmarColocar}
+        />
+      ) : null}
       {pendente ? (
         <DialogoTransferencia
           pendente={pendente}

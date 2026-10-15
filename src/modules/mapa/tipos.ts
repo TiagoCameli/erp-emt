@@ -192,6 +192,59 @@ export interface LocalidadeMapa {
   pos: Posicao;
 }
 
+/** Tipos de local aceitos pelo cadastro (CHECK de `localidades.tipo`). */
+export const TIPOS_LOCAL = [
+  "oficina",
+  "patio",
+  "sede",
+  "deposito",
+  "canteiro",
+  "alojamento",
+  "usina",
+  "pulmao",
+  "pedreira",
+  "jazida",
+  "terreno",
+  "outro",
+] as const;
+export type TipoLocal = (typeof TIPOS_LOCAL)[number];
+
+/** Obra ativa do cadastro; `pos` é o ponto dela no mapa (null enquanto ninguém pôs). */
+export interface ObraMapa {
+  id: string;
+  nome: string;
+  cor: string | null;
+  tipoObra: string;
+  noMapa: boolean;
+  pos: Posicao | null;
+}
+
+/** Tanque do Estoque: fica no mapa pelo local onde está (`localidadeId`). */
+export interface TanqueMapa {
+  id: string;
+  nome: string;
+  apelido: string;
+  uso: string;
+  ehExterno: boolean;
+  localidadeId: string | null;
+  /** Tanque de comboio (meloza): anda com a máquina, não tem local fixo. */
+  equipamentoId: string | null;
+}
+
+/** Depósito do almoxarifado: fica no mapa pelo local onde está. */
+export interface DepositoMapa {
+  id: string;
+  nome: string;
+  localidadeId: string | null;
+}
+
+/** Local do cadastro que ainda não tem ponto no mapa. */
+export interface LocalSemPosicao {
+  id: string;
+  nome: string;
+  tipo: string;
+}
+
 export interface FrenteHoje {
   id: string;
   obraId: string | null;
@@ -239,6 +292,10 @@ export interface EstadoMapa {
   localidades: LocalidadeMapa[];
   frentesHoje: FrenteHoje[];
   fornecedores: FornecedorOpcao[];
+  obras: ObraMapa[];
+  tanques: TanqueMapa[];
+  depositos: DepositoMapa[];
+  localidadesSemPosicao: LocalSemPosicao[];
 }
 
 /** O que a pessoa pode fazer na tela, decidido no servidor pelo catálogo de permissões. */

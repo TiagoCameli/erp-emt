@@ -1,5 +1,6 @@
 import type {
   AreaMapa,
+  DepositoMapa,
   EquipamentoForaDoMapa,
   EquipamentoMapa,
   EstadoEfetivo,
@@ -9,6 +10,7 @@ import type {
   LocalidadeMapa,
   Modelo3d,
   PessoaMapa,
+  TanqueMapa,
   Posicao,
   Propriedade,
   TipoAluguel,
@@ -319,5 +321,64 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       id: texto(f.id),
       nome: texto(f.nome),
     })),
+    obras: lista(b.obras).map((o) => ({
+      id: texto(o.id),
+      nome: texto(o.nome),
+      cor: textoOuNulo(o.cor),
+      tipoObra: texto(o.tipo_obra),
+      noMapa: o.no_mapa === true,
+      pos: posicao(o.lng, o.lat),
+    })),
+    tanques: lista(b.tanques).map((t) => ({
+      id: texto(t.id),
+      nome: texto(t.nome),
+      apelido: texto(t.apelido),
+      uso: texto(t.uso),
+      ehExterno: t.eh_externo === true,
+      localidadeId: textoOuNulo(t.localidade_id),
+      equipamentoId: textoOuNulo(t.equipamento_id),
+    })),
+    depositos: lista(b.depositos).map((d) => ({
+      id: texto(d.id),
+      nome: texto(d.nome),
+      localidadeId: textoOuNulo(d.localidade_id),
+    })),
+    localidadesSemPosicao: lista(b.localidades_sem_posicao).map((l) => ({
+      id: texto(l.id),
+      nome: texto(l.nome),
+      tipo: texto(l.tipo),
+    })),
   };
+}
+
+/**
+ * Segunda linha do rótulo de cada local: quantos tanques e depósitos estão ali
+ * ("2 tanques · 1 depósito"). Tanque de comboio (meloza) anda com a máquina e não conta.
+ */
+export function extrasPorLocal(
+  tanques: readonly TanqueMapa[],
+  depositos: readonly DepositoMapa[],
+): Map<string, string> {
+  const contagem = new Map<string, { tanques: number; depositos: number }>();
+  const somar = (id: string | null, campo: "tanques" | "depositos") => {
+    if (!id) return;
+    const atual = contagem.get(id) ?? { tanques: 0, depositos: 0 };
+    atual[campo] += 1;
+    contagem.set(id, atual);
+  };
+  for (const t of tanques)
+    if (!t.equipamentoId) somar(t.localidadeId, "tanques");
+  for (const d of depositos) somar(d.localidadeId, "depositos");
+  const extras = new Map<string, string>();
+  for (const [id, c] of contagem) {
+    const partes: string[] = [];
+    if (c.tanques)
+      partes.push(`${c.tanques} ${c.tanques === 1 ? "tanque" : "tanques"}`);
+    if (c.depositos)
+      partes.push(
+        `${c.depositos} ${c.depositos === 1 ? "depósito" : "depósitos"}`,
+      );
+    extras.set(id, partes.join(" · "));
+  }
+  return extras;
 }
