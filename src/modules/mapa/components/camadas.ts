@@ -347,6 +347,9 @@ export function montarCamadas(cena: Cena): Layer[] {
     if (dados.length === 0) continue;
     // A caixa do luma tem 2 de lado; cilindro e cone, 1.
     const unidade = forma === "caixa" ? 0.5 : 1;
+    // Pilha em escala real (pedido do Tiago, 15/10/2026: o tamanho dela já é o volume do saldo);
+    // tanque e depósito na escala das máquinas.
+    const escala = forma === "cone" ? 1 : ESCALA_MAQUINA;
     camadas.push(
       new SimpleMeshLayer<ObjetoNoMapa>({
         id: `objetos-${forma}`,
@@ -357,12 +360,12 @@ export function montarCamadas(cena: Cena): Layer[] {
         // Malha em pé no Y: roll de 90° põe o Y no Z (para cima) do mapa.
         getOrientation: [0, 0, 90],
         getScale: (d) => [
-          d.largura * ESCALA_MAQUINA * unidade,
-          d.altura * ESCALA_MAQUINA * unidade,
-          d.comprimento * ESCALA_MAQUINA * unidade,
+          d.largura * escala * unidade,
+          d.altura * escala * unidade,
+          d.comprimento * escala * unidade,
         ],
         // A malha nasce centrada: sobe meia altura para apoiar no chão.
-        getTranslation: (d) => [0, 0, (d.altura * ESCALA_MAQUINA) / 2],
+        getTranslation: (d) => [0, 0, (d.altura * escala) / 2],
         pickable: false,
       }),
     );
