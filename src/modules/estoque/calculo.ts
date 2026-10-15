@@ -8,10 +8,10 @@ import { arredondar } from "@/modules/manutencao/almoxarifado/calculo";
  */
 
 // ---------------------------------------------------------------------------
-// Local: depósito ou tanque de material, num valor só ("deposito:<id>" / "tanque:<id>")
+// Local: depósito, tanque de material ou pilha, num valor só ("deposito:<id>" / "tanque:<id>" / "pilha:<id>")
 // ---------------------------------------------------------------------------
 
-export type TipoLocal = "deposito" | "tanque";
+export type TipoLocal = "deposito" | "tanque" | "pilha";
 
 const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,12 +19,21 @@ export function codificarLocal(tipo: TipoLocal, id: string): string {
   return `${tipo}:${id}`;
 }
 
-/** O valor do campo "Local" de volta em depósito ou tanque; null quando não é um local. */
-export function decodificarLocal(valor: string): { depositoId: string | null; tanqueId: string | null } | null {
+export interface LocalDecodificado {
+  depositoId: string | null;
+  tanqueId: string | null;
+  pilhaId: string | null;
+}
+
+export const SEM_LOCAL: LocalDecodificado = { depositoId: null, tanqueId: null, pilhaId: null };
+
+/** O valor do campo "Local" de volta em depósito, tanque ou pilha; null quando não é um local. */
+export function decodificarLocal(valor: string): LocalDecodificado | null {
   const [tipo, id, ...resto] = valor.split(":");
   if (resto.length > 0 || !id || !GUID.test(id)) return null;
-  if (tipo === "deposito") return { depositoId: id, tanqueId: null };
-  if (tipo === "tanque") return { depositoId: null, tanqueId: id };
+  if (tipo === "deposito") return { ...SEM_LOCAL, depositoId: id };
+  if (tipo === "tanque") return { ...SEM_LOCAL, tanqueId: id };
+  if (tipo === "pilha") return { ...SEM_LOCAL, pilhaId: id };
   return null;
 }
 

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
-import { decodificarLocal } from "@/modules/estoque/calculo";
+import { decodificarLocal, SEM_LOCAL } from "@/modules/estoque/calculo";
 import { paraNumero } from "@/modules/manutencao/almoxarifado/calculo";
 
 /**
@@ -36,16 +36,20 @@ function idObrigatorio(mensagem: string) {
     .refine((valor) => z.guid().safeParse(valor).success, { error: mensagem });
 }
 
-/** O campo "Local": depósito ou tanque de material, codificado por `codificarLocal`. */
+/** O campo "Local": depósito, tanque de material ou pilha, codificado por `codificarLocal`. */
 const localFormSchema = z
   .string()
   .trim()
-  .refine((valor) => decodificarLocal(valor) !== null, { error: "Escolha o depósito ou o tanque" });
+  .refine((valor) => decodificarLocal(valor) !== null, { error: "Escolha o depósito, o tanque ou a pilha" });
 
-/** Na action: um dos dois, nunca os dois nem nenhum. */
-function umLocal(dados: { depositoId: string | null; tanqueId: string | null }, ctx: z.RefinementCtx) {
-  if ((dados.depositoId === null) === (dados.tanqueId === null)) {
-    ctx.addIssue({ code: "custom", path: ["depositoId"], message: "Escolha o depósito ou o tanque" });
+/** Na action: exatamente um dos três. */
+function umLocal(
+  dados: { depositoId: string | null; tanqueId: string | null; pilhaId: string | null },
+  ctx: z.RefinementCtx,
+) {
+  const preenchidos = [dados.depositoId, dados.tanqueId, dados.pilhaId].filter((id) => id !== null).length;
+  if (preenchidos !== 1) {
+    ctx.addIssue({ code: "custom", path: ["depositoId"], message: "Escolha o depósito, o tanque ou a pilha" });
   }
 }
 
@@ -128,6 +132,7 @@ export const entradaSchema = z
     ocItemId: idSchemaCom("Item da OC inválido").nullable(),
     depositoId: idSchemaCom("Escolha o depósito").nullable(),
     tanqueId: idSchemaCom("Escolha o tanque").nullable(),
+    pilhaId: idSchemaCom("Escolha a pilha").nullable(),
     insumoId: idSchemaCom("Insumo inválido").nullable(),
     quantidade: quantidadeNumero(),
     valorUnitario: z.number().nullable(),
@@ -160,11 +165,12 @@ function textoOuNulo(texto: string): string | null {
 /** Formulário para a action. Na OC, insumo e valor seguem nulos: quem manda é a OC. */
 export function entradaDoForm(dados: EntradaFormInput): EntradaInput {
   const daOc = dados.origem === "oc";
-  const local = decodificarLocal(dados.local) ?? { depositoId: null, tanqueId: null };
+  const local = decodificarLocal(dados.local) ?? SEM_LOCAL;
   return {
     ocItemId: daOc ? dados.ocItemId : null,
     depositoId: local.depositoId,
     tanqueId: local.tanqueId,
+    pilhaId: local.pilhaId,
     insumoId: daOc ? null : dados.insumoId,
     quantidade: paraNumero(dados.quantidade, CASAS_TAXA) ?? 0,
     valorUnitario: daOc ? null : paraNumero(dados.valorUnitario, CASAS_TAXA),
@@ -193,6 +199,7 @@ export const saidaSchema = z
   .object({
     depositoId: idSchemaCom("Escolha o depósito").nullable(),
     tanqueId: idSchemaCom("Escolha o tanque").nullable(),
+    pilhaId: idSchemaCom("Escolha a pilha").nullable(),
     insumoId: idSchemaCom("Escolha o material"),
     quantidade: quantidadeNumero(),
     data: dataSchema,
@@ -204,10 +211,11 @@ export const saidaSchema = z
 export type SaidaInput = z.infer<typeof saidaSchema>;
 
 export function saidaDoForm(dados: SaidaFormInput): SaidaInput {
-  const local = decodificarLocal(dados.local) ?? { depositoId: null, tanqueId: null };
+  const local = decodificarLocal(dados.local) ?? SEM_LOCAL;
   return {
     depositoId: local.depositoId,
     tanqueId: local.tanqueId,
+    pilhaId: local.pilhaId,
     insumoId: dados.insumoId,
     quantidade: paraNumero(dados.quantidade, CASAS_TAXA) ?? 0,
     data: dados.data,

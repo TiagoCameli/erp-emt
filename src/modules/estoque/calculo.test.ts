@@ -26,14 +26,16 @@ describe("saldo por depósito e insumo", () => {
 
 describe("local codificado", () => {
   const ID = "38673fc5-c55a-c7be-8687-e9b1d3589ef1";
-  it("ida e volta de depósito e tanque", () => {
-    expect(decodificarLocal(codificarLocal("deposito", ID))).toEqual({ depositoId: ID, tanqueId: null });
-    expect(decodificarLocal(codificarLocal("tanque", ID))).toEqual({ depositoId: null, tanqueId: ID });
+  it("ida e volta de depósito, tanque e pilha", () => {
+    expect(decodificarLocal(codificarLocal("deposito", ID))).toEqual({ depositoId: ID, tanqueId: null, pilhaId: null });
+    expect(decodificarLocal(codificarLocal("tanque", ID))).toEqual({ depositoId: null, tanqueId: ID, pilhaId: null });
+    expect(decodificarLocal(codificarLocal("pilha", ID))).toEqual({ depositoId: null, tanqueId: null, pilhaId: ID });
   });
   it("lixo não vira local", () => {
     expect(decodificarLocal("")).toBeNull();
     expect(decodificarLocal(ID)).toBeNull();
     expect(decodificarLocal(`caminhao:${ID}`)).toBeNull();
     expect(decodificarLocal("tanque:123")).toBeNull();
+    expect(decodificarLocal(`pilha:${ID}:extra`)).toBeNull();
   });
 });

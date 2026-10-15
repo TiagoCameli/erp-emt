@@ -3093,6 +3093,7 @@ export type Database = {
           motivo_exclusao: string | null;
           nota_fiscal: string | null;
           observacoes: string | null;
+          pilha_id: string | null;
           oc_item_id: string | null;
           oc_numero: string | null;
           ordem_compra_id: string | null;
@@ -3115,6 +3116,7 @@ export type Database = {
           motivo_exclusao?: string | null;
           nota_fiscal?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           oc_item_id?: string | null;
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
@@ -3137,6 +3139,7 @@ export type Database = {
           motivo_exclusao?: string | null;
           nota_fiscal?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           oc_item_id?: string | null;
           oc_numero?: string | null;
           ordem_compra_id?: string | null;
@@ -3147,6 +3150,13 @@ export type Database = {
           valor_unitario?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_entradas_pilha_id_fkey";
+            columns: ["pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_entradas_tanque_id_fkey";
             columns: ["tanque_id"];
@@ -3212,6 +3222,63 @@ export type Database = {
           },
         ];
       };
+      estoque_pilhas: {
+        Row: {
+          ativo: boolean;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          insumo_atual_id: string | null;
+          nome: string;
+          observacoes: string | null;
+          saldo: number;
+          total_entrada: number;
+          updated_at: string;
+          zerada_em: string | null;
+        };
+        Insert: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          insumo_atual_id?: string | null;
+          nome: string;
+          observacoes?: string | null;
+          saldo?: number;
+          total_entrada?: number;
+          updated_at?: string;
+          zerada_em?: string | null;
+        };
+        Update: {
+          ativo?: boolean;
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          insumo_atual_id?: string | null;
+          nome?: string;
+          observacoes?: string | null;
+          saldo?: number;
+          total_entrada?: number;
+          updated_at?: string;
+          zerada_em?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_pilhas_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_pilhas_insumo_atual_id_fkey";
+            columns: ["insumo_atual_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       estoque_saida_camadas: {
         Row: {
           created_at: string;
@@ -3268,6 +3335,7 @@ export type Database = {
           insumo_id: string;
           motivo_exclusao: string | null;
           observacoes: string | null;
+          pilha_id: string | null;
           quantidade: number;
           tanque_id: string | null;
           updated_at: string;
@@ -3286,6 +3354,7 @@ export type Database = {
           insumo_id: string;
           motivo_exclusao?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           quantidade: number;
           tanque_id?: string | null;
           updated_at?: string;
@@ -3304,12 +3373,20 @@ export type Database = {
           insumo_id?: string;
           motivo_exclusao?: string | null;
           observacoes?: string | null;
+          pilha_id?: string | null;
           quantidade?: number;
           tanque_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_saidas_pilha_id_fkey";
+            columns: ["pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_saidas_tanque_id_fkey";
             columns: ["tanque_id"];
@@ -10105,7 +10182,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_almox_recalcular_saldo: {
-        Args: { p_deposito: string; p_insumo: string };
+        Args: { p_deposito: string; p_insumo: string; p_pilha: string; p_tanque: string };
         Returns: undefined;
       };
       fn_almox_registrar_entrada: {
@@ -10468,6 +10545,7 @@ export type Database = {
           p_nota_fiscal?: string;
           p_observacoes?: string;
           p_oc_item?: string;
+          p_pilha?: string;
           p_quantidade: number;
           p_tanque: string;
           p_valor_unitario: number;
@@ -10482,6 +10560,7 @@ export type Database = {
           p_id: string;
           p_insumo: string;
           p_observacoes?: string;
+          p_pilha?: string;
           p_quantidade: number;
           p_tanque: string;
         };
