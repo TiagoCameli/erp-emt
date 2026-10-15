@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   agruparEquipamentos,
   consorciosDe,
+  divergenciaDaCota,
+  resumirQuitacao,
   rotuloParcelas,
   somarAquisicoes,
   type AquisicaoLinha,
@@ -21,6 +23,10 @@ const linha = (parcial: Partial<AquisicaoLinha>): AquisicaoLinha => ({
   lancamentos: 1,
   parcelas: null,
   parcelasPagas: null,
+  parcelasAbertas: 0,
+  proximoVencimento: null,
+  ultimoVencimento: null,
+  divida: null,
   valor: 0,
   pago: 0,
   aPagar: 0,
@@ -71,5 +77,35 @@ describe("rotuloParcelas", () => {
 
   it("vazio quando não é cota", () => {
     expect(rotuloParcelas({ parcelas: null, parcelasPagas: null })).toBe("");
+  });
+});
+
+describe("resumirQuitacao", () => {
+  const LINHAS = [
+    linha({ centro: "Carreta", centroId: "a", aPagar: 900.1, ultimoVencimento: "2029-12-15" }),
+    linha({ centro: "Escavadeira", centroId: "b", aPagar: 600.2, ultimoVencimento: "2030-09-09", divida: "contrato" }),
+    linha({ centro: "Rolo", centroId: "c", aPagar: 0, ultimoVencimento: null }),
+    linha({ tipo: "consorcio", centro: "Cota 1", aPagar: 100, ultimoVencimento: "2032-09-15", divida: "cota" }),
+  ];
+  const r = resumirQuitacao(LINHAS);
+
+  it("separa máquinas de consórcio, com a última parcela de cada lado", () => {
+    expect(r.equipamentos).toEqual({ aPagar: 1500.3, bens: 2, quitacao: "2030-09-09" });
+    expect(r.consorcios).toEqual({ aPagar: 100, cotas: 1, quitacao: "2032-09-15" });
+  });
+
+  it("aponta o bem com saldo que não está em Dívidas", () => {
+    expect(r.foraDeDividas).toEqual({ nomes: ["Carreta"], aPagar: 900.1 });
+  });
+
+  it("lista só quem tem saldo, do maior para o menor", () => {
+    expect(r.maiores.map((l) => l.centro)).toEqual(["Carreta", "Escavadeira", "Cota 1"]);
+  });
+});
+
+describe("divergenciaDaCota", () => {
+  it("lançamento x cronograma, em centavos", () => {
+    expect(divergenciaDaCota({ valor: 405463.8, pago: 40546.38, aPagar: 364924.39 })).toBe(-6.97);
+    expect(divergenciaDaCota({ valor: 10, pago: 4, aPagar: 6 })).toBe(0);
   });
 });

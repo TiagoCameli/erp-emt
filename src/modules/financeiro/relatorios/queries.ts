@@ -1570,7 +1570,7 @@ export async function relatorioSociosLigadas(): Promise<SociosLigadasRelatorio> 
 /** Bens comprados (por centro) e cotas de consórcio (por lançamento). */
 export async function aquisicoes(): Promise<AquisicaoLinha[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_rel_aquisicoes");
+  const { data, error } = await supabase.rpc("fn_rel_aquisicoes_quitacao");
   if (error) {
     throw new Error("Não foi possível carregar o relatório de equipamentos e consórcios");
   }
@@ -1590,6 +1590,10 @@ export async function aquisicoes(): Promise<AquisicaoLinha[]> {
     valor: Number(l.valor),
     pago: Number(l.pago),
     aPagar: Number(l.a_pagar),
+    parcelasAbertas: Number(l.parcelas_abertas ?? 0),
+    proximoVencimento: l.proximo_vencimento ?? null,
+    ultimoVencimento: l.ultimo_vencimento ?? null,
+    divida: l.divida === "contrato" || l.divida === "cota" ? l.divida : null,
   }));
 }
 

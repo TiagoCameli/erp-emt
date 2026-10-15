@@ -20,6 +20,14 @@ vi.mock("@/modules/_shared/preferencias-tabela/actions", () => ({
   limparPreferenciaTabela: vi.fn(async () => undefined),
 }));
 
+// jsdom não tem IntersectionObserver, que o `whileInView` do motion usa.
+class SemObservar {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.IntersectionObserver ??= SemObservar as unknown as typeof IntersectionObserver;
+
 afterEach(() => {
   cleanup();
   limparEstadosTabelaParaTeste();
@@ -53,6 +61,10 @@ const equipamento = (
   valor,
   pago,
   aPagar: valor - pago,
+  parcelasAbertas: valor > pago ? 12 : 0,
+  proximoVencimento: valor > pago ? "2026-11-10" : null,
+  ultimoVencimento: valor > pago ? "2027-10-10" : null,
+  divida: null,
 });
 
 const LINHAS: AquisicaoLinha[] = [
@@ -75,6 +87,10 @@ const LINHAS: AquisicaoLinha[] = [
     valor: 300000,
     pago: 45000,
     aPagar: 255000,
+    parcelasAbertas: 51,
+    proximoVencimento: "2026-11-15",
+    ultimoVencimento: "2031-01-15",
+    divida: "cota",
   },
 ];
 
@@ -126,5 +142,26 @@ describe("AquisicoesTabela", () => {
     render(<AquisicoesTabela linhas={[]} podeVerLancamentos />);
     expect(screen.getByText("Nenhuma aquisição lançada")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
+  });
+});
+
+describe("AquisicoesTabela — quanto falta e até quando", () => {
+  it("abre com a frase da quitação e aponta o que não está em Dívidas", () => {
+    render(<AquisicoesTabela linhas={LINHAS} podeVerLancamentos />);
+    const corpo = texto(document.body);
+    // Carreta A 60.000 + Escavadeira 800.000 = 860.000; cota 255.000.
+    expect(corpo).toContain(
+      "Faltam R$ 1.115.000,00 para quitar máquinas e consórcios: R$ 860.000,00 em 2 bens até 10/2027 e R$ 255.000,00 em 1 cota de consórcio até 01/2031",
+    );
+    expect(corpo).toContain("R$ 860.000,00 são de 2 bens financiados que ainda não estão em Financeiro › Dívidas");
+  });
+
+  it("a cota mostra quantas parcelas restam e a quitação", () => {
+    render(<AquisicoesTabela linhas={LINHAS} podeVerLancamentos />);
+    const cota = screen.getByRole("row", { name: /LAN-0042/ });
+    expect(texto(cota)).toContain("51");
+    expect(texto(cota)).toContain("01/2031");
+    const quitada = screen.getByRole("row", { name: /Carreta B/ });
+    expect(texto(quitada)).toContain("quitado");
   });
 });

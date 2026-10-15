@@ -1834,7 +1834,7 @@ export default async function RelatoriosPage({
         <SecaoRelatorio
           relatorio="aquisicoes"
           titulo="Equipamentos e consórcios"
-          descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada."
+          descricao="O que foi comprado, por bem (centros de imobilizado e as carretas lançadas como Aquisição de Equipamento), e as cotas de consórcio. O pago vem das parcelas do lançamento, na proporção do rateio: um lançamento dividido entre três carretas paga um terço de cada. A quitação é o vencimento da última parcela em aberto. No consórcio com cota cadastrada em Financeiro › Dívidas, o a pagar e as parcelas que restam vêm do cronograma da cota. Seguro-garantia e caução lançados com a categoria Investimentos não são máquina e ficam fora."
         >
           <ConteudoAquisicoes podeVerLancamentos={podeVerLancamentos} />
         </SecaoRelatorio>
