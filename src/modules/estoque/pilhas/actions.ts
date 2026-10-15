@@ -51,6 +51,7 @@ function linhaPilha(dados: PilhaInput) {
   return {
     nome: dados.nome,
     insumo_id: dados.insumoId,
+    localidade_id: dados.localidadeId,
     observacoes: dados.observacoes === "" ? null : dados.observacoes,
   };
 }
@@ -59,7 +60,9 @@ const CHECK_VIOLADO = "23514";
 
 /** As travas do banco (insumo inativo, insumo de outro módulo, troca com movimento) já falam português. */
 function erroDeSalvar(error: { code?: string; message?: string }): string {
-  if (error.code === CHECK_VIOLADO) return "Escolha o insumo da pilha";
+  if (error.code === CHECK_VIOLADO) {
+    return error.message?.includes("localidade") ? "Escolha o local da pilha" : "Escolha o insumo da pilha";
+  }
   return traduzirErroEstoque(error, "Não foi possível salvar a pilha. Tente novamente");
 }
 

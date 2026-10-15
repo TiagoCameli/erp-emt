@@ -35,6 +35,15 @@ function localDaLinha(linha: {
   return { local: codificarLocal("deposito", linha.deposito_id ?? ""), localNome: linha.almoxarifado_depositos?.nome ?? "" };
 }
 
+/** Movimento gerado por outro registro: só muda por lá (o banco recusa a edição direta). */
+export type VinculoMovimento = "frete" | "transferencia" | null;
+
+function vinculoDaLinha(linha: { frete_id?: string | null; transferencia_id: string | null }): VinculoMovimento {
+  if (linha.frete_id) return "frete";
+  if (linha.transferencia_id) return "transferencia";
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Locais
 // ---------------------------------------------------------------------------
@@ -158,6 +167,7 @@ export interface EntradaLinha {
   observacoes: string | null;
   excluida: boolean;
   motivoExclusao: string | null;
+  vinculo: VinculoMovimento;
 }
 
 /** Entradas, as excluídas também (a tela filtra; restaurar precisa delas). */
@@ -168,7 +178,7 @@ export async function listarEntradas(): Promise<EntradaLinha[]> {
       .from("estoque_entradas")
       .select(
         `id, data, deposito_id, tanque_id, pilha_id, insumo_id, quantidade, valor_unitario, valor_total, oc_item_id, oc_numero,
-         nota_fiscal, observacoes, excluido_em, motivo_exclusao,
+         nota_fiscal, observacoes, excluido_em, motivo_exclusao, frete_id, transferencia_id,
          almoxarifado_depositos(nome),
          tanques(nome),
          estoque_pilhas(nome),
@@ -199,6 +209,7 @@ export async function listarEntradas(): Promise<EntradaLinha[]> {
     observacoes: linha.observacoes,
     excluida: linha.excluido_em !== null,
     motivoExclusao: linha.motivo_exclusao,
+    vinculo: vinculoDaLinha(linha),
   }));
 }
 
@@ -217,15 +228,20 @@ export interface SaidaLinha {
   quantidade: number;
   custoUnitario: number;
   valorTotal: number;
+  /** Vazio na saída de transferência (só muda o material de lugar). */
   centroCustoId: string;
-  /** "Obra X" ou "Obra X › Etapa Y". */
+  /** "Obra X" ou "Obra X › Etapa Y"; na transferência, "Transferência para ...". */
   centroCustoRotulo: string;
   /** A raiz, para o filtro. */
   centroCustoRaiz: string;
   observacoes: string | null;
   excluida: boolean;
   motivoExclusao: string | null;
+  vinculo: VinculoMovimento;
 }
+
+/** Chave de "centro" das saídas de transferência no filtro. */
+export const RAIZ_TRANSFERENCIA = "transferencia";
 
 export async function listarSaidas(): Promise<SaidaLinha[]> {
   const supabase = await createClient();
@@ -235,7 +251,7 @@ export async function listarSaidas(): Promise<SaidaLinha[]> {
         .from("estoque_saidas")
         .select(
           `id, data, deposito_id, tanque_id, pilha_id, insumo_id, quantidade, custo_unitario, valor_total, centro_custo_id,
-           observacoes, excluido_em, motivo_exclusao,
+           observacoes, excluido_em, motivo_exclusao, transferencia_id,
            almoxarifado_depositos(nome),
            tanques(nome),
            estoque_pilhas(nome),
@@ -261,10 +277,14 @@ export async function listarSaidas(): Promise<SaidaLinha[]> {
   }
 
   return saidas.linhas.map((linha) => {
-    const centro = porId.get(linha.centro_custo_id);
-    const raiz = raizDe(linha.centro_custo_id);
-    const rotulo =
-      centro && raiz && centro.id !== raiz.id ? `${raiz.nome} › ${centro.nome}` : (centro?.nome ?? "");
+    const centroId = linha.centro_custo_id;
+    const centro = centroId ? porId.get(centroId) : undefined;
+    const raiz = centroId ? raizDe(centroId) : null;
+    const rotulo = !centroId
+      ? (linha.observacoes ?? "Transferência")
+      : centro && raiz && centro.id !== raiz.id
+        ? `${raiz.nome} › ${centro.nome}`
+        : (centro?.nome ?? "");
     return {
       id: linha.id,
       data: linha.data,
@@ -275,12 +295,13 @@ export async function listarSaidas(): Promise<SaidaLinha[]> {
       quantidade: Number(linha.quantidade),
       custoUnitario: Number(linha.custo_unitario),
       valorTotal: Number(linha.valor_total),
-      centroCustoId: linha.centro_custo_id,
+      centroCustoId: centroId ?? "",
       centroCustoRotulo: rotulo,
-      centroCustoRaiz: raiz?.id ?? linha.centro_custo_id,
+      centroCustoRaiz: centroId ? (raiz?.id ?? centroId) : RAIZ_TRANSFERENCIA,
       observacoes: linha.observacoes,
       excluida: linha.excluido_em !== null,
       motivoExclusao: linha.motivo_exclusao,
+      vinculo: vinculoDaLinha(linha),
     };
   });
 }

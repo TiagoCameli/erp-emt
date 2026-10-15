@@ -23,6 +23,9 @@ export interface PilhaLinha {
   /** Escolhido no cadastro. Nulo só nas pilhas criadas antes de 15/10 22h, até serem editadas. */
   insumoId: string | null;
   insumoNome: string | null;
+  /** A localidade do Frete. Nula só nas pilhas criadas antes de 15/10 23h, até serem editadas. */
+  localidadeId: string | null;
+  localidadeNome: string | null;
   unidade: string | null;
   /** A entrada mais recente (pela data; no mesmo dia, a lançada por último). */
   ultimaEntrada: PilhaMovimento | null;
@@ -46,7 +49,10 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
     supabase
       .from("estoque_pilhas")
       .select(
-        "id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla)), estoque_entradas(data, quantidade), estoque_saidas(data, quantidade)",
+        `id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla)),
+         localidade_id, localidades(nome),
+         estoque_entradas!estoque_entradas_pilha_id_fkey(data, quantidade),
+         estoque_saidas!estoque_saidas_pilha_id_fkey(data, quantidade)`,
       )
       .is("estoque_entradas.excluido_em", null)
       .order("data", { referencedTable: "estoque_entradas", ascending: false })
@@ -72,6 +78,8 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
     totalEntrada: Number(linha.total_entrada),
     insumoId: linha.insumo_id,
     insumoNome: linha.insumos?.nome ?? null,
+    localidadeId: linha.localidade_id,
+    localidadeNome: linha.localidades?.nome?.trim() ?? null,
     unidade: linha.insumos?.unidades_medida?.sigla ?? null,
     ultimaEntrada: primeiroMovimento(linha.estoque_entradas),
     ultimaSaida: primeiroMovimento(linha.estoque_saidas),

@@ -3088,6 +3088,7 @@ export type Database = {
           excluido_em: string | null;
           excluido_por: string | null;
           fornecedor_id: string | null;
+          frete_id: string | null;
           id: string;
           insumo_id: string;
           motivo_exclusao: string | null;
@@ -3099,6 +3100,7 @@ export type Database = {
           ordem_compra_id: string | null;
           quantidade: number;
           tanque_id: string | null;
+          transferencia_id: string | null;
           updated_at: string;
           valor_total: number | null;
           valor_unitario: number;
@@ -3111,6 +3113,7 @@ export type Database = {
           excluido_em?: string | null;
           excluido_por?: string | null;
           fornecedor_id?: string | null;
+          frete_id?: string | null;
           id?: string;
           insumo_id: string;
           motivo_exclusao?: string | null;
@@ -3122,6 +3125,7 @@ export type Database = {
           ordem_compra_id?: string | null;
           quantidade: number;
           tanque_id?: string | null;
+          transferencia_id?: string | null;
           updated_at?: string;
           valor_total?: number | null;
           valor_unitario: number;
@@ -3134,6 +3138,7 @@ export type Database = {
           excluido_em?: string | null;
           excluido_por?: string | null;
           fornecedor_id?: string | null;
+          frete_id?: string | null;
           id?: string;
           insumo_id?: string;
           motivo_exclusao?: string | null;
@@ -3145,11 +3150,26 @@ export type Database = {
           ordem_compra_id?: string | null;
           quantidade?: number;
           tanque_id?: string | null;
+          transferencia_id?: string | null;
           updated_at?: string;
           valor_total?: number | null;
           valor_unitario?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_entradas_frete_id_fkey";
+            columns: ["frete_id"];
+            isOneToOne: false;
+            referencedRelation: "fretes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_entradas_transferencia_id_fkey";
+            columns: ["transferencia_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_transferencias";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_entradas_pilha_id_fkey";
             columns: ["pilha_id"];
@@ -3229,6 +3249,7 @@ export type Database = {
           created_by: string | null;
           id: string;
           insumo_id: string | null;
+          localidade_id: string | null;
           nome: string;
           observacoes: string | null;
           saldo: number;
@@ -3242,6 +3263,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           insumo_id?: string | null;
+          localidade_id?: string | null;
           nome: string;
           observacoes?: string | null;
           saldo?: number;
@@ -3255,6 +3277,7 @@ export type Database = {
           created_by?: string | null;
           id?: string;
           insumo_id?: string | null;
+          localidade_id?: string | null;
           nome?: string;
           observacoes?: string | null;
           saldo?: number;
@@ -3263,6 +3286,13 @@ export type Database = {
           zerada_em?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_pilhas_localidade_id_fkey";
+            columns: ["localidade_id"];
+            isOneToOne: false;
+            referencedRelation: "localidades";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_pilhas_created_by_fkey";
             columns: ["created_by"];
@@ -3323,7 +3353,7 @@ export type Database = {
       };
       estoque_saidas: {
         Row: {
-          centro_custo_id: string;
+          centro_custo_id: string | null;
           created_at: string;
           created_by: string | null;
           custo_unitario: number;
@@ -3338,11 +3368,12 @@ export type Database = {
           pilha_id: string | null;
           quantidade: number;
           tanque_id: string | null;
+          transferencia_id: string | null;
           updated_at: string;
           valor_total: number;
         };
         Insert: {
-          centro_custo_id: string;
+          centro_custo_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           custo_unitario?: number;
@@ -3357,11 +3388,12 @@ export type Database = {
           pilha_id?: string | null;
           quantidade: number;
           tanque_id?: string | null;
+          transferencia_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
         Update: {
-          centro_custo_id?: string;
+          centro_custo_id?: string | null;
           created_at?: string;
           created_by?: string | null;
           custo_unitario?: number;
@@ -3376,10 +3408,18 @@ export type Database = {
           pilha_id?: string | null;
           quantidade?: number;
           tanque_id?: string | null;
+          transferencia_id?: string | null;
           updated_at?: string;
           valor_total?: number;
         };
         Relationships: [
+          {
+            foreignKeyName: "estoque_saidas_transferencia_id_fkey";
+            columns: ["transferencia_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_transferencias";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "estoque_saidas_pilha_id_fkey";
             columns: ["pilha_id"];
@@ -3427,6 +3467,132 @@ export type Database = {
             columns: ["insumo_id"];
             isOneToOne: false;
             referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      estoque_transferencias: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          custo_adicional: number;
+          data_chegada: string;
+          data_saida: string;
+          destino_deposito_id: string | null;
+          destino_pilha_id: string | null;
+          destino_tanque_id: string | null;
+          excluido_em: string | null;
+          excluido_por: string | null;
+          frete_id: string | null;
+          id: string;
+          insumo_id: string;
+          motivo_exclusao: string | null;
+          observacoes: string | null;
+          origem_deposito_id: string | null;
+          origem_pilha_id: string | null;
+          origem_tanque_id: string | null;
+          quantidade: number;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_adicional?: number;
+          data_chegada: string;
+          data_saida: string;
+          destino_deposito_id?: string | null;
+          destino_pilha_id?: string | null;
+          destino_tanque_id?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          frete_id?: string | null;
+          id?: string;
+          insumo_id: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem_deposito_id?: string | null;
+          origem_pilha_id?: string | null;
+          origem_tanque_id?: string | null;
+          quantidade: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          custo_adicional?: number;
+          data_chegada?: string;
+          data_saida?: string;
+          destino_deposito_id?: string | null;
+          destino_pilha_id?: string | null;
+          destino_tanque_id?: string | null;
+          excluido_em?: string | null;
+          excluido_por?: string | null;
+          frete_id?: string | null;
+          id?: string;
+          insumo_id?: string;
+          motivo_exclusao?: string | null;
+          observacoes?: string | null;
+          origem_deposito_id?: string | null;
+          origem_pilha_id?: string | null;
+          origem_tanque_id?: string | null;
+          quantidade?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "estoque_transferencias_frete_id_fkey";
+            columns: ["frete_id"];
+            isOneToOne: false;
+            referencedRelation: "fretes";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_insumo_id_fkey";
+            columns: ["insumo_id"];
+            isOneToOne: false;
+            referencedRelation: "insumos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_origem_deposito_id_fkey";
+            columns: ["origem_deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_origem_tanque_id_fkey";
+            columns: ["origem_tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_origem_pilha_id_fkey";
+            columns: ["origem_pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_destino_deposito_id_fkey";
+            columns: ["destino_deposito_id"];
+            isOneToOne: false;
+            referencedRelation: "almoxarifado_depositos";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_destino_tanque_id_fkey";
+            columns: ["destino_tanque_id"];
+            isOneToOne: false;
+            referencedRelation: "tanques";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "estoque_transferencias_destino_pilha_id_fkey";
+            columns: ["destino_pilha_id"];
+            isOneToOne: false;
+            referencedRelation: "estoque_pilhas";
             referencedColumns: ["id"];
           },
         ];
@@ -10562,6 +10728,32 @@ export type Database = {
           p_quantidade: number;
           p_tanque: string;
           p_valor_unitario: number;
+        };
+        Returns: string;
+      };
+      fn_estoque_excluir_transferencia: {
+        Args: { p_id: string; p_motivo: string };
+        Returns: undefined;
+      };
+      fn_estoque_restaurar_transferencia: {
+        Args: { p_id: string };
+        Returns: undefined;
+      };
+      fn_estoque_salvar_transferencia: {
+        Args: {
+          p_custo_adicional?: number;
+          p_data_chegada: string;
+          p_data_saida: string;
+          p_destino_deposito: string;
+          p_destino_pilha: string;
+          p_destino_tanque: string;
+          p_id: string;
+          p_insumo: string;
+          p_observacoes?: string;
+          p_origem_deposito: string;
+          p_origem_pilha: string;
+          p_origem_tanque: string;
+          p_quantidade: number;
         };
         Returns: string;
       };
