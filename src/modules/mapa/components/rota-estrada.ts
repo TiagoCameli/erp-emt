@@ -1,12 +1,64 @@
 import type { Posicao } from "@/modules/mapa/tipos";
 
 /**
- * Pavimentação desenhada pelo início, curvas e fim: tenta o caminho pela estrada no serviço de
- * rotas do Google (Directions). Em 15/10/2026 a chave do ERP NÃO tem esse serviço liberado
- * ("REQUEST_DENIED"), então hoje volta null e quem chama usa os pontos tocados. Quando a
- * "Directions API" for ativada no Google Cloud e liberada na chave, a linha passa a seguir a
- * estrada sem mudar código. Sem Google na página (motor de tiles), também volta null.
+ * Pavimentação desenhada pelo início, curvas e fim: pede ao Google o caminho pela estrada.
+ *
+ * 1. Routes API (`google.maps.routes.Route.computeRoutes`), a que o projeto `erp-emt` do Google
+ *    Cloud pode ter: a Directions virou serviço antigo em março de 2025 e não se ativa em projeto
+ *    novo. O Tiago ativou a Routes API e a pôs na chave restrita em 15/10/2026.
+ * 2. Directions (`DirectionsService`), como reserva para projeto antigo que ainda a tenha.
+ *
+ * Sem nenhuma das duas (ou sem Google na página, no motor de tiles), volta null e quem chama usa
+ * os pontos tocados.
  */
+
+const ll = (p: Posicao) => ({ lat: p[1], lng: p[0] });
+
+async function pelaRoutesApi(
+  g: typeof google,
+  pontos: readonly Posicao[],
+): Promise<Posicao[] | null> {
+  const { Route } = (await g.maps.importLibrary(
+    "routes",
+  )) as google.maps.RoutesLibrary;
+  if (!Route?.computeRoutes) return null;
+  const { routes } = await Route.computeRoutes({
+    origin: ll(pontos[0]),
+    destination: ll(pontos[pontos.length - 1]),
+    // As curvas tocadas são pontos de passagem, não paradas.
+    intermediates: pontos
+      .slice(1, -1)
+      .slice(0, 25)
+      .map((p) => ({ location: ll(p), via: true })),
+    travelMode: "DRIVING",
+    fields: ["path"],
+  });
+  const caminho = routes?.[0]?.path;
+  if (!caminho || caminho.length < 2) return null;
+  return caminho.map((p) => [p.lng, p.lat]);
+}
+
+async function pelaDirections(
+  g: typeof google,
+  pontos: readonly Posicao[],
+): Promise<Posicao[] | null> {
+  const { DirectionsService } = (await g.maps.importLibrary(
+    "routes",
+  )) as google.maps.RoutesLibrary;
+  const resposta = await new DirectionsService().route({
+    origin: ll(pontos[0]),
+    destination: ll(pontos[pontos.length - 1]),
+    waypoints: pontos
+      .slice(1, -1)
+      .slice(0, 25)
+      .map((p) => ({ location: ll(p), stopover: false })),
+    travelMode: g.maps.TravelMode.DRIVING,
+  });
+  const caminho = resposta.routes[0]?.overview_path;
+  if (!caminho || caminho.length < 2) return null;
+  return caminho.map((p) => [p.lng(), p.lat()]);
+}
+
 export async function rotaPelaEstrada(
   pontos: readonly Posicao[],
 ): Promise<Posicao[] | null> {
@@ -14,23 +66,13 @@ export async function rotaPelaEstrada(
   const g = (window as unknown as { google?: typeof google }).google;
   if (!g?.maps?.importLibrary) return null;
   try {
-    const { DirectionsService } = (await g.maps.importLibrary(
-      "routes",
-    )) as google.maps.RoutesLibrary;
-    const ll = (p: Posicao) => ({ lat: p[1], lng: p[0] });
-    const resposta = await new DirectionsService().route({
-      origin: ll(pontos[0]),
-      destination: ll(pontos[pontos.length - 1]),
-      // O serviço aceita até 25 pontos no meio.
-      waypoints: pontos
-        .slice(1, -1)
-        .slice(0, 25)
-        .map((p) => ({ location: ll(p), stopover: false })),
-      travelMode: g.maps.TravelMode.DRIVING,
-    });
-    const caminho = resposta.routes[0]?.overview_path;
-    if (!caminho || caminho.length < 2) return null;
-    return caminho.map((p) => [p.lng(), p.lat()]);
+    const rota = await pelaRoutesApi(g, pontos);
+    if (rota) return rota;
+  } catch {
+    // Routes API fora da chave ou fora do ar: tenta o serviço antigo
+  }
+  try {
+    return await pelaDirections(g, pontos);
   } catch {
     return null;
   }
