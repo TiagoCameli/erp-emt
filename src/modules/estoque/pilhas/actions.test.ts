@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const exigirPermissao = vi.fn();
 const createClient = vi.fn();
 const insert = vi.fn();
+const enderecoParaColocar = vi.fn();
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/permissoes", () => ({
@@ -11,6 +12,9 @@ vi.mock("@/lib/permissoes", () => ({
 }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: () => createClient(),
+}));
+vi.mock("@/modules/mapa/colocar-na-criacao", () => ({
+  enderecoParaColocar: (...args: unknown[]) => enderecoParaColocar(...args),
 }));
 
 import { criarPilha } from "@/modules/estoque/pilhas/actions";
@@ -23,7 +27,17 @@ describe("pilha nasce com o insumo", () => {
     exigirPermissao.mockReset();
     createClient.mockReset();
     insert.mockReset();
-    createClient.mockResolvedValue({ from: () => ({ insert }) });
+    enderecoParaColocar.mockReset();
+    enderecoParaColocar.mockResolvedValue(null);
+    // insert(...).select("id").single(): o que o teste programa em `insert` é a resposta do single.
+    createClient.mockResolvedValue({
+      from: () => ({
+        insert: (linha: unknown) => {
+          const resposta = insert(linha);
+          return { select: () => ({ single: () => resposta }) };
+        },
+      }),
+    });
     exigirPermissao.mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -41,8 +55,12 @@ describe("pilha nasce com o insumo", () => {
   });
 
   it("grava nome, insumo e observação vazia como nula", async () => {
-    insert.mockResolvedValue({ error: null });
-    await expect(criarPilha({ nome: " Brita 1 ", insumoId: BRITA, observacoes: " " })).resolves.toEqual({ ok: true });
+    insert.mockResolvedValue({ data: { id: "p1" }, error: null });
+    await expect(criarPilha({ nome: " Brita 1 ", insumoId: BRITA, observacoes: " " })).resolves.toEqual({
+      ok: true,
+      id: "p1",
+      mapa: null,
+    });
     expect(insert).toHaveBeenCalledWith({ nome: "Brita 1", insumo_id: BRITA, observacoes: null });
   });
 
@@ -55,5 +73,16 @@ describe("pilha nasce com o insumo", () => {
     await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
       erro: "Insumo inexistente ou inativo",
     });
+  });
+
+  it("criada por quem edita o Mapa, volta o endereço que abre o mapa para marcar o lugar", async () => {
+    insert.mockResolvedValue({ data: { id: "p9" }, error: null });
+    enderecoParaColocar.mockResolvedValue("/mapa?colocar=pilha&id=p9");
+    await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
+      ok: true,
+      id: "p9",
+      mapa: "/mapa?colocar=pilha&id=p9",
+    });
+    expect(enderecoParaColocar).toHaveBeenCalledWith("pilha", "p9");
   });
 });

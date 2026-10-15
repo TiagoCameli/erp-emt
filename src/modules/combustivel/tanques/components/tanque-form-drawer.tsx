@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
@@ -83,6 +84,7 @@ export interface TanqueFormDrawerProps {
  * editar: são calculados pelo banco a partir dos movimentos.
  */
 export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores }: TanqueFormDrawerProps) {
+  const router = useRouter();
   const editando = Boolean(tanque);
 
   const form = useForm<TanqueFormInput>({
@@ -142,8 +144,14 @@ export function TanqueFormDrawer({ aberto, onAbertoChange, tanque, fornecedores 
       toast.error(resultado.erro);
       return;
     }
-    toast.success(editando ? "Tanque salvo" : "Tanque criado");
     onAbertoChange(false);
+    // Criado agora: o lugar é marcado no mapa do módulo Mapa (quem pode editar o Mapa vai direto).
+    if (!editando && resultado.mapa) {
+      toast.success("Tanque criado: toque no mapa onde ele fica");
+      router.push(resultado.mapa);
+      return;
+    }
+    toast.success(editando ? "Tanque salvo" : "Tanque criado");
   }
 
   // Virar de terceiro com combustível dentro deixa litros da EMT num tanque sem estoque.

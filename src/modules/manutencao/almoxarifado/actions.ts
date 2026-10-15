@@ -26,6 +26,7 @@ import {
   type EntradaInput,
   type PecaInput,
 } from "@/modules/manutencao/almoxarifado/schemas";
+import { enderecoParaColocar } from "@/modules/mapa/colocar-na-criacao";
 
 /**
  * Mutações do almoxarifado de peças (`manutencao.almoxarifado`).
@@ -49,7 +50,8 @@ const ROTA_PECAS = `${ROTA}/pecas`;
 const RECURSO_DEPOSITOS = "estoque.depositos" as const;
 const ROTAS_ESTOQUE = ["/estoque/depositos", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
 
-export type ResultadoAcao = { ok: true } | { erro: string };
+/** `id` e `mapa` só na criação de depósito: o endereço que abre o /mapa para marcar o lugar. */
+export type ResultadoAcao = { ok: true; id?: string; mapa?: string | null } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
@@ -106,9 +108,11 @@ export async function criarDeposito(dados: DepositoInput): Promise<ResultadoAcao
     if (!validado.success) return { erro: primeiraMensagem(validado.error) };
 
     const supabase = await createClient();
-    const { error } = await supabase
+    const { data: novo, error } = await supabase
       .from("almoxarifado_depositos")
-      .insert(linhaDeposito(validado.data));
+      .insert(linhaDeposito(validado.data))
+      .select("id")
+      .single();
 
     if (error) {
       if (ehRepetido(error)) return { erro: ERRO_DEPOSITO_REPETIDO };
@@ -120,7 +124,7 @@ export async function criarDeposito(dados: DepositoInput): Promise<ResultadoAcao
     }
 
     revalidar(ROTA_DEPOSITOS, ROTA, ROTA_ENTRADAS, ...ROTAS_ESTOQUE);
-    return { ok: true };
+    return { ok: true, id: novo.id, mapa: await enderecoParaColocar("deposito", novo.id) };
   });
 }
 

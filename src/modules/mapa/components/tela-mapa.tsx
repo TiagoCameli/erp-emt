@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import {
   Box,
   Compass,
@@ -103,6 +104,7 @@ import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
   type ConfigGoogle,
+  type AlvoObjeto,
   type EquipamentoMapa,
   type ObraMapa,
   type EstadoEfetivo,
@@ -206,9 +208,17 @@ export interface TelaMapaProps {
   inicial: EstadoMapa;
   google: ConfigGoogle;
   permissoes: PermissoesMapa;
+  /** Tanque, pilha ou depósito recém-criado no Estoque: a tela abre no "toque onde fica". */
+  colocarInicial?: { alvo: AlvoObjeto; id: string } | null;
 }
 
-export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
+export function TelaMapa({
+  inicial,
+  google,
+  permissoes,
+  colocarInicial = null,
+}: TelaMapaProps) {
+  const router = useRouter();
   const [estado, setEstado] = React.useState(inicial);
   // Quando o servidor manda um estado novo (router.refresh), a tela adota (padrão "derivar na
   // renderização", sem efeito).
@@ -296,7 +306,22 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   const [adicionando, setAdicionando] = React.useState<"obra" | "local" | null>(
     null,
   );
-  const [colocando, setColocando] = React.useState<PedidoColocar | null>(null);
+  const [colocando, setColocando] = React.useState<PedidoColocar | null>(() => {
+    if (!colocarInicial) return null;
+    const objeto = objetosDoEstoque(
+      inicial.tanques,
+      inicial.pilhas,
+      inicial.depositos,
+    ).find((o) => o.id === colocarInicial.id && o.alvo === colocarInicial.alvo);
+    return objeto
+      ? {
+          tipo: "objeto",
+          alvo: objeto.alvo,
+          id: objeto.id,
+          rotulo: objeto.nome,
+        }
+      : null;
+  });
   const [pontoColocar, setPontoColocar] = React.useState<Posicao | null>(null);
   const [pendente, setPendente] = React.useState<Pendente | null>(null);
   const [pendentePessoa, setPendentePessoa] = React.useState<{
@@ -780,9 +805,20 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
         ? `${colocando.obra.nome} no mapa`
         : `${colocando.rotulo} no mapa`,
     );
-    if (ok) cancelarColocar();
+    if (ok) {
+      cancelarColocar();
+      // Veio da criação no Estoque: limpa o ?colocar= para um recarregar não pedir de novo.
+      if (colocarInicial) router.replace("/mapa");
+    }
     return ok;
-  }, [colocando, pontoColocar, aplicar, cancelarColocar]);
+  }, [
+    colocando,
+    pontoColocar,
+    aplicar,
+    cancelarColocar,
+    colocarInicial,
+    router,
+  ]);
 
   const ligarAoLocal = React.useCallback(
     async (

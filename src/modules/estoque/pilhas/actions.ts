@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
 import { traduzirErroEstoque } from "@/modules/estoque/erros";
 import { pilhaSchema, type PilhaInput } from "@/modules/estoque/pilhas/schemas";
+import { enderecoParaColocar } from "@/modules/mapa/colocar-na-criacao";
 
 /**
  * Cadastro das pilhas (`estoque.pilhas`). A tela grava nome, insumo e observações (grant por
@@ -21,7 +22,8 @@ import { pilhaSchema, type PilhaInput } from "@/modules/estoque/pilhas/schemas";
 const RECURSO = "estoque.pilhas" as const;
 const ROTAS = ["/estoque/pilhas", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
 
-export type ResultadoAcao = { ok: true } | { erro: string };
+/** `id` e `mapa` só na criação: o endereço que abre o /mapa para marcar o lugar da pilha. */
+export type ResultadoAcao = { ok: true; id?: string; mapa?: string | null } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
@@ -69,11 +71,15 @@ export async function criarPilha(dados: PilhaInput): Promise<ResultadoAcao> {
     if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
 
     const supabase = await createClient();
-    const { error } = await supabase.from("estoque_pilhas").insert(linhaPilha(validado.data));
+    const { data: nova, error } = await supabase
+      .from("estoque_pilhas")
+      .insert(linhaPilha(validado.data))
+      .select("id")
+      .single();
     if (error) return erroAcao("estoque.pilhas.criar", error, erroDeSalvar(error));
 
     revalidar();
-    return { ok: true };
+    return { ok: true, id: nova.id, mapa: await enderecoParaColocar("pilha", nova.id) };
   });
 }
 

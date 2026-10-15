@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
 
 import { EmptyState, PageHeader } from "@/components/canonicos";
+import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { TelaMapa } from "@/modules/mapa/components/tela-mapa";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
+import type { AlvoObjeto } from "@/modules/mapa/tipos";
 
 /**
  * Mapa: a frota e as pessoas em 3D sobre a BR-364, arrastáveis. Leitura numa RPC só
@@ -16,9 +18,25 @@ import { carregarEstadoMapa } from "@/modules/mapa/queries";
  * PUBLIC_); por serem lidas no servidor, não precisam do prefixo que o Next embute no build.
  * NEXT_PUBLIC_GOOGLE_MAPS_* continua valendo como reserva (.env.local antigo).
  */
-export default async function PaginaMapa() {
+export default async function PaginaMapa({
+  searchParams,
+}: {
+  searchParams: Promise<{ colocar?: string; id?: string }>;
+}) {
   const usuario = await getUsuarioLogado();
   if (!usuario || !temPermissao(usuario, "mapa.mapa", "ver")) notFound();
+
+  // Vindo da criação de tanque, pilha ou depósito no Estoque: abre no "toque onde fica".
+  const { colocar, id } = await searchParams;
+  const alvo: AlvoObjeto | null =
+    colocar === "tanque" || colocar === "pilha" || colocar === "deposito"
+      ? colocar
+      : null;
+  const idValido = idSchema.safeParse(id);
+  const colocarInicial =
+    alvo && idValido.success && temPermissao(usuario, "mapa.mapa", "editar")
+      ? { alvo, id: idValido.data }
+      : null;
 
   const cabecalho = (
     <PageHeader
@@ -49,6 +67,7 @@ export default async function PaginaMapa() {
       <h1 className="sr-only">Frota no mapa</h1>
       <TelaMapa
         inicial={estado}
+        colocarInicial={colocarInicial}
         google={{
           chave:
             process.env.NEXT_GOOGLE_MAPS_API_KEY ||

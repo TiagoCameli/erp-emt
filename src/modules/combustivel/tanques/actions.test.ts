@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * traduzidas (nome repetido, tanque em uso).
  */
 
+const ID_NOVO = "55555555-5555-4555-8555-555555555555";
+
 const estado = vi.hoisted(() => ({
   permitido: true,
   insercoes: [] as unknown[],
@@ -22,12 +24,19 @@ vi.mock("@/lib/permissoes", () => ({
     if (!estado.permitido) throw new Error("Sem permissão");
   }),
 }));
+vi.mock("@/modules/mapa/colocar-na-criacao", () => ({
+  enderecoParaColocar: vi.fn(async () => null),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: () => ({
-      insert: async (linha: unknown) => {
+      insert: (linha: unknown) => {
         estado.insercoes.push(linha);
-        return { error: estado.erro };
+        return {
+          select: () => ({
+            single: async () => ({ data: estado.erro ? null : { id: "55555555-5555-4555-8555-555555555555" }, error: estado.erro }),
+          }),
+        };
       },
       update: (linha: unknown) => {
         estado.updates.push(linha);
@@ -81,7 +90,7 @@ describe("criarTanque", () => {
   });
 
   it("grava só as colunas liberadas, com vazio virando null", async () => {
-    await expect(criarTanque(DADOS)).resolves.toEqual({ ok: true });
+    await expect(criarTanque(DADOS)).resolves.toEqual({ ok: true, id: ID_NOVO, mapa: null });
     expect(estado.insercoes).toEqual([
       {
         nome: "Tanque Comboio 01",
@@ -104,7 +113,7 @@ describe("criarTanque", () => {
   });
 
   it("tanque de terceiro grava o dono", async () => {
-    await expect(criarTanque({ ...DADOS, ehExterno: true, proprietarioId: DONO })).resolves.toEqual({ ok: true });
+    await expect(criarTanque({ ...DADOS, ehExterno: true, proprietarioId: DONO })).resolves.toEqual({ ok: true, id: ID_NOVO, mapa: null });
     expect(estado.insercoes[0]).toMatchObject({ eh_externo: true, proprietario_id: DONO });
   });
 

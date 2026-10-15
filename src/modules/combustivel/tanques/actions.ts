@@ -19,6 +19,7 @@ import {
   type FornecedorParaCasar,
   type TanqueInput,
 } from "@/modules/combustivel/tanques/schemas";
+import { enderecoParaColocar } from "@/modules/mapa/colocar-na-criacao";
 
 /**
  * Mutações do cadastro de tanques (`estoque.tanques`). Desde 13/10/2026 o tanque é criado
@@ -35,7 +36,8 @@ const ROTA = "/combustivel/tanques";
 const TABELA = "tanques" as const;
 const ERRO_NOME_REPETIDO = "Já existe um tanque com este nome";
 
-export type ResultadoAcao = { ok: true } | { erro: string };
+/** `id` e `mapa` só na criação: o endereço que abre o /mapa para marcar o lugar do tanque. */
+export type ResultadoAcao = { ok: true; id?: string; mapa?: string | null } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
 
@@ -87,14 +89,18 @@ export async function criarTanque(dados: TanqueInput): Promise<ResultadoAcao> {
     if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
 
     const supabase = await createClient();
-    const { error } = await supabase.from(TABELA).insert(paraLinha(validado.data));
+    const { data: novo, error } = await supabase
+      .from(TABELA)
+      .insert(paraLinha(validado.data))
+      .select("id")
+      .single();
     if (error) {
       if (ehRepetido(error)) return { erro: ERRO_NOME_REPETIDO };
       return erroAcao("combustivel.tanques.criar", error, "Não foi possível salvar o tanque. Tente novamente");
     }
 
     revalidar();
-    return { ok: true };
+    return { ok: true, id: novo.id, mapa: await enderecoParaColocar("tanque", novo.id) };
   });
 }
 
