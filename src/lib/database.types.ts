@@ -10411,6 +10411,19 @@ export type Database = {
         Args: { p_confira_ids: string[]; p_conta_id: string; p_mes: string };
         Returns: string;
       };
+      fn_conferencia_extrato_contas: {
+        Args: never;
+        Returns: {
+          conta_bancaria_id: string;
+          diferenca_na_data: number | null;
+          extrato_data: string | null;
+          extrato_saldo: number | null;
+          lancamentos_depois: number | null;
+          movimento_depois: number | null;
+          saldo_sistema: number;
+          saldo_sistema_na_data: number | null;
+        }[];
+      };
       fn_estoque_excluir: {
         Args: { p_id: string; p_motivo: string; p_tabela: string };
         Returns: undefined;
@@ -11071,9 +11084,11 @@ export type Database = {
         Args: {
           p_conta?: string;
           p_faixa?: string;
+          p_grupo?: string;
           p_hoje?: string;
           p_mes?: string;
           p_realizado?: boolean;
+          p_sentido?: string;
           p_tipo_lancamento?: string;
           p_tipo_recorte: string;
         };
@@ -11928,6 +11943,7 @@ export type Database = {
       fn_rel_fluxo_caixa: {
         Args: { p_centros_custo?: string[]; p_centros_receita?: string[] };
         Returns: {
+          grupo: string | null;
           mes: string;
           realizado: boolean;
           tipo: string;

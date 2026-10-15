@@ -23,6 +23,12 @@ import {
   type SaldoRealAplicacao,
   type SubcontaInvestimento,
 } from "@/modules/financeiro/relatorios/investimentos";
+import {
+  classeDaConta,
+  resumoDaPosicao,
+  type ConferenciaExtrato,
+  type ResumoDaPosicao,
+} from "@/modules/financeiro/relatorios/posicao-bancaria";
 import type { JanelaFluxo } from "@/modules/financeiro/relatorios/filtros-fluxo-caixa";
 import {
   montarFluxoCaixa,
@@ -92,17 +98,17 @@ export interface FluxoCaixa extends FluxoCaixaMontado {
    * ficaram fora por a pessoa não poder ver o saldo delas. Zero e zero quando o
    * relatório está recortado por centro (o saldo nem é lido).
    */
-  contasNoSaldo: { contas: number; ocultas: number };
+  contasNoSaldo: { contas: number; ocultas: number; aplicadas: number };
 }
 
 /**
- * Fluxo de caixa mensal em quatro séries (ver `fluxo-caixa.ts`): entradas e
- * saídas operacionais, empréstimos tomados e amortizações, separando realizado
- * de projetado. O realizado (parcelas pagas) entra no mês em que o dinheiro de
+ * Fluxo de caixa mensal em cinco grupos pela natureza (ver `fluxo-caixa.ts`):
+ * operação, CAPEX, sócios e mútuo, dívida e aplicações, cada um com entrada e
+ * saída, separando realizado de projetado. O realizado (parcelas pagas) entra no mês em que o dinheiro de
  * fato se moveu (data_pagamento), refletindo a posição de caixa; o projetado
  * (pendentes/aprovadas) entra no mês de vencimento, pois é quando deve ocorrer.
- * Parcelas canceladas ficam de fora. Desde a D1 (03/10/2026) a movimentação que
- * passa pela conta entra, em série própria; só o ajuste de aplicação fica fora.
+ * Parcelas canceladas ficam de fora, e a origem aplicação (rendimento, ajuste
+ * de abertura) também: é variação dentro da subconta.
  *
  * A JANELA É APLICADA AQUI, e não no componente do gráfico, de propósito.
  * `fn_rel_fluxo_caixa()` devolve todo mês em que existe parcela, pelo
@@ -116,12 +122,13 @@ export interface FluxoCaixa extends FluxoCaixaMontado {
  * agregada: o rateio é do LANÇAMENTO e o dinheiro é da PARCELA, então a fatia de
  * um centro só se calcula antes de agregar. Filtrar aqui exigiria trazer parcela
  * e rateio crus (uns 15 mil registros por abertura de tela) e reescrever em TS as
- * regras que a RPC já tem: o mês do pagamento x o do vencimento, a série de
+ * regras que a RPC já tem: o mês do pagamento x o do vencimento, o grupo de
  * cada natureza, o cancelado fora. Duas cópias dessas regras divergem na
  * primeira que alguém mexer de um lado só.
  *
  * O SALDO DE PARTIDA vem de `fn_saldos_das_contas`, a mesma função de Contas
- * bancárias e de Posição bancária, somando as correntes e caixa ativas. Com
+ * bancárias e de Posição bancária, somando as correntes e caixa ativas (o
+ * disponível) e, à parte, as subcontas de investimento (o aplicado). Com
  * centro escolhido ele nem é lido: as barras viram fatia de uma obra, e somar a
  * fatia ao saldo da empresa inteira não daria saldo de ninguém.
  */
@@ -181,7 +188,7 @@ export async function fluxoCaixa(
             saldo: Number(linha.saldo),
           })),
         )
-      : { saldo: null, contas: 0, ocultas: 0 };
+      : { saldo: null, contas: 0, ocultas: 0, aplicado: null, contasAplicadas: 0 };
 
   return {
     ...montarFluxoCaixa({
@@ -189,9 +196,14 @@ export async function fluxoCaixa(
       janela,
       mesCorrente: mesCorrente(),
       saldoInicial: partida.saldo,
+      aplicado: partida.aplicado,
       comCorteDeCentro,
     }),
-    contasNoSaldo: { contas: partida.contas, ocultas: partida.ocultas },
+    contasNoSaldo: {
+      contas: partida.contas,
+      ocultas: partida.ocultas,
+      aplicadas: partida.contasAplicadas,
+    },
   };
 }
 
@@ -358,6 +370,10 @@ export interface PosicaoBancariaConta {
   contaId: string;
   nome: string;
   banco: string;
+  /** corrente, caixa, poupança ou investimento (subconta). */
+  tipo: string;
+  /** O último extrato e a comparação na data dele. `null` = sem OFX. */
+  extrato: ConferenciaExtrato | null;
   saldoInicial: number;
   /**
    * Data do extrato de onde o saldo inicial foi lido. Quando existe, "Saldo
@@ -373,6 +389,8 @@ export interface PosicaoBancariaConta {
 
 export interface PosicaoBancaria {
   contas: PosicaoBancariaConta[];
+  /** Disponível x aplicado, e as contas com extrato a conferir. */
+  resumo: ResumoDaPosicao;
   totalSaldoInicial: number;
   totalEntradas: number;
   totalSaidas: number;
@@ -391,7 +409,8 @@ export interface PosicaoBancaria {
 }
 
 /**
- * Saldo por conta bancária ativa: saldo_inicial mais o movimento da conta.
+ * Saldo por conta bancária ativa: saldo_inicial mais o movimento da conta, e a
+ * conferência contra o último extrato (ver `posicao-bancaria.ts`).
  *
  * ENTRA: parcela recebida (a_receber) e o lado de quem recebeu numa
  * transferência entre contas (transferencia_entrada).
@@ -399,16 +418,14 @@ export interface PosicaoBancaria {
  * (transferencia_saida) -- nessa, a tarifa já vem somada pela RPC, porque o
  * banco debita valor mais tarifa da origem e credita só o valor no destino.
  *
- * Só conta parcela paga (status='pago') com conta_bancaria_id preenchida. As
- * transferências entram todas: elas não têm status, são registro direto.
+ * Só conta parcela paga com conta preenchida e posterior a `saldo_inicial_data`
+ * (null = tudo), a mesma regra (`vw_parcelas_caixa.no_saldo`) de Contas
+ * bancárias e do Fluxo de caixa. Desde a D1 (03/10/2026) a movimentação ENTRA:
+ * o resgate e a transferência mexem no saldo da conta por onde passaram.
  *
- * NÃO é "o efeito de tudo que movimentou a conta", e o que a RPC recorta desde
- * 22/08/2026 é o que faz esta tela e a aba Contas bancárias concordarem:
- *   1. só movimento POSTERIOR a `saldo_inicial_data` (null = tudo);
- *   2. nada de categoria com natureza `movimentacao` -- aplicação e resgate do
- *      principal não mexem no saldo, porque o dinheiro não saiu da empresa.
- * O saldo daqui é o dinheiro que a empresa TEM naquele banco, corrente mais
- * aplicado, que é o número que o extrato chama de "Saldo".
+ * Cada linha é UMA conta, e a subconta de investimentos é conta própria: o
+ * saldo da corrente é o disponível, o da subconta é o aplicado, e o resumo
+ * soma os dois separados.
  */
 export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   const supabase = await createClient();
@@ -418,13 +435,14 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   // 27/08/2026 o `authenticated` não tem SELECT nessa coluna, e as entradas e
   // saídas por conta agora vêm somadas de `fn_saldos_das_contas`, que é a mesma
   // função da aba Contas bancárias — as duas telas não têm como divergir.
-  const [contasResultado, saldosResultado] = await Promise.all([
+  const [contasResultado, saldosResultado, extratosResultado] = await Promise.all([
     supabase
       .from("contas_bancarias")
-      .select("id, nome, banco, saldo_inicial_data")
+      .select("id, nome, banco, tipo, saldo_inicial_data")
       .eq("ativo", true)
       .order("nome"),
     supabase.rpc("fn_saldos_das_contas"),
+    supabase.rpc("fn_conferencia_extrato_contas"),
   ]);
 
   if (contasResultado.error) {
@@ -432,6 +450,24 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
   }
   if (saldosResultado.error) {
     throw new Error("Não foi possível carregar os pagamentos das contas");
+  }
+  if (extratosResultado.error) {
+    throw new Error("Não foi possível conferir as contas com o extrato");
+  }
+
+  const extratoPorConta = new Map<string, ConferenciaExtrato>();
+  for (const linha of extratosResultado.data ?? []) {
+    // Sem extrato a função devolve a conta com a data nula: fica fora do mapa,
+    // e a conta sai como "sem extrato", nunca como "em dia".
+    if (!linha.extrato_data) continue;
+    extratoPorConta.set(linha.conta_bancaria_id, {
+      data: linha.extrato_data,
+      saldoExtrato: Number(linha.extrato_saldo),
+      movimentoDepois: Number(linha.movimento_depois),
+      lancamentosDepois: linha.lancamentos_depois ?? 0,
+      saldoNaData: Number(linha.saldo_sistema_na_data),
+      diferencaNaData: Number(linha.diferenca_na_data),
+    });
   }
 
   const dinheiroPorConta = new Map(
@@ -458,6 +494,8 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
       contaId: conta.id,
       nome: conta.nome,
       banco: conta.banco,
+      tipo: conta.tipo,
+      extrato: extratoPorConta.get(conta.id) ?? null,
       saldoInicial: paraReais(inicialCentavos),
       saldoInicialData: conta.saldo_inicial_data,
       entradas: paraReais(entradasCentavos),
@@ -466,8 +504,17 @@ export async function posicaoBancaria(): Promise<PosicaoBancaria> {
     });
   }
 
+  // Disponível antes do aplicado: é a ordem da pergunta ("quanto posso pagar").
+  resultado.sort(
+    (a, b) =>
+      Number(classeDaConta(a.tipo) === "aplicado") -
+        Number(classeDaConta(b.tipo) === "aplicado") ||
+      a.nome.localeCompare(b.nome, "pt-BR"),
+  );
+
   return {
     contas: resultado,
+    resumo: resumoDaPosicao(resultado),
     totalSaldoInicial: resultado.reduce((s, c) => s + c.saldoInicial, 0),
     totalEntradas: resultado.reduce((s, c) => s + c.entradas, 0),
     totalSaidas: resultado.reduce((s, c) => s + c.saidas, 0),

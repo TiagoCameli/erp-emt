@@ -420,58 +420,56 @@ describe("drillGrupoInsumo", () => {
 });
 
 describe("drillFluxoCaixa", () => {
-  it("realizado vira recorte de fluxo pago", () => {
+  it("o clique na barra soma pago e previsto: situação `todos`", () => {
+    // A barra do mês corrente tem as duas metades; a lista tem de abrir com o
+    // mesmo número.
     expect(
-      params(drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true })),
+      params(drillFluxoCaixa({ mes: "2026-10", grupo: "operacao", sentido: "saida" })),
     ).toEqual({
-      recorte: "fluxo:2026-07:realizado:a_pagar",
+      recorte: "fluxo:2026-10:todos:operacao:saida",
       tipo: "a_pagar",
     });
   });
 
-  it("previsto vira recorte de fluxo previsto", () => {
+  it("realizado e previsto viajam quando escolhidos", () => {
     expect(
       params(
-        drillFluxoCaixa({ mes: "2026-07", serie: "a_receber", realizado: false }),
+        drillFluxoCaixa({
+          mes: "2026-07",
+          grupo: "operacao",
+          sentido: "entrada",
+          realizado: true,
+        }),
       ),
-    ).toEqual({
-      recorte: "fluxo:2026-07:previsto:a_receber",
-      tipo: "a_receber",
-    });
+    ).toEqual({ recorte: "fluxo:2026-07:realizado:operacao:entrada", tipo: "a_receber" });
+    expect(
+      params(
+        drillFluxoCaixa({
+          mes: "2026-11",
+          grupo: "divida",
+          sentido: "saida",
+          realizado: false,
+        }),
+      ),
+    ).toEqual({ recorte: "fluxo:2026-11:previsto:divida:saida", tipo: "a_pagar" });
   });
 
-  it("as séries de movimentação viajam no recorte, com o tipo do lado delas", () => {
-    // Desde a D1 o fluxo tem quatro séries. Clicar em "Amortizações" abre só as
-    // prestações, e nenhum filtro de natureza vai junto: o caixa inclui
-    // movimentação.
-    expect(
-      params(
-        drillFluxoCaixa({ mes: "2026-11", serie: "amortizacao", realizado: false }),
-      ),
-    ).toEqual({
-      recorte: "fluxo:2026-11:previsto:amortizacao",
-      tipo: "a_pagar",
-    });
-    const tomado = params(
-      drillFluxoCaixa({
-        mes: "2026-07",
-        serie: "emprestimo_tomado",
-        realizado: true,
-      }),
+  it("o grupo vai no recorte e nenhum filtro de natureza vai junto", () => {
+    // O grupo JÁ é a natureza, resolvida pelo banco: um `sem_investimento` a
+    // mais cortaria o próprio CAPEX que se clicou.
+    const capex = params(
+      drillFluxoCaixa({ mes: "2026-07", grupo: "investimento", sentido: "saida" }),
     );
-    expect(tomado).toEqual({
-      recorte: "fluxo:2026-07:realizado:emprestimo_tomado",
-      tipo: "a_receber",
-    });
-    expect(tomado.sem_movimentacao).toBeUndefined();
-    expect(tomado.sem_investimento).toBeUndefined();
+    expect(capex.recorte).toBe("fluxo:2026-07:todos:investimento:saida");
+    expect(capex.sem_movimentacao).toBeUndefined();
+    expect(capex.sem_investimento).toBeUndefined();
   });
 
   it("não manda mes de competência num drill de caixa", () => {
     // Regime de CAIXA: `mes` é competência, e mandá-lo aqui daria outra lista sem
     // erro nenhum. O recorte carrega o mês do caixa, que é coisa diferente.
     const p = params(
-      drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true }),
+      drillFluxoCaixa({ mes: "2026-07", grupo: "operacao", sentido: "saida" }),
     );
     expect(p.mes).toBeUndefined();
     expect(p.venc_de).toBeUndefined();
@@ -486,13 +484,13 @@ describe("drillFluxoCaixa", () => {
       params(
         drillFluxoCaixa({
           mes: "2026-07",
-          serie: "a_pagar",
-          realizado: true,
+          grupo: "operacao",
+          sentido: "saida",
           centroIds: [CENTRO, OUTRO_CENTRO],
         }),
       ),
     ).toEqual({
-      recorte: "fluxo:2026-07:realizado:a_pagar",
+      recorte: "fluxo:2026-07:todos:operacao:saida",
       tipo: "a_pagar",
       centro: `${CENTRO},${OUTRO_CENTRO}`,
     });
@@ -505,8 +503,8 @@ describe("drillFluxoCaixa", () => {
     const p = params(
       drillFluxoCaixa({
         mes: "2026-07",
-        serie: "a_receber",
-        realizado: false,
+        grupo: "operacao",
+        sentido: "entrada",
         centroIds: [],
       }),
     );
@@ -673,7 +671,7 @@ describe("corte de resultado nos drills", () => {
   });
 
   const DE_CAIXA: [string, string][] = [
-    ["fluxo de caixa", drillFluxoCaixa({ mes: "2026-07", serie: "a_pagar", realizado: true })],
+    ["fluxo de caixa", drillFluxoCaixa({ mes: "2026-07", grupo: "operacao", sentido: "saida" })],
     ["aging", drillAging({ faixa: "v_1_7", tipo: "a_pagar" })],
     ["posição bancária", drillContaBancaria({ contaId: CONTA, tipo: "a_pagar" })],
   ];

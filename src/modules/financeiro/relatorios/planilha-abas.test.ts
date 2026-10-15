@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 
+import { resumoDaPosicao } from "@/modules/financeiro/relatorios/posicao-bancaria";
 import { LINHAS_CABECALHO_MARCA } from "@/lib/planilha-marca";
 import {
   abaAging,
@@ -164,19 +165,30 @@ describe("aba do DRE", () => {
 });
 
 describe("aba da posição bancária", () => {
-  const dados = {
-    contas: [
-      {
-        contaId: "c1",
-        nome: "BANCO DO BRASIL 102.124-9",
-        banco: "Banco do Brasil",
-        saldoInicial: 155484.34,
-        saldoInicialData: "2026-08-21",
-        entradas: 906000,
-        saidas: 932631.66,
-        saldoAtual: 128852.68,
+  const contas = [
+    {
+      contaId: "c1",
+      nome: "BANCO DO BRASIL 102.124-9",
+      banco: "Banco do Brasil",
+      tipo: "corrente",
+      extrato: {
+        data: "2026-10-08",
+        saldoExtrato: 0,
+        movimentoDepois: -640000,
+        lancamentosDepois: 3,
+        saldoNaData: 0,
+        diferencaNaData: 0,
       },
-    ],
+      saldoInicial: 155484.34,
+      saldoInicialData: "2026-08-21",
+      entradas: 906000,
+      saidas: 932631.66,
+      saldoAtual: 128852.68,
+    },
+  ];
+  const dados = {
+    contas,
+    resumo: resumoDaPosicao(contas),
     totalSaldoInicial: 155484.34,
     totalEntradas: 906000,
     totalSaidas: 932631.66,
@@ -194,6 +206,15 @@ describe("aba da posição bancária", () => {
       new Date(Date.UTC(2026, 7, 21)),
     );
     expect(celula(1, "Saldo atual")).toBe(128852.68);
+  });
+
+  it("leva a classe e a conferência contra o último extrato", async () => {
+    const { celula } = await ler(abaPosicaoBancaria(dados));
+
+    expect(celula(1, "Classe")).toBe("Disponível");
+    expect(celula(1, "Último extrato em")).toEqual(new Date(Date.UTC(2026, 9, 8)));
+    expect(celula(1, "Lançado depois do extrato")).toBe(-640000);
+    expect(celula(1, "Diferença na data do extrato")).toBe(0);
   });
 
   it("o rótulo do total avisa da transferência entre contas", async () => {

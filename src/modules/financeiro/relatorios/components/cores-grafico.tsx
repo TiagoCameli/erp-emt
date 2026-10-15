@@ -1,3 +1,5 @@
+import type { GrupoFluxo } from "@/modules/financeiro/lancamentos/recorte";
+
 /**
  * Cor e animação dos gráficos dos relatórios do Financeiro.
  *
@@ -20,6 +22,12 @@ export type EntidadeGrafico =
   | "amortizacao"
   | "juros_divida"
   | "parcela_consorcio"
+  | "fluxo_operacao"
+  | "fluxo_investimento"
+  | "fluxo_socios"
+  | "fluxo_divida"
+  | "fluxo_aplicacao"
+  | "saldo_com_aplicado"
   | "agregado";
 
 /**
@@ -70,8 +78,35 @@ export const COR_ENTIDADE: Record<EntidadeGrafico, string> = {
    */
   juros_divida: "var(--viz-custo)",
   parcela_consorcio: "var(--viz-financiamento)",
+  /**
+   * Os cinco grupos do fluxo de caixa (15/10/2026). Cada grupo é UMA cor nos
+   * dois lados do zero: o lado diz entrada ou saída, a cor diz de onde veio o
+   * dinheiro. A operação fica com o verde da marca (é o que a tela mais mostra);
+   * a dívida com o roxo do financiamento, o mesmo de antes; o CAPEX com o azul
+   * da produção (máquina que vai produzir); sócios com o asfalto; e as
+   * aplicações com o laranja.
+   */
+  fluxo_operacao: "var(--color-chart-1)",
+  fluxo_investimento: "var(--viz-producao)",
+  fluxo_socios: "var(--color-chart-3)",
+  fluxo_divida: "var(--viz-financiamento)",
+  fluxo_aplicacao: "var(--viz-custo)",
+  /** O saldo projetado contando o aplicado: o âmbar do saldo, tracejado. */
+  saldo_com_aplicado: "var(--color-chart-2)",
   /** "Outros" e afins: um agregado não é uma entidade, e não clica. */
   agregado: "var(--color-status-rascunho)",
+};
+
+/**
+ * A cor de cada grupo do fluxo, a mesma no gráfico, na ponte e nos dois lados
+ * do zero. Aqui, e não no gráfico, porque a ponte não carrega o Recharts.
+ */
+export const ENTIDADE_DO_GRUPO: Record<GrupoFluxo, EntidadeGrafico> = {
+  operacao: "fluxo_operacao",
+  investimento: "fluxo_investimento",
+  socios: "fluxo_socios",
+  divida: "fluxo_divida",
+  aplicacao: "fluxo_aplicacao",
 };
 
 /** Quanto da cor cheia sobra no tom de "ainda não aconteceu". */
