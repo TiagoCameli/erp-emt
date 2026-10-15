@@ -14,6 +14,7 @@ import {
   pontoNoKm,
   resolverDestino,
   rumo,
+  sugereAjuste,
 } from "@/modules/mapa/geo";
 import type {
   AreaMapa,
@@ -199,5 +200,70 @@ describe("cor hex", () => {
     expect(hexParaRgb("#3E7744")).toEqual([62, 119, 68]);
     expect(hexParaRgb("cf943a")).toEqual([207, 148, 58]);
     expect(hexParaRgb("")).toEqual([69, 70, 75]);
+  });
+});
+
+describe("ajuste de localização x transferência (sugestão da confirmação)", () => {
+  const ctx = {
+    trechos: [medirTrecho(trecho)],
+    areas: [area],
+    localidades: [local, oficina],
+    snapTracadoM: 300,
+    snapLocalM: 300,
+  };
+  const naPista = deslocar([-72.45, -7.7], 0, 40);
+  const atualNaPista = {
+    pos: naPista,
+    trechoId: "t1",
+    km: 705.5,
+    areaId: null,
+    localidadeId: null,
+  };
+
+  it("mesmo trecho a menos de 1 km sugere ajuste; a mais de 1 km, transferência", () => {
+    const perto = resolverDestino(deslocar(naPista, 90, 400), ctx);
+    expect(sugereAjuste(atualNaPista, perto)).toBe(true);
+    const longe = resolverDestino(deslocar(naPista, 90, 2500), ctx);
+    expect(sugereAjuste(atualNaPista, longe)).toBe(false);
+  });
+
+  it("mesmo pátio sugere ajuste; sair do pátio para a pista é transferência", () => {
+    const noPatio = deslocar(local.pos, 90, 120);
+    const atualNoPatio = {
+      pos: noPatio,
+      trechoId: null,
+      km: null,
+      areaId: null,
+      localidadeId: local.id,
+    };
+    expect(
+      sugereAjuste(
+        atualNoPatio,
+        resolverDestino(deslocar(local.pos, 0, 100), ctx),
+      ),
+    ).toBe(true);
+    expect(sugereAjuste(atualNoPatio, resolverDestino(naPista, ctx))).toBe(
+      false,
+    );
+  });
+
+  it("livre perto de onde estava é ajuste; quem nunca foi posicionada não tem ajuste", () => {
+    const livre: [number, number] = [-73.5, -8.5];
+    const atualLivre = {
+      pos: livre,
+      trechoId: null,
+      km: null,
+      areaId: null,
+      localidadeId: null,
+    };
+    expect(
+      sugereAjuste(atualLivre, resolverDestino(deslocar(livre, 0, 150), ctx)),
+    ).toBe(true);
+    expect(
+      sugereAjuste(atualLivre, resolverDestino(deslocar(livre, 0, 900), ctx)),
+    ).toBe(false);
+    expect(
+      sugereAjuste({ ...atualLivre, pos: null }, resolverDestino(livre, ctx)),
+    ).toBe(false);
   });
 });

@@ -97,6 +97,7 @@ export async function moverEquipamentos(
     itens,
     data,
     motivo,
+    ajuste,
     deslocamento,
     conserto_motivo,
     conserto_previsao,
@@ -109,7 +110,8 @@ export async function moverEquipamentos(
       if (vistos.has(item.id)) continue;
       vistos.add(item.id);
       const destino: Record<string, unknown> = { lng: item.lng, lat: item.lat };
-      if (item.estado) destino.estado = item.estado;
+      if (ajuste) destino.ajuste = true;
+      else if (item.estado) destino.estado = item.estado;
       if (deslocamento) destino.deslocamento = deslocamento;
       if (conserto_motivo) destino.conserto_motivo = conserto_motivo;
       if (conserto_previsao) destino.conserto_previsao = conserto_previsao;

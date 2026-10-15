@@ -541,7 +541,7 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
   );
 
   const confirmarTransferencia = React.useCallback(
-    async ({ data, motivo, estadoLivre }: ConfirmacaoTransferencia) => {
+    async ({ data, motivo, estadoLivre, ajuste }: ConfirmacaoTransferencia) => {
       if (!pendente) return true;
       setSalvando(true);
       try {
@@ -552,20 +552,28 @@ export function TelaMapa({ inicial, google, permissoes }: TelaMapaProps) {
               id: it.equipamento.id,
               lng: pos[0],
               lat: pos[1],
-              estado: it.destino.tipo === "livre" ? estadoLivre : undefined,
+              estado:
+                !ajuste && it.destino.tipo === "livre"
+                  ? estadoLivre
+                  : undefined,
             };
           }),
           data,
           motivo: motivo || undefined,
+          ajuste: ajuste || undefined,
         });
         const n = pendente.itens.length;
         const ok = aplicar(
           r,
           pendente.modo === "posicionar"
             ? `${pendente.principal.codigo} posicionada`
-            : n > 1
-              ? `${n} equipamentos transferidos`
-              : `${pendente.principal.codigo} transferida`,
+            : ajuste
+              ? n > 1
+                ? `Localização de ${n} equipamentos ajustada`
+                : `Localização de ${pendente.principal.codigo} ajustada`
+              : n > 1
+                ? `${n} equipamentos transferidos`
+                : `${pendente.principal.codigo} transferida`,
         );
         if (ok) {
           setPendente(null);

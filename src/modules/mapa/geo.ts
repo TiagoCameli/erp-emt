@@ -317,6 +317,53 @@ export function resolverDestino(
   return { tipo: "livre", pos: p, estado: null };
 }
 
+/** Até quanto o ponto anda no mesmo trecho e ainda é só correção (não é outra frente). */
+export const AJUSTE_MAX_KM = 1;
+/** Fora de zona, quanto o ponto anda e ainda é só correção. */
+export const AJUSTE_MAX_LIVRE_M = 300;
+
+/** Onde a máquina está hoje, no que interessa para separar ajuste de transferência. */
+export interface LugarAtual {
+  pos: Posicao | null;
+  trechoId: string | null;
+  km: number | null;
+  areaId: string | null;
+  localidadeId: string | null;
+}
+
+/**
+ * Sugestão da confirmação: é só ajuste de localização (corrigir o ponto) quando a máquina
+ * continua na mesma zona: mesma área, mesmo local, mesmo trecho a até 1 km, ou fora de zona a
+ * até 300 m. Mudar de zona é transferência. Quem nunca foi posicionada não tem ajuste. A pessoa
+ * pode trocar na confirmação; quem grava a diferença é a RPC (`ajuste` no destino).
+ */
+export function sugereAjuste(
+  atual: LugarAtual,
+  destino: DestinoResolvido,
+): boolean {
+  if (!atual.pos) return false;
+  switch (destino.tipo) {
+    case "area":
+      return atual.areaId === destino.area.id;
+    case "localidade":
+      return atual.areaId === null && atual.localidadeId === destino.local.id;
+    case "trecho":
+      return (
+        atual.areaId === null &&
+        atual.trechoId === destino.trecho.id &&
+        atual.km !== null &&
+        Math.abs(atual.km - destino.km) <= AJUSTE_MAX_KM
+      );
+    default:
+      return (
+        atual.areaId === null &&
+        atual.localidadeId === null &&
+        atual.trechoId === null &&
+        distanciaM(atual.pos, destino.pos) <= AJUSTE_MAX_LIVRE_M
+      );
+  }
+}
+
 export const formatarKm = (km: number): string =>
   km.toFixed(1).replace(".", ",");
 export const formatarMetros = (m: number): string => `${Math.round(m)} m`;
