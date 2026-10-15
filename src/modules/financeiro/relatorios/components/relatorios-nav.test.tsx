@@ -55,7 +55,7 @@ describe("RelatoriosNav em Relatórios", () => {
     salvarQuerySessao(RELATORIOS, navegador.query);
     render(<RelatoriosNav ativo="dre" investimentosEmAplicacoes />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Investimentos/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Aplicações/ }));
 
     expect(navegador.push).toEqual(["/financeiro/aplicacoes"]);
     expect(navegador.replace).toEqual([]);
@@ -65,7 +65,7 @@ describe("RelatoriosNav em Relatórios", () => {
   it("sem a aba Aplicações, Investimentos continua sendo o relatório", () => {
     render(<RelatoriosNav ativo="dre" />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Investimentos/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Aplicações/ }));
 
     expect(navegador.push).toEqual([]);
     expect(navegador.replace).toEqual([`${RELATORIOS}?rel=investimentos`]);
@@ -105,7 +105,7 @@ describe("RelatoriosNav em Aplicações", () => {
     render(<RelatoriosNav ativo="investimentos" investimentosEmAplicacoes />);
 
     expect(
-      screen.getByRole("button", { name: /Investimentos/ }).getAttribute("aria-current"),
+      screen.getByRole("button", { name: /Aplicações/ }).getAttribute("aria-current"),
     ).toBe("page");
   });
 
@@ -131,7 +131,7 @@ describe("RelatoriosNav em Aplicações", () => {
   it("clicar na própria aba não navega", () => {
     render(<RelatoriosNav ativo="investimentos" investimentosEmAplicacoes />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Investimentos/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Aplicações/ }));
 
     expect(navegador.push).toEqual([]);
     expect(navegador.replace).toEqual([]);

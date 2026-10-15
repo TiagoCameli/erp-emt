@@ -145,6 +145,74 @@ export function vencidoAging(lista: AgingFaixa[]): number {
     .reduce((soma, f) => soma + f.valor, 0);
 }
 
+/**
+ * O "a vencer" quebrado pelo prazo (fn_rel_aging.faixa_prazo). Sem isso o aging
+ * mostra um bloco único de "a vencer" que mistura o boleto de amanhã com a
+ * prestação de 2031, e a pergunta do dia ("o que pago este mês?") fica sem
+ * resposta.
+ */
+export type PrazoAVencer = "ate_7" | "d_8_15" | "d_16_30" | "d_31_60" | "acima_60";
+
+export const ORDEM_PRAZO_A_VENCER: PrazoAVencer[] = [
+  "ate_7",
+  "d_8_15",
+  "d_16_30",
+  "d_31_60",
+  "acima_60",
+];
+
+export const ROTULO_PRAZO_A_VENCER: Record<PrazoAVencer, string> = {
+  ate_7: "Vence em até 7 dias",
+  d_8_15: "Vence em 8 a 15 dias",
+  d_16_30: "Vence em 16 a 30 dias",
+  d_31_60: "Vence em 31 a 60 dias",
+  acima_60: "Vence depois de 60 dias",
+};
+
+/** Os prazos que somam "os próximos 30 dias". */
+const PRAZOS_ATE_30 = new Set<PrazoAVencer>(["ate_7", "d_8_15", "d_16_30"]);
+
+export interface PrazoFaixa {
+  prazo: PrazoAVencer;
+  rotulo: string;
+  valor: number;
+}
+
+/** Uma linha a vencer do banco, com o prazo em texto livre. */
+export interface LinhaPrazoAVencer {
+  prazo: string;
+  valor: number | string | null | undefined;
+}
+
+/**
+ * Soma o a vencer por prazo, com os cinco prazos sempre presentes. Prazo que a
+ * lista não conhece vai para "depois de 60 dias": somar no prazo mais longo
+ * nunca faz uma conta parecer mais urgente do que é, e a linha não some.
+ */
+export function agregarPrazoAVencer(linhas: LinhaPrazoAVencer[]): PrazoFaixa[] {
+  const porPrazo = new Map<PrazoAVencer, number>();
+  for (const linha of linhas) {
+    const prazo = (ORDEM_PRAZO_A_VENCER as string[]).includes(linha.prazo)
+      ? (linha.prazo as PrazoAVencer)
+      : "acima_60";
+    porPrazo.set(prazo, (porPrazo.get(prazo) ?? 0) + paraCentavos(linha.valor));
+  }
+  return ORDEM_PRAZO_A_VENCER.map((prazo) => ({
+    prazo,
+    rotulo: ROTULO_PRAZO_A_VENCER[prazo],
+    valor: paraReais(porPrazo.get(prazo) ?? 0),
+  }));
+}
+
+/** O que vence nos próximos 30 dias, sem o vencido (que tem cartão próprio). */
+export function aVencerEm30Dias(lista: PrazoFaixa[]): number {
+  return paraReais(
+    lista
+      .filter((f) => PRAZOS_ATE_30.has(f.prazo))
+      .reduce((soma, f) => soma + paraCentavos(f.valor), 0),
+  );
+}
+
 // =====================================================================
 // Soma por categoria (base do DRE)
 // =====================================================================

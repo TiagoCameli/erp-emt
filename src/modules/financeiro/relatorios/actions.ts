@@ -30,6 +30,7 @@ import {
   type ParametrosUrl,
 } from "@/modules/financeiro/relatorios/filtros-periodo";
 import { lerFornecedoresDaUrl } from "@/modules/financeiro/relatorios/extrato-filtros";
+import { lerPeriodoFornecedores } from "@/modules/financeiro/relatorios/fornecedores-ranking";
 import {
   abaAging,
   abaInvestimentos,
@@ -40,6 +41,8 @@ import {
   abaExtratoFornecedor,
   abaFluxoCaixa,
   abaPosicaoBancaria,
+  abaRankingFornecedores,
+  abasSociosLigadas,
 } from "@/modules/financeiro/relatorios/planilha-abas";
 import {
   montarPlanilhaDeRelatorio,
@@ -57,10 +60,13 @@ import {
   extratoPorFornecedor,
   fluxoCaixa,
   mesCorrente,
+  mesFechado,
   listarCentrosCustoParaFiltro,
   mesesDeCompetencia,
   posicaoBancaria,
   primeirosMesesDosCentros,
+  rankingFornecedores,
+  relatorioSociosLigadas,
 } from "@/modules/financeiro/relatorios/queries";
 import { lerPeriodoInvestimentos } from "@/modules/financeiro/relatorios/investimentos";
 import type { RelatorioId } from "@/modules/financeiro/relatorios/relatorios";
@@ -240,7 +246,7 @@ async function abaDoRelatorio(
     }
 
     case "dre": {
-      const escolha = lerPeriodoDaUrl(params, mesCorrente());
+      const escolha = lerPeriodoDaUrl(params, mesFechado());
       // O DRE precisa das duas pontas FECHADAS: `fn_rel_dre` não tem default
       // nem guarda de nulo, então "tudo" vira o primeiro e o último mês que
       // existem de verdade — não uma data inventada com folga, que traria mês
@@ -272,7 +278,7 @@ async function abaDoRelatorio(
     }
 
     case "custo-cc": {
-      const { filtros } = lerFiltrosCustoCc(params, mesCorrente());
+      const { filtros } = lerFiltrosCustoCc(params, mesFechado());
       // A escada de centro vira a lista que a RPC aceita: a etapa escolhida
       // SUBSTITUI a raiz, e o banco filtra pela subárvore do que receber.
       const centroIds = centrosEfetivos(
@@ -340,7 +346,7 @@ async function abaDoRelatorio(
     }
 
     case "custo-grupo": {
-      const filtros = lerFiltrosCustoGrupo(params, mesCorrente());
+      const filtros = lerFiltrosCustoGrupo(params, mesFechado());
       const periodo = periodoDoModo(filtros);
       const dados = await custoPorGrupo({
         ...pontasDaRpc(periodo),
@@ -361,7 +367,14 @@ async function abaDoRelatorio(
       );
     }
 
-    case "socios-ligadas":
+    case "socios-ligadas": {
+      // Três abas (sócios, sócios mês a mês, ligadas) numa escrita só: o
+      // contrato desta função é uma escrita por relatório.
+      const abas = abasSociosLigadas(await relatorioSociosLigadas());
+      return (workbook) => {
+        for (const escrever of abas) escrever(workbook);
+      };
+    }
     case "aquisicoes":
     case "custos-indiretos":
     case "rateio-indireto":
@@ -371,9 +384,14 @@ async function abaDoRelatorio(
     case "extrato-fornecedor": {
       const fornecedorIds = lerFornecedoresDaUrl(params.fornecedor);
       if (fornecedorIds.length === 0) {
-        // Sem fornecedor escolhido a tela não mostra extrato nenhum, então
-        // exportar traria a base inteira de a pagar com a cara de um extrato.
-        return null;
+        // Sem fornecedor escolhido a tela mostra o RANKING, e é ele que vai para
+        // a planilha (a base inteira de a pagar com cara de extrato, não).
+        const escolha = lerPeriodoFornecedores(params, mesCorrente());
+        const periodo = periodoDoModo(escolha);
+        return abaRankingFornecedores(
+          await rankingFornecedores(pontasDaRpc(periodo)),
+          descreverPeriodo(periodo, escolha.modo),
+        );
       }
       return abaExtratoFornecedor(
         await extratoPorFornecedor({ fornecedorIds }),

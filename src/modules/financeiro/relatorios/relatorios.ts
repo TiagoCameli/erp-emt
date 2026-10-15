@@ -33,20 +33,62 @@ export type RelatorioId =
 
 /** Ordem dos relatórios na navegação. */
 export const RELATORIOS: readonly RelatorioId[] = [
-  "fluxo-caixa",
   "dre",
-  "aging",
-  "posicao-bancaria",
-  "investimentos",
-  "custo-cc",
   "custo-receita",
+  "custo-cc",
+  "fluxo-caixa",
+  "posicao-bancaria",
+  "aging",
+  "investimentos",
   "custo-grupo",
-  "extrato-fornecedor",
-  "socios-ligadas",
-  "aquisicoes",
   "custos-indiretos",
   "rateio-indireto",
+  "extrato-fornecedor",
+  "aquisicoes",
+  "socios-ligadas",
 ];
+
+
+/**
+ * Os relatórios agrupados pela pergunta de quem abre a tela. Treze botões em
+ * fila não dizem por onde começar; quatro grupos dizem. A ordem de `RELATORIOS`
+ * é a destes grupos lidos em sequência (teste em relatorios-grupos.test.ts).
+ */
+export const GRUPOS_RELATORIOS: readonly {
+  titulo: string;
+  relatorios: readonly RelatorioId[];
+}[] = [
+  { titulo: "Resultado", relatorios: ["dre", "custo-receita", "custo-cc"] },
+  {
+    titulo: "Caixa",
+    relatorios: ["fluxo-caixa", "posicao-bancaria", "aging", "investimentos"],
+  },
+  {
+    titulo: "Custo",
+    relatorios: ["custo-grupo", "custos-indiretos", "rateio-indireto", "extrato-fornecedor"],
+  },
+  { titulo: "Patrimônio e sócios", relatorios: ["aquisicoes", "socios-ligadas"] },
+];
+
+/**
+ * A pergunta que cada relatório responde, em uma linha. Abre a seção; o
+ * "como a conta é feita" fica recolhido embaixo dela.
+ */
+export const PERGUNTA_DO_RELATORIO: Record<RelatorioId, string> = {
+  dre: "A empresa deu lucro no período? Quanto de cada real recebido sobrou?",
+  "custo-receita": "Quanto cada obra faturou, quanto custou e qual a margem?",
+  "custo-cc": "Onde o dinheiro foi gasto, centro por centro?",
+  "fluxo-caixa": "Quanto a operação gerou, para onde foi o resto e como fica o saldo nos próximos meses?",
+  "posicao-bancaria": "Quanto há disponível e aplicado hoje, e cada conta bate com o extrato?",
+  aging: "Quanto está vencido e quanto vence nos próximos dias?",
+  investimentos: "Quanto está aplicado e quanto rendeu?",
+  "custo-grupo": "O custo foi para material, mão de obra ou equipamento?",
+  "custos-indiretos": "Quanto custa manter o escritório e a manutenção, mês a mês?",
+  "rateio-indireto": "Quanto do custo indireto cada obra carrega neste mês?",
+  "extrato-fornecedor": "Quanto devo e quanto já paguei a cada fornecedor?",
+  aquisicoes: "Quanto custou cada máquina e quanto falta pagar?",
+  "socios-ligadas": "Quanto foi para os sócios e para as empresas ligadas, e quanto voltou?",
+};
 
 export const RELATORIO_PADRAO: RelatorioId = "fluxo-caixa";
 

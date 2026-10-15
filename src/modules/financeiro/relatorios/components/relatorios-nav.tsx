@@ -25,8 +25,8 @@ import {
 } from "@/components/canonicos/filtros-sessao";
 import { cn } from "@/lib/utils";
 import {
+  GRUPOS_RELATORIOS,
   PARAM_RELATORIO,
-  RELATORIOS,
   type RelatorioId,
 } from "@/modules/financeiro/relatorios/relatorios";
 
@@ -46,7 +46,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     dre: { rotulo: "DRE gerencial", icone: Scale },
     aging: { rotulo: "Aging", icone: CalendarClock },
     "posicao-bancaria": { rotulo: "Posição bancária", icone: Banknote },
-    investimentos: { rotulo: "Investimentos", icone: PiggyBank },
+    investimentos: { rotulo: "Aplicações", icone: PiggyBank },
     "custo-cc": { rotulo: "Custo por centro de custo", icone: Building2 },
     "custo-receita": { rotulo: "Custo x receita", icone: Scale3d },
     "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
@@ -108,29 +108,39 @@ export function RelatoriosNav({
   return (
     <nav
       aria-label="Relatórios financeiros"
-      className="flex flex-wrap items-center gap-1"
+      className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,auto)] xl:justify-start"
     >
-      {RELATORIOS.map((id) => {
-        const { rotulo, icone: Icone } = APRESENTACAO[id];
-        const selecionado = id === ativo;
-        return (
-          <button
-            key={id}
-            type="button"
-            aria-current={selecionado ? "page" : undefined}
-            onClick={() => abrir(id)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
-              selecionado
-                ? "border-primary/30 bg-primary/10 font-medium text-primary"
-                : "border-border bg-card text-muted-foreground hover:bg-surface hover:text-foreground",
-            )}
-          >
-            <Icone className="size-4" aria-hidden="true" />
-            {rotulo}
-          </button>
-        );
-      })}
+      {GRUPOS_RELATORIOS.map((grupo) => (
+        <div key={grupo.titulo} className="flex min-w-0 flex-col gap-1.5">
+          <span className="text-legenda font-medium uppercase tracking-wide text-muted-foreground">
+            {grupo.titulo}
+          </span>
+          <ul className="flex flex-wrap gap-1">
+            {grupo.relatorios.map((id) => {
+              const { rotulo, icone: Icone } = APRESENTACAO[id];
+              const selecionado = id === ativo;
+              return (
+                <li key={id}>
+                  <button
+                    type="button"
+                    aria-current={selecionado ? "page" : undefined}
+                    onClick={() => abrir(id)}
+                    className={cn(
+                      "foco-anel inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-detalhe transition-colors",
+                      selecionado
+                        ? "border-primary/30 bg-primary/10 font-medium text-primary"
+                        : "border-border bg-card text-muted-foreground hover:bg-surface hover:text-foreground",
+                    )}
+                  >
+                    <Icone className="size-4" aria-hidden="true" />
+                    {rotulo}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }

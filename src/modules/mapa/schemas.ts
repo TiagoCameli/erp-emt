@@ -71,6 +71,8 @@ export const moverEquipamentosSchema = z.strictObject({
     .max(200),
   data: dataSchema,
   motivo: motivoOpcional,
+  /** Só corrige o ponto no mapa: não é transferência (estado, obra e frente ficam). */
+  ajuste: z.boolean().optional(),
   deslocamento: deslocamentoSchema,
   conserto_motivo: z.string().trim().max(TEXTO_CURTO).optional(),
   conserto_previsao: dataOpcional,
