@@ -22,6 +22,7 @@
     "@googlemaps/js-api-loader": "^1.16.10",
     "@hookform/resolvers": "^5.4.0",
     "@loaders.gl/gltf": "^4.5.4",
+    "@luma.gl/engine": "~9.4.2",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "@tanstack/react-table": "^8.21.3",

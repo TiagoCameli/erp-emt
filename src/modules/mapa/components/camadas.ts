@@ -10,9 +10,16 @@ import {
   ScatterplotLayer,
   TextLayer,
 } from "@deck.gl/layers";
-import { ScenegraphLayer } from "@deck.gl/mesh-layers";
+import { ScenegraphLayer, SimpleMeshLayer } from "@deck.gl/mesh-layers";
+import {
+  ConeGeometry,
+  CubeGeometry,
+  CylinderGeometry,
+  type Geometry,
+} from "@luma.gl/engine";
 
 import { hexParaRgb, type TrechoMedido } from "@/modules/mapa/geo";
+import type { FormaObjeto, ObjetoMapa } from "@/modules/mapa/objetos";
 import { COR_AREA, COR_ESTADO, type Rgb } from "@/modules/mapa/rotulos";
 import type {
   AreaMapa,
@@ -58,6 +65,39 @@ export interface RotuloObra {
 /** Anel de giro da máquina selecionada. */
 export const ID_GIRO = "giro-anel";
 
+/**
+ * A partir de que zoom cada nome aparece (pedido do Tiago, 15/10/2026: "os nomes só quando estou
+ * mais próximo"). De longe ficam só os desenhos; as obras nomeiam primeiro, as máquinas por último.
+ */
+export const ZOOM_NOMES = {
+  obras: 10,
+  km: 11.5,
+  locais: 12.5,
+  areas: 13,
+  objetos: 14,
+  maquinas: 15,
+} as const;
+
+/** Nome do tanque, pilha ou depósito: tocar nele abre a ficha. */
+export const ID_OBJETOS = "objetos-nome";
+
+/** Objeto do Estoque que já tem lugar no mapa. */
+export type ObjetoNoMapa = ObjetoMapa & { pos: Posicao };
+
+/**
+ * Malhas de unidade, montadas uma vez: cilindro e cone com diâmetro 1 e altura 1, caixa 2×2×2
+ * (a do luma vai de -1 a 1). Vêm em pé no eixo Y; a camada deita para o Z do mapa.
+ */
+let malhas: Record<FormaObjeto, Geometry> | null = null;
+function malha(forma: FormaObjeto): Geometry {
+  malhas ??= {
+    cilindro: new CylinderGeometry({ radius: 0.5, height: 1, nradial: 40 }),
+    cone: new ConeGeometry({ radius: 0.5, height: 1, nradial: 40, cap: true }),
+    caixa: new CubeGeometry(),
+  };
+  return malhas[forma];
+}
+
 /** Nome da obra: tocar nele abre a ficha da obra. */
 export const ID_OBRAS = "obras-nome";
 
@@ -78,6 +118,8 @@ export interface Cena {
   obras: ObraNoMapa[];
   /** Nome de cada obra no mapa: no ponto, no meio do trecho ou no centro da área (clicável). */
   rotulosObra: RotuloObra[];
+  /** Tanques, pilhas e depósitos com lugar no mapa (3D gerado, sem arquivo de modelo). */
+  objetos: ObjetoNoMapa[];
   /** Anel de giro em volta da máquina selecionada: apertar e arrastar gira a máquina. */
   anelGiro: { id: string; pos: Posicao; raioM: number } | null;
   /** Obra sendo desenhada (pavimentação = linha, edificação = polígono): o rascunho. */
@@ -93,6 +135,8 @@ export interface Cena {
   mostrarAreas: boolean;
   /** Muda a cada arraste/seleção para o deck.gl reavaliar os accessors. */
   tick: number;
+  /** Zoom atual do mapa (degrau de meio nível): os nomes só aparecem de perto. */
+  zoom: number;
 }
 
 /** A luz: ambiente forte (sem sombra preta) e um sol de cima. Validado no spike. */
@@ -165,6 +209,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<AreaMapa>({
         id: "areas-nome",
+        visible: cena.zoom >= ZOOM_NOMES.areas,
         // Área de edificação de uma obra leva o nome da obra (rótulo da obra, clicável).
         data: cena.areas.filter(
           (a) => a.centro && !(a.tipo === "edificacao" && a.obraId),
@@ -207,6 +252,7 @@ export function montarCamadas(cena: Cena): Layer[] {
   camadas.push(
     new TextLayer<{ km: number; pos: Posicao }>({
       id: "marcos-km",
+      visible: cena.zoom >= ZOOM_NOMES.km,
       data: cena.marcos,
       getPosition: (d) => d.pos,
       getText: (d) => `km ${d.km}`,
@@ -238,6 +284,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     }),
     new TextLayer<LocalidadeMapa>({
       id: ID_LOCAIS,
+      visible: cena.zoom >= ZOOM_NOMES.locais,
       data: cena.localidades,
       getPosition: (d) => d.pos,
       getText: (d) => {
@@ -273,6 +320,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     }),
     new TextLayer<RotuloObra>({
       id: ID_OBRAS,
+      visible: cena.zoom >= ZOOM_NOMES.obras,
       data: cena.rotulosObra,
       getPosition: (d) => d.pos,
       getText: (d) => d.nome,
@@ -287,6 +335,54 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: true,
     }),
   );
+
+  // Tanques (cilindro), pilhas (cone) e depósitos (caixa) em pé no chão, na mesma escala das
+  // máquinas, e o nome de cada um (clicável: abre a ficha com "Mover no mapa").
+  for (const forma of ["cilindro", "cone", "caixa"] as const) {
+    const dados = cena.objetos.filter((o) => o.forma === forma);
+    if (dados.length === 0) continue;
+    // A caixa do luma tem 2 de lado; cilindro e cone, 1.
+    const unidade = forma === "caixa" ? 0.5 : 1;
+    camadas.push(
+      new SimpleMeshLayer<ObjetoNoMapa>({
+        id: `objetos-${forma}`,
+        data: dados,
+        mesh: malha(forma),
+        getPosition: (d) => d.pos,
+        getColor: (d) => d.cor,
+        // Malha em pé no Y: roll de 90° põe o Y no Z (para cima) do mapa.
+        getOrientation: [0, 0, 90],
+        getScale: (d) => [
+          d.largura * ESCALA_MAQUINA * unidade,
+          d.altura * ESCALA_MAQUINA * unidade,
+          d.comprimento * ESCALA_MAQUINA * unidade,
+        ],
+        // A malha nasce centrada: sobe meia altura para apoiar no chão.
+        getTranslation: (d) => [0, 0, (d.altura * ESCALA_MAQUINA) / 2],
+        pickable: false,
+      }),
+    );
+  }
+  if (cena.objetos.length > 0)
+    camadas.push(
+      new TextLayer<ObjetoNoMapa>({
+        id: ID_OBJETOS,
+        visible: cena.zoom >= ZOOM_NOMES.objetos,
+        data: cena.objetos,
+        getPosition: (d) => d.pos,
+        getText: (d) => d.nome,
+        getSize: 11,
+        getColor: BRANCO,
+        background: true,
+        getBackgroundColor: (d) => [...d.cor, 220],
+        backgroundPadding: [5, 2],
+        getPixelOffset: [0, 18],
+        fontFamily: FONTE,
+        characterSet: "auto",
+        pickable: true,
+        parameters: { depthCompare: "always" },
+      }),
+    );
 
   // Anel de giro: só o contorno (o miolo deixa a máquina clicável para arrastar), com mínimo em
   // pixels para dar para pegar mesmo de longe.
@@ -445,6 +541,7 @@ export function montarCamadas(cena: Cena): Layer[] {
     camadas.push(
       new TextLayer<EquipamentoMapa>({
         id: "rotulos",
+        visible: cena.zoom >= ZOOM_NOMES.maquinas,
         data: cena.equipamentos,
         getPosition: (d) => posicaoDe(cena, d),
         getText: (d) => d.codigo || d.descricao,

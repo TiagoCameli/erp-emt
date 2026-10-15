@@ -328,3 +328,12 @@ export type DesenharObraInput = z.infer<typeof desenharObraSchema>;
 export const tirarObraSchema = z.strictObject({
   obraId: idSchemaCom("Obra inválida"),
 });
+
+/** Põe ou move um tanque, pilha ou depósito do Estoque no mapa. */
+export const posicionarObjetoSchema = z.strictObject({
+  alvo: z.enum(["tanque", "pilha", "deposito"]),
+  id: idSchemaCom("Cadastro inválido"),
+  lng: longitudeSchema,
+  lat: latitudeSchema,
+});
+export type PosicionarObjetoInput = z.infer<typeof posicionarObjetoSchema>;

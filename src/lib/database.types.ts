@@ -11287,6 +11287,10 @@ export type Database = {
         Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
         Returns: number;
       };
+      fn_mapa_objeto_posicionar: {
+        Args: { p_alvo: string; p_id: string; p_lng: number; p_lat: number };
+        Returns: undefined;
+      };
       fn_mapa_obra_desenhar: {
         Args: {
           p_obra: string;
