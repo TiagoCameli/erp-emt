@@ -11114,6 +11114,56 @@ export type Database = {
         };
         Returns: Json;
       };
+      // Modulo Mapa (editado a mao em 15/10/2026, como as demais entradas fn_*
+      // spliced: o arquivo inteiro nao e regenerado). Assinaturas em
+      // supabase/migrations/20261014120000_modulo_mapa_v1.sql e ..._v1_3_tela.sql.
+      fn_mapa_assinalar_operador: {
+        Args: { p_equipamento: string; p_colaborador: string | null; p_motivo?: string | null };
+        Returns: undefined;
+      };
+      fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_locacao_encerrar: {
+        Args: { p_equipamento: string; p_fim?: string | null; p_medicao_fim?: number | null; p_motivo?: string | null };
+        Returns: undefined;
+      };
+      fn_mapa_locacao_iniciar: {
+        Args: {
+          p_equipamento: string | null;
+          p_fornecedor: string;
+          p_tipo_aluguel: string;
+          p_valor_unitario: number;
+          p_inicio?: string | null;
+          p_destino?: Json | null;
+          p_fim_previsto?: string | null;
+          p_medicao_inicio?: number | null;
+          p_observacao?: string | null;
+          p_novo?: Json | null;
+        };
+        Returns: string;
+      };
+      fn_mapa_marcar_estado: {
+        Args: {
+          p_id: string;
+          p_estado: string;
+          p_motivo: string;
+          p_descricao?: string | null;
+          p_deslocamento?: Json | null;
+          p_previsao?: string | null;
+        };
+        Returns: undefined;
+      };
+      fn_mapa_mover_colaboradores: {
+        Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
+        Returns: number;
+      };
+      fn_mapa_mover_equipamentos: {
+        Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
+        Returns: number;
+      };
+      fn_mapa_resolver_destino: {
+        Args: { p_lng: number; p_lat: number };
+        Returns: Json;
+      };
       fn_marcar_parcela_conferida: {
         Args: { p_conferido?: boolean; p_parcela_id: string };
         Returns: undefined;

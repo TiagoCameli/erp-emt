@@ -11,6 +11,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Map,
   Menu,
   Settings,
   ShoppingCart,
@@ -47,6 +48,7 @@ import { cn } from "@/lib/utils";
 
 export const MAPA_ICONES: Record<string, LucideIcon> = {
   gestao: LayoutDashboard,
+  mapa: Map,
   administracao: Settings,
   cadastros: FolderOpen,
   compras: ShoppingCart,
