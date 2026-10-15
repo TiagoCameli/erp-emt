@@ -3,6 +3,12 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 
+/** Um movimento da pilha: entrada ou saída (a transferência entre pilhas é uma de cada). */
+export interface PilhaMovimento {
+  data: string;
+  quantidade: number;
+}
+
 export interface PilhaLinha {
   id: string;
   nome: string;
@@ -18,15 +24,38 @@ export interface PilhaLinha {
   insumoId: string | null;
   insumoNome: string | null;
   unidade: string | null;
+  /** A entrada mais recente (pela data; no mesmo dia, a lançada por último). */
+  ultimaEntrada: PilhaMovimento | null;
+  /** A saída mais recente, inclusive a que levou o agregado para outra pilha. */
+  ultimaSaida: PilhaMovimento | null;
 }
 
-/** Todas as pilhas, as inativas também (a tela filtra). Material e saldo vêm do cache do banco. */
+function primeiroMovimento(linhas: { data: string; quantidade: number | string }[] | null): PilhaMovimento | null {
+  const linha = linhas?.[0];
+  return linha ? { data: linha.data, quantidade: Number(linha.quantidade) } : null;
+}
+
+/**
+ * Todas as pilhas, as inativas também (a tela filtra). Material e saldo vêm do cache do banco.
+ * O último movimento vem do embed com `limit(1)` por pilha: o fluxo é constante, e ler todos os
+ * movimentos para achar o último cresceria sem parar.
+ */
 export async function listarPilhas(): Promise<PilhaLinha[]> {
   const supabase = await createClient();
   const { linhas, erro } = await todasAsLinhas((de, ate) =>
     supabase
       .from("estoque_pilhas")
-      .select("id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla))")
+      .select(
+        "id, nome, observacoes, ativo, zerada_em, saldo, total_entrada, insumo_id, insumos(nome, unidades_medida(sigla)), estoque_entradas(data, quantidade), estoque_saidas(data, quantidade)",
+      )
+      .is("estoque_entradas.excluido_em", null)
+      .order("data", { referencedTable: "estoque_entradas", ascending: false })
+      .order("created_at", { referencedTable: "estoque_entradas", ascending: false })
+      .limit(1, { referencedTable: "estoque_entradas" })
+      .is("estoque_saidas.excluido_em", null)
+      .order("data", { referencedTable: "estoque_saidas", ascending: false })
+      .order("created_at", { referencedTable: "estoque_saidas", ascending: false })
+      .limit(1, { referencedTable: "estoque_saidas" })
       .order("nome")
       .order("id")
       .range(de, ate),
@@ -44,5 +73,7 @@ export async function listarPilhas(): Promise<PilhaLinha[]> {
     insumoId: linha.insumo_id,
     insumoNome: linha.insumos?.nome ?? null,
     unidade: linha.insumos?.unidades_medida?.sigla ?? null,
+    ultimaEntrada: primeiroMovimento(linha.estoque_entradas),
+    ultimaSaida: primeiroMovimento(linha.estoque_saidas),
   }));
 }
