@@ -100,8 +100,11 @@ export function FichaEquipamento({
   const podeEditar = permissoes.editar;
   const desde =
     e.estado === "sem_posicao" ? null : textoDesde(e.estadoDesde, hoje);
-  const podeMudarEstado =
-    podeEditar && e.estado !== "fora_funcionamento" && e.pos !== null;
+  // Fora de funcionamento imposto pelo cadastro não se desfaz no mapa; o marcado na ficha, sim.
+  const foraPeloCadastro =
+    e.estado === "fora_funcionamento" &&
+    e.estadoMarcado !== "fora_funcionamento";
+  const podeMudarEstado = podeEditar && !foraPeloCadastro && e.pos !== null;
   const onde = [
     e.trechoNome && e.km !== null
       ? `${e.trechoNome} · km ${formatarKm(e.km)}`

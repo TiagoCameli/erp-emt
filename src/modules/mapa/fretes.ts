@@ -65,13 +65,14 @@ export function pontoNaRota(
 
 /**
  * A marcação da ficha feita depois da saída do frete vence o frete quando tira a carreta da
- * estrada: parado, quebrado na obra ou em conserto. Operando NÃO vence (Tiago, 16/10/2026:
+ * estrada: parado, quebrado na obra, em conserto ou fora de funcionamento. Operando NÃO vence (Tiago, 16/10/2026:
  * "carreta operando quer dizer que está em rota"), e em rota é o próprio frete.
  */
 const ESTADOS_QUE_TIRAM_DA_ROTA: ReadonlySet<string> = new Set([
   "parado",
   "quebrado_obra",
   "conserto",
+  "fora_funcionamento",
 ]);
 
 export function marcacaoVenceFrete(
