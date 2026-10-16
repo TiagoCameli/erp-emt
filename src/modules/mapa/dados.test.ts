@@ -309,7 +309,17 @@ describe("paraEstadoMapa", () => {
         t("meloza", "l1", "eq1"),
         t("solto", null),
       ],
-      [{ id: "d1", nome: "Almox", localidadeId: "l2", pos: null }],
+      [
+        {
+          id: "d1",
+          nome: "Almox",
+          localidadeId: "l2",
+          pos: null,
+          larguraM: null,
+          comprimentoM: null,
+          alturaM: null,
+        },
+      ],
     );
     expect(extras.get("l1")).toBe("2 tanques");
     expect(extras.get("l2")).toBe("1 tanque · 1 depósito");
