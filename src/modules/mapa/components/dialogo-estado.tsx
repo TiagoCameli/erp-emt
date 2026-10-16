@@ -14,7 +14,8 @@ import {
 
 /**
  * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra
- * quer a descrição do defeito; conserto quer a previsão (a máquina vai para a oficina); em rota
+ * quer a descrição do defeito; conserto quer a previsão (a máquina fica onde está: só a
+ * transferência a leva para outro lugar); em rota
  * quer o trajeto (de onde, para onde, com o quê). Operando e parado só pedem o motivo.
  * Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  */
@@ -44,7 +45,7 @@ const DESCRICAO: Record<EstadoMaquina, string> = {
   quebrado_obra:
     "Quebrada na frente, aguardando a manutenção. Descreva o defeito para a OS.",
   conserto:
-    "Vai para a oficina (zona ou local de oficina do cadastro) e sai do trecho.",
+    "Fica onde está no mapa. Para levar a máquina a outro lugar, use a transferência.",
 };
 
 export function DialogoEstado({
