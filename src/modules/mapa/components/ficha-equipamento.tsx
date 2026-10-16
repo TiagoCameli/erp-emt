@@ -240,9 +240,11 @@ export function FichaEquipamento({
         <Linha rotulo="Obra">{e.obraNome || "–"}</Linha>
         <Linha rotulo="Onde">{onde.length ? onde.join(" · ") : "–"}</Linha>
         {e.frenteNome ? <Linha rotulo="Frente">{e.frenteNome}</Linha> : null}
-        {(podeEditar && onTransferirParaObra) || historicoHref ? (
+        {(podeEditar && onTransferirParaObra && !e.carretaEmt) ||
+        historicoHref ? (
           <div className="flex flex-wrap gap-2 pt-1">
-            {podeEditar && onTransferirParaObra ? (
+            {/* Carreta da EMT Transportes não troca de obra: é sempre "001 - Carretas EMT". */}
+            {podeEditar && onTransferirParaObra && !e.carretaEmt ? (
               <Button
                 type="button"
                 size="sm"
@@ -253,7 +255,7 @@ export function FichaEquipamento({
                   e.fontePosicao === "gps"
                     ? "Tem posição por GPS: não pode ser transferida pelo mapa"
                     : e.fontePosicao === "frete"
-                      ? "Em rota pelo Frete: a posição segue a rota até a chegada ser lançada no Frete"
+                      ? "A posição segue o Frete (em frete ou na volta para a pedreira)"
                       : undefined
                 }
               >

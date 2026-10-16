@@ -2188,6 +2188,7 @@ export function TelaMapa({
           hoje={estado.hoje}
           obras={opcoesObra}
           obrasNoMapa={rotulosObra}
+          obraCarretasEmt={estado.config.obraCarretasEmt}
           levarParaObra={levarParaObra}
           onCancelar={cancelarTransferencia}
           onConfirmar={confirmarTransferencia}

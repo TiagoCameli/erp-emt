@@ -182,9 +182,20 @@ export function aplicarFretes(
   const fretesVencidos = new Set<string>();
   const retornoDe = new Map<string, CarretaRetorno>();
   // O mais recente vale (a lista vem do banco em ordem de saída).
-  for (const f of fretes) if (f.equipamentoId) freteDe.set(f.equipamentoId, f);
+  // Só carreta da EMT Transportes anda pelo Frete (Tiago, 16/10/2026); o banco já filtra, isto
+  // segura a tela se uma placa casar com outra máquina.
+  const naoCarreta = new Set(
+    equipamentos.filter((e) => e.carretaEmt === false).map((e) => e.id),
+  );
+  for (const f of fretes)
+    if (f.equipamentoId && !naoCarreta.has(f.equipamentoId))
+      freteDe.set(f.equipamentoId, f);
   for (const r of retornos)
-    if (r.equipamentoId && !freteDe.has(r.equipamentoId))
+    if (
+      r.equipamentoId &&
+      !naoCarreta.has(r.equipamentoId) &&
+      !freteDe.has(r.equipamentoId)
+    )
       retornoDe.set(r.equipamentoId, r);
   if (freteDe.size === 0 && retornoDe.size === 0)
     return {
