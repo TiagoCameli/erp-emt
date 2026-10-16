@@ -12,6 +12,7 @@ import {
   Combobox,
   ConfirmDialog,
   FormDrawer,
+  InputMoeda,
   InputQuantidade,
   LinhaCampos,
   SelectAtivo,
@@ -46,6 +47,7 @@ import {
   STATUS_EQUIPAMENTO,
   type DocumentoFormInput,
   type EquipamentoFormInput,
+  valorAquisicaoParaNumero,
 } from "@/modules/cadastros/equipamentos/schemas";
 
 import type { AnexoDoDocumento } from "@/modules/_shared/anexos/queries";
@@ -86,6 +88,10 @@ function valoresIniciais(
         : "",
     numeroSerie: equipamento?.numeroSerie ?? "",
     dataAquisicao: equipamento?.dataAquisicao ?? "",
+    valorAquisicao:
+      equipamento?.valorAquisicao != null
+        ? String(equipamento.valorAquisicao).replace(".", ",")
+        : "",
     dataVenda: equipamento?.dataVenda ?? "",
     ativo: equipamento?.ativo ?? true,
   };
@@ -166,6 +172,7 @@ export function EquipamentosFormDrawer({
       numeroSerie: valores.numeroSerie,
       dataAquisicao:
         valores.dataAquisicao === "" ? undefined : valores.dataAquisicao,
+      valorAquisicao: valorAquisicaoParaNumero(valores.valorAquisicao),
       dataVenda: valores.dataVenda === "" ? undefined : valores.dataVenda,
       ativo: valores.ativo,
     };
@@ -447,7 +454,7 @@ export function EquipamentosFormDrawer({
           </CampoFormulario>
         </LinhaCampos>
 
-        <LinhaCampos colunas={2}>
+        <LinhaCampos colunas={3}>
           <CampoFormulario
             id="equipamento-data-aquisicao"
             rotulo="Data de aquisição"
@@ -458,6 +465,24 @@ export function EquipamentosFormDrawer({
               type="date"
               disabled={salvando}
               {...form.register("dataAquisicao")}
+            />
+          </CampoFormulario>
+
+          <CampoFormulario
+            id="equipamento-valor-aquisicao"
+            rotulo="Valor de aquisição"
+            erro={form.formState.errors.valorAquisicao?.message}
+          >
+            <InputMoeda
+              id="equipamento-valor-aquisicao"
+              valor={form.watch("valorAquisicao")}
+              onValorChange={(valor) =>
+                form.setValue("valorAquisicao", valor, {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              disabled={salvando}
             />
           </CampoFormulario>
 

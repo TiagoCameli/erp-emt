@@ -68,6 +68,7 @@ function paraRegistro(dados: EquipamentoInput) {
     medicao_inicial: dados.medicaoInicial ?? null,
     numero_serie: dados.numeroSerie ?? null,
     data_aquisicao: dados.dataAquisicao ?? null,
+    valor_aquisicao: dados.valorAquisicao ?? null,
     data_venda: dados.dataVenda ?? null,
     ativo: dados.ativo,
   };
