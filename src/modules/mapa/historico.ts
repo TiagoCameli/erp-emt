@@ -31,6 +31,12 @@ export interface MovimentacaoMapa {
   deAcoplado: string | null;
   paraAcoplado: string | null;
   fornecedor: string | null;
+  /** Desfeita pelo Histórico (a linha fica, riscada); null = vale. */
+  desfeitaEm: string | null;
+  desfeitaPorNome: string | null;
+  desfeitaMotivo: string | null;
+  /** A última que ainda vale da máquina, de um tipo que dá para desfazer (o banco decide). */
+  podeDesfazer: boolean;
 }
 
 export const TIPOS_MOVIMENTACAO = [

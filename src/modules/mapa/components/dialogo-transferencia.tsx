@@ -46,10 +46,11 @@ import {
  * nem estado); a sugestão vem de `sugereAjuste` (continua na mesma zona = ajuste). Confirmar grava; cancelar devolve as
  * máquinas para onde estavam. Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  *
- * Fora do ajuste, a "Obra de destino" vem da zona e pode ser trocada; quando o ponto não é de
- * obra nenhuma, a pessoa escolhe a obra ou "Sem obra" (obra-destino.ts). No modo "obra" (botão
- * "Transferir para obra" da ficha, sem arraste) a obra é o próprio destino: a máquina vai para o
- * ponto da obra no mapa, que o pai calcula em `levarParaObra`.
+ * Fora do ajuste, a "Obra em que trabalha" vem da zona e pode ser trocada; quando o ponto não é
+ * de obra nenhuma, a pessoa escolhe a obra ou "Sem obra" (obra-destino.ts). No modo "destino"
+ * (botão "Transferir" da ficha, sem arraste) a pessoa escolhe primeiro PARA ONDE (uma obra, um
+ * local ou uma área do mapa) e depois em que obra a máquina trabalha; o lugar só sugere a obra.
+ * O ponto vem do pai (`levarPara`).
  */
 
 export interface ItemPendente {
@@ -60,9 +61,9 @@ export interface ItemPendente {
 }
 
 export interface Pendente {
-  modo: "arraste" | "posicionar" | "obra";
+  modo: "arraste" | "posicionar" | "destino";
   principal: EquipamentoMapa;
-  /** No modo "obra" vem vazio: os itens nascem da obra escolhida (`levarParaObra`). */
+  /** No modo "destino" vem vazio: os itens nascem do lugar escolhido (`levarPara`). */
   itens: ItemPendente[];
 }
 
@@ -78,7 +79,7 @@ export interface ConfirmacaoTransferencia {
   estadoLivre: EstadoMaquina;
   /** Só corrige o ponto no mapa; não é transferência. */
   ajuste: boolean;
-  /** Os itens que vão gravar (no modo "obra", os do ponto da obra escolhida). */
+  /** Os itens que vão gravar (no modo "destino", os do ponto do lugar escolhido). */
   itens: ItemPendente[];
   /** Obra de destino; null só no ajuste, que não mexe na obra. */
   obra: DecisaoObra | null;
@@ -105,12 +106,26 @@ function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
 
 const ROTULO_SEM_OBRA = "Sem obra (pátio central, oficina, em trânsito)";
 
+/** Um lugar para onde a ficha manda a máquina: uma obra, um local ou uma área do mapa. */
+export interface LugarOpcao {
+  /** "obra:<id>", "local:<id>" ou "area:<id>". */
+  chave: string;
+  rotulo: string;
+}
+
+/** O que a máquina vira ao ir para o lugar escolhido na ficha. */
+export interface DestinoDaFicha {
+  itens: ItemPendente[];
+  /** A obra do lugar (a própria obra, ou a obra do local ou da área); null = lugar sem obra. */
+  obraSugerida: string | null;
+}
+
 export function DialogoTransferencia({
   pendente,
   hoje,
   obras,
-  obrasNoMapa,
-  levarParaObra,
+  lugares,
+  levarPara,
   obraCarretasEmt = null,
   onCancelar,
   onConfirmar,
@@ -122,12 +137,12 @@ export function DialogoTransferencia({
    */
   obraCarretasEmt?: string | null;
   hoje: string;
-  /** Todas as obras, para o campo "Obra de destino". */
+  /** Todas as obras, para o campo "Obra em que trabalha". */
   obras: ObraOpcao[];
-  /** Só as que têm lugar no mapa: as que o modo "obra" pode receber. */
-  obrasNoMapa: ObraOpcao[];
-  /** Modo "obra": onde a máquina cai no ponto da obra; null = obra sem lugar no mapa. */
-  levarParaObra: (obraId: string) => ItemPendente[] | null;
+  /** Modo "destino": obras, locais e áreas com lugar no mapa. */
+  lugares: LugarOpcao[];
+  /** Modo "destino": onde a máquina cai no lugar escolhido; null = lugar sem ponto no mapa. */
+  levarPara: (chave: string) => DestinoDaFicha | null;
   onCancelar: () => void;
   onConfirmar: (dados: ConfirmacaoTransferencia) => Promise<boolean>;
 }) {
@@ -139,7 +154,8 @@ export function DialogoTransferencia({
   const idMotivo = React.useId();
   const idEstado = React.useId();
   const idObra = React.useId();
-  const paraObra = pendente.modo === "obra";
+  const idLugar = React.useId();
+  const daFicha = pendente.modo === "destino";
   const podeAjustar =
     pendente.modo === "arraste" &&
     pendente.itens.every((i) => i.equipamento.pos !== null);
@@ -149,61 +165,72 @@ export function DialogoTransferencia({
       pendente.itens.every((i) => sugereAjuste(i.equipamento, i.destino)),
   );
   const soCarretas =
-    !paraObra &&
     obraCarretasEmt !== null &&
-    pendente.itens.length > 0 &&
-    pendente.itens.every((i) => i.equipamento.carretaEmt);
+    (daFicha
+      ? pendente.principal.carretaEmt
+      : pendente.itens.length > 0 &&
+        pendente.itens.every((i) => i.equipamento.carretaEmt));
   const escolhaInicial = React.useMemo(
     () =>
-      paraObra
-        ? ""
-        : soCarretas && obraCarretasEmt
-          ? obraCarretasEmt
+      soCarretas && obraCarretasEmt
+        ? obraCarretasEmt
+        : daFicha
+          ? ""
           : escolhaInicialObra(pendente.itens.map((i) => i.destino)),
-    [paraObra, soCarretas, obraCarretasEmt, pendente.itens],
+    [daFicha, soCarretas, obraCarretasEmt, pendente.itens],
   );
   const [escolhaObra, setEscolhaObra] = React.useState(escolhaInicial);
+  const [lugar, setLugar] = React.useState("");
+  const destinoDaFicha = React.useMemo(
+    () => (daFicha && lugar ? levarPara(lugar) : null),
+    [daFicha, lugar, levarPara],
+  );
+
+  /** Trocou o lugar: a obra em que trabalha passa a ser a do lugar (pode trocar depois). */
+  function escolherLugar(chave: string) {
+    setLugar(chave);
+    if (soCarretas) return;
+    const d = chave ? levarPara(chave) : null;
+    setEscolhaObra(
+      d?.obraSugerida ??
+        (d ? escolhaInicialObra(d.itens.map((i) => i.destino)) : ""),
+    );
+  }
 
   const itens = React.useMemo(
-    () =>
-      paraObra
-        ? escolhaObra
-          ? (levarParaObra(escolhaObra) ?? [])
-          : []
-        : pendente.itens,
-    [paraObra, escolhaObra, levarParaObra, pendente.itens],
+    () => (daFicha ? (destinoDaFicha?.itens ?? []) : pendente.itens),
+    [daFicha, destinoDaFicha, pendente.itens],
   );
   const nomeObra = React.useMemo(
     () => new Map(obras.map((o) => [o.id, o.nome])),
     [obras],
   );
-  const opcoesObra = React.useMemo(() => {
-    if (paraObra)
-      return obrasNoMapa
-        .map((o) => ({ valor: o.id, rotulo: o.nome }))
-        .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
-    return [
+  const opcoesObra = React.useMemo(
+    () => [
       ...(escolhaInicial === PELA_ZONA
         ? [{ valor: PELA_ZONA, rotulo: "Cada uma pela obra do ponto onde caiu" }]
         : []),
       ...obras.map((o) => ({ valor: o.id, rotulo: o.nome })),
       { valor: SEM_OBRA, rotulo: ROTULO_SEM_OBRA },
-    ];
-  }, [paraObra, obrasNoMapa, obras, escolhaInicial]);
+    ],
+    [obras, escolhaInicial],
+  );
+  const opcoesLugar = React.useMemo(
+    () => lugares.map((l) => ({ valor: l.chave, rotulo: l.rotulo })),
+    [lugares],
+  );
 
-  const n = paraObra ? 1 : pendente.itens.length;
+  const n = daFicha ? 1 : pendente.itens.length;
   const algumLivre = !ajuste && itens.some((i) => i.destino.tipo === "livre");
   const alvo = n > 1 ? `${n} equipamentos` : pendente.principal.codigo;
   const titulo =
     pendente.modo === "posicionar"
       ? `Posicionar ${pendente.principal.codigo}`
-      : paraObra
-        ? `Transferir ${pendente.principal.codigo} para outra obra`
-        : ajuste
-          ? `Ajustar localização de ${alvo}`
-          : `Transferir ${alvo}`;
+      : ajuste
+        ? `Ajustar localização de ${alvo}`
+        : `Transferir ${alvo}`;
 
-  /** "· obra X" ou "· sem obra" na linha de cada máquina, e o aviso quando a escolha vence a zona. */
+  /** "Obra: X" ou "Sem obra" na linha de cada máquina, e o aviso quando a escolha vence a zona. */
   function obraDaLinha(item: ItemPendente): {
     texto: string;
     aviso: string | null;
@@ -219,9 +246,9 @@ export function DialogoTransferencia({
       ? `Obra: ${nomeObra.get(efetiva) ?? "obra escolhida"}`
       : escolhaObra === SEM_OBRA
         ? "Sem obra"
-        : "Este ponto não é de nenhuma obra: escolha a obra de destino";
+        : "Escolha a obra em que a máquina trabalha";
     const aviso =
-      !paraObra && efetiva && daZona && daZona !== efetiva
+      !daFicha && efetiva && daZona && daZona !== efetiva
         ? `O ponto é de ${nomeObra.get(daZona) ?? "outra obra"}; a máquina fica com a obra escolhida.`
         : null;
     return { texto, aviso };
@@ -237,8 +264,8 @@ export function DialogoTransferencia({
       descricao={
         pendente.modo === "posicionar"
           ? "A máquina entra no mapa neste ponto. A alocação e a movimentação ficam registradas."
-          : paraObra
-            ? "A máquina vai para o ponto da obra no mapa. Depois, se quiser, arraste para o lugar exato (ajuste de localização)."
+          : daFicha
+            ? "Escolha para onde a máquina vai e em que obra ela trabalha. Depois, se quiser, arraste para o lugar exato (ajuste de localização)."
             : ajuste
               ? "Só corrige o ponto no mapa. Estado, obra e frente continuam os mesmos; não conta como transferência."
               : "A posição nova vale a partir da data efetiva e fica na trilha de movimentações."
@@ -276,9 +303,23 @@ export function DialogoTransferencia({
               </Button>
             </div>
           ) : null}
+          {daFicha ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={idLugar}>Para onde</Label>
+              <Combobox
+                id={idLugar}
+                valor={lugar}
+                onValorChange={escolherLugar}
+                opcoes={opcoesLugar}
+                placeholder="Obra, local ou área"
+                buscaPlaceholder="Buscar obra, local ou área"
+                vazioTexto="Nada com lugar no mapa"
+              />
+            </div>
+          ) : null}
           {ajuste || soCarretas ? null : (
             <div className="flex flex-col gap-2">
-              <Label htmlFor={idObra}>Obra de destino</Label>
+              <Label htmlFor={idObra}>Obra em que trabalha</Label>
               <Combobox
                 id={idObra}
                 valor={escolhaObra}
@@ -286,17 +327,8 @@ export function DialogoTransferencia({
                 opcoes={opcoesObra}
                 placeholder="Selecione a obra"
                 buscaPlaceholder="Buscar obra"
-                vazioTexto={
-                  paraObra
-                    ? "Nenhuma obra com lugar no mapa"
-                    : "Nenhuma obra encontrada"
-                }
+                vazioTexto="Nenhuma obra encontrada"
               />
-              {paraObra && obrasNoMapa.length < obras.length ? (
-                <p className="text-detalhe text-muted-foreground">
-                  Só aparecem as obras desenhadas ou posicionadas no mapa.
-                </p>
-              ) : null}
             </div>
           )}
           {itens.length > 0 ? (
@@ -321,7 +353,8 @@ export function DialogoTransferencia({
                       <p
                         className={
                           obraEfetiva(escolhaObra, item.destino) ||
-                          escolhaObra === SEM_OBRA
+                          escolhaObra === SEM_OBRA ||
+                          (item.equipamento.carretaEmt && obraCarretasEmt)
                             ? "text-foreground"
                             : "text-destructive"
                         }
@@ -393,17 +426,19 @@ export function DialogoTransferencia({
         </div>
       }
       onConfirmar={() => {
+        if (daFicha && !lugar) {
+          toast.warning("Escolha para onde a máquina vai.");
+          return false;
+        }
         const obra = ajuste ? null : decisaoObra(escolhaObra);
         if (!ajuste && !obra) {
           toast.warning(
-            paraObra
-              ? "Escolha a obra de destino."
-              : `Escolha a obra de destino, ou "Sem obra" se a máquina não fica em obra nenhuma.`,
+            `Escolha a obra em que a máquina trabalha, ou "Sem obra" se ela não trabalha em obra nenhuma.`,
           );
           return false;
         }
         if (itens.length === 0) {
-          toast.warning("Essa obra ainda não tem lugar no mapa.");
+          toast.warning("Esse lugar ainda não tem ponto no mapa.");
           return false;
         }
         return onConfirmar({

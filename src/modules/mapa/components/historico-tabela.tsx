@@ -1,17 +1,21 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { History } from "lucide-react";
+import { History, Undo2 } from "lucide-react";
 
 import {
+  ConfirmDialog,
   DataTable,
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
 } from "@/components/canonicos";
+import { toast } from "@/components/canonicos/toast";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { dataLocalISO, formatarData, formatarDataHora } from "@/lib/formatadores";
 import {
@@ -20,6 +24,7 @@ import {
   rotuloTipoMovimentacao,
   type MovimentacaoMapa,
 } from "@/modules/mapa/historico";
+import { desfazerMovimentacao } from "@/modules/mapa/historico-actions";
 import type { MaquinaOpcao } from "@/modules/mapa/historico-queries";
 
 interface Linha extends MovimentacaoMapa {
@@ -73,17 +78,44 @@ const colunas: ColumnDef<Linha, unknown>[] = [
     accessorKey: "tipo",
     header: "Tipo",
     size: 140,
+    cell: ({ row }) => {
+      const m = row.original;
+      if (m.desfeitaEm)
+        return (
+          <div className="flex flex-col items-start gap-0.5">
+            <Badge variant="secondary">
+              {rotuloTipoMovimentacao(m.tipo)} desfeita
+            </Badge>
+            <span className="text-legenda text-muted-foreground">
+              {m.desfeitaPorNome || "–"}, {formatarDataHora(m.desfeitaEm)}
+              {m.desfeitaMotivo ? ` · ${m.desfeitaMotivo}` : ""}
+            </span>
+          </div>
+        );
+      return (
+        <Badge
+          variant={m.trocouObra ? "default" : "outline"}
+          title={m.trocouObra ? "Trocou de obra" : undefined}
+        >
+          {rotuloTipoMovimentacao(m.tipo)}
+        </Badge>
+      );
+    },
+  },
+  {
+    accessorKey: "de",
+    header: "De",
+    size: 260,
+    cell: ({ row }) => <Riscado linha={row.original} texto={row.original.de} />,
+  },
+  {
+    accessorKey: "para",
+    header: "Para",
+    size: 260,
     cell: ({ row }) => (
-      <Badge
-        variant={row.original.trocouObra ? "default" : "outline"}
-        title={row.original.trocouObra ? "Trocou de obra" : undefined}
-      >
-        {rotuloTipoMovimentacao(row.original.tipo)}
-      </Badge>
+      <Riscado linha={row.original} texto={row.original.para} />
     ),
   },
-  { accessorKey: "de", header: "De", size: 260 },
-  { accessorKey: "para", header: "Para", size: 260 },
   {
     accessorKey: "motivo",
     header: "Motivo",
@@ -98,6 +130,15 @@ const colunas: ColumnDef<Linha, unknown>[] = [
   },
 ];
 
+/** A movimentação desfeita continua na trilha, riscada: não vale mais. */
+function Riscado({ linha, texto }: { linha: Linha; texto: string }) {
+  return linha.desfeitaEm ? (
+    <span className="text-muted-foreground line-through">{texto}</span>
+  ) : (
+    <>{texto}</>
+  );
+}
+
 function idDaLinha(m: Linha): string {
   return String(m.id);
 }
@@ -109,6 +150,8 @@ export interface HistoricoTabelaProps {
   maquinaInicial: string;
   /** A RPC devolve até 2000: avisar quando bateu no teto. */
   noTeto: boolean;
+  /** mapa.mapa/editar: mostra "Desfazer" na última movimentação de cada máquina. */
+  podeDesfazer: boolean;
 }
 
 /**
@@ -121,7 +164,10 @@ export function HistoricoTabela({
   maquinas,
   maquinaInicial,
   noTeto,
+  podeDesfazer,
 }: HistoricoTabelaProps) {
+  const router = useRouter();
+  const [desfazendo, setDesfazendo] = React.useState<Linha | null>(null);
   const [busca, setBusca] = React.useState("");
   const [maquina, setMaquina] = React.useState(maquinaInicial);
   const [tipo, setTipo] = React.useState("");
@@ -173,7 +219,32 @@ export function HistoricoTabela({
     <div className="flex flex-col gap-2">
       <DataTable
         idTabela="mapa.historico"
-        columns={colunas}
+        columns={
+          podeDesfazer
+            ? [
+                ...colunas,
+                {
+                  id: "acoes",
+                  header: "",
+                  size: 120,
+                  enableSorting: false,
+                  cell: ({ row }) =>
+                    row.original.podeDesfazer ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDesfazendo(row.original)}
+                        title="Desfaz esta movimentação e volta a máquina para como estava antes"
+                      >
+                        <Undo2 />
+                        Desfazer
+                      </Button>
+                    ) : null,
+                },
+              ]
+            : colunas
+        }
         data={dados}
         idDaLinha={idDaLinha}
         cabecalhoFixo
@@ -256,6 +327,35 @@ export function HistoricoTabela({
           />
         }
       />
+      {desfazendo ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setDesfazendo(null);
+          }}
+          titulo={`Desfazer ${rotuloTipoMovimentacao(desfazendo.tipo).toLowerCase()} de ${desfazendo.alvoCodigo || desfazendo.alvoNome}?`}
+          descricao={`A máquina volta para como estava antes: ${desfazendo.de}. A linha fica no histórico, riscada, com o motivo.`}
+          textoConfirmar="Desfazer movimentação"
+          variante="destrutivo"
+          exigeMotivo
+          onConfirmar={async (motivo) => {
+            const r = await desfazerMovimentacao({
+              id: desfazendo.id,
+              motivo: motivo ?? "",
+            });
+            if ("erro" in r) {
+              toast.error(r.erro);
+              return false;
+            }
+            toast.success(
+              `${desfazendo.alvoCodigo || "Máquina"} voltou para como estava antes`,
+            );
+            setDesfazendo(null);
+            router.refresh();
+            return true;
+          }}
+        />
+      ) : null}
       {noTeto ? (
         <p className="text-detalhe text-muted-foreground">
           Mostrando as 2000 movimentações mais recentes.

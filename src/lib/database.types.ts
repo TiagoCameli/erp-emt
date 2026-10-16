@@ -11498,7 +11498,15 @@ export type Database = {
           de_acoplado: string | null;
           para_acoplado: string | null;
           fornecedor: string | null;
+          desfeita_em: string | null;
+          desfeita_por_nome: string | null;
+          desfeita_motivo: string | null;
+          pode_desfazer: boolean;
         }[];
+      };
+      fn_mapa_desfazer_movimentacao: {
+        Args: { p_id: number; p_motivo: string };
+        Returns: undefined;
       };
       fn_mapa_local_editar: {
         Args: {
