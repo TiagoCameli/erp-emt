@@ -9,6 +9,7 @@ import {
 } from "@/modules/mapa/fretes";
 import { distanciaM } from "@/modules/mapa/geo";
 import type {
+  CarretaRetorno,
   EquipamentoMapa,
   FreteEmRota,
   Posicao,
@@ -44,7 +45,7 @@ const frete = (f: Partial<FreteEmRota>): FreteEmRota => ({
   ...f,
 });
 
-describe("carreta em rota pelo Frete", () => {
+describe("carreta em frete pelo Frete", () => {
   it("a fração da viagem é o tempo desde a saída sobre o tempo da rota, sem chegar", () => {
     const saida = Date.parse("2026-10-16T13:30:00Z");
     expect(fracaoDaViagem(frete({}), saida - HORA)).toBe(0);
@@ -67,7 +68,7 @@ describe("carreta em rota pelo Frete", () => {
     expect(pontoNaRota([], 0.5)).toBeNull();
   });
 
-  it("a máquina do frete vai para a rota, em rota e sem trecho; as outras passam iguais", () => {
+  it("a máquina do frete vai para a rota, em frete e sem trecho; as outras passam iguais", () => {
     const base = {
       id: "cs3",
       pos: null,
@@ -83,10 +84,11 @@ describe("carreta em rota pelo Frete", () => {
     const { equipamentos, freteDe } = aplicarFretes(
       [base, outra],
       [frete({})],
+      [],
       agora,
     );
     const [cs3, x] = equipamentos;
-    expect(cs3.estado).toBe("em_rota");
+    expect(cs3.estado).toBe("em_frete");
     expect(cs3.fontePosicao).toBe("frete");
     expect(cs3.pos?.[1]).toBeCloseTo(-9.5, 6);
     expect(cs3.trechoId).toBeNull();
@@ -110,7 +112,7 @@ describe("carreta em rota pelo Frete", () => {
     const agora = Date.parse("2026-10-16T16:00:00Z");
 
     it("sem posição própria, fica parada no destino do frete e a rota some", () => {
-      const r = aplicarFretes([cs3], [frete({})], agora);
+      const r = aplicarFretes([cs3], [frete({})], [], agora);
       const [e] = r.equipamentos;
       expect(e.estado).toBe("parado");
       expect(e.pos).toEqual([-67, -9]);
@@ -125,43 +127,172 @@ describe("carreta em rota pelo Frete", () => {
         pos: [-72, -7.9],
         estado: "parado",
       } as EquipamentoMapa;
-      const [e] = aplicarFretes([comPos], [frete({})], agora).equipamentos;
+      const [e] = aplicarFretes([comPos], [frete({})], [], agora).equipamentos;
       expect(e).toBe(comPos);
     });
 
-    it("marcação antes da saída perde: o frete põe em rota", () => {
+    it("marcação antes da saída perde: o frete põe em frete", () => {
       const antes = {
         ...cs3,
         estadoDesde: "2026-10-16T12:00:00Z",
       } as EquipamentoMapa;
-      const r = aplicarFretes([antes], [frete({})], agora);
-      expect(r.equipamentos[0].estado).toBe("em_rota");
+      const r = aplicarFretes([antes], [frete({})], [], agora);
+      expect(r.equipamentos[0].estado).toBe("em_frete");
       expect(r.equipamentos[0].fontePosicao).toBe("frete");
       expect(r.fretesVencidos.size).toBe(0);
     });
 
-    it("operando, em rota ou RPC antiga sem o estado marcado não vencem: segue em rota", () => {
+    it("operando ou RPC antiga sem o estado marcado não vencem: segue em frete", () => {
       // Caso real: CS-003/004/005 marcadas operando 15:49 UTC com frete aberto. Carreta operando
       // é carreta rodando (Tiago, 16/10/2026).
-      for (const estadoMarcado of ["operando", "em_rota", null]) {
+      for (const estadoMarcado of ["operando", null]) {
         const e = { ...cs3, estadoMarcado } as EquipamentoMapa;
-        const r = aplicarFretes([e], [frete({})], agora);
-        expect(r.equipamentos[0].estado).toBe("em_rota");
+        const r = aplicarFretes([e], [frete({})], [], agora);
+        expect(r.equipamentos[0].estado).toBe("em_frete");
         expect(r.freteDe.has("cs3")).toBe(true);
       }
     });
 
-    it("frete novo depois da marcação volta a pôr em rota", () => {
+    it("frete novo depois da marcação volta a pôr em frete", () => {
       const r = aplicarFretes(
         [cs3],
         [frete({}), frete({ id: "f2", criadoEm: "2026-10-16T15:55:00Z" })],
+        [],
         agora,
       );
-      expect(r.equipamentos[0].estado).toBe("em_rota");
+      expect(r.equipamentos[0].estado).toBe("em_frete");
       expect(r.freteDe.get("cs3")?.id).toBe("f2");
       // O frete antigo, de antes da marcação, não é o que manda: a rota do novo é a que fica.
       expect(r.fretesVencidos.has("f2")).toBe(false);
     });
+
+    it("remarcar parado sem mudar o estado também vence (vale a última marcação)", () => {
+      // Parada desde antes do frete; remarcada "parado" depois da saída: estado_desde não anda.
+      const remarcada = {
+        ...cs3,
+        estadoDesde: "2026-10-16T12:00:00Z",
+        marcadoEm: "2026-10-16T15:49:20Z",
+      } as EquipamentoMapa;
+      const r = aplicarFretes([remarcada], [frete({})], [], agora);
+      expect(r.equipamentos[0].estado).toBe("parado");
+      expect(r.fretesVencidos.has("f1")).toBe(true);
+    });
+  });
+});
+
+describe("carreta em deslocamento: volta do destino para a pedreira", () => {
+  // Chegada lançada 18:00 UTC; a volta (a reta de 111 km, ao contrário) leva 10 h.
+  const volta = (r: Partial<CarretaRetorno>): CarretaRetorno => ({
+    equipamentoId: "cs3",
+    freteId: "f1",
+    chegadaEm: "2026-10-16T18:00:00Z",
+    chegada: "2026-10-16",
+    de: "Usina Gregorio",
+    pedreiraId: "britam",
+    pedreira: "Pedreira Britam",
+    pedreiraEscolhida: false,
+    horas: 10,
+    km: 700,
+    caminho: [...reta].reverse(),
+    ...r,
+  });
+  const chegada = Date.parse("2026-10-16T18:00:00Z");
+  const cs3 = {
+    id: "cs3",
+    pos: null,
+    heading: 0,
+    rumoManual: null,
+    fontePosicao: "manual",
+    estado: "sem_posicao",
+    estadoMarcado: "operando",
+    estadoDesde: "2026-10-16T15:49:20Z",
+    marcadoEm: "2026-10-16T15:49:20Z",
+    localidadeNome: "",
+  } as unknown as EquipamentoMapa;
+
+  it("no meio da volta está em deslocamento, no caminho da pedreira, e a volta fica na ficha", () => {
+    const r = aplicarFretes([cs3], [], [volta({})], chegada + 5 * HORA);
+    const [e] = r.equipamentos;
+    expect(e.estado).toBe("em_deslocamento");
+    expect(e.fontePosicao).toBe("frete");
+    expect(e.estadoDesde).toBe("2026-10-16T18:00:00Z");
+    expect(e.pos?.[1]).toBeCloseTo(-9.5, 6);
+    expect(e.heading).toBeCloseTo(180, 3); // para o sul, de volta
+    expect(r.retornoDe.get("cs3")?.pedreira).toBe("Pedreira Britam");
+  });
+
+  it("passado o tempo da volta, está parada na pedreira", () => {
+    const r = aplicarFretes([cs3], [], [volta({})], chegada + 11 * HORA);
+    const [e] = r.equipamentos;
+    expect(e.estado).toBe("parado");
+    expect(e.pos).toEqual([-67, -10]);
+    expect(e.localidadeNome).toBe("Pedreira Britam");
+    expect(e.estadoDesde).toBe("2026-10-17T04:00:00.000Z");
+  });
+
+  it("a pedreira escolhida na ficha é o fim do caminho", () => {
+    const formate: Posicao[] = [
+      [-67, -9],
+      [-66, -9],
+    ];
+    const r = aplicarFretes(
+      [cs3],
+      [],
+      [volta({ pedreira: "Pedreira Formate", caminho: formate })],
+      chegada + 11 * HORA,
+    );
+    expect(r.equipamentos[0].pos).toEqual([-66, -9]);
+    expect(r.equipamentos[0].localidadeNome).toBe("Pedreira Formate");
+  });
+
+  it("parado marcado depois da chegada vence: fica no destino e a volta some", () => {
+    const parada = {
+      ...cs3,
+      estadoMarcado: "parado",
+      marcadoEm: "2026-10-16T19:00:00Z",
+    } as EquipamentoMapa;
+    const r = aplicarFretes([parada], [], [volta({})], chegada + 5 * HORA);
+    expect(r.equipamentos[0].estado).toBe("parado");
+    expect(r.equipamentos[0].pos).toEqual([-67, -9]);
+    expect(r.equipamentos[0].fontePosicao).toBe("manual");
+    expect(r.retornoDe.has("cs3")).toBe(false);
+  });
+
+  it("parado marcado depois da chegada estimada à pedreira: fica na pedreira", () => {
+    const parada = {
+      ...cs3,
+      estadoMarcado: "parado",
+      marcadoEm: "2026-10-17T06:00:00Z",
+    } as EquipamentoMapa;
+    const r = aplicarFretes([parada], [], [volta({})], chegada + 20 * HORA);
+    expect(r.equipamentos[0].pos).toEqual([-67, -10]);
+  });
+
+  it("operando ou marcação de antes da chegada não vencem: segue em deslocamento", () => {
+    const antes = {
+      ...cs3,
+      estadoMarcado: "parado",
+      marcadoEm: "2026-10-16T17:00:00Z",
+    } as EquipamentoMapa;
+    const operando = {
+      ...cs3,
+      marcadoEm: "2026-10-16T19:00:00Z",
+    } as EquipamentoMapa;
+    for (const e of [antes, operando]) {
+      const r = aplicarFretes([e], [], [volta({})], chegada + 5 * HORA);
+      expect(r.equipamentos[0].estado).toBe("em_deslocamento");
+    }
+  });
+
+  it("frete aberto vence a volta: a carreta está em frete", () => {
+    const r = aplicarFretes(
+      [cs3],
+      [frete({ id: "f2", criadoEm: "2026-10-17T13:00:00Z" })],
+      [volta({})],
+      Date.parse("2026-10-17T15:00:00Z"),
+    );
+    expect(r.equipamentos[0].estado).toBe("em_frete");
+    expect(r.retornoDe.has("cs3")).toBe(false);
   });
 });
 

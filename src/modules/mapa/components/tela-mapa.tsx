@@ -43,6 +43,7 @@ import {
   editarLocal,
   inativarLocal,
   encerrarLocacao,
+  escolherPedreira,
   girarEquipamento,
   marcarEstado,
   moverEquipamentos,
@@ -300,20 +301,35 @@ export function TelaMapa({
     setEstado(inicial);
   }
 
-  // Relógio do mapa: a carreta em rota anda no traçado a cada minuto (posição estimada).
+  // Relógio do mapa: a carreta em frete ou na volta anda no traçado a cada minuto (estimativa).
   const [agora, setAgora] = React.useState(() => Date.now());
   React.useEffect(() => {
     const t = setInterval(() => setAgora(Date.now()), 60_000);
     return () => clearInterval(t);
   }, []);
-  // A frota como a tela mostra: a máquina com frete aberto vai para o ponto estimado da rota.
+  // A frota como a tela mostra: a carreta com frete aberto vai para o ponto estimado da rota, e a
+  // que já chegou, para o caminho de volta à pedreira.
   const {
     equipamentos: equipamentosVistos,
     freteDe,
     fretesVencidos,
+    retornoDe,
   } = React.useMemo(
-    () => aplicarFretes(estado.equipamentos, estado.fretesEmRota, agora),
-    [estado.equipamentos, estado.fretesEmRota, agora],
+    () =>
+      aplicarFretes(
+        estado.equipamentos,
+        estado.fretesEmRota,
+        estado.carretasRetorno,
+        agora,
+      ),
+    [estado.equipamentos, estado.fretesEmRota, estado.carretasRetorno, agora],
+  );
+  const pedreiras = React.useMemo(
+    () =>
+      estado.localidades
+        .filter((l) => l.tipos.includes("pedreira"))
+        .map((l) => ({ id: l.id, nome: l.nome })),
+    [estado.localidades],
   );
 
   const [selecao, setSelecao] = React.useState<ReadonlySet<string>>(
@@ -688,6 +704,17 @@ export function TelaMapa({
         ? [{ id: f.id, caminho: f.caminho }]
         : [],
     );
+    // E a volta de cada carreta em deslocamento (na pedreira ou parada pela ficha, sem rota).
+    for (const e of equipamentosVistos) {
+      const r = retornoDe.get(e.id);
+      if (
+        r &&
+        e.estado === "em_deslocamento" &&
+        r.caminho.length >= 2 &&
+        idsNaCena.has(e.id)
+      )
+        rotasFrete.push({ id: `volta-${r.freteId}`, caminho: r.caminho });
+    }
     return {
       equipamentos,
       pessoas,
@@ -725,6 +752,7 @@ export function TelaMapa({
     equipamentosVistos,
     estado.fretesEmRota,
     fretesVencidos,
+    retornoDe,
     estado.areas,
     estado.localidades,
     raioPrevio,
@@ -867,7 +895,9 @@ export function TelaMapa({
         }
         if (equipamento.fontePosicao === "frete") {
           toast.warning(
-            `${equipamento.codigo} está em rota pelo Frete: a posição segue a rota até a chegada ser lançada no Frete.`,
+            equipamento.estado === "em_frete"
+              ? `${equipamento.codigo} está em frete: a posição segue a rota até a chegada ser lançada no Frete.`
+              : `${equipamento.codigo} segue a volta do Frete para a pedreira: troque a pedreira ou marque como parado na ficha.`,
           );
           return [];
         }
@@ -1124,6 +1154,33 @@ export function TelaMapa({
     [aplicar],
   );
 
+  // Para qual pedreira a carreta volta depois do frete (null = a última de onde saiu).
+  const trocarPedreira = React.useCallback(
+    async (
+      equipamento: EquipamentoMapa,
+      freteId: string,
+      localidadeId: string | null,
+    ): Promise<boolean> => {
+      setSalvando(true);
+      try {
+        const r = await escolherPedreira({
+          equipamentoId: equipamento.id,
+          freteId,
+          localidadeId,
+        });
+        return aplicar(
+          r,
+          localidadeId === null
+            ? `${equipamento.codigo}: volta para a última pedreira`
+            : `${equipamento.codigo}: pedreira da volta trocada`,
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [aplicar],
+  );
+
   /**
    * Girar a máquina: o mapa mostra na hora e grava 600 ms depois do último toque (vários
    * toques de 15° viram uma gravação só). null volta a seguir a pista e grava direto.
@@ -1281,14 +1338,6 @@ export function TelaMapa({
           motivo: dados.motivo || undefined,
           descricao: dados.descricao || undefined,
           previsao: dados.previsao || undefined,
-          deslocamento: dados.deslocamento
-            ? {
-                origem: dados.deslocamento.origem || undefined,
-                destino: dados.deslocamento.destino || undefined,
-                transporte: dados.deslocamento.transporte || undefined,
-                previsao: dados.deslocamento.previsao || undefined,
-              }
-            : undefined,
         });
         const ok = aplicar(
           r,
@@ -1522,6 +1571,12 @@ export function TelaMapa({
       pessoas={estado.pessoas}
       hoje={estado.hoje}
       frete={freteDe.get(equipamentoFicha.id) ?? null}
+      retorno={retornoDe.get(equipamentoFicha.id) ?? null}
+      pedreiras={pedreiras}
+      onEscolherPedreira={(localidadeId) => {
+        const r = retornoDe.get(equipamentoFicha.id);
+        if (r) void trocarPedreira(equipamentoFicha, r.freteId, localidadeId);
+      }}
       tanque={
         estado.tanques.find((t) => t.equipamentoId === equipamentoFicha.id) ??
         null

@@ -416,26 +416,59 @@ describe("schemas das actions", () => {
     ).toBe(false);
   });
 
-  it("marcar estado recusa estado fora da lista e aceita deslocamento", () => {
+  it("marcar estado recusa estado fora da lista, inclusive em rota (vem do Frete desde a v1.19)", () => {
+    for (const estado of ["sem_posicao", "em_rota", "em_frete", "em_deslocamento"])
+      expect(
+        marcarEstadoSchema.safeParse({
+          id: "c4e0f922-3aec-8c72-7089-225523e04557",
+          estado,
+        }).success,
+      ).toBe(false);
     expect(
       marcarEstadoSchema.safeParse({
         id: "c4e0f922-3aec-8c72-7089-225523e04557",
-        estado: "sem_posicao",
-      }).success,
-    ).toBe(false);
-    expect(
-      marcarEstadoSchema.safeParse({
-        id: "c4e0f922-3aec-8c72-7089-225523e04557",
-        estado: "em_rota",
-        motivo: "prancha",
-        deslocamento: {
-          origem: "Colorado",
-          destino: "km 720",
-          transporte: "prancha própria",
-          previsao: "",
-        },
+        estado: "parado",
       }).success,
     ).toBe(true);
+  });
+
+  it("a volta da carreta inverte o traçado da ida quando o Frete não mediu a volta", () => {
+    const estado = paraEstadoMapa({
+      equipamentos: [],
+      trechos: [],
+      carretas_retorno: [
+        {
+          equipamento_id: "cs3",
+          frete_id: "f1",
+          chegada_em: "2026-10-16T18:00:00Z",
+          chegada: "2026-10-16",
+          de: "Usina Gregorio",
+          de_lng: -71.4,
+          de_lat: -7.9,
+          pedreira_id: "britam",
+          pedreira: "Pedreira Britam",
+          pedreira_lng: -66.2,
+          pedreira_lat: -9.8,
+          pedreira_escolhida: false,
+          horas: 10.7,
+          km: 696.9,
+          tracado_volta: null,
+          // [lat, lng] da pedreira para a usina
+          tracado_ida: [
+            [-9.8, -66.2],
+            [-8.9, -68.8],
+            [-7.9, -71.4],
+          ],
+        },
+      ],
+    });
+    const [r] = estado!.carretasRetorno;
+    expect(r.caminho).toEqual([
+      [-71.4, -7.9],
+      [-68.8, -8.9],
+      [-66.2, -9.8],
+    ]);
+    expect(r.pedreiraEscolhida).toBe(false);
   });
 
   it("locação exige máquina OU máquina nova, fornecedor e valor com duas casas", () => {

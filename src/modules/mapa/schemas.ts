@@ -295,6 +295,14 @@ export const girarEquipamentoSchema = z.strictObject({
 });
 export type GirarEquipamentoInput = z.infer<typeof girarEquipamentoSchema>;
 
+/** Pedreira da volta da carreta depois daquele frete; null volta à última de onde ela saiu. */
+export const escolherPedreiraSchema = z.strictObject({
+  equipamentoId: idSchemaCom("Equipamento inválido"),
+  freteId: idSchemaCom("Frete inválido"),
+  localidadeId: idSchemaCom("Pedreira inválida").nullable(),
+});
+export type EscolherPedreiraInput = z.infer<typeof escolherPedreiraSchema>;
+
 /** Nome e tipos de um local (sem mexer no ponto). */
 export const editarLocalSchema = z
   .strictObject({

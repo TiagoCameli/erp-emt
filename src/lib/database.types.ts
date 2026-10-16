@@ -11457,6 +11457,10 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_mapa_escolher_pedreira: {
+        Args: { p_id: string; p_frete: string; p_localidade: string | null };
+        Returns: undefined;
+      };
       fn_mapa_estado: { Args: never; Returns: Json };
       fn_mapa_ficha_equipamento: { Args: { p_id: string }; Returns: Json };
       fn_mapa_girar_equipamento: {

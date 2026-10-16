@@ -31,6 +31,7 @@ import {
   ROTULO_ESTADO,
   ROTULO_PROPRIEDADE,
   ROTULO_TIPO_ALUGUEL,
+  type CarretaRetorno,
   type EquipamentoMapa,
   type EstadoMaquina,
   type FreteEmRota,
@@ -51,8 +52,14 @@ export interface FichaEquipamentoProps {
   pessoas: PessoaMapa[];
   /** yyyy-mm-dd de Rio Branco, do servidor (conta "desde ontem"). */
   hoje: string;
-  /** Frete aberto da máquina (carreta em rota): material, peso, valor e a rota. */
+  /** Frete aberto da máquina (carreta em frete): material, peso, valor e a rota. */
   frete?: FreteEmRota | null;
+  /** Volta da carreta à pedreira depois da chegada do frete. */
+  retorno?: CarretaRetorno | null;
+  /** Pedreiras posicionadas no mapa: para onde a volta pode ir. */
+  pedreiras?: { id: string; nome: string }[];
+  /** Troca a pedreira da volta; null volta à última de onde a carreta saiu. */
+  onEscolherPedreira?: (localidadeId: string | null) => void;
   /** Tanque que anda com a máquina (Meloza): conteúdo e nível. */
   tanque?: TanqueMapa | null;
   permissoes: PermissoesMapa;
@@ -96,6 +103,9 @@ export function FichaEquipamento({
   pessoas,
   hoje,
   frete = null,
+  retorno = null,
+  pedreiras = [],
+  onEscolherPedreira,
   tanque = null,
   permissoes,
   selecionados,
@@ -265,7 +275,7 @@ export function FichaEquipamento({
         {frete ? (
           <div className="mt-1 flex flex-col gap-1 rounded-md border border-border bg-surface p-2">
             <span className="text-legenda font-medium text-muted-foreground">
-              Frete em rota
+              Em frete
             </span>
             <Linha rotulo="Rota">
               {frete.origem || "–"} → {frete.destino || "–"}
@@ -311,15 +321,57 @@ export function FichaEquipamento({
               : ""}
           </Linha>
         ) : null}
-        {e.estado === "em_rota" && e.deslocamento && !frete ? (
-          <Linha rotulo="Rota">
-            {[e.deslocamento.origem, e.deslocamento.destino]
-              .filter(Boolean)
-              .join(" → ") || "–"}
-            {e.deslocamento.transporte
-              ? ` (${String(e.deslocamento.transporte)})`
-              : ""}
-          </Linha>
+        {retorno && !frete ? (
+          <div className="mt-1 flex flex-col gap-1 rounded-md border border-border bg-surface p-2">
+            <span className="text-legenda font-medium text-muted-foreground">
+              Volta para a pedreira
+            </span>
+            <Linha rotulo="Rota">
+              {retorno.de || "–"} → {retorno.pedreira || "–"}
+            </Linha>
+            <Linha rotulo="Chegou ao destino">
+              {retorno.chegada ? formatarData(retorno.chegada) : "–"}
+            </Linha>
+            {podeEditar && onEscolherPedreira ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-legenda text-muted-foreground">
+                  Indo para
+                </span>
+                <Combobox
+                  valor={retorno.pedreiraId}
+                  onValorChange={(v) =>
+                    v && v !== retorno.pedreiraId && onEscolherPedreira(v)
+                  }
+                  opcoes={pedreiras.map((p) => ({
+                    valor: p.id,
+                    rotulo: p.nome,
+                  }))}
+                  rotuloDoValor={retorno.pedreira || undefined}
+                  placeholder="Pedreira"
+                  buscaPlaceholder="Pedreira"
+                  size="sm"
+                  disabled={salvando}
+                  ariaLabel="Pedreira da volta"
+                />
+                {retorno.pedreiraEscolhida ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    className="self-start"
+                    onClick={() => onEscolherPedreira(null)}
+                    disabled={salvando}
+                  >
+                    Voltar para a última pedreira
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            <p className="text-legenda text-muted-foreground">
+              Posição estimada pelo tempo desde a chegada lançada no Frete. Se
+              ela não saiu do destino, marque como parado.
+            </p>
+          </div>
         ) : null}
         {e.estado === "quebrado_obra" && e.quebraDescricao ? (
           <Linha rotulo="Defeito">{e.quebraDescricao}</Linha>

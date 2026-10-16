@@ -1,6 +1,7 @@
 import { ESTADOS_MAQUINA, type EstadoMaquina } from "@/modules/mapa/tipos";
 import type {
   AreaMapa,
+  CarretaRetorno,
   DepositoMapa,
   EquipamentoForaDoMapa,
   EquipamentoMapa,
@@ -117,17 +118,44 @@ function frete(f: Linha): FreteEmRota {
   };
 }
 
+/**
+ * A volta da carreta, do destino do frete à pedreira: o traçado da volta, se o Frete mediu; senão
+ * o da ida (pedreira → destino) de trás para a frente; sem nenhum, a reta.
+ */
+function retorno(r: Linha): CarretaRetorno {
+  const de = posicao(r.de_lng, r.de_lat);
+  const pedreira = posicao(r.pedreira_lng, r.pedreira_lat);
+  const volta = caminhoDoFrete(r.tracado_volta, null, null);
+  return {
+    equipamentoId: texto(r.equipamento_id),
+    freteId: texto(r.frete_id),
+    chegadaEm: texto(r.chegada_em),
+    chegada: texto(r.chegada),
+    de: texto(r.de),
+    pedreiraId: texto(r.pedreira_id),
+    pedreira: texto(r.pedreira),
+    pedreiraEscolhida: r.pedreira_escolhida === true,
+    horas: numeroOuNulo(r.horas),
+    km: numeroOuNulo(r.km),
+    caminho:
+      volta.length >= 2
+        ? volta
+        : caminhoDoFrete(r.tracado_ida, pedreira, de).reverse(),
+  };
+}
+
 const ESTADOS: ReadonlySet<string> = new Set([
   "operando",
   "parado",
-  "em_rota",
   "quebrado_obra",
   "conserto",
   "sem_posicao",
   "fora_funcionamento",
 ]);
 
+/** 'em_rota' manual (fora da tela desde a v1.19) aparece como em deslocamento. */
 function estadoEfetivo(v: unknown): EstadoEfetivo {
+  if (v === "em_rota") return "em_deslocamento";
   return typeof v === "string" && ESTADOS.has(v)
     ? (v as EstadoEfetivo)
     : "sem_posicao";
@@ -222,6 +250,8 @@ function equipamento(e: Linha): EquipamentoMapa {
     estado: estadoEfetivo(e.estado),
     estadoMarcado: estadoMarcado(e.estado_mapa),
     estadoDesde: textoOuNulo(e.estado_desde),
+    // RPC antiga sem a chave: a mudança de estado é a última marcação conhecida.
+    marcadoEm: textoOuNulo(e.marcado_em) ?? textoOuNulo(e.estado_desde),
     diasNoEstado: numeroOuNulo(e.dias_no_estado),
     obraId: textoOuNulo(e.obra_id),
     obraNome: texto(e.obra_nome),
@@ -443,6 +473,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       tipos: tiposDoLocal(l.tipos, l.tipo),
     })),
     fretesEmRota: lista(b.fretes_em_rota).map(frete),
+    carretasRetorno: lista(b.carretas_retorno).map(retorno),
     implementos: lista(b.implementos).map((i) => ({
       id: texto(i.id),
       codigo: texto(i.codigo),

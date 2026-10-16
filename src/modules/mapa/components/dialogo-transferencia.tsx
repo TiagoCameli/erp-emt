@@ -84,7 +84,7 @@ export interface ConfirmacaoTransferencia {
   obra: DecisaoObra | null;
 }
 
-const ESTADOS_LIVRE: EstadoMaquina[] = ["operando", "parado", "em_rota"];
+const ESTADOS_LIVRE: EstadoMaquina[] = ["operando", "parado"];
 
 /** Onde a máquina cai; no ajuste sem o estado da zona, que não muda. */
 function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
