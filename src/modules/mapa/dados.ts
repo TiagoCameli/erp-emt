@@ -421,6 +421,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       nome: texto(d.nome),
       localidadeId: textoOuNulo(d.localidade_id),
       pos: posicao(d.lng, d.lat),
+      rumo: numero(d.rumo),
       larguraM: numeroOuNulo(d.largura_m),
       comprimentoM: numeroOuNulo(d.comprimento_m),
       alturaM: numeroOuNulo(d.altura_m),

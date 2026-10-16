@@ -38,6 +38,8 @@ export interface ObjetoMapa {
   comprimento: number;
   altura: number;
   cor: Rgb;
+  /** Rumo em graus a partir do norte, sentido horário (só o depósito gira; 0 nos outros). */
+  rumo?: number;
 }
 
 /** Tanque sem capacidade cadastrada (posto externo, por exemplo) desenha como um de 15 mil L. */
@@ -249,6 +251,7 @@ export function objetosDoEstoque(
       comprimento: d.comprimentoM ?? TAMANHO_DEPOSITO_PADRAO.comprimento,
       altura: d.alturaM ?? TAMANHO_DEPOSITO_PADRAO.altura,
       cor: COR_DEPOSITO,
+      rumo: d.rumo,
     });
   return objetos;
 }

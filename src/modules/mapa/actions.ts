@@ -22,6 +22,7 @@ import {
   moverPessoasSchema,
   posicionarObjetoSchema,
   tamanhoDepositoSchema,
+  rumoDepositoSchema,
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
@@ -714,6 +715,35 @@ export async function posicionarObjeto(dados: unknown): Promise<ResultadoMapa> {
       "mapa.objetoPosicionar",
       erro,
       `Não foi possível pôr no mapa: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Rumo do depósito no mapa (graus, sentido horário a partir do norte), escolhido na ficha. */
+export async function girarDeposito(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = rumoDepositoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_deposito_rumo", {
+      p_id: validado.data.id,
+      p_rumo: validado.data.rumo,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.depositoRumo",
+        error,
+        mensagemDaRpc(error, "Não foi possível girar o depósito"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.depositoRumo",
+      erro,
+      `Não foi possível girar o depósito: ${textoDoErro(erro)}`,
     );
   }
 }
