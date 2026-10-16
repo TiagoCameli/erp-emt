@@ -1,3 +1,4 @@
+import { ESTADOS_MAQUINA, type EstadoMaquina } from "@/modules/mapa/tipos";
 import type {
   AreaMapa,
   DepositoMapa,
@@ -132,6 +133,14 @@ function estadoEfetivo(v: unknown): EstadoEfetivo {
     : "sem_posicao";
 }
 
+/** O estado marcado na ficha; fora dos cinco (RPC antiga sem a chave), null. */
+function estadoMarcado(v: unknown): EstadoMaquina | null {
+  return typeof v === "string" &&
+    (ESTADOS_MAQUINA as readonly string[]).includes(v)
+    ? (v as EstadoMaquina)
+    : null;
+}
+
 function propriedade(v: unknown): Propriedade {
   return v === "colorado" || v === "alugada" ? v : "propria";
 }
@@ -211,6 +220,7 @@ function equipamento(e: Linha): EquipamentoMapa {
     rumoManual: numeroOuNulo(e.heading),
     fontePosicao: e.fonte_posicao === "gps" ? "gps" : "manual",
     estado: estadoEfetivo(e.estado),
+    estadoMarcado: estadoMarcado(e.estado_mapa),
     estadoDesde: textoOuNulo(e.estado_desde),
     diasNoEstado: numeroOuNulo(e.dias_no_estado),
     obraId: textoOuNulo(e.obra_id),
