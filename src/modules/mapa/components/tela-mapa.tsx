@@ -14,6 +14,7 @@ import {
   RefreshCw,
   RotateCcw,
   RotateCw,
+  Route,
   Satellite,
   Tag,
   Users,
@@ -87,7 +88,12 @@ import {
   RAIO_MINIMO_GIRO_PX,
   raioDoAnelM,
 } from "@/modules/mapa/components/camadas";
-import { rotaPelaEstrada } from "@/modules/mapa/components/rota-estrada";
+import {
+  formatarDistancia,
+  medirRotaPelaEstrada,
+  rotaPelaEstrada,
+  type ResultadoRota,
+} from "@/modules/mapa/components/rota-estrada";
 import {
   MapaEmt,
   type Alvo,
@@ -106,6 +112,7 @@ import {
 } from "@/modules/mapa/components/painel-mapa";
 import {
   colarNoLocal,
+  distanciaM,
   maquinaEm,
   marcosKm,
   medirTrecho,
@@ -361,6 +368,18 @@ export function TelaMapa({
     seguiuEstrada: boolean;
   } | null>(null);
   const [concluindo, setConcluindo] = React.useState(false);
+  /**
+   * Ferramenta "Rota" (Tiago, 16/10/2026): toca a partida, toca o destino e o mapa mostra a menor
+   * distância pela estrada. Tocar de novo muda o destino. `pedidoRota` descarta a resposta de um
+   * cálculo antigo que chegue depois do novo.
+   */
+  const [rota, setRota] = React.useState<{
+    origem: Posicao | null;
+    destino: Posicao | null;
+    resultado: ResultadoRota | null;
+    calculando: boolean;
+  } | null>(null);
+  const pedidoRota = React.useRef(0);
   // Prévias que valem mais que o banco até gravar: raio do local e rumo da máquina.
   const [raioPrevio, setRaioPrevio] = React.useState<{
     id: string;
@@ -737,6 +756,13 @@ export function TelaMapa({
         : desenho
           ? { forma: desenho.forma, pontos: desenho.pontos }
           : null,
+      rota: rota?.origem
+        ? {
+            origem: rota.origem,
+            destino: rota.destino,
+            caminho: rota.resultado?.caminho ?? [],
+          }
+        : null,
       modelos,
       snapLocalM: estado.config.snapLocalM,
       mostrarPessoas,
@@ -764,6 +790,7 @@ export function TelaMapa({
     anelGiro,
     desenho,
     desenhoFinal,
+    rota,
     estado.config.snapLocalM,
     trechosMedidos,
     marcos,
@@ -927,8 +954,27 @@ export function TelaMapa({
     ],
   );
 
+  const calcularRota = React.useCallback(
+    async (origem: Posicao, destino: Posicao) => {
+      const n = ++pedidoRota.current;
+      const resultado = await medirRotaPelaEstrada(origem, destino);
+      if (pedidoRota.current !== n) return;
+      setRota((r) => (r ? { ...r, resultado, calculando: false } : r));
+    },
+    [],
+  );
+
   const clicarMapa = React.useCallback(
     (pos: Posicao) => {
+      if (rota) {
+        if (!rota.origem) {
+          setRota({ ...rota, origem: pos });
+          return;
+        }
+        setRota({ ...rota, destino: pos, resultado: null, calculando: true });
+        void calcularRota(rota.origem, pos);
+        return;
+      }
       if (desenho) {
         setDesenho((d) => (d ? { ...d, pontos: [...d.pontos, pos] } : d));
         return;
@@ -951,7 +997,7 @@ export function TelaMapa({
         ],
       });
     },
-    [posicionandoEquipamento, ctxDestino, colocando, desenho],
+    [posicionandoEquipamento, ctxDestino, colocando, desenho, rota, calcularRota],
   );
 
   const escolherNoMapa = React.useCallback((pedido: PedidoColocar) => {
@@ -1796,6 +1842,7 @@ export function TelaMapa({
             inclinado={inclinado}
             podeArrastar={permissoes.editar && !pendente && !pendentePessoa}
             modoPosicionar={
+              rota !== null ||
               (desenho !== null && desenhoFinal === null) ||
               ((posicionando !== null || colocando !== null) &&
                 !pendente &&
@@ -1828,6 +1875,19 @@ export function TelaMapa({
               {botaoAlternar(inclinado, "3D", Box, () =>
                 setInclinado((v) => !v),
               )}
+              {botaoAlternar(rota !== null, "Rota", Route, () => {
+                pedidoRota.current += 1;
+                setRota((r) =>
+                  r
+                    ? null
+                    : {
+                        origem: null,
+                        destino: null,
+                        resultado: null,
+                        calculando: false,
+                      },
+                );
+              })}
               <Button
                 type="button"
                 size="xs"
@@ -1912,7 +1972,76 @@ export function TelaMapa({
               </Button>
             </div>
           </div>
-          {desenho && !desenhoFinal ? (
+          {rota ? (
+            <div className="absolute inset-x-2 bottom-10 flex justify-center">
+              <div
+                className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-background/95 py-1 pr-1 pl-3 text-detalhe shadow-sm backdrop-blur"
+                aria-live="polite"
+              >
+                <span>
+                  {!rota.origem ? (
+                    "Rota: toque o ponto de partida"
+                  ) : !rota.destino ? (
+                    "Rota: toque o destino"
+                  ) : rota.calculando ? (
+                    "Calculando a rota pela estrada..."
+                  ) : rota.resultado ? (
+                    <>
+                      <strong className="tabular-nums">
+                        {formatarDistancia(rota.resultado.metros)}
+                      </strong>{" "}
+                      pela estrada ·{" "}
+                      <span className="tabular-nums">
+                        {formatarDistancia(
+                          distanciaM(rota.origem, rota.destino),
+                        )}
+                      </span>{" "}
+                      em linha reta
+                      {rota.resultado.fonte === "osm" ? (
+                        <span className="text-muted-foreground">
+                          {" "}
+                          (OpenStreetMap)
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    "Não achei caminho pela estrada entre os dois pontos"
+                  )}
+                </span>
+                {rota.origem ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => {
+                      pedidoRota.current += 1;
+                      setRota({
+                        origem: null,
+                        destino: null,
+                        resultado: null,
+                        calculando: false,
+                      });
+                    }}
+                  >
+                    Recomeçar
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => {
+                    pedidoRota.current += 1;
+                    setRota(null);
+                  }}
+                  aria-label="Fechar a rota"
+                >
+                  <X className="size-3" />
+                  Fechar
+                </Button>
+              </div>
+            </div>
+          ) : desenho && !desenhoFinal ? (
             <div className="absolute inset-x-2 bottom-10 flex justify-center">
               <div className="flex flex-wrap items-center justify-center gap-2 rounded-2xl border border-border bg-background/95 py-1 pr-1 pl-3 text-detalhe shadow-sm backdrop-blur">
                 <span>

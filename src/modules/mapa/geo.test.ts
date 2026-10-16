@@ -190,6 +190,30 @@ describe("resolver destino (mesma ordem do banco)", () => {
     ).toBe("l2");
   });
 
+  it("jazida ao lado da rodovia ganha do trecho (banco v1.20); pátio no mesmo lugar não", () => {
+    const beira = deslocar([-72.45, -7.7], 180, 150);
+    const jazida: LocalidadeMapa = {
+      ...local,
+      id: "j1",
+      nome: "Jazida",
+      tipo: "jazida",
+      tipos: ["jazida"],
+      obraId: "o2",
+      pos: beira,
+    };
+    const naJazida = resolverDestino(beira, {
+      ...ctx,
+      localidades: [jazida, local, oficina],
+    });
+    expect(naJazida.tipo).toBe("localidade");
+    if (naJazida.tipo === "localidade") expect(naJazida.local.id).toBe("j1");
+    // Controle: um pátio no mesmo ponto continua perdendo para o traçado.
+    const patioNaBeira = { ...jazida, id: "p9", tipo: "patio", tipos: ["patio"] };
+    expect(
+      resolverDestino(beira, { ...ctx, localidades: [patioNaBeira] }).tipo,
+    ).toBe("trecho");
+  });
+
   it("longe de tudo é livre e sem estado (a tela pergunta)", () => {
     const d = resolverDestino([-73.5, -8.5], ctx);
     expect(d).toEqual({ tipo: "livre", pos: [-73.5, -8.5], estado: null });
