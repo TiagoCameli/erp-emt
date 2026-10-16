@@ -408,7 +408,11 @@ export interface FichaNumeros {
     /** A máquina tem centro de custo (sem ele, não há como somar o Financeiro). */
     temCentro: boolean;
     /** Desde sempre, por categoria do Financeiro, da maior para a menor. */
-    porCategoria: { categoria: string; total: number }[];
+    /**
+     * Pago na compra da máquina (categorias de aquisição, config mapa.categorias_aquisicao),
+     * desde sempre. Fica fora dos quatro períodos acima.
+     */
+    aquisicao: number;
   };
   /**
    * Custo das OS concluídas (Manutenção), pela data de conclusão, nos mesmos períodos. Fonte

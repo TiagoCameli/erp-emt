@@ -98,10 +98,15 @@ export function NumerosEquipamento({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
+        {/* Um número só (Tiago, 16/10): o do cadastro; sem ele, o pago no Financeiro. */}
         {aquisicao.valor !== null ? (
           <Linha rotulo="Valor de aquisição">
             {formatarBRL(aquisicao.valor)}
             {aquisicao.data ? ` · em ${formatarData(aquisicao.data)}` : ""}
+          </Linha>
+        ) : gasto.aquisicao > 0 ? (
+          <Linha rotulo="Valor de aquisição">
+            {formatarBRL(gasto.aquisicao)}
           </Linha>
         ) : null}
         <Linha rotulo="Último abastecimento">
@@ -136,7 +141,7 @@ export function NumerosEquipamento({
 
       <div className="flex flex-col gap-1">
         <span className="text-legenda font-medium text-muted-foreground">
-          Despesas no Financeiro (centro da máquina)
+          Despesas no Financeiro (centro da máquina, sem a aquisição)
         </span>
         {gasto.temCentro ? (
           <>
@@ -150,30 +155,6 @@ export function NumerosEquipamento({
             <Linha rotulo={`Em ${formatarMesAno(gasto.mesPassadoRef)}`}>
               {formatarBRL(gasto.mesPassado)}
             </Linha>
-            {gasto.porCategoria.length > 0 ? (
-              <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
-                <span className="text-legenda text-muted-foreground">
-                  Desde sempre, por categoria
-                </span>
-                {/* Nome longo ("Manutenção de equipamentos") corta; o valor nunca quebra. */}
-                {gasto.porCategoria.map((c) => (
-                  <div
-                    key={c.categoria}
-                    className="flex items-baseline justify-between gap-3 text-detalhe"
-                  >
-                    <span
-                      className="min-w-0 truncate text-muted-foreground"
-                      title={c.categoria}
-                    >
-                      {c.categoria}
-                    </span>
-                    <span className="shrink-0 text-right whitespace-nowrap text-foreground tabular-nums">
-                      {formatarBRL(c.total)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
           </>
         ) : (
           <p className="text-detalhe text-muted-foreground">
