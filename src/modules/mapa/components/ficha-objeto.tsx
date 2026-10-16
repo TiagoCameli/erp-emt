@@ -124,6 +124,7 @@ export function FichaObjeto({
   onSalvarTamanho,
   rumo = 0,
   onGirar,
+  acoes = null,
 }: {
   objeto: ObjetoMapa;
   linhas: LinhaFicha[];
@@ -135,6 +136,8 @@ export function FichaObjeto({
   rumo?: number;
   /** Gira o depósito: graus a somar; null volta ao norte. */
   onGirar?: (delta: number | null) => void;
+  /** Botões do módulo dono do objeto (na pilha: entrada avulsa e saída do Estoque). */
+  acoes?: React.ReactNode;
 }) {
   return (
     <section
@@ -224,6 +227,7 @@ export function FichaObjeto({
           </div>
         </div>
       ) : null}
+      {acoes}
       {podeEditar ? (
         <Button type="button" size="sm" variant="outline" onClick={onMover}>
           <Move />

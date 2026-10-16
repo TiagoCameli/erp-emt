@@ -74,6 +74,10 @@ import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import { FichaLocal } from "@/modules/mapa/components/ficha-local";
 import { FichaObjeto } from "@/modules/mapa/components/ficha-objeto";
+import {
+  MovimentarPilha,
+  type PermissoesMovimentoPilha,
+} from "@/modules/mapa/components/movimentar-pilha";
 import { FichaPessoa } from "@/modules/mapa/components/ficha-pessoa";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import {
@@ -269,6 +273,8 @@ export interface TelaMapaProps {
   colocarInicial?: { alvo: AlvoObjeto; id: string } | null;
   /** Valor em estoque por id de tanque e pilha; nulo para quem não vê a Posição do Estoque. */
   valoresEstoque?: Record<string, number> | null;
+  /** Entrada avulsa e saída no card da pilha: as permissões são as do Estoque. */
+  movimentarPilha?: PermissoesMovimentoPilha;
 }
 
 export function TelaMapa({
@@ -277,6 +283,7 @@ export function TelaMapa({
   permissoes,
   colocarInicial = null,
   valoresEstoque = null,
+  movimentarPilha = { entrada: false, saida: false },
 }: TelaMapaProps) {
   const router = useRouter();
   const [estado, setEstado] = React.useState(inicial);
@@ -1536,6 +1543,17 @@ export function TelaMapa({
         valores: valoresDaFicha,
       })}
       podeEditar={permissoes.editar}
+      acoes={
+        objetoDaFicha.alvo === "pilha" ? (
+          <MovimentarPilha
+            pilhaId={objetoDaFicha.id}
+            saldo={
+              estado.pilhas.find((p) => p.id === objetoDaFicha.id)?.saldo ?? 0
+            }
+            permissoes={movimentarPilha}
+          />
+        ) : null
+      }
       onFechar={() => setObjetoFicha(null)}
       onMover={() =>
         escolherNoMapa({

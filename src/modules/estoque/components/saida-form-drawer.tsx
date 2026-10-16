@@ -30,9 +30,16 @@ import type { InsumoOpcao, Opcao } from "@/modules/manutencao/almoxarifado/queri
 
 const ID_FORM = "form-saida-estoque";
 
-function valoresIniciais(saida: SaidaLinha | null): SaidaFormInput {
+function valoresIniciais(saida: SaidaLinha | null, inicial?: SaidaInicial): SaidaFormInput {
   if (!saida) {
-    return { local: "", insumoId: "", quantidade: "", data: "", centroCustoId: "", observacoes: "" };
+    return {
+      local: inicial?.local ?? "",
+      insumoId: inicial?.insumoId ?? "",
+      quantidade: "",
+      data: "",
+      centroCustoId: "",
+      observacoes: "",
+    };
   }
   return {
     local: saida.local,
@@ -42,6 +49,12 @@ function valoresIniciais(saida: SaidaLinha | null): SaidaFormInput {
     centroCustoId: saida.centroCustoId,
     observacoes: saida.observacoes ?? "",
   };
+}
+
+/** Registrar já num local (o card da pilha no Mapa): o local e o material vêm escolhidos. */
+export interface SaidaInicial {
+  local: string;
+  insumoId: string;
 }
 
 export interface SaidaFormDrawerProps {
@@ -55,6 +68,7 @@ export interface SaidaFormDrawerProps {
   /** Saldo por `chaveSaldo(local, insumo)`, sem a própria saída na edição. */
   saldos: Map<string, number>;
   centros: CentroCustoOpcao[];
+  inicial?: SaidaInicial;
 }
 
 /**
@@ -70,17 +84,18 @@ export function SaidaFormDrawer({
   materiais,
   saldos,
   centros,
+  inicial,
 }: SaidaFormDrawerProps) {
   const editando = saida !== null;
   const form = useForm<SaidaFormInput>({
     resolver: zodResolver(saidaFormSchema),
-    defaultValues: valoresIniciais(saida),
+    defaultValues: valoresIniciais(saida, inicial),
   });
   const salvando = form.formState.isSubmitting;
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(saida));
-  }, [aberto, saida, form]);
+    if (aberto) form.reset(valoresIniciais(saida, inicial));
+  }, [aberto, saida, inicial, form]);
 
   const [local, insumoId, quantidade, centroCustoId] = useWatch({
     control: form.control,

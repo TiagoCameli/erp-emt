@@ -42,13 +42,13 @@ import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 
 const ID_FORM = "form-entrada-estoque";
 
-function valoresIniciais(entrada: EntradaLinha | null): EntradaFormInput {
+function valoresIniciais(entrada: EntradaLinha | null, inicial?: EntradaInicial): EntradaFormInput {
   if (!entrada) {
     return {
       origem: "avulsa",
       ocItemId: "",
-      local: "",
-      insumoId: "",
+      local: inicial?.local ?? "",
+      insumoId: inicial?.insumoId ?? "",
       quantidade: "",
       valorUnitario: "",
       // A data fica em branco de propósito: é o único campo que nem a OC preenche.
@@ -75,6 +75,12 @@ function rotuloItemOc(item: ItemOcDisponivel): string {
   return `${item.ocNumero} · ${item.insumoNome} · falta ${restante}`;
 }
 
+/** Registrar já num local (o card da pilha no Mapa): o local e o insumo vêm escolhidos. */
+export interface EntradaInicial {
+  local: string;
+  insumoId: string;
+}
+
 export interface EntradaFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
@@ -84,6 +90,9 @@ export interface EntradaFormDrawerProps {
   locais: LocalFormOpcao[];
   insumos: InsumoOpcao[];
   itensOc: ItemOcDisponivel[];
+  inicial?: EntradaInicial;
+  /** Sem a aba "De uma OC" (o Mapa não carrega os itens das OCs). */
+  apenasAvulsa?: boolean;
 }
 
 /**
@@ -101,17 +110,19 @@ export function EntradaFormDrawer({
   locais,
   insumos,
   itensOc,
+  inicial,
+  apenasAvulsa = false,
 }: EntradaFormDrawerProps) {
   const editando = entrada !== null;
   const form = useForm<EntradaFormInput>({
     resolver: zodResolver(entradaFormSchema),
-    defaultValues: valoresIniciais(entrada),
+    defaultValues: valoresIniciais(entrada, inicial),
   });
   const salvando = form.formState.isSubmitting;
 
   React.useEffect(() => {
-    if (aberto) form.reset(valoresIniciais(entrada));
-  }, [aberto, entrada, form]);
+    if (aberto) form.reset(valoresIniciais(entrada, inicial));
+  }, [aberto, entrada, inicial, form]);
 
   const [origem, ocItemId, local, insumoId, quantidade, valorUnitario] = useWatch({
     control: form.control,
@@ -216,7 +227,7 @@ export function EntradaFormDrawer({
       }
     >
       <form id={ID_FORM} onSubmit={submeterComAviso(form, aoEnviar)} className={classesFormulario} noValidate>
-        {editando ? null : (
+        {editando || apenasAvulsa ? null : (
           <Tabs value={origem} onValueChange={trocarOrigem}>
             <TabsList aria-label="Origem da entrada">
               <TabsTrigger value="avulsa" disabled={salvando}>

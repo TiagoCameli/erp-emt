@@ -89,6 +89,10 @@ export default async function PaginaMapa({
           editar: temPermissao(usuario, "mapa.mapa", "editar"),
           criar: temPermissao(usuario, "mapa.mapa", "criar"),
         }}
+        movimentarPilha={{
+          entrada: temPermissao(usuario, "estoque.entradas", "criar"),
+          saida: temPermissao(usuario, "estoque.saidas", "criar"),
+        }}
       />
     </div>
   );
