@@ -41,7 +41,10 @@ export default async function PaginaSaidasEstoque() {
 
   const nomesRaiz = new Map<string, string>();
   for (const saida of saidas) {
-    nomesRaiz.set(saida.centroCustoRaiz, saida.centroCustoRotulo.split(" › ")[0] ?? "");
+    nomesRaiz.set(
+      saida.centroCustoRaiz,
+      saida.vinculo === "transferencia" ? "Transferências" : (saida.centroCustoRotulo.split(" › ")[0] ?? ""),
+    );
   }
   const raizes = [...nomesRaiz].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
@@ -50,7 +53,7 @@ export default async function PaginaSaidasEstoque() {
       <PageHeader
         modulo="Estoque"
         titulo="Saídas"
-        descricao="Material que saiu do depósito ou do tanque para um centro de custo, com o valor das entradas mais antigas (PEPS)"
+        descricao="Material que saiu do depósito, do tanque ou da pilha para um centro de custo (ou numa transferência), com o valor das entradas mais antigas (PEPS)"
         acoes={
           <SaidasAcoesCabecalho
             podeCriar={podeCriar}

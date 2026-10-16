@@ -324,6 +324,15 @@ export const RECURSOS = [
     rota: "/estoque/saidas",
     acoes: CRUD,
   },
+  // Transferências entre depósitos, tanques e pilhas (15/10/2026). As do frete de
+  // transferência nascem quando o frete chega e só mudam pelo Frete.
+  {
+    id: "estoque.transferencias",
+    nome: "Transferências",
+    modulo: "estoque",
+    rota: "/estoque/transferencias",
+    acoes: CRUD,
+  },
   {
     id: "estoque.depositos",
     nome: "Depósitos",

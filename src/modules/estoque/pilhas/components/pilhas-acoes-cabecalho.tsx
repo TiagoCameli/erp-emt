@@ -8,7 +8,15 @@ import type { InsumoOpcao } from "@/modules/manutencao/almoxarifado/queries";
 import { PilhaFormDrawer } from "./pilha-form-drawer";
 
 /** Botão "Nova pilha" do cabeçalho. */
-export function PilhasAcoesCabecalho({ podeCriar, insumos }: { podeCriar: boolean; insumos: InsumoOpcao[] }) {
+export function PilhasAcoesCabecalho({
+  podeCriar,
+  insumos,
+  localidades,
+}: {
+  podeCriar: boolean;
+  insumos: InsumoOpcao[];
+  localidades: { id: string; nome: string }[];
+}) {
   const [aberto, setAberto] = React.useState(false);
 
   if (!podeCriar) return null;
@@ -19,7 +27,7 @@ export function PilhasAcoesCabecalho({ podeCriar, insumos }: { podeCriar: boolea
         <Plus />
         Nova pilha
       </Button>
-      <PilhaFormDrawer aberto={aberto} onAbertoChange={setAberto} insumos={insumos} />
+      <PilhaFormDrawer aberto={aberto} onAbertoChange={setAberto} insumos={insumos} localidades={localidades} />
     </>
   );
 }

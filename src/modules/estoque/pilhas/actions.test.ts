@@ -21,6 +21,7 @@ import { criarPilha } from "@/modules/estoque/pilhas/actions";
 import { pilhaSchema } from "@/modules/estoque/pilhas/schemas";
 
 const BRITA = "79ea56b3-82fe-c79d-c598-09736c347c9f";
+const GREGORIO = "0a04b9e6-5216-548a-2d90-41a9c0ca88b7";
 
 describe("pilha nasce com o insumo", () => {
   beforeEach(() => {
@@ -43,12 +44,12 @@ describe("pilha nasce com o insumo", () => {
   });
 
   it("o formulário exige o insumo", () => {
-    const r = pilhaSchema.safeParse({ nome: "Brita 1 - Pátio", insumoId: "", observacoes: "" });
-    expect(r.success ? [] : r.error.issues.map((i) => i.path.join("."))).toEqual(["insumoId"]);
+    const r = pilhaSchema.safeParse({ nome: "Brita 1 - Pátio", localidadeId: "", insumoId: "", observacoes: "" });
+    expect(r.success ? [] : r.error.issues.map((i) => i.path.join(".")).sort()).toEqual(["insumoId", "localidadeId"]);
   });
 
   it("sem insumo nem chega ao banco", async () => {
-    await expect(criarPilha({ nome: "Brita 1", insumoId: "", observacoes: "" })).resolves.toEqual({
+    await expect(criarPilha({ nome: "Brita 1", localidadeId: GREGORIO, insumoId: "", observacoes: "" })).resolves.toEqual({
       erro: "Escolha o insumo da pilha",
     });
     expect(insert).not.toHaveBeenCalled();
@@ -56,21 +57,22 @@ describe("pilha nasce com o insumo", () => {
 
   it("grava nome, insumo e observação vazia como nula", async () => {
     insert.mockResolvedValue({ data: { id: "p1" }, error: null });
-    await expect(criarPilha({ nome: " Brita 1 ", insumoId: BRITA, observacoes: " " })).resolves.toEqual({
-      ok: true,
-      id: "p1",
-      mapa: null,
-    });
-    expect(insert).toHaveBeenCalledWith({ nome: "Brita 1", insumo_id: BRITA, observacoes: null });
+    await expect(
+      criarPilha({ nome: " Brita 1 ", localidadeId: GREGORIO, insumoId: BRITA, observacoes: " " }),
+    ).resolves.toEqual({ ok: true, id: "p1", mapa: null });
+    expect(insert).toHaveBeenCalledWith({ nome: "Brita 1", insumo_id: BRITA, localidade_id: GREGORIO, observacoes: null });
   });
 
   it("o CHECK do banco vira frase, e a trava do banco volta como está", async () => {
-    insert.mockResolvedValueOnce({ error: { code: "23514", message: "violates check constraint" } });
-    await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
-      erro: "Escolha o insumo da pilha",
+    const pilha = { nome: "Brita 1", localidadeId: GREGORIO, insumoId: BRITA, observacoes: "" };
+    insert.mockResolvedValueOnce({ error: { code: "23514", message: 'violates check constraint "estoque_pilhas_insumo_obrigatorio"' } });
+    await expect(criarPilha(pilha)).resolves.toEqual({ erro: "Escolha o insumo da pilha" });
+    insert.mockResolvedValueOnce({
+      error: { code: "23514", message: 'violates check constraint "estoque_pilhas_localidade_obrigatoria"' },
     });
+    await expect(criarPilha(pilha)).resolves.toEqual({ erro: "Escolha o local da pilha" });
     insert.mockResolvedValueOnce({ error: { code: "P0001", message: "Insumo inexistente ou inativo" } });
-    await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
+    await expect(criarPilha(pilha)).resolves.toEqual({
       erro: "Insumo inexistente ou inativo",
     });
   });
@@ -78,7 +80,7 @@ describe("pilha nasce com o insumo", () => {
   it("criada por quem edita o Mapa, volta o endereço que abre o mapa para marcar o lugar", async () => {
     insert.mockResolvedValue({ data: { id: "p9" }, error: null });
     enderecoParaColocar.mockResolvedValue("/mapa?colocar=pilha&id=p9");
-    await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
+    await expect(criarPilha({ nome: "Brita 1", localidadeId: GREGORIO, insumoId: BRITA, observacoes: "" })).resolves.toEqual({
       ok: true,
       id: "p9",
       mapa: "/mapa?colocar=pilha&id=p9",

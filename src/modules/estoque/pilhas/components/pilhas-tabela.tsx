@@ -56,6 +56,7 @@ export interface PilhasTabelaProps {
   pilhas: PilhaLinha[];
   /** Para o formulário de edição; vazio para quem não edita. */
   insumos: InsumoOpcao[];
+  localidades: { id: string; nome: string }[];
   podeEditar: boolean;
   podeExcluir: boolean;
 }
@@ -65,7 +66,7 @@ export interface PilhasTabelaProps {
  * ativa se a saída que a zerou for excluída). Excluir vai para a lixeira; pilha com
  * movimento está em uso e a FK recusa.
  */
-export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: PilhasTabelaProps) {
+export function PilhasTabela({ pilhas, insumos, localidades, podeEditar, podeExcluir }: PilhasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativas", ["ativas", "inativas", "todas"]);
   const [editando, setEditando] = React.useState<PilhaLinha | null>(null);
@@ -87,6 +88,7 @@ export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: Pilha
             textoPesquisavel(
               pilha.nome,
               pilha.insumoNome,
+              pilha.localidadeNome,
               pilha.observacoes,
               formatarQuantidade(pilha.saldo),
               pilha.zeradaEm ? formatarData(pilha.zeradaEm) : null,
@@ -117,6 +119,13 @@ export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: Pilha
         size: 260,
         meta: { celular: "titulo" },
         cell: ({ row }) => <span className="font-medium">{row.original.nome}</span>,
+      },
+      {
+        accessorKey: "localidadeNome",
+        header: "Local",
+        size: 180,
+        cell: ({ row }) =>
+          row.original.localidadeNome ?? <StatusBadge status="pendente_aprovacao" rotulo="Defina o local" />,
       },
       {
         accessorKey: "insumoNome",
@@ -199,7 +208,7 @@ export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: Pilha
             fixo: true,
             temValor: busca !== "",
             onLimpar: () => setBusca(""),
-            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, insumo ou observação" />,
+            elemento: <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Nome, local, insumo ou observação" />,
           },
           {
             id: "status",
@@ -266,6 +275,7 @@ export function PilhasTabela({ pilhas, insumos, podeEditar, podeExcluir }: Pilha
           }}
           pilha={editando}
           insumos={insumos}
+          localidades={localidades}
         />
       ) : null}
 

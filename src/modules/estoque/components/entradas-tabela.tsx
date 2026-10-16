@@ -151,6 +151,10 @@ export function EntradasTabela({
         cell: ({ row }) =>
           row.original.ocNumero ? (
             <span className="codigo-doc">{row.original.ocNumero}</span>
+          ) : row.original.vinculo === "frete" ? (
+            <StatusBadge status="recebido" rotulo="Frete" />
+          ) : row.original.vinculo === "transferencia" ? (
+            <StatusBadge status="recebido" rotulo="Transferência" />
           ) : (
             <span className="text-muted-foreground">Avulsa</span>
           ),
@@ -238,7 +242,11 @@ export function EntradasTabela({
         acoesLinha={
           temAcoes
             ? (entrada) =>
-                entrada.excluida ? (
+                entrada.vinculo ? (
+                  <DropdownMenuItem disabled>
+                    {entrada.vinculo === "frete" ? "Veio de um frete: altere no Frete" : "É de uma transferência: altere em Transferências"}
+                  </DropdownMenuItem>
+                ) : entrada.excluida ? (
                   podeExcluir ? (
                     <DropdownMenuItem onSelect={() => void restaurar(entrada)}>
                       <RotateCcw />
