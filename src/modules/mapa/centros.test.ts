@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   agruparRelatorio,
+  mesAnteriorDe,
+  mesDoRelatorio,
   paraCentrosEquipamento,
   ROTULO_MOTIVO_CENTRO,
+  rotuloMes,
   rotuloMotivoCentro,
 } from "@/modules/mapa/centros";
 
@@ -123,5 +126,22 @@ describe("rótulos de motivo", () => {
     );
     expect(rotuloMotivoCentro("obra")).toBe("Operando na obra");
     expect(rotuloMotivoCentro("desconhecido")).toBe("desconhecido");
+  });
+});
+
+describe("mês do relatório", () => {
+  it("aceita AAAA-MM válido e cai no mês de hoje fora disso", () => {
+    expect(mesDoRelatorio("2026-09", "2026-10")).toBe("2026-09");
+    expect(mesDoRelatorio("2026-13", "2026-10")).toBe("2026-10");
+    expect(mesDoRelatorio(undefined, "2026-10")).toBe("2026-10");
+    expect(mesDoRelatorio("x", "2026-10")).toBe("2026-10");
+  });
+  it("mês anterior vira o ano", () => {
+    expect(mesAnteriorDe("2026-10")).toBe("2026-09");
+    expect(mesAnteriorDe("2026-01")).toBe("2025-12");
+  });
+  it("rótulo por extenso", () => {
+    expect(rotuloMes("2026-10")).toBe("outubro de 2026");
+    expect(rotuloMes("2027-01")).toBe("janeiro de 2027");
   });
 });

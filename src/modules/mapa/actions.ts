@@ -817,6 +817,41 @@ export async function marcarVariosCentros(
   }
 }
 
+/** Planilha do relatório "Dias por centro de custo" do mês (e da propriedade filtrada). */
+export async function gerarPlanilhaDiasCentro(
+  mes: string,
+  propriedade: string,
+): Promise<{ ok: true; base64: string; nomeArquivo: string } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.historico", "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar os relatórios do Mapa" };
+  }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { erro: "Mês inválido" };
+  if (!["", "propria", "colorado", "alugada"].includes(propriedade))
+    return { erro: "Propriedade inválida" };
+  try {
+    const { carregarRelDiasCentro } = await import("@/modules/mapa/centros-queries");
+    const { linhas, erro } = await carregarRelDiasCentro(mes, propriedade);
+    if (erro) return { erro };
+    const { agruparRelatorio, rotuloMes } = await import("@/modules/mapa/centros");
+    const { montarPlanilhaDiasCentro } = await import("@/modules/mapa/centros-planilha");
+    const workbook = montarPlanilhaDiasCentro(agruparRelatorio(linhas), rotuloMes(mes));
+    const conteudo = await workbook.xlsx.writeBuffer();
+    return {
+      ok: true,
+      base64: Buffer.from(conteudo).toString("base64"),
+      nomeArquivo: `dias-por-centro-${mes}.xlsx`,
+    };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.planilhaDiasCentro",
+      erro,
+      `Não foi possível gerar a planilha: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
 /** Acopla um implemento no equipamento do card, ou desacopla (equipamentoId null). */
 export async function acoplarImplemento(
   dados: unknown,

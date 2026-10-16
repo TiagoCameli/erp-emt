@@ -91,6 +91,30 @@ export function paraCentrosEquipamento(
   };
 }
 
+const MES_VALIDO = /^\d{4}-(0[1-9]|1[0-2])$/;
+const NOMES_MES = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+/** O `?mes=AAAA-MM` da URL; fora do formato, o mês de hoje. */
+export function mesDoRelatorio(param: string | undefined, mesHoje: string): string {
+  return param && MES_VALIDO.test(param) ? param : mesHoje;
+}
+
+export function mesAnteriorDe(mes: string): string {
+  const ano = Number(mes.slice(0, 4));
+  const numero = Number(mes.slice(5, 7));
+  return numero === 1
+    ? `${String(ano - 1).padStart(4, "0")}-12`
+    : `${String(ano).padStart(4, "0")}-${String(numero - 1).padStart(2, "0")}`;
+}
+
+/** "2026-10" → "outubro de 2026". */
+export function rotuloMes(mes: string): string {
+  return `${NOMES_MES[Number(mes.slice(5, 7)) - 1] ?? mes} de ${mes.slice(0, 4)}`;
+}
+
 /** Uma linha de fn_mapa_rel_dias_centro: dias de uma máquina num centro, no mês. */
 export interface RelDiasCentroLinha {
   equipamentoId: string;
