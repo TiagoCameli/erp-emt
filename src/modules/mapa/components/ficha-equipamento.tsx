@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipamento";
+import { textoDesde } from "@/modules/mapa/desde";
 import { formatarKm } from "@/modules/mapa/geo";
 import { CLASSES_ESTADO } from "@/modules/mapa/rotulos";
 import {
@@ -31,6 +32,8 @@ import {
 export interface FichaEquipamentoProps {
   equipamento: EquipamentoMapa;
   pessoas: PessoaMapa[];
+  /** yyyy-mm-dd de Rio Branco, do servidor (conta "desde ontem"). */
+  hoje: string;
   permissoes: PermissoesMapa;
   selecionados: number;
   salvando: boolean;
@@ -62,6 +65,7 @@ function Linha({
 export function FichaEquipamento({
   equipamento: e,
   pessoas,
+  hoje,
   permissoes,
   selecionados,
   salvando,
@@ -82,6 +86,8 @@ export function FichaEquipamento({
     [pessoas],
   );
   const podeEditar = permissoes.editar;
+  const desde =
+    e.estado === "sem_posicao" ? null : textoDesde(e.estadoDesde, hoje);
   const podeMudarEstado =
     podeEditar && e.estado !== "fora_funcionamento" && e.pos !== null;
   const onde = [
@@ -146,10 +152,8 @@ export function FichaEquipamento({
         >
           {ROTULO_ESTADO[e.estado]}
         </Badge>
-        {e.diasNoEstado !== null && e.estado !== "sem_posicao" ? (
-          <span className="text-legenda text-muted-foreground">
-            há {e.diasNoEstado} {e.diasNoEstado === 1 ? "dia" : "dias"}
-          </span>
+        {desde ? (
+          <span className="text-legenda text-muted-foreground">{desde}</span>
         ) : null}
         <Badge variant="outline" className="text-legenda">
           {ROTULO_PROPRIEDADE[e.propriedade]}

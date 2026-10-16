@@ -71,11 +71,18 @@ import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import { FichaLocal } from "@/modules/mapa/components/ficha-local";
 import { FichaObjeto } from "@/modules/mapa/components/ficha-objeto";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
+import {
+  ESCALA_MAQUINA,
+  RAIO_MINIMO_ANEL_PX,
+  RAIO_MINIMO_GIRO_PX,
+  raioDoAnelM,
+} from "@/modules/mapa/components/camadas";
 import { rotaPelaEstrada } from "@/modules/mapa/components/rota-estrada";
 import {
   MapaEmt,
   type Alvo,
   type ArrasteSolto,
+  type CartaoNoMapa,
   type CenaBase,
   type Foco,
   type GiroMapa,
@@ -99,7 +106,7 @@ import {
   type TrechoMedido,
 } from "@/modules/mapa/geo";
 import { extrasPorLocal } from "@/modules/mapa/dados";
-import { objetosDoEstoque } from "@/modules/mapa/objetos";
+import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
@@ -132,6 +139,15 @@ const CHAVE_PAINEL = "erp-emt:mapa:painel";
 /** Raio do anel de giro em volta da máquina (as miniaturas são 3x o tamanho real). */
 const RAIO_GIRO_M = 45;
 const RAIO_GIRO_USINA_M = 90;
+
+/** Tela larga (md do Tailwind): a ficha abre ao lado do objeto, no mapa. */
+const CONSULTA_TELA_LARGA = "(min-width: 768px)";
+function assinarTelaLarga(aviso: () => void) {
+  const mq = window.matchMedia(CONSULTA_TELA_LARGA);
+  mq.addEventListener("change", aviso);
+  return () => mq.removeEventListener("change", aviso);
+}
+const lerTelaLarga = () => window.matchMedia(CONSULTA_TELA_LARGA).matches;
 const assinantesPainel = new Set<() => void>();
 /** Reserva para quando o storage não existe (aba privada): vale só nesta visita. */
 let painelNaMemoria: boolean | null = null;
@@ -272,26 +288,16 @@ export function TelaMapa({
     setGiroMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
   // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado). A ficha
   // mora na lateral, então ficha aberta mostra a lateral mesmo com a lista recolhida.
+  const telaLarga = React.useSyncExternalStore(
+    assinarTelaLarga,
+    lerTelaLarga,
+    () => false,
+  );
   const listaAberta = React.useSyncExternalStore(
     assinarPainel,
     lerPainel,
     () => true,
   );
-  const painelAberto =
-    listaAberta ||
-    ficha !== null ||
-    localFicha !== null ||
-    obraFicha !== null ||
-    objetoFicha !== null;
-  const alternarPainel = () => {
-    if (painelAberto) {
-      setFicha(null);
-      setLocalFicha(null);
-      setObraFicha(null);
-      setObjetoFicha(null);
-    }
-    gravarPainel(!painelAberto);
-  };
   const [hover, setHover] = React.useState<string | null>(null);
   const [fundo, setFundo] = React.useState<ModoFundo>("mapa");
   const [inclinado, setInclinado] = React.useState(true);
@@ -1303,6 +1309,147 @@ export function TelaMapa({
     </Button>
   );
 
+  // A ficha da máquina, da pessoa ou do objeto tocado. Em tela larga ela abre ao lado dele, no
+  // mapa (pedido do Tiago, 16/10/2026); no celular, ou sem lugar no mapa, fica na lateral.
+  const fichaFlutuante: React.ReactNode = equipamentoFicha ? (
+    <FichaEquipamento
+      equipamento={
+        rumoPrevio?.id === equipamentoFicha.id
+          ? {
+              ...equipamentoFicha,
+              heading: rumoPrevio.rumo,
+              rumoManual: rumoPrevio.rumo,
+            }
+          : {
+              ...equipamentoFicha,
+              heading: headingNoTrecho(equipamentoFicha, medidosPorId),
+            }
+      }
+      onGirar={(delta) => girar(equipamentoFicha, delta)}
+      pessoas={estado.pessoas}
+      hoje={estado.hoje}
+      permissoes={permissoes}
+      selecionados={selecao.size}
+      salvando={salvando}
+      onFechar={() => setFicha(null)}
+      onFocar={() => equipamentoFicha.pos && focar(equipamentoFicha.pos, 16)}
+      onPosicionar={() => iniciarPosicionar(equipamentoFicha)}
+      onMarcarEstado={(s) =>
+        setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
+      }
+      onAssinalarOperador={assinalar}
+      onEncerrarLocacao={() => {
+        setFimLocacao(estado.hoje);
+        setEncerrando(equipamentoFicha);
+      }}
+    />
+  ) : pessoaFicha ? (
+    <section
+      className="flex flex-col gap-1 rounded-lg border border-border bg-background p-3 text-detalhe"
+      aria-label={`Ficha de ${pessoaFicha.nome}`}
+    >
+      <p className="text-corpo font-semibold">{pessoaFicha.nome}</p>
+      <p className="text-muted-foreground">
+        {[pessoaFicha.funcao, pessoaFicha.vinculo, pessoaFicha.equipeNome]
+          .filter(Boolean)
+          .join(" · ") || "Sem função cadastrada"}
+      </p>
+      <p>
+        Opera:{" "}
+        {pessoaFicha.equipamentoId ? (
+          (estado.equipamentos.find((e) => e.id === pessoaFicha.equipamentoId)
+            ?.codigo ?? "–")
+        ) : (
+          <span className="text-muted-foreground">ninguém assinalado</span>
+        )}
+      </p>
+      {permissoes.editar ? (
+        <p className="text-legenda text-muted-foreground">
+          Arraste a pessoa até uma máquina para assinalar como operador.
+        </p>
+      ) : null}
+    </section>
+  ) : objetoDaFicha ? (
+    <FichaObjeto
+      key={objetoDaFicha.id}
+      objeto={objetoDaFicha}
+      linhas={linhasDaFicha(objetoDaFicha, {
+        tanques: estado.tanques,
+        pilhas: estado.pilhas,
+        depositos: estado.depositos,
+        localidades: estado.localidades,
+        equipamentos: estado.equipamentos,
+      })}
+      podeEditar={permissoes.editar}
+      onFechar={() => setObjetoFicha(null)}
+      onMover={() =>
+        escolherNoMapa({
+          tipo: "objeto",
+          alvo: objetoDaFicha.alvo,
+          id: objetoDaFicha.id,
+          rotulo: objetoDaFicha.nome,
+        })
+      }
+    />
+  ) : null;
+  const cartao: CartaoNoMapa | null = (() => {
+    if (!telaLarga || !fichaFlutuante) return null;
+    if (equipamentoFicha) {
+      const naCena = cena.equipamentos.find(
+        (e) => e.id === equipamentoFicha.id,
+      );
+      if (!naCena?.pos) return null;
+      const giro = anelGiro?.id === naCena.id ? anelGiro : null;
+      return {
+        chave: naCena.id,
+        pos: naCena.pos,
+        raioM: giro ? giro.raioM : raioDoAnelM(naCena.modelo3d),
+        raioMinimoPx: giro ? RAIO_MINIMO_GIRO_PX : RAIO_MINIMO_ANEL_PX,
+        conteudo: fichaFlutuante,
+      };
+    }
+    if (pessoaFicha) {
+      const naCena = cena.pessoas.find((q) => q.id === pessoaFicha.id);
+      if (!naCena?.pos) return null;
+      return {
+        chave: naCena.id,
+        pos: naCena.pos,
+        raioM: 3,
+        raioMinimoPx: 14,
+        conteudo: fichaFlutuante,
+      };
+    }
+    if (objetoDaFicha?.pos) {
+      // Pilha em escala real; tanque e depósito na escala das máquinas (como em camadas.ts).
+      const escala = objetoDaFicha.forma === "cone" ? 1 : ESCALA_MAQUINA;
+      return {
+        chave: objetoDaFicha.id,
+        pos: objetoDaFicha.pos,
+        raioM:
+          (Math.max(objetoDaFicha.largura, objetoDaFicha.comprimento) / 2) *
+          escala,
+        raioMinimoPx: 12,
+        conteudo: fichaFlutuante,
+      };
+    }
+    return null;
+  })();
+  // A lateral só abre sozinha para a ficha que não foi para o mapa.
+  const fichaNaLateral = fichaFlutuante !== null && cartao === null;
+  const painelAberto =
+    listaAberta || fichaNaLateral || localFicha !== null || obraFicha !== null;
+  const alternarPainel = () => {
+    if (painelAberto) {
+      setLocalFicha(null);
+      setObraFicha(null);
+      if (fichaNaLateral) {
+        setFicha(null);
+        setObjetoFicha(null);
+      }
+    }
+    gravarPainel(!painelAberto);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <BarraFiltrosConfiguravel
@@ -1364,6 +1511,7 @@ export function TelaMapa({
             onGirarPrevia={girarPeloAnel}
             onGirarFim={soltarAnel}
             onMotor={aoMotor}
+            cartao={cartao}
           />
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
             <div className="pointer-events-auto flex flex-wrap gap-1.5">
@@ -1570,76 +1718,8 @@ export function TelaMapa({
             objetosSemLugar={objetosSemLugar}
             onEscolherObjeto={clicarObjeto}
           >
-            {equipamentoFicha ? (
-              <FichaEquipamento
-                equipamento={
-                  rumoPrevio?.id === equipamentoFicha.id
-                    ? {
-                        ...equipamentoFicha,
-                        heading: rumoPrevio.rumo,
-                        rumoManual: rumoPrevio.rumo,
-                      }
-                    : {
-                        ...equipamentoFicha,
-                        heading: headingNoTrecho(
-                          equipamentoFicha,
-                          medidosPorId,
-                        ),
-                      }
-                }
-                onGirar={(delta) => girar(equipamentoFicha, delta)}
-                pessoas={estado.pessoas}
-                permissoes={permissoes}
-                selecionados={selecao.size}
-                salvando={salvando}
-                onFechar={() => setFicha(null)}
-                onFocar={() =>
-                  equipamentoFicha.pos && focar(equipamentoFicha.pos, 16)
-                }
-                onPosicionar={() => iniciarPosicionar(equipamentoFicha)}
-                onMarcarEstado={(s) =>
-                  setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
-                }
-                onAssinalarOperador={assinalar}
-                onEncerrarLocacao={() => {
-                  setFimLocacao(estado.hoje);
-                  setEncerrando(equipamentoFicha);
-                }}
-              />
-            ) : pessoaFicha ? (
-              <section
-                className="flex flex-col gap-1 rounded-lg border border-border bg-background p-3 text-detalhe"
-                aria-label={`Ficha de ${pessoaFicha.nome}`}
-              >
-                <p className="text-corpo font-semibold">{pessoaFicha.nome}</p>
-                <p className="text-muted-foreground">
-                  {[
-                    pessoaFicha.funcao,
-                    pessoaFicha.vinculo,
-                    pessoaFicha.equipeNome,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || "Sem função cadastrada"}
-                </p>
-                <p>
-                  Opera:{" "}
-                  {pessoaFicha.equipamentoId ? (
-                    (estado.equipamentos.find(
-                      (e) => e.id === pessoaFicha.equipamentoId,
-                    )?.codigo ?? "–")
-                  ) : (
-                    <span className="text-muted-foreground">
-                      ninguém assinalado
-                    </span>
-                  )}
-                </p>
-                {permissoes.editar ? (
-                  <p className="text-legenda text-muted-foreground">
-                    Arraste a pessoa até uma máquina para assinalar como
-                    operador.
-                  </p>
-                ) : null}
-              </section>
+            {fichaNaLateral ? (
+              fichaFlutuante
             ) : localDaFicha ? (
               <FichaLocal
                 key={localDaFicha.id}
@@ -1676,21 +1756,6 @@ export function TelaMapa({
                     tipo: "local",
                     rotulo: localDaFicha.nome,
                     localidadeId: localDaFicha.id,
-                  })
-                }
-              />
-            ) : objetoDaFicha ? (
-              <FichaObjeto
-                key={objetoDaFicha.id}
-                objeto={objetoDaFicha}
-                podeEditar={permissoes.editar}
-                onFechar={() => setObjetoFicha(null)}
-                onMover={() =>
-                  escolherNoMapa({
-                    tipo: "objeto",
-                    alvo: objetoDaFicha.alvo,
-                    id: objetoDaFicha.id,
-                    rotulo: objetoDaFicha.nome,
                   })
                 }
               />

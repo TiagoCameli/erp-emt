@@ -7,9 +7,13 @@ import {
   corDaPilha,
   dimensoesDaPilha,
   dimensoesDoTanque,
+  linhasDaFicha,
   objetosDoEstoque,
+  textoSaldoPilha,
+  volumeDaPilha,
+  type FontesFicha,
 } from "@/modules/mapa/objetos";
-import type { TanqueMapa } from "@/modules/mapa/tipos";
+import type { PilhaMapa, TanqueMapa } from "@/modules/mapa/tipos";
 
 const tanque = (t: Partial<TanqueMapa>): TanqueMapa => ({
   id: "t",
@@ -66,7 +70,18 @@ describe("objetos do Estoque no mapa", () => {
   it("todos entram, com ou sem lugar, cada um com a forma do seu tipo", () => {
     const objetos = objetosDoEstoque(
       [tanque({ id: "t1", pos: [-72.7, -7.6], insumo: "Diesel S10" })],
-      [{ id: "p1", nome: "Brita 1 - Colorado", saldo: 0, pos: null }],
+      [
+        {
+          id: "p1",
+          nome: "Brita 1 - Colorado",
+          saldo: 0,
+          totalEntrada: 0,
+          insumo: "BRITA 1",
+          unidade: "t",
+          localidadeId: null,
+          pos: null,
+        },
+      ],
       [{ id: "d1", nome: "Almoxarifado", localidadeId: null, pos: null }],
     );
     expect(objetos.map((o) => [o.alvo, o.forma])).toEqual([
@@ -95,5 +110,84 @@ describe("tamanho da pilha pelo saldo", () => {
     expect(dimensoesDaPilha(300).diametro).toBeGreaterThan(
       dimensoesDaPilha(30).diametro,
     );
+  });
+
+  it("pilha em m³ não divide por 1,5; em t divide", () => {
+    expect(volumeDaPilha(150, "t")).toBe(100);
+    expect(volumeDaPilha(150, "m³")).toBe(150);
+    expect(volumeDaPilha(150, "M3")).toBe(150);
+    expect(textoSaldoPilha(282, "t")).toBe("282 t ≈ 188 m³");
+    expect(textoSaldoPilha(40, "m³")).toBe("40 m³");
+  });
+});
+
+const pilha = (p: Partial<PilhaMapa>): PilhaMapa => ({
+  id: "p",
+  nome: "Brita 1 - Canteiro Gregorio",
+  saldo: 282,
+  totalEntrada: 282,
+  insumo: "BRITA 1",
+  unidade: "t",
+  localidadeId: "l1",
+  pos: [-71.49, -7.95],
+  ...p,
+});
+
+const fontes = (f: Partial<FontesFicha>): FontesFicha => ({
+  tanques: [],
+  pilhas: [],
+  depositos: [],
+  localidades: [{ id: "l1", nome: "Usina Gregorio" }],
+  equipamentos: [{ id: "e1", codigo: "CB-001" }],
+  ...f,
+});
+
+describe("linhas da ficha do objeto", () => {
+  it("pilha: material, saldo com volume, entrou, saiu e local (Gregorio em 16/10)", () => {
+    const linhas = linhasDaFicha(
+      { id: "p", alvo: "pilha" },
+      fontes({ pilhas: [pilha({ saldo: 250, totalEntrada: 282 })] }),
+    );
+    expect(linhas).toEqual([
+      { rotulo: "Material", valor: "BRITA 1" },
+      { rotulo: "Saldo", valor: "250 t ≈ 167 m³" },
+      { rotulo: "Já entrou", valor: "282 t" },
+      { rotulo: "Já saiu", valor: "32 t" },
+      { rotulo: "Local", valor: "Usina Gregorio" },
+    ]);
+  });
+
+  it("tanque: conteúdo, nível sobre a capacidade e a máquina que o leva", () => {
+    const linhas = linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({
+        tanques: [
+          tanque({
+            id: "t",
+            capacidade: 15000,
+            nivel: 5152.9,
+            insumo: "Diesel S10",
+            equipamentoId: "e1",
+          }),
+        ],
+      }),
+    );
+    expect(linhas).toEqual([
+      { rotulo: "Tipo", valor: "Tanque de combustível" },
+      { rotulo: "Conteúdo", valor: "Diesel S10" },
+      { rotulo: "Nível", valor: "5.152,9 de 15.000 L (34%)" },
+      { rotulo: "Anda com", valor: "CB-001" },
+    ]);
+  });
+
+  it("posto externo não tem nível; objeto que sumiu do cadastro não inventa linha", () => {
+    const linhas = linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({
+        tanques: [tanque({ id: "t", ehExterno: true, localidadeId: "l1" })],
+      }),
+    );
+    expect(linhas.map((l) => l.rotulo)).toEqual(["Tipo", "Conteúdo", "Local"]);
+    expect(linhasDaFicha({ id: "x", alvo: "pilha" }, fontes({}))).toEqual([]);
   });
 });

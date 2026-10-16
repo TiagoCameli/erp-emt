@@ -256,7 +256,15 @@ export interface DepositoMapa {
 export interface PilhaMapa {
   id: string;
   nome: string;
+  /** Na unidade do material (as pilhas de agregado são controladas em toneladas). */
   saldo: number;
+  /** Tudo o que já entrou na pilha; o que saiu é a diferença para o saldo. */
+  totalEntrada: number;
+  /** Material da pilha (insumo do Estoque). */
+  insumo: string;
+  /** Sigla da unidade do material ("t", "m³"). */
+  unidade: string;
+  localidadeId: string | null;
   pos: Posicao | null;
 }
 
@@ -368,5 +376,16 @@ export interface FichaNumeros {
     anoRef: number;
     /** A máquina tem centro de custo (sem ele, não há como somar o Financeiro). */
     temCentro: boolean;
+  };
+  /**
+   * Custo das OS concluídas (Manutenção), pela data de conclusão, nos mesmos períodos. Fonte
+   * diferente do Financeiro e que pode se sobrepor a ele: a ficha mostra as duas, sem somar.
+   */
+  custoOs: {
+    total: number;
+    ultimos12Meses: number;
+    ano: number;
+    mesPassado: number;
+    quantidade: number;
   };
 }

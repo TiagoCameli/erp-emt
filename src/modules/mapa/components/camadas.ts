@@ -54,6 +54,15 @@ export const ID_LOCAIS = "locais-nome";
 
 /** Quantas vezes o tamanho real a miniatura aparece (fixo no terreno, em metros). */
 export const ESCALA_MAQUINA = 3;
+
+/** Raio do anel de seleção da máquina, em metros (a usina é maior). */
+export function raioDoAnelM(modelo3d: string): number {
+  return (modelo3d === "usina_asfalto" ? 28 : 13) * ESCALA_MAQUINA;
+}
+/** O anel nunca fica menor que isto na tela, por mais longe que esteja. */
+export const RAIO_MINIMO_ANEL_PX = 26;
+/** Idem para o anel de giro (maior, para dar para pegar de longe). */
+export const RAIO_MINIMO_GIRO_PX = 34;
 const FONTE = "Inter, Helvetica, Arial, sans-serif";
 const BRANCO: Rgb = [255, 255, 255];
 
@@ -401,7 +410,7 @@ export function montarCamadas(cena: Cena): Layer[] {
         getPosition: (d) => d.pos,
         getRadius: (d) => d.raioM,
         radiusUnits: "meters",
-        radiusMinPixels: 34,
+        radiusMinPixels: RAIO_MINIMO_GIRO_PX,
         filled: false,
         stroked: true,
         getLineColor: [255, 255, 255, 230],
@@ -523,10 +532,9 @@ export function montarCamadas(cena: Cena): Layer[] {
       id: "anel",
       data: marcados,
       getPosition: (d) => posicaoDe(cena, d),
-      getRadius: (d) =>
-        (d.modelo3d === "usina_asfalto" ? 28 : 13) * ESCALA_MAQUINA,
+      getRadius: (d) => raioDoAnelM(d.modelo3d),
       radiusUnits: "meters",
-      radiusMinPixels: 26,
+      radiusMinPixels: RAIO_MINIMO_ANEL_PX,
       filled: true,
       getFillColor: (d) =>
         cena.selecao.has(d.id) ? [255, 255, 255, 40] : [255, 255, 255, 25],

@@ -426,6 +426,20 @@ describe("paraFichaNumeros", () => {
         ano_ref: 2026,
         tem_centro: true,
       },
+      custo_os: {
+        total: "10612.9700",
+        ultimos_12_meses: "10612.9700",
+        ano: "10612.9700",
+        mes_passado: 0,
+        quantidade: 3,
+      },
+    });
+    expect(f?.custoOs).toEqual({
+      total: 10612.97,
+      ultimos12Meses: 10612.97,
+      ano: 10612.97,
+      mesPassado: 0,
+      quantidade: 3,
     });
     expect(f?.ultimoAbastecimento?.litros).toBe(100);
     expect(f?.ultimaManutencao?.custo).toBe(184);
@@ -448,6 +462,8 @@ describe("paraFichaNumeros", () => {
     expect(vazio?.ultimoAbastecimento).toBeNull();
     expect(vazio?.ultimaManutencao).toBeNull();
     expect(vazio?.gastoManutencao.temCentro).toBe(false);
+    // RPC antiga, sem custo_os: zero OS, não quebra
+    expect(vazio?.custoOs.quantidade).toBe(0);
     expect(paraFichaNumeros(null)).toBeNull();
   });
 });
