@@ -136,6 +136,8 @@ export interface MapaEmtProps {
   onMotor: (motor: TipoMotor, aviso: string | null) => void;
   /** Ficha aberta ao lado do objeto (null = nenhuma, ou mostrada fora do mapa). */
   cartao?: CartaoNoMapa | null;
+  /** Clique no mapa sem nada embaixo (nem máquina, nem nome): fecha o card aberto. */
+  onClicarVazio?: () => void;
   className?: string;
 }
 
@@ -569,6 +571,8 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   } | null>(null);
   // O navegador dispara um `click` depois do arraste; ele não pode limpar a seleção.
   const ignorarCliqueRef = React.useRef(false);
+  // Onde o ponteiro desceu: soltar depois de arrastar o mapa ainda dispara `click` no mouse.
+  const descidaRef = React.useRef<{ x: number; y: number } | null>(null);
   const tickRef = React.useRef(0);
   const [dica, setDica] = React.useState<{
     titulo: string;
@@ -811,6 +815,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     };
 
     const aoPressionar = (e: PointerEvent) => {
+      descidaRef.current = { x: e.clientX, y: e.clientY };
       if (e.button !== undefined && e.button !== 0) return;
       const motor = motorRef.current;
       if (!motor) return;
@@ -973,6 +978,10 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       }
       const motor = motorRef.current;
       if (!motor) return;
+      // Foi arraste do mapa, não clique: não posiciona nem fecha nada.
+      const desceu = descidaRef.current;
+      if (desceu && Math.hypot(e.clientX - desceu.x, e.clientY - desceu.y) > 5)
+        return;
       const r = el.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
@@ -997,6 +1006,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       }
       if (p.selecao.size > 0 && !(e.shiftKey || e.ctrlKey || e.metaKey))
         p.onSelecionar(null, false);
+      p.onClicarVazio?.();
     };
 
     const aoSair = () => {
