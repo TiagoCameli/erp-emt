@@ -48,6 +48,16 @@ export const COR_MATERIAL: Rgb = [69, 70, 75];
 export const COR_EXTERNO: Rgb = [150, 150, 150];
 export const COR_DEPOSITO: Rgb = [62, 119, 68];
 
+/**
+ * Depósito sem tamanho escolhido na ficha, em metros e em tamanho real (16/10/2026: "diminua o
+ * almoxarifado, deixa eu escolher o tamanho"). Antes era esta caixa vezes a escala das máquinas.
+ */
+export const TAMANHO_DEPOSITO_PADRAO = {
+  largura: 10,
+  comprimento: 15,
+  altura: 5,
+} as const;
+
 /** Capacidade do tanque em litros (m³ vira L); sem capacidade, a padrão. */
 function litrosDoTanque(capacidade: number | null, unidade: string): number {
   if (!capacidade || capacidade <= 0) return CAPACIDADE_PADRAO_L;
@@ -235,9 +245,9 @@ export function objetosDoEstoque(
       detalhe: "depósito",
       pos: d.pos,
       forma: "caixa",
-      largura: 10,
-      comprimento: 15,
-      altura: 5,
+      largura: d.larguraM ?? TAMANHO_DEPOSITO_PADRAO.largura,
+      comprimento: d.comprimentoM ?? TAMANHO_DEPOSITO_PADRAO.comprimento,
+      altura: d.alturaM ?? TAMANHO_DEPOSITO_PADRAO.altura,
       cor: COR_DEPOSITO,
     });
   return objetos;
@@ -283,7 +293,8 @@ export function localDoPonto(
   let perto: { nome: string; d: number } | null = null;
   for (const l of localidades) {
     const d = distanciaM(pos, l.pos);
-    if (d <= PERTO_DE_MAX_M && (!perto || d < perto.d)) perto = { nome: l.nome, d };
+    if (d <= PERTO_DE_MAX_M && (!perto || d < perto.d))
+      perto = { nome: l.nome, d };
   }
   return perto ? `perto de ${perto.nome} (${Math.round(perto.d)} m)` : null;
 }
@@ -299,7 +310,10 @@ function textoDoLocal(
     : undefined;
   if (cadastrado) return cadastrado;
   if (!pos) return "sem lugar no mapa";
-  return localDoPonto(pos, fontes.localidades, fontes.snapLocalM) ?? "fora de um local";
+  return (
+    localDoPonto(pos, fontes.localidades, fontes.snapLocalM) ??
+    "fora de um local"
+  );
 }
 
 /** Linha "Valor" quando quem vê tem a Posição do Estoque; o que não está na posição vale zero. */
@@ -368,11 +382,16 @@ export function linhasDaFicha(
     linhas.push(
       maquina
         ? { rotulo: "Anda com", valor: maquina.codigo }
-        : { rotulo: "Local", valor: textoDoLocal(t.localidadeId, t.pos, fontes) },
+        : {
+            rotulo: "Local",
+            valor: textoDoLocal(t.localidadeId, t.pos, fontes),
+          },
     );
     return linhas;
   }
   const d = fontes.depositos.find((x) => x.id === objeto.id);
   if (!d) return [];
-  return [{ rotulo: "Local", valor: textoDoLocal(d.localidadeId, d.pos, fontes) }];
+  return [
+    { rotulo: "Local", valor: textoDoLocal(d.localidadeId, d.pos, fontes) },
+  ];
 }

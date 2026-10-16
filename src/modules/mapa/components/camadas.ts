@@ -11,11 +11,7 @@ import {
   TextLayer,
 } from "@deck.gl/layers";
 import { ScenegraphLayer, SimpleMeshLayer } from "@deck.gl/mesh-layers";
-import {
-  ConeGeometry,
-  CubeGeometry,
-  Geometry,
-} from "@luma.gl/engine";
+import { ConeGeometry, CubeGeometry, Geometry } from "@luma.gl/engine";
 
 import {
   hexParaRgb,
@@ -442,9 +438,8 @@ export function montarCamadas(cena: Cena): Layer[] {
     if (dados.length === 0) continue;
     // A caixa do luma tem 2 de lado; o cone, 1.
     const unidade = forma === "caixa" ? 0.5 : 1;
-    // Pilha em escala real (pedido do Tiago, 15/10/2026: o tamanho dela já é o volume do saldo);
-    // depósito na escala das máquinas.
-    const escala = forma === "cone" ? 1 : ESCALA_MAQUINA;
+    // Em escala real: a pilha (15/10/2026: o tamanho dela já é o volume do saldo) e o depósito
+    // (16/10/2026: o tamanho é o escolhido na ficha, em metros).
     camadas.push(
       new SimpleMeshLayer<ObjetoNoMapa>({
         id: `objetos-${forma}`,
@@ -455,12 +450,12 @@ export function montarCamadas(cena: Cena): Layer[] {
         // Malha em pé no Y: roll de 90° põe o Y no Z (para cima) do mapa.
         getOrientation: [0, 0, 90],
         getScale: (d) => [
-          d.largura * escala * unidade,
-          d.altura * escala * unidade,
-          d.comprimento * escala * unidade,
+          d.largura * unidade,
+          d.altura * unidade,
+          d.comprimento * unidade,
         ],
         // A malha nasce centrada: sobe meia altura para apoiar no chão.
-        getTranslation: (d) => [0, 0, (d.altura * escala) / 2],
+        getTranslation: (d) => [0, 0, d.altura / 2],
         pickable: false,
       }),
     );

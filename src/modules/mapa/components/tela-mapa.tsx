@@ -36,6 +36,7 @@ import {
   ajustarRaioLocal,
   assinalarOperador,
   colocarLocal,
+  definirTamanhoDeposito,
   desenharObra,
   editarLocal,
   encerrarLocacao,
@@ -1495,6 +1496,12 @@ export function TelaMapa({
           id: objetoDaFicha.id,
           rotulo: objetoDaFicha.nome,
         })
+      }
+      onSalvarTamanho={async (t) =>
+        aplicar(
+          await definirTamanhoDeposito({ id: objetoDaFicha.id, ...t }),
+          `Tamanho de ${objetoDaFicha.nome} salvo`,
+        )
       }
     />
   ) : null;

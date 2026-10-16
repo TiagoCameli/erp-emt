@@ -256,6 +256,10 @@ export interface DepositoMapa {
   nome: string;
   localidadeId: string | null;
   pos: Posicao | null;
+  /** Tamanho escolhido na ficha, em metros; null = o padrão (TAMANHO_DEPOSITO_PADRAO). */
+  larguraM: number | null;
+  comprimentoM: number | null;
+  alturaM: number | null;
 }
 
 /** Pilha de agregado do Estoque (areia, brita...). */
