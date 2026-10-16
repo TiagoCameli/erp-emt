@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Crosshair, Plus, X } from "lucide-react";
+import { ChevronRight, Crosshair, Plus, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,8 @@ import {
 /**
  * O painel ao lado do mapa: contagem por estado (chips clicáveis, que recortam a cena e as listas
  * pelo mesmo filtro da barra), a lista de quem ainda não tem posição (com "posicionar") e a lista
- * de quem está no mapa (clique centraliza e seleciona). Busca e obra vivem na barra de filtros
+ * de quem está no mapa (clique centraliza e seleciona). Embaixo, as pessoas no mapa e as que ainda
+ * não têm lugar (com "posicionar": toque numa máquina e ela vira operadora, ou num ponto/local). Busca e obra vivem na barra de filtros
  * canônica, em cima da tela. Em tela estreita o painel fica embaixo do mapa.
  */
 
@@ -42,11 +43,15 @@ export interface PainelMapaProps {
   semPosicao: EquipamentoMapa[];
   noMapa: EquipamentoMapa[];
   pessoasNoMapa: PessoaMapa[];
+  /** Colaboradores ativos ainda sem lugar no mapa (sem máquina, local nem ponto). */
+  pessoasSemPosicao: PessoaMapa[];
   selecao: ReadonlySet<string>;
   posicionando: EquipamentoMapa | null;
+  posicionandoPessoa: PessoaMapa | null;
   permissoes: PermissoesMapa;
   temCandidatosLocacao: boolean;
   onPosicionar: (equipamento: EquipamentoMapa) => void;
+  onPosicionarPessoa: (pessoa: PessoaMapa) => void;
   onCancelarPosicionar: () => void;
   onEscolherEquipamento: (equipamento: EquipamentoMapa) => void;
   onEscolherPessoa: (pessoa: PessoaMapa) => void;
@@ -106,11 +111,14 @@ export function PainelMapa({
   semPosicao,
   noMapa,
   pessoasNoMapa,
+  pessoasSemPosicao,
   selecao,
   posicionando,
+  posicionandoPessoa,
   permissoes,
   temCandidatosLocacao,
   onPosicionar,
+  onPosicionarPessoa,
   onCancelarPosicionar,
   onEscolherEquipamento,
   onEscolherPessoa,
@@ -120,6 +128,9 @@ export function PainelMapa({
   children,
 }: PainelMapaProps) {
   const total = ORDEM_ESTADOS.reduce((s, k) => s + contagens[k], 0);
+  // O quadro inteiro sem posição é longo: a lista abre a pedido, ou sozinha quando há busca.
+  const [verSemPosicao, setVerSemPosicao] = React.useState(false);
+  const abrirSemPosicao = verSemPosicao || filtros.busca.trim() !== "";
 
   return (
     <aside
@@ -158,11 +169,23 @@ export function PainelMapa({
         ))}
       </div>
 
-      {posicionando ? (
+      {posicionando || posicionandoPessoa ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-faixa bg-surface px-3 py-2 text-detalhe">
           <span>
-            Toque no mapa onde está{" "}
-            <span className="font-mono font-medium">{posicionando.codigo}</span>
+            {posicionando ? (
+              <>
+                Toque no mapa onde está{" "}
+                <span className="font-mono font-medium">
+                  {posicionando.codigo}
+                </span>
+              </>
+            ) : (
+              <>
+                Toque no mapa onde fica{" "}
+                <span className="font-medium">{posicionandoPessoa?.nome}</span>{" "}
+                (numa máquina, assinala como operador)
+              </>
+            )}
           </span>
           <Button
             type="button"
@@ -298,6 +321,76 @@ export function PainelMapa({
                 </li>
               ))}
             </ul>
+          </section>
+        ) : null}
+
+        {pessoasSemPosicao.length > 0 ? (
+          <section>
+            <h3 className="mb-1 text-legenda font-medium text-muted-foreground">
+              <button
+                type="button"
+                onClick={() => setVerSemPosicao((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 rounded-sm text-left foco-anel"
+                aria-expanded={abrirSemPosicao}
+              >
+                <span className="flex items-center gap-1">
+                  <ChevronRight
+                    className={cn(
+                      "size-3.5 transition-transform",
+                      abrirSemPosicao && "rotate-90",
+                    )}
+                    aria-hidden
+                  />
+                  Pessoas sem posição
+                </span>
+                <Badge variant="secondary" className="text-legenda">
+                  {pessoasSemPosicao.length}
+                </Badge>
+              </button>
+            </h3>
+            {abrirSemPosicao ? (
+              <ul className="flex flex-col">
+                {pessoasSemPosicao.map((p) => (
+                  <li
+                    key={p.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2 py-1 text-detalhe",
+                      posicionandoPessoa?.id === p.id
+                        ? "bg-accent text-accent-foreground"
+                        : "hover:bg-surface",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onEscolherPessoa(p)}
+                      className="min-w-0 flex-1 text-left foco-anel rounded-sm"
+                    >
+                      <span className="font-medium">{p.nome}</span>
+                      <span className="block truncate text-legenda text-muted-foreground">
+                        {[p.funcao, p.equipeNome].filter(Boolean).join(" · ") ||
+                          "Sem função cadastrada"}
+                      </span>
+                    </button>
+                    {permissoes.editar ? (
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant={
+                          posicionandoPessoa?.id === p.id
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() => onPosicionarPessoa(p)}
+                        aria-label={`Posicionar ${p.nome}`}
+                        title="Posicionar no mapa"
+                      >
+                        <Crosshair />
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
         ) : null}
       </div>

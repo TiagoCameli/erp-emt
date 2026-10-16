@@ -127,6 +127,7 @@ import { extrasPorLocal } from "@/modules/mapa/dados";
 import { pontoNaObra } from "@/modules/mapa/obra-destino";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
+import { pessoaNoFiltro } from "@/modules/mapa/pessoas";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
@@ -426,6 +427,10 @@ export function TelaMapa({
   const [mostrarAreas, setMostrarAreas] = React.useState(true);
   const [filtros, setFiltros] = React.useState<FiltrosMapa>(FILTROS_VAZIOS);
   const [posicionando, setPosicionando] = React.useState<string | null>(null);
+  // Pessoa esperando o toque no mapa (quem ainda não tem lugar não tem o que arrastar).
+  const [posicionandoPessoa, setPosicionandoPessoa] = React.useState<
+    string | null
+  >(null);
   // "Adicionar obra" / "Adicionar localização": diálogo aberto, pedido esperando o toque no
   // mapa e o ponto tocado esperando a confirmação.
   const [adicionando, setAdicionando] = React.useState<"obra" | "local" | null>(
@@ -451,7 +456,8 @@ export function TelaMapa({
   const [pendente, setPendente] = React.useState<Pendente | null>(null);
   const [pendentePessoa, setPendentePessoa] = React.useState<{
     pessoa: PessoaMapa;
-    para: Posicao;
+    /** Ponto solto ou tocado; null quando a máquina foi escolhida na ficha (ela pode não ter posição). */
+    para: Posicao | null;
     sobre: EquipamentoMapa | null;
     /** Local onde a pessoa vai trabalhar (soltou dentro do raio dele, ou escolheu na ficha). */
     local: LocalidadeMapa | null;
@@ -567,11 +573,12 @@ export function TelaMapa({
           if (p.equipamentoId === item.equipamento.id) mapa.set(p.id, pos);
       }
     }
-    if (pendentePessoa)
-      mapa.set(
-        pendentePessoa.pessoa.id,
-        pendentePessoa.sobre?.pos ?? pendentePessoa.para,
-      );
+    if (pendentePessoa) {
+      const pos = pendentePessoa.sobre
+        ? pendentePessoa.sobre.pos
+        : pendentePessoa.para;
+      if (pos) mapa.set(pendentePessoa.pessoa.id, pos);
+    }
     return mapa;
   }, [pendente, pendentePessoa, estado.pessoas]);
 
@@ -643,7 +650,12 @@ export function TelaMapa({
     const porNome = (a: { rotulo: string }, b: { rotulo: string }) =>
       a.rotulo.localeCompare(b.rotulo, "pt-BR");
     const deObras = rotulosObra
-      .map((o) => ({ chave: `obra:${o.id}`, rotulo: `Obra · ${o.nome}`, pos: o.pos, obra: o.id }))
+      .map((o) => ({
+        chave: `obra:${o.id}`,
+        rotulo: `Obra · ${o.nome}`,
+        pos: o.pos,
+        obra: o.id,
+      }))
       .sort(porNome);
     const deLocais = estado.localidades
       .map((l) => ({
@@ -852,6 +864,27 @@ export function TelaMapa({
   const posicionandoEquipamento = posicionando
     ? (equipamentosVistos.find((e) => e.id === posicionando) ?? null)
     : null;
+  const pessoaPosicionando = posicionandoPessoa
+    ? (estado.pessoas.find((p) => p.id === posicionandoPessoa) ?? null)
+    : null;
+  // Listas de pessoas do painel, recortadas pela busca e pela obra da barra (a cena não).
+  const pessoasNaLista = React.useMemo(
+    () =>
+      cena.pessoas.filter((p) =>
+        pessoaNoFiltro(p, { busca: filtros.busca, obraId: filtros.obraId }),
+      ),
+    [cena.pessoas, filtros.busca, filtros.obraId],
+  );
+  const pessoasSemPosicao = React.useMemo(
+    () =>
+      estado.pessoas.filter(
+        (p) =>
+          p.pos === null &&
+          !posicoesPendentes.has(p.id) &&
+          pessoaNoFiltro(p, { busca: filtros.busca, obraId: filtros.obraId }),
+      ),
+    [estado.pessoas, posicoesPendentes, filtros.busca, filtros.obraId],
+  );
   const tiposConhecidos = React.useMemo(
     () =>
       [
@@ -900,6 +933,20 @@ export function TelaMapa({
         setFicha(null);
         return;
       }
+      // Pessoa esperando o toque: tocar numa máquina assinala a pessoa como operadora dela (o
+      // toque na máquina não chega ao "clicar no mapa", ele seleciona).
+      if (pessoaPosicionando && alvo.tipo === "equipamento") {
+        const sobre = cena.equipamentos.find((e) => e.id === alvo.id);
+        if (sobre) {
+          setPendentePessoa({
+            pessoa: pessoaPosicionando,
+            para: sobre.pos,
+            sobre,
+            local: null,
+          });
+          return;
+        }
+      }
       if (alvo.tipo === "equipamento") {
         setSelecao((atual) => {
           if (multi || multiTecla) {
@@ -913,7 +960,7 @@ export function TelaMapa({
       }
       abrirFicha(alvo);
     },
-    [multi, abrirFicha],
+    [multi, abrirFicha, pessoaPosicionando, cena.equipamentos],
   );
 
   const soltar = React.useCallback(
@@ -1026,6 +1073,20 @@ export function TelaMapa({
         setPontoColocar(pos);
         return;
       }
+      if (pessoaPosicionando) {
+        // Como soltar a pessoa arrastada: numa máquina vira operador, no raio de um local fica nele.
+        const sobre = maquinaEm(pos, cena.equipamentos);
+        setPendentePessoa({
+          pessoa: pessoaPosicionando,
+          para: pos,
+          sobre,
+          local: sobre
+            ? null
+            : (colarNoLocal(pos, estado.localidades, estado.config.snapLocalM)
+                ?.local ?? null),
+        });
+        return;
+      }
       if (!posicionandoEquipamento) return;
       setPendente({
         modo: "posicionar",
@@ -1040,12 +1101,24 @@ export function TelaMapa({
         ],
       });
     },
-    [posicionandoEquipamento, ctxDestino, colocando, desenho, rota, calcularRota],
+    [
+      posicionandoEquipamento,
+      pessoaPosicionando,
+      cena.equipamentos,
+      estado.localidades,
+      estado.config.snapLocalM,
+      ctxDestino,
+      colocando,
+      desenho,
+      rota,
+      calcularRota,
+    ],
   );
 
   const escolherNoMapa = React.useCallback((pedido: PedidoColocar) => {
     setAdicionando(null);
     setPosicionando(null);
+    setPosicionandoPessoa(null);
     setColocando(pedido);
     toast.info(
       `Toque no mapa onde fica ${pedido.tipo === "obra" ? pedido.obra.nome : pedido.rotulo}.`,
@@ -1139,6 +1212,7 @@ export function TelaMapa({
     (obra: ObraMapa, forma: "trecho" | "area", substituir: boolean) => {
       setAdicionando(null);
       setPosicionando(null);
+      setPosicionandoPessoa(null);
       setColocando(null);
       setDesenhoFinal(null);
       setDesenho({ obra, forma, substituir, pontos: [] });
@@ -1385,6 +1459,12 @@ export function TelaMapa({
       setSalvando(true);
       try {
         const { pessoa, para, sobre, local } = pendentePessoa;
+        const destino = local
+          ? { localidade_id: local.id }
+          : para
+            ? { lng: para[0], lat: para[1] }
+            : null;
+        if (!sobre && !destino) return true;
         const r = sobre
           ? await assinalarOperador({
               equipamentoId: sobre.id,
@@ -1393,9 +1473,7 @@ export function TelaMapa({
             })
           : await moverPessoas({
               ids: [pessoa.id],
-              destino: local
-                ? { localidade_id: local.id }
-                : { lng: para[0], lat: para[1] },
+              destino,
               data: estado.hoje,
               motivo: motivo?.trim() || undefined,
             });
@@ -1407,7 +1485,10 @@ export function TelaMapa({
               ? `${pessoa.nome} trabalha em ${local.nome}`
               : `${pessoa.nome} realocado`,
         );
-        if (ok) setPendentePessoa(null);
+        if (ok) {
+          setPendentePessoa(null);
+          setPosicionandoPessoa(null);
+        }
         return ok;
       } finally {
         setSalvando(false);
@@ -1525,10 +1606,24 @@ export function TelaMapa({
 
   const iniciarPosicionar = React.useCallback(
     (e: EquipamentoMapa) => {
+      setPosicionandoPessoa(null);
       setPosicionando(e.id);
       abrirFicha({ tipo: "equipamento", id: e.id });
       setSelecao(new Set([e.id]));
       toast.info(`Toque no mapa onde está ${e.codigo}.`);
+    },
+    [abrirFicha],
+  );
+
+  const iniciarPosicionarPessoa = React.useCallback(
+    (p: PessoaMapa) => {
+      setPosicionando(null);
+      setColocando(null);
+      setPosicionandoPessoa(p.id);
+      abrirFicha({ tipo: "pessoa", id: p.id });
+      toast.info(
+        `Toque no mapa onde fica ${p.nome}. Numa máquina, assinala como operador.`,
+      );
     },
     [abrirFicha],
   );
@@ -1706,11 +1801,28 @@ export function TelaMapa({
               ?.codigo ?? null)
           : null
       }
+      maquinas={equipamentosVistos}
       localidades={estado.localidades}
       podeEditar={permissoes.editar}
       salvando={salvando}
+      posicionando={posicionandoPessoa === pessoaFicha.id}
       onFechar={() => setFicha(null)}
       onFocar={() => pessoaFicha.pos && focar(pessoaFicha.pos, 17)}
+      onPosicionar={() =>
+        posicionandoPessoa === pessoaFicha.id
+          ? setPosicionandoPessoa(null)
+          : iniciarPosicionarPessoa(pessoaFicha)
+      }
+      onOperar={(equipamentoId) => {
+        const sobre = equipamentosVistos.find((e) => e.id === equipamentoId);
+        if (sobre)
+          setPendentePessoa({
+            pessoa: pessoaFicha,
+            para: null,
+            sobre,
+            local: null,
+          });
+      }}
       onTrocarLocal={(localidadeId) => {
         const local = estado.localidades.find((l) => l.id === localidadeId);
         if (local)
@@ -1892,7 +2004,9 @@ export function TelaMapa({
             modoPosicionar={
               rota !== null ||
               (desenho !== null && desenhoFinal === null) ||
-              ((posicionando !== null || colocando !== null) &&
+              ((posicionando !== null ||
+                posicionandoPessoa !== null ||
+                colocando !== null) &&
                 !pendente &&
                 !pontoColocar)
             }
@@ -2161,13 +2275,23 @@ export function TelaMapa({
             contagens={contagens}
             semPosicao={semPosicao}
             noMapa={noMapa}
-            pessoasNoMapa={cena.pessoas}
+            pessoasNoMapa={pessoasNaLista}
+            pessoasSemPosicao={pessoasSemPosicao}
             selecao={selecao}
             posicionando={posicionandoEquipamento}
+            posicionandoPessoa={pessoaPosicionando}
             permissoes={permissoes}
             temCandidatosLocacao={estado.foraDoMapa.length > 0}
             onPosicionar={iniciarPosicionar}
-            onCancelarPosicionar={() => setPosicionando(null)}
+            onPosicionarPessoa={(p) =>
+              posicionandoPessoa === p.id
+                ? setPosicionandoPessoa(null)
+                : iniciarPosicionarPessoa(p)
+            }
+            onCancelarPosicionar={() => {
+              setPosicionando(null);
+              setPosicionandoPessoa(null);
+            }}
             onEscolherEquipamento={escolherEquipamento}
             onEscolherPessoa={(p) => {
               abrirFicha({ tipo: "pessoa", id: p.id });
@@ -2372,7 +2496,7 @@ export function TelaMapa({
               ? `A pessoa passa a ser o operador de ${pendentePessoa.sobre.codigo}${pendentePessoa.sobre.operadorNome ? ` no lugar de ${pendentePessoa.sobre.operadorNome}` : ""} e acompanha a máquina no mapa.`
               : pendentePessoa.local
                 ? `A pessoa aparece no ponto de ${pendentePessoa.local.nome} até ser realocada.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
-                : `A pessoa fica neste ponto (${pendentePessoa.para[1].toFixed(5)}, ${pendentePessoa.para[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
+                : `A pessoa fica neste ponto (${pendentePessoa.para?.[1].toFixed(5)}, ${pendentePessoa.para?.[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
           }
           textoConfirmar={
             pendentePessoa.sobre

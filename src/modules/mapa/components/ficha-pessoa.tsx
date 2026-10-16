@@ -1,38 +1,56 @@
 "use client";
 
 import * as React from "react";
-import { LocateFixed, X } from "lucide-react";
+import { Crosshair, LocateFixed, X } from "lucide-react";
 
 import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import type { LocalidadeMapa, PessoaMapa } from "@/modules/mapa/tipos";
+import type {
+  EquipamentoMapa,
+  LocalidadeMapa,
+  PessoaMapa,
+} from "@/modules/mapa/tipos";
 
 /**
  * Ficha da pessoa tocada no mapa: quem é, qual máquina opera e o local onde trabalha (pedido do
  * Tiago, 16/10/2026: "assinalar pessoas a localizações onde elas estão trabalhando"). Trocar o
  * local põe a pessoa no ponto do local; quem opera uma máquina deixa de operar (o pai confirma).
  * Sem "nenhum local": tirar do local é arrastar a pessoa para outro ponto.
+ *
+ * Quem ainda não tem lugar no mapa não tem o que arrastar (Tiago, 16/10/2026: "não tem como
+ * assinalar os colaboradores aqui, somente equipamentos"): a ficha escolhe a máquina que a pessoa
+ * opera, o local, ou "Posicionar no mapa" (toque num ponto, como o das máquinas).
  */
 
 export function FichaPessoa({
   pessoa,
   maquina,
+  maquinas,
   localidades,
   podeEditar,
   salvando,
+  posicionando,
   onFechar,
   onFocar,
   onTrocarLocal,
+  onOperar,
+  onPosicionar,
 }: {
   pessoa: PessoaMapa;
   /** Código da máquina que a pessoa opera (null = nenhuma). */
   maquina: string | null;
+  /** Máquinas do mapa que a pessoa pode passar a operar. */
+  maquinas: readonly EquipamentoMapa[];
   localidades: readonly LocalidadeMapa[];
   podeEditar: boolean;
   salvando: boolean;
+  /** A tela espera o toque no mapa para esta pessoa. */
+  posicionando: boolean;
   onFechar: () => void;
   onFocar: () => void;
   onTrocarLocal: (localidadeId: string) => void;
+  onOperar: (equipamentoId: string) => void;
+  onPosicionar: () => void;
 }) {
   const opcoes = React.useMemo(
     () =>
@@ -40,6 +58,22 @@ export function FichaPessoa({
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
         .map((l) => ({ valor: l.id, rotulo: l.nome })),
     [localidades],
+  );
+  const opcoesMaquina = React.useMemo(
+    () =>
+      [...maquinas]
+        .sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR"))
+        .map((e) => ({
+          valor: e.id,
+          rotulo: [
+            e.codigo,
+            e.descricao,
+            e.operadorNome && `com ${e.operadorNome}`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
+    [maquinas],
   );
   const local = pessoa.localidadeId
     ? (localidades.find((l) => l.id === pessoa.localidadeId) ?? null)
@@ -84,14 +118,33 @@ export function FichaPessoa({
         </div>
       </header>
 
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="shrink-0 text-muted-foreground">Opera</span>
-        <span className="text-right">
-          {maquina ?? (
-            <span className="text-muted-foreground">nenhuma máquina</span>
-          )}
-        </span>
-      </div>
+      {podeEditar ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Opera</span>
+          <Combobox
+            valor={pessoa.equipamentoId ?? ""}
+            onValorChange={(v) => {
+              if (v && v !== pessoa.equipamentoId) onOperar(v);
+            }}
+            opcoes={opcoesMaquina}
+            rotuloDoValor={maquina ?? undefined}
+            placeholder="Nenhuma máquina"
+            buscaPlaceholder="Código ou descrição"
+            size="sm"
+            disabled={salvando}
+            ariaLabel="Máquina que opera"
+          />
+        </div>
+      ) : (
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="shrink-0 text-muted-foreground">Opera</span>
+          <span className="text-right">
+            {maquina ?? (
+              <span className="text-muted-foreground">nenhuma máquina</span>
+            )}
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <span className="text-muted-foreground">Local de trabalho</span>
@@ -115,10 +168,24 @@ export function FichaPessoa({
       </div>
 
       {podeEditar ? (
-        <p className="text-legenda text-muted-foreground">
-          Arraste a pessoa até uma máquina para assinalar como operador, ou até
-          um local para pôr ela lá.
-        </p>
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant={posicionando ? "default" : "outline"}
+            onClick={onPosicionar}
+            disabled={salvando}
+          >
+            <Crosshair />
+            {posicionando ? "Toque no mapa" : "Posicionar no mapa"}
+          </Button>
+          {pessoa.pos ? (
+            <p className="text-legenda text-muted-foreground">
+              Também dá para arrastar a pessoa até uma máquina (vira operador)
+              ou até um local.
+            </p>
+          ) : null}
+        </>
       ) : null}
     </section>
   );
