@@ -145,10 +145,22 @@ export function NumerosEquipamento({
                 <span className="text-legenda text-muted-foreground">
                   Desde sempre, por categoria
                 </span>
+                {/* Nome longo ("Manutenção de equipamentos") corta; o valor nunca quebra. */}
                 {gasto.porCategoria.map((c) => (
-                  <Linha key={c.categoria} rotulo={c.categoria}>
-                    {formatarBRL(c.total)}
-                  </Linha>
+                  <div
+                    key={c.categoria}
+                    className="flex items-baseline justify-between gap-3 text-detalhe"
+                  >
+                    <span
+                      className="min-w-0 truncate text-muted-foreground"
+                      title={c.categoria}
+                    >
+                      {c.categoria}
+                    </span>
+                    <span className="shrink-0 text-right whitespace-nowrap text-foreground tabular-nums">
+                      {formatarBRL(c.total)}
+                    </span>
+                  </div>
                 ))}
               </div>
             ) : null}
