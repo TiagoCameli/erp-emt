@@ -41,6 +41,7 @@ import {
   girarDeposito,
   desenharObra,
   editarLocal,
+  inativarLocal,
   encerrarLocacao,
   girarEquipamento,
   marcarEstado,
@@ -916,6 +917,7 @@ export function TelaMapa({
               localidadeId: colocando.localidadeId,
               nome: colocando.nome,
               tipos: colocando.tipos,
+              obraId: colocando.obraId,
               vincular: colocando.vincular,
               lng,
               lat,
@@ -1908,6 +1910,7 @@ export function TelaMapa({
               <FichaLocal
                 key={localDaFicha.id}
                 local={localDaFicha}
+                obras={estado.obras}
                 itens={itensDoLocal}
                 padraoM={estado.config.snapLocalM}
                 podeEditar={permissoes.editar}
@@ -1922,15 +1925,32 @@ export function TelaMapa({
                   )
                 }
                 onSalvar={(raioM) => salvarRaio(localDaFicha.id, raioM)}
-                onSalvarDados={async (nome, tipos) => {
+                onSalvarDados={async (nome, tipos, obraId) => {
                   setSalvando(true);
                   try {
                     const r = await editarLocal({
                       localidadeId: localDaFicha.id,
                       nome,
                       tipos,
+                      obraId,
                     });
                     return aplicar(r, `${nome} salvo`);
+                  } finally {
+                    setSalvando(false);
+                  }
+                }}
+                onInativar={async () => {
+                  setSalvando(true);
+                  try {
+                    const r = await inativarLocal({
+                      localidadeId: localDaFicha.id,
+                    });
+                    const ok = aplicar(r, `${localDaFicha.nome} inativado`);
+                    if (ok) {
+                      setLocalFicha(null);
+                      setRaioPrevio(null);
+                    }
+                    return ok;
                   } finally {
                     setSalvando(false);
                   }
@@ -2001,6 +2021,7 @@ export function TelaMapa({
       {adicionando === "local" ? (
         <DialogoAdicionarLocal
           localidades={estado.localidades}
+          obras={estado.obras}
           semPosicao={estado.localidadesSemPosicao}
           tanques={estado.tanques}
           depositos={estado.depositos}

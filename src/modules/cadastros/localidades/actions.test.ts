@@ -61,6 +61,15 @@ describe("localidade: pedreira (fornecedor)", () => {
     expect(eq).toHaveBeenCalledWith("id", ID);
   });
 
+  it("jazida sem obra recusada pelo banco (23514) diz onde escolher a obra", async () => {
+    eq.mockResolvedValue({
+      error: { code: "23514", message: 'Jazida "Jazida X" precisa estar atrelada a uma obra' },
+    });
+    await expect(editar(ID, { nome: "Jazida X", endereco: "", ativo: true })).resolves.toEqual({
+      erro: 'Jazida "Jazida X" precisa estar atrelada a uma obra. Escolha a obra na ficha do local, no Mapa.',
+    });
+  });
+
   it("sem permissão de criar não grava", async () => {
     exigirPermissao.mockRejectedValue(new Error("x"));
     await expect(criar({ nome: "X1", endereco: "", ativo: true })).resolves.toEqual({

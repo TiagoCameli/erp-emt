@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Move, X } from "lucide-react";
+import { Archive, Move, X } from "lucide-react";
 
 import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -9,14 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
-import { TIPOS_LOCAL, type LocalidadeMapa } from "@/modules/mapa/tipos";
+import {
+  TIPOS_LOCAL,
+  type LocalidadeMapa,
+  type ObraMapa,
+} from "@/modules/mapa/tipos";
 
 /**
  * A ficha do local tocado no mapa: nome e tipos (um local pode ser pátio, jazida e oficina ao
  * mesmo tempo; o primeiro é o principal e decide o estado da máquina que cai nele), o que está ali
  * (tanques, depósitos), "Mover no mapa" e o tamanho da área, que decide até onde uma máquina
  * solta "cai" no local. O raio muda no mapa enquanto a pessoa mexe (prévia) e só grava em
- * "Salvar área".
+ * "Salvar área". Jazida é de uma obra: quem opera nela trabalha para essa obra, e trocar a obra
+ * da jazida leva junto quem está ali. "Inativar" tira o local do mapa (volta pelo Cadastros).
  */
 
 const OPCOES_TIPO = TIPOS_LOCAL.map((t) => ({
@@ -31,6 +36,7 @@ const SLIDER_MAX = 2000;
 
 export function FichaLocal({
   local,
+  obras,
   itens,
   padraoM,
   podeEditar,
@@ -40,8 +46,11 @@ export function FichaLocal({
   onSalvar,
   onSalvarDados,
   onMover,
+  onInativar,
 }: {
   local: LocalidadeMapa;
+  /** Obras ativas, para atrelar o local (obrigatório na jazida). */
+  obras: readonly ObraMapa[];
   /** Tanques e depósitos ligados ao local. */
   itens: readonly string[];
   /** Raio quando o local não tem um próprio (configuração mapa.snap_local_m). */
@@ -53,17 +62,34 @@ export function FichaLocal({
   onPrevia: (raioM: number | null) => void;
   /** null volta ao padrão. false = recusou (o toast já avisou). */
   onSalvar: (raioM: number | null) => Promise<boolean>;
-  /** Nome e tipos. false = recusou. */
-  onSalvarDados: (nome: string, tipos: string[]) => Promise<boolean>;
+  /** Nome, tipos e obra (null = não mexe). false = recusou. */
+  onSalvarDados: (
+    nome: string,
+    tipos: string[],
+    obraId: string | null,
+  ) => Promise<boolean>;
   /** Escolher o novo ponto do local no mapa. */
   onMover: () => void;
+  /** Tira o local do mapa. false = recusou. */
+  onInativar: () => Promise<boolean>;
 }) {
   const [nome, setNome] = React.useState(local.nome);
   const [tipos, setTipos] = React.useState<string[]>(local.tipos);
+  const [obraId, setObraId] = React.useState(local.obraId ?? "");
+  const [confirmarInativar, setConfirmarInativar] = React.useState(false);
   const idNome = React.useId();
   const idTipos = React.useId();
+  const idObra = React.useId();
+  const ehJazida = tipos.includes("jazida");
+  const faltaObra = ehJazida && !obraId;
+  const obraAtual = obras.find((o) => o.id === local.obraId) ?? null;
+  const opcoesObra = React.useMemo(
+    () => obras.map((o) => ({ valor: o.id, rotulo: o.nome })),
+    [obras],
+  );
   const dadosMudaram =
     nome.trim() !== local.nome ||
+    obraId !== (local.obraId ?? "") ||
     tipos.length !== local.tipos.length ||
     tipos.some((t, i) => t !== local.tipos[i]);
   const atual = local.raioM ?? padraoM;
@@ -87,6 +113,13 @@ export function FichaLocal({
           <p className="text-detalhe text-muted-foreground">
             {local.tipos.map(rotuloTipoLocalidade).join(" · ")}
           </p>
+          {obraAtual ? (
+            <p className="text-detalhe text-foreground">{obraAtual.nome}</p>
+          ) : local.tipos.includes("jazida") ? (
+            <p className="text-detalhe text-status-pendente">
+              Jazida sem obra: escolha a obra para quem opera aqui contar nela.
+            </p>
+          ) : null}
         </div>
         <Button
           type="button"
@@ -124,16 +157,43 @@ export function FichaLocal({
               disabled={salvando}
             />
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={idObra}>
+              {ehJazida ? "Obra (obrigatória na jazida)" : "Obra"}
+            </Label>
+            <Combobox
+              id={idObra}
+              valor={obraId}
+              rotuloDoValor={obraAtual?.nome}
+              onValorChange={setObraId}
+              opcoes={opcoesObra}
+              placeholder="Sem obra"
+              buscaPlaceholder="Buscar obra"
+              disabled={salvando}
+            />
+            {ehJazida ? (
+              <p className="text-legenda text-muted-foreground">
+                Quem opera na jazida trabalha para esta obra. Trocar a obra leva
+                junto quem está aqui agora.
+              </p>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-1.5">
             <Button
               type="button"
               size="sm"
               disabled={
-                !dadosMudaram || salvando || !nome.trim() || tipos.length === 0
+                !dadosMudaram ||
+                salvando ||
+                !nome.trim() ||
+                tipos.length === 0 ||
+                faltaObra
               }
-              onClick={() => void onSalvarDados(nome.trim(), tipos)}
+              onClick={() =>
+                void onSalvarDados(nome.trim(), tipos, obraId || null)
+              }
             >
-              Salvar nome e tipos
+              Salvar dados
             </Button>
             <Button
               type="button"
@@ -242,6 +302,49 @@ export function FichaLocal({
               Voltar ao padrão
             </Button>
           ) : null}
+        </div>
+      ) : null}
+
+      {podeEditar ? (
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+          {confirmarInativar ? (
+            <>
+              <span className="text-detalhe text-muted-foreground">
+                Tirar {local.nome} do mapa?
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={salvando}
+                onClick={async () => {
+                  if (!(await onInativar())) setConfirmarInativar(false);
+                }}
+              >
+                Inativar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={salvando}
+                onClick={() => setConfirmarInativar(false)}
+              >
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={salvando}
+              onClick={() => setConfirmarInativar(true)}
+            >
+              <Archive />
+              Inativar local
+            </Button>
+          )}
         </div>
       ) : null}
     </section>
