@@ -626,3 +626,20 @@ insert into public.usuario_permissoes (usuario_id, recurso, acao)
 select usuario_id, 'estoque.transferencias', acao from public.usuario_permissoes
 where recurso = 'estoque.saidas' and acao in ('ver', 'criar', 'editar', 'excluir')
 on conflict (usuario_id, recurso, acao) do nothing;
+
+-- 9. As 3 pilhas de antes (16/10) ganham o local -------------------------------------------------
+-- Duas pistas: o nome da pilha e a posição marcada no Mapa (Canteiro Gregorio a 27 m da Usina
+-- Gregorio). Sem isso, a chegada dos fretes Britam → Usina Gregorio de 16/10 criaria uma 4ª pilha.
+update public.estoque_pilhas p set localidade_id = l.id
+from (values ('Brita 1 - Canteiro Gregorio', 'Usina Gregorio'),
+             ('Brita 1 - Escola de Mancio Lima', 'Escola de Mancio Lima'),
+             ('Brita 1 - Patio Colorado', 'Colorado')) m(pilha, local)
+join public.localidades l on l.nome = m.local
+where p.nome = m.pilha and p.localidade_id is null;
+
+do $confere$
+declare v int;
+begin
+  select count(*) into v from public.estoque_pilhas where localidade_id is not null;
+  if v <> 3 then raise exception 'Esperado 3 pilhas com local, veio %', v; end if;
+end $confere$;
