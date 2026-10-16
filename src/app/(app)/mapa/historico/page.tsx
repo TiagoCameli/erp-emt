@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { TriangleAlert } from "lucide-react";
+import { CalendarDays, TriangleAlert } from "lucide-react";
 
 import { EmptyState, PageHeader } from "@/components/canonicos";
+import { Button } from "@/components/ui/button";
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { HistoricoTabela } from "@/modules/mapa/components/historico-tabela";
@@ -32,6 +34,14 @@ export default async function PaginaHistoricoMapa({
       modulo="Mapa"
       titulo="Histórico"
       descricao="Cada transferência, ajuste de posição e mudança de estado feita no mapa, com quem fez e quando. A última de cada máquina pode ser desfeita."
+      acoes={
+        <Button asChild variant="outline" size="sm">
+          <Link href="/mapa/dias-por-centro">
+            <CalendarDays />
+            Dias por centro
+          </Link>
+        </Button>
+      }
     />
   );
 

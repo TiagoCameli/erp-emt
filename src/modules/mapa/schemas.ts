@@ -380,6 +380,13 @@ export const acoplarImplementoSchema = z.strictObject({
 });
 export type AcoplarImplementoInput = z.infer<typeof acoplarImplementoSchema>;
 
+/** Marca "atende vários centros" da máquina (os dias dela vão para Equipamento Sem Alocação). */
+export const variosCentrosSchema = z.strictObject({
+  equipamentoId: idSchemaCom("Equipamento inválido"),
+  valor: z.boolean({ error: "Informe se atende vários centros" }),
+});
+export type VariosCentrosInput = z.infer<typeof variosCentrosSchema>;
+
 /** Tamanho do depósito no mapa, em metros (os mesmos limites do banco). */
 export const tamanhoDepositoSchema = z.strictObject({
   id: idSchemaCom("Depósito inválido"),

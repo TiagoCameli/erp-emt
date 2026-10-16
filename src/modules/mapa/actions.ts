@@ -10,6 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
 import { paraFichaNumeros } from "@/modules/mapa/dados";
 import {
+  paraCentrosEquipamento,
+  type CentrosEquipamento,
+} from "@/modules/mapa/centros";
+import {
   assinalarOperadorSchema,
   colocarLocalSchema,
   desenharObraSchema,
@@ -29,6 +33,7 @@ import {
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
+  variosCentrosSchema,
   vincularLocalSchema,
 } from "@/modules/mapa/schemas";
 import type { EstadoMapa, FichaNumeros } from "@/modules/mapa/tipos";
@@ -740,6 +745,109 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Centro de custo da máquina na ficha: o de agora, os dias do mês e os períodos. Pede só ver. */
+export async function carregarCentrosEquipamento(
+  equipamentoId: string,
+): Promise<{ ok: true; centros: CentrosEquipamento } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.mapa", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver o Mapa" };
+  }
+  const id = idSchemaCom("Equipamento inválido").safeParse(equipamentoId);
+  if (!id.success) return { erro: "Equipamento inválido" };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_mapa_centros_equipamento", {
+      p_id: id.data,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.centrosEquipamento",
+        error,
+        mensagemDaRpc(error, "Não foi possível carregar os centros de custo da máquina"),
+      );
+    const centros = paraCentrosEquipamento(data);
+    if (!centros) return { erro: "Resposta inesperada ao carregar os centros de custo" };
+    return { ok: true, centros };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.centrosEquipamento",
+      erro,
+      `Não foi possível carregar os centros de custo da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Liga ou desliga "atende vários centros". Não relê o mapa: a marca não muda o desenho, só o
+ * centro dos dias; a ficha recarrega o próprio bloco.
+ */
+export async function marcarVariosCentros(
+  dados: unknown,
+): Promise<{ ok: true } | { erro: string }> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = variosCentrosSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_marcar_varios_centros", {
+      p_id: validado.data.equipamentoId,
+      p_valor: validado.data.valor,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.variosCentros",
+        error,
+        mensagemDaRpc(error, "Não foi possível gravar a marca de vários centros"),
+      );
+    return { ok: true };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.variosCentros",
+      erro,
+      `Não foi possível gravar a marca de vários centros: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Planilha do relatório "Dias por centro de custo" do mês (e da propriedade filtrada). */
+export async function gerarPlanilhaDiasCentro(
+  mes: string,
+  propriedade: string,
+): Promise<{ ok: true; base64: string; nomeArquivo: string } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.historico", "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar os relatórios do Mapa" };
+  }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { erro: "Mês inválido" };
+  if (!["", "propria", "colorado", "alugada"].includes(propriedade))
+    return { erro: "Propriedade inválida" };
+  try {
+    const { carregarRelDiasCentro } = await import("@/modules/mapa/centros-queries");
+    const { linhas, erro } = await carregarRelDiasCentro(mes, propriedade);
+    if (erro) return { erro };
+    const { agruparRelatorio, rotuloMes } = await import("@/modules/mapa/centros");
+    const { montarPlanilhaDiasCentro } = await import("@/modules/mapa/centros-planilha");
+    const workbook = montarPlanilhaDiasCentro(agruparRelatorio(linhas), rotuloMes(mes));
+    const conteudo = await workbook.xlsx.writeBuffer();
+    return {
+      ok: true,
+      base64: Buffer.from(conteudo).toString("base64"),
+      nomeArquivo: `dias-por-centro-${mes}.xlsx`,
+    };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.planilhaDiasCentro",
+      erro,
+      `Não foi possível gerar a planilha: ${textoDoErro(erro)}`,
     );
   }
 }

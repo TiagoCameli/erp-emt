@@ -46,6 +46,7 @@ export const TIPOS_MOVIMENTACAO = [
   "operador",
   "locacao",
   "acoplamento",
+  "centro",
 ] as const;
 
 export const ROTULO_TIPO_MOVIMENTACAO: Record<string, string> = {
@@ -55,6 +56,7 @@ export const ROTULO_TIPO_MOVIMENTACAO: Record<string, string> = {
   operador: "Operador",
   locacao: "Locação",
   acoplamento: "Acoplamento",
+  centro: "Centro de custo",
   frente: "Frente",
   equipe: "Equipe",
 };

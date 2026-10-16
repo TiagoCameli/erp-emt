@@ -1684,6 +1684,7 @@ export function TelaMapa({
           ? `/mapa/historico?equipamento=${equipamentoFicha.id}`
           : null
       }
+      relatorioCentrosHref={permissoes.historico ? "/mapa/dias-por-centro" : null}
       onMarcarEstado={(s) =>
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
