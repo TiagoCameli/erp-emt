@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
+  acoplarImplemento,
   ajustarRaioLocal,
   assinalarOperador,
   colocarLocal,
@@ -40,6 +41,7 @@ import {
   girarDeposito,
   desenharObra,
   editarLocal,
+  inativarLocal,
   encerrarLocacao,
   girarEquipamento,
   marcarEstado,
@@ -915,6 +917,7 @@ export function TelaMapa({
               localidadeId: colocando.localidadeId,
               nome: colocando.nome,
               tipos: colocando.tipos,
+              obraId: colocando.obraId,
               vincular: colocando.vincular,
               lng,
               lat,
@@ -1270,6 +1273,31 @@ export function TelaMapa({
     [equipamentoFicha, aplicar],
   );
 
+  const acoplar = React.useCallback(
+    async (implementoId: string, acoplarNela: boolean) => {
+      if (!equipamentoFicha) return;
+      const codigo =
+        estado.implementos.find((i) => i.id === implementoId)?.codigo ??
+        "Implemento";
+      setSalvando(true);
+      try {
+        const r = await acoplarImplemento({
+          implementoId,
+          equipamentoId: acoplarNela ? equipamentoFicha.id : null,
+        });
+        aplicar(
+          r,
+          acoplarNela
+            ? `${codigo} acoplado em ${equipamentoFicha.codigo}`
+            : `${codigo} desacoplado de ${equipamentoFicha.codigo}`,
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [equipamentoFicha, estado.implementos, aplicar],
+  );
+
   const confirmarEncerramento = React.useCallback(
     async (motivo?: string) => {
       if (!encerrando) return true;
@@ -1461,6 +1489,8 @@ export function TelaMapa({
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
       onAssinalarOperador={assinalar}
+      implementos={estado.implementos}
+      onAcoplar={acoplar}
       onEncerrarLocacao={() => {
         setFimLocacao(estado.hoje);
         setEncerrando(equipamentoFicha);
@@ -1880,6 +1910,7 @@ export function TelaMapa({
               <FichaLocal
                 key={localDaFicha.id}
                 local={localDaFicha}
+                obras={estado.obras}
                 itens={itensDoLocal}
                 padraoM={estado.config.snapLocalM}
                 podeEditar={permissoes.editar}
@@ -1894,15 +1925,32 @@ export function TelaMapa({
                   )
                 }
                 onSalvar={(raioM) => salvarRaio(localDaFicha.id, raioM)}
-                onSalvarDados={async (nome, tipos) => {
+                onSalvarDados={async (nome, tipos, obraId) => {
                   setSalvando(true);
                   try {
                     const r = await editarLocal({
                       localidadeId: localDaFicha.id,
                       nome,
                       tipos,
+                      obraId,
                     });
                     return aplicar(r, `${nome} salvo`);
+                  } finally {
+                    setSalvando(false);
+                  }
+                }}
+                onInativar={async () => {
+                  setSalvando(true);
+                  try {
+                    const r = await inativarLocal({
+                      localidadeId: localDaFicha.id,
+                    });
+                    const ok = aplicar(r, `${localDaFicha.nome} inativado`);
+                    if (ok) {
+                      setLocalFicha(null);
+                      setRaioPrevio(null);
+                    }
+                    return ok;
                   } finally {
                     setSalvando(false);
                   }
@@ -1973,6 +2021,7 @@ export function TelaMapa({
       {adicionando === "local" ? (
         <DialogoAdicionarLocal
           localidades={estado.localidades}
+          obras={estado.obras}
           semPosicao={estado.localidadesSemPosicao}
           tanques={estado.tanques}
           depositos={estado.depositos}

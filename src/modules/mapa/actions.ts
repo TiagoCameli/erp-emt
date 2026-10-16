@@ -14,6 +14,7 @@ import {
   colocarLocalSchema,
   desenharObraSchema,
   editarLocalSchema,
+  inativarLocalSchema,
   encerrarLocacaoSchema,
   girarEquipamentoSchema,
   iniciarLocacaoSchema,
@@ -21,6 +22,7 @@ import {
   moverEquipamentosSchema,
   moverPessoasSchema,
   posicionarObjetoSchema,
+  acoplarImplementoSchema,
   tamanhoDepositoSchema,
   rumoDepositoSchema,
   posicionarObraSchema,
@@ -50,7 +52,10 @@ type ErroRpc = { code?: string; message?: string } | null;
 function mensagemDaRpc(error: ErroRpc, reserva: string): string {
   if (
     error &&
-    (error.code === "P0001" || error.code === "42501") &&
+    // 23514: regra do banco com mensagem para a pessoa (jazida sem obra).
+    (error.code === "P0001" ||
+      error.code === "42501" ||
+      error.code === "23514") &&
     error.message
   )
     return error.message;
@@ -389,12 +394,14 @@ export async function colocarLocal(dados: unknown): Promise<ResultadoMapa> {
     };
   try {
     const supabase = await createClient();
-    const { data: id, error } = await supabase.rpc("fn_mapa_local_editar", {
+    const { data: id, error } = await supabase.rpc("fn_mapa_local_gravar", {
       p_id: v.localidadeId ?? null,
       p_nome: v.nome ?? null,
       p_tipos: v.tipos ?? null,
       p_lng: v.lng,
       p_lat: v.lat,
+      p_obra: v.obraId ?? null,
+      p_ativo: null,
     });
     if (error || !id)
       return erroAcao(
@@ -515,7 +522,10 @@ export async function girarEquipamento(dados: unknown): Promise<ResultadoMapa> {
   }
 }
 
-/** Nome e tipos do local (a posição muda pelo "Mover no mapa", em `colocarLocal`). */
+/**
+ * Nome, tipos e obra do local (a posição muda pelo "Mover no mapa", em `colocarLocal`). Trocar a
+ * obra de uma jazida leva junto quem está nela (trigger no banco).
+ */
 export async function editarLocal(dados: unknown): Promise<ResultadoMapa> {
   const bloqueio = await semPermissao("editar");
   if (bloqueio) return { erro: bloqueio };
@@ -525,12 +535,14 @@ export async function editarLocal(dados: unknown): Promise<ResultadoMapa> {
   const v = validado.data;
   try {
     const supabase = await createClient();
-    const { error } = await supabase.rpc("fn_mapa_local_editar", {
+    const { error } = await supabase.rpc("fn_mapa_local_gravar", {
       p_id: v.localidadeId,
       p_nome: v.nome,
       p_tipos: v.tipos,
       p_lng: null,
       p_lat: null,
+      p_obra: v.obraId,
+      p_ativo: null,
     });
     if (error)
       return erroAcao(
@@ -544,6 +556,40 @@ export async function editarLocal(dados: unknown): Promise<ResultadoMapa> {
       "mapa.localEditar",
       erro,
       `Não foi possível salvar o local: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Inativa o local (some do mapa); volta a ficar ativo pelo Cadastros > Localidades. */
+export async function inativarLocal(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = inativarLocalSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_local_gravar", {
+      p_id: validado.data.localidadeId,
+      p_nome: null,
+      p_tipos: null,
+      p_lng: null,
+      p_lat: null,
+      p_obra: null,
+      p_ativo: false,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.localInativar",
+        error,
+        mensagemDaRpc(error, "Não foi possível inativar o local"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.localInativar",
+      erro,
+      `Não foi possível inativar o local: ${textoDoErro(erro)}`,
     );
   }
 }
@@ -649,6 +695,38 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Acopla um implemento no equipamento do card, ou desacopla (equipamentoId null). */
+export async function acoplarImplemento(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = acoplarImplementoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_acoplar_implemento", {
+      p_implemento: v.implementoId,
+      p_equipamento: v.equipamentoId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.acoplarImplemento",
+        error,
+        mensagemDaRpc(error, "Não foi possível acoplar o implemento"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.acoplarImplemento",
+      erro,
+      `Não foi possível acoplar o implemento: ${textoDoErro(erro)}`,
     );
   }
 }

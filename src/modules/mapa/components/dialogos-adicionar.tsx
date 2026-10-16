@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
+import { ERRO_JAZIDA_SEM_OBRA } from "@/modules/mapa/schemas";
 import {
   TIPOS_LOCAL,
   type DepositoMapa,
@@ -44,6 +45,8 @@ export type PedidoColocar =
       /** Dá ponto a um local que já existe; sem ele, cria um novo com nome e tipo. */
       localidadeId?: string;
       nome?: string;
+      /** Obra do local novo; obrigatória quando é jazida. */
+      obraId?: string;
       tipos?: TipoLocal[];
       vincular?: { alvo: "tanque" | "deposito"; id: string };
     };
@@ -207,6 +210,7 @@ const NOVO = "__novo__";
 
 export function DialogoAdicionarLocal({
   localidades,
+  obras,
   semPosicao,
   tanques,
   depositos,
@@ -216,6 +220,8 @@ export function DialogoAdicionarLocal({
   onLigar,
 }: {
   localidades: readonly LocalidadeMapa[];
+  /** Obras ativas: jazida nova nasce atrelada a uma. */
+  obras: readonly ObraMapa[];
   semPosicao: readonly LocalSemPosicao[];
   tanques: readonly TanqueMapa[];
   depositos: readonly DepositoMapa[];
@@ -235,12 +241,14 @@ export function DialogoAdicionarLocal({
   );
   const [nome, setNome] = React.useState("");
   const [tipos, setTipos] = React.useState<string[]>(["oficina"]);
+  const [obraId, setObraId] = React.useState("");
   const [itemId, setItemId] = React.useState("");
   const [ondeFica, setOndeFica] = React.useState("");
   const ids = {
     existente: React.useId(),
     nome: React.useId(),
     tipo: React.useId(),
+    obra: React.useId(),
     item: React.useId(),
     onde: React.useId(),
   };
@@ -282,6 +290,11 @@ export function DialogoAdicionarLocal({
     })),
   ];
 
+  const opcoesObra = obras.map((o) => ({ valor: o.id, rotulo: o.nome }));
+  const ehJazida = tipos.includes("jazida");
+  /** A obra só vai junto quando o local novo é jazida (os outros tipos seguem sem obra). */
+  const obraDoNovo = ehJazida && obraId ? obraId : undefined;
+
   const item = itens.find((i) => i.id === itemId) ?? null;
   const criandoLocal =
     (oQue === "local" && localExistente === NOVO) ||
@@ -313,11 +326,16 @@ export function DialogoAdicionarLocal({
         toast.error("Escolha ao menos um tipo");
         return false;
       }
+      if (ehJazida && !obraId) {
+        toast.error(ERRO_JAZIDA_SEM_OBRA);
+        return false;
+      }
       onEscolherNoMapa({
         tipo: "local",
         rotulo: nome.trim(),
         nome: nome.trim(),
         tipos: tipos as TipoLocal[],
+        obraId: obraDoNovo,
       });
       return;
     }
@@ -340,11 +358,16 @@ export function DialogoAdicionarLocal({
       toast.error("Escolha ao menos um tipo");
       return false;
     }
+    if (ehJazida && !obraId) {
+      toast.error(ERRO_JAZIDA_SEM_OBRA);
+      return false;
+    }
     onEscolherNoMapa({
       tipo: "local",
       rotulo: item.nome,
       nome: nome.trim(),
       tipos: tipos as TipoLocal[],
+      obraId: obraDoNovo,
       vincular: { alvo: oQue, id: item.id },
     });
   };
@@ -453,6 +476,23 @@ export function DialogoAdicionarLocal({
                   placeholder="Escolha os tipos"
                 />
               </div>
+            </div>
+          ) : null}
+
+          {criandoLocal && ehJazida ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={ids.obra}>Obra da jazida</Label>
+              <Combobox
+                id={ids.obra}
+                valor={obraId}
+                onValorChange={setObraId}
+                opcoes={opcoesObra}
+                placeholder="Selecione a obra"
+                buscaPlaceholder="Buscar obra"
+              />
+              <p className="text-legenda text-muted-foreground">
+                Quem opera na jazida trabalha para esta obra.
+              </p>
             </div>
           ) : null}
         </div>
