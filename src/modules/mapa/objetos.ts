@@ -129,6 +129,8 @@ export function objetosDoEstoque(
 ): ObjetoMapa[] {
   const objetos: ObjetoMapa[] = [];
   for (const t of tanques) {
+    // Tanque de comboio (Meloza) anda com a máquina: é ela que aparece no mapa, não um tanque fixo.
+    if (t.equipamentoId) continue;
     const { diametro, altura } = dimensoesDoTanque(t.capacidade, t.unidade);
     const capacidade =
       t.capacidade && t.capacidade > 0 ? litrosTexto(t.capacidade) : "";

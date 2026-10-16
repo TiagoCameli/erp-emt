@@ -106,6 +106,7 @@ import {
   type TrechoMedido,
 } from "@/modules/mapa/geo";
 import { extrasPorLocal } from "@/modules/mapa/dados";
+import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
@@ -243,6 +244,18 @@ export function TelaMapa({
     setInicialAnterior(inicial);
     setEstado(inicial);
   }
+
+  // Relógio do mapa: a carreta em rota anda no traçado a cada minuto (posição estimada).
+  const [agora, setAgora] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const t = setInterval(() => setAgora(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  // A frota como a tela mostra: a máquina com frete aberto vai para o ponto estimado da rota.
+  const { equipamentos: equipamentosVistos, freteDe } = React.useMemo(
+    () => aplicarFretes(estado.equipamentos, estado.fretesEmRota, agora),
+    [estado.equipamentos, estado.fretesEmRota, agora],
+  );
 
   const [selecao, setSelecao] = React.useState<ReadonlySet<string>>(
     () => new Set(),
@@ -390,17 +403,17 @@ export function TelaMapa({
     const mapa = new Map<string, string>();
     for (const t of estado.trechos)
       if (t.obraId) mapa.set(t.obraId, t.obraNome);
-    for (const e of estado.equipamentos)
+    for (const e of equipamentosVistos)
       if (e.obraId && !mapa.has(e.obraId)) mapa.set(e.obraId, e.obraNome);
     return [...mapa]
       .map(([id, nome]) => ({ id, nome }))
       .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
-  }, [estado.trechos, estado.equipamentos]);
+  }, [estado.trechos, equipamentosVistos]);
 
   // Busca e obra recortam tudo; o estado recorta só as listas e a cena (as contagens mostram o todo).
   const baseFiltrada = React.useMemo(() => {
     const termo = normalizar(filtros.busca.trim());
-    return estado.equipamentos.filter((e) => {
+    return equipamentosVistos.filter((e) => {
       if (filtros.obraId && e.obraId !== filtros.obraId) return false;
       if (!termo) return true;
       return normalizar(
@@ -415,7 +428,7 @@ export function TelaMapa({
         ].join(" "),
       ).includes(termo);
     });
-  }, [estado.equipamentos, filtros.busca, filtros.obraId]);
+  }, [equipamentosVistos, filtros.busca, filtros.obraId]);
 
   const contagens = React.useMemo(() => {
     const c = Object.fromEntries(ORDEM_ESTADOS.map((k) => [k, 0])) as Record<
@@ -518,15 +531,15 @@ export function TelaMapa({
       selecao.size !== 1
     )
       return null;
-    const e = estado.equipamentos.find((x) => x.id === ficha.id);
-    if (!e || !e.pos || e.fontePosicao === "gps" || !selecao.has(e.id))
+    const e = equipamentosVistos.find((x) => x.id === ficha.id);
+    if (!e || !e.pos || e.fontePosicao !== "manual" || !selecao.has(e.id))
       return null;
     return {
       id: e.id,
       pos: e.pos,
       raioM: e.modelo3d === "usina_asfalto" ? RAIO_GIRO_USINA_M : RAIO_GIRO_M,
     };
-  }, [permissoes.editar, ficha, selecao, estado.equipamentos]);
+  }, [permissoes.editar, ficha, selecao, equipamentosVistos]);
 
   const cena = React.useMemo<CenaBase>(() => {
     const equipamentos = filtrados.flatMap((e) => {
@@ -549,15 +562,23 @@ export function TelaMapa({
       if (
         p.equipamentoId &&
         !idsNaCena.has(p.equipamentoId) &&
-        estado.equipamentos.some((e) => e.id === p.equipamentoId)
+        equipamentosVistos.some((e) => e.id === p.equipamentoId)
       )
         return [];
       return [{ ...p, pos }];
     });
+    // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota).
+    const rotasFrete = estado.fretesEmRota.flatMap((f) =>
+      f.caminho.length >= 2 &&
+      (!f.equipamentoId || idsNaCena.has(f.equipamentoId))
+        ? [{ id: f.id, caminho: f.caminho }]
+        : [],
+    );
     return {
       equipamentos,
       pessoas,
       trechos: trechosMedidos,
+      rotasFrete,
       marcos,
       areas: estado.areas,
       localidades: raioPrevio
@@ -587,7 +608,8 @@ export function TelaMapa({
     pendente,
     medidosPorId,
     estado.pessoas,
-    estado.equipamentos,
+    equipamentosVistos,
+    estado.fretesEmRota,
     estado.areas,
     estado.localidades,
     raioPrevio,
@@ -618,25 +640,25 @@ export function TelaMapa({
   );
   const equipamentoFicha =
     ficha?.tipo === "equipamento"
-      ? (estado.equipamentos.find((e) => e.id === ficha.id) ?? null)
+      ? (equipamentosVistos.find((e) => e.id === ficha.id) ?? null)
       : null;
   const pessoaFicha =
     ficha?.tipo === "pessoa"
       ? (estado.pessoas.find((p) => p.id === ficha.id) ?? null)
       : null;
   const posicionandoEquipamento = posicionando
-    ? (estado.equipamentos.find((e) => e.id === posicionando) ?? null)
+    ? (equipamentosVistos.find((e) => e.id === posicionando) ?? null)
     : null;
   const tiposConhecidos = React.useMemo(
     () =>
       [
         ...new Set(
-          [...estado.equipamentos, ...estado.foraDoMapa]
+          [...equipamentosVistos, ...estado.foraDoMapa]
             .map((e) => e.tipo)
             .filter(Boolean),
         ),
       ].sort((a, b) => a.localeCompare(b, "pt-BR")),
-    [estado.equipamentos, estado.foraDoMapa],
+    [equipamentosVistos, estado.foraDoMapa],
   );
 
   /** Aplica a resposta de uma action: estado novo + toast. Devolve se deu certo. */
@@ -711,11 +733,17 @@ export function TelaMapa({
       }
       const itens = arraste.itens.flatMap((i) => {
         if (i.alvo.tipo !== "equipamento") return [];
-        const equipamento = estado.equipamentos.find((e) => e.id === i.alvo.id);
+        const equipamento = equipamentosVistos.find((e) => e.id === i.alvo.id);
         if (!equipamento) return [];
         if (equipamento.fontePosicao === "gps") {
           toast.warning(
             `${equipamento.codigo} tem posição por GPS e não pode ser arrastado.`,
+          );
+          return [];
+        }
+        if (equipamento.fontePosicao === "frete") {
+          toast.warning(
+            `${equipamento.codigo} está em rota pelo Frete: a posição segue a rota até a chegada ser lançada no Frete.`,
           );
           return [];
         }
@@ -737,7 +765,7 @@ export function TelaMapa({
     [
       permissoes.editar,
       estado.pessoas,
-      estado.equipamentos,
+      equipamentosVistos,
       cena.equipamentos,
       ctxDestino,
     ],
@@ -1208,7 +1236,7 @@ export function TelaMapa({
       equipamentoId: string | null,
     ) => {
       if (!resultado.estado) return;
-      const antes = new Set(estado.equipamentos.map((e) => e.id));
+      const antes = new Set(equipamentosVistos.map((e) => e.id));
       setEstado(resultado.estado);
       const alvoId =
         equipamentoId ??
@@ -1223,7 +1251,7 @@ export function TelaMapa({
         setSelecao(new Set([alvo.id]));
       }
     },
-    [estado.equipamentos, abrirFicha],
+    [equipamentosVistos, abrirFicha],
   );
 
   const aoMotor = React.useCallback((tipo: TipoMotor, aviso: string | null) => {
@@ -1328,6 +1356,11 @@ export function TelaMapa({
       onGirar={(delta) => girar(equipamentoFicha, delta)}
       pessoas={estado.pessoas}
       hoje={estado.hoje}
+      frete={freteDe.get(equipamentoFicha.id) ?? null}
+      tanque={
+        estado.tanques.find((t) => t.equipamentoId === equipamentoFicha.id) ??
+        null
+      }
       permissoes={permissoes}
       selecionados={selecao.size}
       salvando={salvando}
@@ -1357,7 +1390,7 @@ export function TelaMapa({
       <p>
         Opera:{" "}
         {pessoaFicha.equipamentoId ? (
-          (estado.equipamentos.find((e) => e.id === pessoaFicha.equipamentoId)
+          (equipamentosVistos.find((e) => e.id === pessoaFicha.equipamentoId)
             ?.codigo ?? "–")
         ) : (
           <span className="text-muted-foreground">ninguém assinalado</span>
@@ -1378,7 +1411,7 @@ export function TelaMapa({
         pilhas: estado.pilhas,
         depositos: estado.depositos,
         localidades: estado.localidades,
-        equipamentos: estado.equipamentos,
+        equipamentos: equipamentosVistos,
       })}
       podeEditar={permissoes.editar}
       onFechar={() => setObjetoFicha(null)}

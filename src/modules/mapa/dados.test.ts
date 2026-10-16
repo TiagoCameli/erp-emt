@@ -220,6 +220,51 @@ describe("paraEstadoMapa", () => {
     const antigo = paraEstadoMapa(bruto);
     expect(antigo?.obras).toEqual([]);
     expect(antigo?.tanques).toEqual([]);
+    expect(antigo?.fretesEmRota).toEqual([]);
+  });
+
+  it("frete em rota: traçado do Frete vira [lng, lat]; sem traçado, a reta origem → destino", () => {
+    const estado = paraEstadoMapa({
+      ...bruto,
+      fretes_em_rota: [
+        {
+          id: "f1",
+          equipamento_id: "cs3",
+          criado_em: "2026-10-16T13:29:29Z",
+          material: "BRITA 1",
+          peso: "47.0000",
+          valor_total: "12346.90",
+          valor_material: null,
+          horas: "10.7000",
+          tracado: [
+            [-9.8188, -66.2167],
+            [-9.7495, -66.2172],
+          ],
+        },
+        {
+          id: "f2",
+          origem_lng: -66.2,
+          origem_lat: -9.8,
+          destino_lng: -72.6,
+          destino_lat: -7.6,
+          tracado: null,
+        },
+      ],
+    });
+    const [f1, f2] = estado?.fretesEmRota ?? [];
+    expect(f1.caminho).toEqual([
+      [-66.2167, -9.8188],
+      [-66.2172, -9.7495],
+    ]);
+    expect(f1.peso).toBe(47);
+    expect(f1.valorTotal).toBe(12346.9);
+    // sem permissão de ver Fretes o banco manda null: não vira zero
+    expect(f1.valorMaterial).toBeNull();
+    expect(f2.caminho).toEqual([
+      [-66.2, -9.8],
+      [-72.6, -7.6],
+    ]);
+    expect(f2.equipamentoId).toBeNull();
   });
 
   it("resume o que está em cada local, sem contar tanque de comboio", () => {
