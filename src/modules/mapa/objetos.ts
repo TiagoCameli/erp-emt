@@ -1,6 +1,9 @@
+import { formatarBRL } from "@/lib/formatadores";
+import { colarNoLocal, distanciaM } from "@/modules/mapa/geo";
 import type {
   AlvoObjeto,
   DepositoMapa,
+  LocalidadeMapa,
   PilhaMapa,
   Posicao,
   TanqueMapa,
@@ -250,8 +253,59 @@ export interface FontesFicha {
   tanques: readonly TanqueMapa[];
   pilhas: readonly PilhaMapa[];
   depositos: readonly DepositoMapa[];
-  localidades: readonly { id: string; nome: string }[];
+  localidades: readonly LocalidadeMapa[];
   equipamentos: readonly { id: string; codigo: string }[];
+  /** Raio padrão de um local sem raio próprio (`config.snapLocalM`). */
+  snapLocalM: number;
+  /**
+   * Valor do que está dentro, por id do tanque ou da pilha (o mesmo da aba Posição do Estoque:
+   * combustível pelo preço médio do tanque, material pelo PEPS). Nulo para quem não vê a Posição.
+   */
+  valores: ReadonlyMap<string, number> | null;
+}
+
+/** Até onde o "perto de" alcança quando o ponto não cai na área de nenhum local. */
+export const PERTO_DE_MAX_M = 1000;
+
+/**
+ * Onde o objeto está, pelo lugar marcado no mapa (pedido do Tiago, 16/10/2026: "deve pegar a
+ * localização de onde eles estão"). Dentro do raio de um local: o nome dele. Fora, mas a até 1 km:
+ * "perto de X (374 m)", para não dizer que está dentro. Sem lugar marcado ou longe de tudo: null.
+ */
+export function localDoPonto(
+  pos: Posicao | null,
+  localidades: readonly LocalidadeMapa[],
+  snapLocalM: number,
+): string | null {
+  if (!pos) return null;
+  const dentro = colarNoLocal(pos, [...localidades], snapLocalM);
+  if (dentro) return dentro.local.nome;
+  let perto: { nome: string; d: number } | null = null;
+  for (const l of localidades) {
+    const d = distanciaM(pos, l.pos);
+    if (d <= PERTO_DE_MAX_M && (!perto || d < perto.d)) perto = { nome: l.nome, d };
+  }
+  return perto ? `perto de ${perto.nome} (${Math.round(perto.d)} m)` : null;
+}
+
+/** O local cadastrado manda; sem ele, o do lugar no mapa. */
+function textoDoLocal(
+  localidadeId: string | null,
+  pos: Posicao | null,
+  fontes: FontesFicha,
+): string {
+  const cadastrado = localidadeId
+    ? fontes.localidades.find((l) => l.id === localidadeId)?.nome
+    : undefined;
+  if (cadastrado) return cadastrado;
+  if (!pos) return "sem lugar no mapa";
+  return localDoPonto(pos, fontes.localidades, fontes.snapLocalM) ?? "fora de um local";
+}
+
+/** Linha "Valor" quando quem vê tem a Posição do Estoque; o que não está na posição vale zero. */
+function linhaValor(id: string, fontes: FontesFicha): LinhaFicha[] {
+  if (!fontes.valores) return [];
+  return [{ rotulo: "Valor", valor: formatarBRL(fontes.valores.get(id) ?? 0) }];
 }
 
 /**
@@ -264,8 +318,6 @@ export function linhasDaFicha(
   objeto: Pick<ObjetoMapa, "id" | "alvo">,
   fontes: FontesFicha,
 ): LinhaFicha[] {
-  const nomeDoLocal = (id: string | null) =>
-    id ? (fontes.localidades.find((l) => l.id === id)?.nome ?? null) : null;
   if (objeto.alvo === "pilha") {
     const p = fontes.pilhas.find((x) => x.id === objeto.id);
     if (!p) return [];
@@ -281,7 +333,8 @@ export function linhasDaFicha(
         valor: `${numeroTexto(p.totalEntrada, 1)} ${p.unidade}`,
       },
       { rotulo: "Já saiu", valor: `${numeroTexto(saiu, 1)} ${p.unidade}` },
-      { rotulo: "Local", valor: nomeDoLocal(p.localidadeId) ?? "–" },
+      ...linhaValor(p.id, fontes),
+      { rotulo: "Local", valor: textoDoLocal(p.localidadeId, p.pos, fontes) },
     ];
   }
   if (objeto.alvo === "tanque") {
@@ -308,17 +361,18 @@ export function linhasDaFicha(
           ? `${numeroTexto(nivel, 1)} de ${numeroTexto(capacidade, 0)} ${un} (${numeroTexto((nivel / capacidade) * 100, 0)}%)`
           : `${numeroTexto(nivel, 1)} ${un}`,
       });
+    if (!t.ehExterno) linhas.push(...linhaValor(t.id, fontes));
     const maquina = t.equipamentoId
       ? fontes.equipamentos.find((e) => e.id === t.equipamentoId)
       : null;
     linhas.push(
       maquina
         ? { rotulo: "Anda com", valor: maquina.codigo }
-        : { rotulo: "Local", valor: nomeDoLocal(t.localidadeId) ?? "–" },
+        : { rotulo: "Local", valor: textoDoLocal(t.localidadeId, t.pos, fontes) },
     );
     return linhas;
   }
   const d = fontes.depositos.find((x) => x.id === objeto.id);
   if (!d) return [];
-  return [{ rotulo: "Local", valor: nomeDoLocal(d.localidadeId) ?? "–" }];
+  return [{ rotulo: "Local", valor: textoDoLocal(d.localidadeId, d.pos, fontes) }];
 }
