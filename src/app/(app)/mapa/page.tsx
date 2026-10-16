@@ -4,6 +4,7 @@ import { TriangleAlert } from "lucide-react";
 import { EmptyState, PageHeader } from "@/components/canonicos";
 import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { listarPosicao } from "@/modules/estoque/queries";
 import { TelaMapa } from "@/modules/mapa/components/tela-mapa";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
 import type { AlvoObjeto } from "@/modules/mapa/tipos";
@@ -47,7 +48,12 @@ export default async function PaginaMapa({
     />
   );
 
-  const { estado, erro } = await carregarEstadoMapa();
+  // Valor do que está em cada tanque e pilha: o mesmo da aba Posição, só para quem a vê.
+  const verValor = temPermissao(usuario, "estoque.posicao", "ver");
+  const [{ estado, erro }, valoresEstoque] = await Promise.all([
+    carregarEstadoMapa(),
+    verValor ? valoresDoEstoque() : Promise.resolve(null),
+  ]);
   if (!estado) {
     return (
       <>
@@ -68,6 +74,7 @@ export default async function PaginaMapa({
       <TelaMapa
         inicial={estado}
         colocarInicial={colocarInicial}
+        valoresEstoque={valoresEstoque}
         google={{
           chave:
             process.env.NEXT_GOOGLE_MAPS_API_KEY ||
@@ -85,4 +92,18 @@ export default async function PaginaMapa({
       />
     </div>
   );
+}
+
+/** Valor em estoque por tanque e pilha (soma dos materiais do local). Falha de leitura: sem valor. */
+async function valoresDoEstoque(): Promise<Record<string, number> | null> {
+  try {
+    const valores: Record<string, number> = {};
+    for (const linha of await listarPosicao()) {
+      if (linha.localTipo !== "tanque" && linha.localTipo !== "pilha") continue;
+      valores[linha.localId] = (valores[linha.localId] ?? 0) + linha.valor;
+    }
+    return valores;
+  } catch {
+    return null;
+  }
 }

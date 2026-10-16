@@ -15,6 +15,7 @@ import {
   volumeDaPilha,
   type FontesFicha,
 } from "@/modules/mapa/objetos";
+import { formatarBRL } from "@/lib/formatadores";
 import type { PilhaMapa, TanqueMapa } from "@/modules/mapa/tipos";
 
 const tanque = (t: Partial<TanqueMapa>): TanqueMapa => ({
@@ -187,12 +188,27 @@ const pilha = (p: Partial<PilhaMapa>): PilhaMapa => ({
   ...p,
 });
 
+// Posições reais (16/10): Usina Gregorio tem raio de 110 m; Colorado não tem raio (vale o padrão).
+const GREGORIO: [number, number] = [-71.4914, -7.9517];
+const COLORADO: [number, number] = [-72.6, -7.6];
+const local = (id: string, nome: string, pos: [number, number], raioM: number | null) => ({
+  id,
+  nome,
+  tipo: "patio",
+  obraId: null,
+  fornecedorId: null,
+  pos,
+  tipos: ["patio"],
+  raioM,
+});
 const fontes = (f: Partial<FontesFicha>): FontesFicha => ({
   tanques: [],
   pilhas: [],
   depositos: [],
-  localidades: [{ id: "l1", nome: "Usina Gregorio" }],
+  localidades: [local("l1", "Usina Gregorio", GREGORIO, 110), local("l2", "Colorado", COLORADO, null)],
   equipamentos: [{ id: "e1", codigo: "CB-001" }],
+  snapLocalM: 300,
+  valores: null,
   ...f,
 });
 
@@ -243,6 +259,53 @@ describe("linhas da ficha do objeto", () => {
     );
     expect(linhas.map((l) => l.rotulo)).toEqual(["Tipo", "Conteúdo", "Local"]);
     expect(linhasDaFicha({ id: "x", alvo: "pilha" }, fontes({}))).toEqual([]);
+  });
+
+  const localDaFicha = (pos: [number, number] | null) =>
+    linhasDaFicha({ id: "t", alvo: "tanque" }, fontes({ tanques: [tanque({ id: "t", pos })] })).find(
+      (l) => l.rotulo === "Local",
+    )?.valor;
+
+  it("tanque sem local cadastrado pega o local de onde está no mapa", () => {
+    // 17 m da Usina Gregorio (Tanque Canteiro 2): dentro do raio de 110 m.
+    expect(localDaFicha([GREGORIO[0] + 0.00015, GREGORIO[1]])).toBe("Usina Gregorio");
+    // ~370 m do Colorado, fora dos 300 m padrão: diz "perto de", não que está dentro.
+    expect(localDaFicha([COLORADO[0] + 0.00336, COLORADO[1]])).toBe("perto de Colorado (370 m)");
+    expect(localDaFicha([-70, -9])).toBe("fora de um local");
+    expect(localDaFicha(null)).toBe("sem lugar no mapa");
+  });
+
+  it("o local cadastrado manda sobre o lugar no mapa", () => {
+    const linhas = linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({ tanques: [tanque({ id: "t", localidadeId: "l2", pos: GREGORIO })] }),
+    );
+    expect(linhas.find((l) => l.rotulo === "Local")?.valor).toBe("Colorado");
+  });
+
+  it("valor do que está dentro só para quem vê a Posição; posto externo não tem valor", () => {
+    const valores = new Map([
+      ["t", 15234.5],
+      ["p", 109912.32],
+    ]);
+    const tanqueComValor = linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({ tanques: [tanque({ id: "t", pos: GREGORIO })], valores }),
+    );
+    expect(tanqueComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(formatarBRL(15234.5));
+    const pilhaComValor = linhasDaFicha(
+      { id: "p", alvo: "pilha" },
+      fontes({ pilhas: [pilha({ saldo: 282, totalEntrada: 282 })], valores }),
+    );
+    expect(pilhaComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(formatarBRL(109912.32));
+    const externo = linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({ tanques: [tanque({ id: "t", ehExterno: true })], valores }),
+    );
+    expect(externo.some((l) => l.rotulo === "Valor")).toBe(false);
+    expect(linhasDaFicha({ id: "t", alvo: "tanque" }, fontes({ tanques: [tanque({ id: "t" })] })).some(
+      (l) => l.rotulo === "Valor",
+    )).toBe(false);
   });
 });
 

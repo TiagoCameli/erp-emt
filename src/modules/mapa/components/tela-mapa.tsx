@@ -260,6 +260,8 @@ export interface TelaMapaProps {
   permissoes: PermissoesMapa;
   /** Tanque, pilha ou depósito recém-criado no Estoque: a tela abre no "toque onde fica". */
   colocarInicial?: { alvo: AlvoObjeto; id: string } | null;
+  /** Valor em estoque por id de tanque e pilha; nulo para quem não vê a Posição do Estoque. */
+  valoresEstoque?: Record<string, number> | null;
 }
 
 export function TelaMapa({
@@ -267,9 +269,14 @@ export function TelaMapa({
   google,
   permissoes,
   colocarInicial = null,
+  valoresEstoque = null,
 }: TelaMapaProps) {
   const router = useRouter();
   const [estado, setEstado] = React.useState(inicial);
+  const valoresDaFicha = React.useMemo(
+    () => (valoresEstoque ? new Map(Object.entries(valoresEstoque)) : null),
+    [valoresEstoque],
+  );
   // Quando o servidor manda um estado novo (router.refresh), a tela adota (padrão "derivar na
   // renderização", sem efeito).
   const [inicialAnterior, setInicialAnterior] = React.useState(inicial);
@@ -1456,6 +1463,8 @@ export function TelaMapa({
         depositos: estado.depositos,
         localidades: estado.localidades,
         equipamentos: equipamentosVistos,
+        snapLocalM: estado.config.snapLocalM,
+        valores: valoresDaFicha,
       })}
       podeEditar={permissoes.editar}
       onFechar={() => setObjetoFicha(null)}
