@@ -11477,6 +11477,18 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_mapa_local_gravar: {
+        Args: {
+          p_id: string | null;
+          p_nome: string | null;
+          p_tipos: string[] | null;
+          p_lng: number | null;
+          p_lat: number | null;
+          p_obra: string | null;
+          p_ativo: boolean | null;
+        };
+        Returns: string;
+      };
       fn_mapa_local_raio: {
         Args: { p_id: string; p_raio: number | null };
         Returns: undefined;

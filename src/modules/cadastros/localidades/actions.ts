@@ -42,6 +42,16 @@ function paraLinha(dados: LocalidadeInput) {
   };
 }
 
+/**
+ * Regra do banco com texto para a pessoa (23514). Hoje é a jazida ativa sem obra: a obra da
+ * jazida se escolhe na ficha do local, no Mapa.
+ */
+function mensagemDaRegra(mensagem: string): string {
+  return mensagem.includes("Jazida")
+    ? `${mensagem}. Escolha a obra na ficha do local, no Mapa.`
+    : mensagem;
+}
+
 /** Cria uma localidade. */
 export async function criar(dados: LocalidadeInput): Promise<ResultadoAcao> {
   try {
@@ -98,6 +108,7 @@ export async function editar(
 
   if (error) {
     if (error.code === "23505") return { erro: ERRO_NOME_REPETIDO };
+    if (error.code === "23514") return { erro: mensagemDaRegra(error.message) };
     return erroAcao(
       "cadastros.localidades.editar",
       error,
@@ -130,6 +141,7 @@ export async function alternarAtivo(
     .eq("id", idValido.data);
 
   if (error) {
+    if (error.code === "23514") return { erro: mensagemDaRegra(error.message) };
     return erroAcao(
       "cadastros.localidades.alternarAtivo",
       error,

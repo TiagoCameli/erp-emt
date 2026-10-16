@@ -229,6 +229,12 @@ export const posicionarObraSchema = z.strictObject({
 export type PosicionarObraInput = z.infer<typeof posicionarObraSchema>;
 
 /**
+ * Jazida é de uma obra (Tiago, 16/10/2026): a máquina que opera nela trabalha para essa obra.
+ * O banco recusa jazida ativa sem obra; aqui o aviso chega antes de tocar no mapa.
+ */
+export const ERRO_JAZIDA_SEM_OBRA = "Jazida precisa estar atrelada a uma obra";
+
+/**
  * Local no ponto tocado: `localidadeId` dá ponto a um local que já existe; sem ele, cria um
  * local novo (nome e tipo). `vincular` liga um tanque ou depósito do Estoque a esse local.
  */
@@ -242,6 +248,8 @@ export const colocarLocalSchema = z
       .optional(),
     lng: longitudeSchema,
     lat: latitudeSchema,
+    /** Obra do local. Jazida nova tem de vir com ela (o banco também recusa). */
+    obraId: idSchemaCom("Obra inválida").optional(),
     vincular: z
       .strictObject({
         alvo: z.enum(["tanque", "deposito"]),
@@ -251,6 +259,9 @@ export const colocarLocalSchema = z
   })
   .refine((v) => v.localidadeId || (v.nome && v.tipos), {
     error: "Informe o nome e o tipo do local",
+  })
+  .refine((v) => !v.tipos?.includes("jazida") || v.obraId, {
+    error: ERRO_JAZIDA_SEM_OBRA,
   });
 export type ColocarLocalInput = z.infer<typeof colocarLocalSchema>;
 
@@ -289,18 +300,30 @@ export const escolherPedreiraSchema = z.strictObject({
 export type EscolherPedreiraInput = z.infer<typeof escolherPedreiraSchema>;
 
 /** Nome e tipos de um local (sem mexer no ponto). */
-export const editarLocalSchema = z.strictObject({
-  localidadeId: idSchemaCom("Local inválido"),
-  nome: z
-    .string()
-    .trim()
-    .min(1, { error: "Informe o nome do local" })
-    .max(TEXTO_CURTO),
-  tipos: z
-    .array(z.enum(TIPOS_LOCAL, { error: "Tipo de local inválido" }))
-    .min(1, { error: "Escolha ao menos um tipo" }),
-});
+export const editarLocalSchema = z
+  .strictObject({
+    localidadeId: idSchemaCom("Local inválido"),
+    nome: z
+      .string()
+      .trim()
+      .min(1, { error: "Informe o nome do local" })
+      .max(TEXTO_CURTO),
+    tipos: z
+      .array(z.enum(TIPOS_LOCAL, { error: "Tipo de local inválido" }))
+      .min(1, { error: "Escolha ao menos um tipo" }),
+    /** Obra do local; null não mexe na que ele tem. Jazida exige obra. */
+    obraId: idSchemaCom("Obra inválida").nullable(),
+  })
+  .refine((v) => !v.tipos.includes("jazida") || v.obraId, {
+    error: ERRO_JAZIDA_SEM_OBRA,
+  });
 export type EditarLocalInput = z.infer<typeof editarLocalSchema>;
+
+/** Inativa o local: some do mapa e das listas; quem estava nele fica onde está. */
+export const inativarLocalSchema = z.strictObject({
+  localidadeId: idSchemaCom("Local inválido"),
+});
+export type InativarLocalInput = z.infer<typeof inativarLocalSchema>;
 
 const coordenadaSchema = z.tuple([longitudeSchema, latitudeSchema]);
 
