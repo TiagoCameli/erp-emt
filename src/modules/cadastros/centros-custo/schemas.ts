@@ -15,6 +15,7 @@ export const TIPOS_CENTRO = [
   "socio",
   "empresa_ligada",
   "imobilizado",
+  "equipamento",
 ] as const;
 
 export type TipoCentro = (typeof TIPOS_CENTRO)[number];
@@ -42,6 +43,11 @@ export const ROTULO_TIPO_CENTRO: Record<TipoCentro, string> = {
   empresa_ligada: "Empresa ligada",
   /** Compra de equipamento e imóvel: patrimônio, fora do custo (D5). */
   imobilizado: "Imobilizado",
+  /**
+   * Equipamento Sem Alocação (16/10/2026): dias de máquina parada, sem obra ou que
+   * atende vários centros. Indireto, rateado nas obras como o Escritório Central.
+   */
+  equipamento: "Equipamento",
 };
 
 const nomeSchema = z

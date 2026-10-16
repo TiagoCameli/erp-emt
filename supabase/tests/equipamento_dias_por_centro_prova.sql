@@ -124,6 +124,25 @@ begin
   else v_falhas := v_falhas + 1; v_rel := v_rel || E'\nFALHA relatório do mês'; end if;
   perform public.fn_mapa_centros_equipamento(v_imp);
 
+  -- (h) dia perdido pelo cron: o reparo refaz pela foto do mapa e não mexe em dia que já tem linha
+  declare v_ontem date := v_hoje - 1; v_antes int; v_reparo int; v_de_novo int;
+  begin
+    select count(*) into v_antes from public.equipamento_dias_centro where dia = v_ontem;
+    delete from public.equipamento_dias_centro where dia = v_ontem;
+    v_reparo := public.fn_equip_dias_reparar(v_ontem);
+    v_de_novo := public.fn_equip_dias_reparar(v_ontem);
+    if not exists (select 1 from public.mapa_snapshots where data = v_ontem) then
+      v_rel := v_rel || E'\n--   sem foto de ontem: reparo não testado com dado';
+    elsif v_reparo > 0 and v_reparo = (select count(*) from public.equipamento_dias_centro where dia = v_ontem) and v_de_novo = 0
+    then v_rel := v_rel || format(E'\nOK   reparo de ontem: %s linhas (antes %s), 2ª vez 0', v_reparo, v_antes);
+    else v_falhas := v_falhas + 1; v_rel := v_rel || format(E'\nFALHA reparo de ontem: %s / %s', v_reparo, v_de_novo); end if;
+    begin
+      perform public.fn_equip_dias_reparar(v_hoje);
+      v_falhas := v_falhas + 1; v_rel := v_rel || E'\nFALHA reparo aceitou hoje';
+    exception when others then v_rel := v_rel || E'\nOK   reparo recusa hoje';
+    end;
+  end;
+
   -- (f) rateio indireto continua de pé com o centro novo
   perform count(*) from public.fn_rel_custos_indiretos(extract(year from v_hoje)::int);
   v_rel := v_rel || E'\nOK   fn_rel_custos_indiretos roda';
