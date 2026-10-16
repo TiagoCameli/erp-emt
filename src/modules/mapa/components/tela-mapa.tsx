@@ -370,8 +370,8 @@ export function TelaMapa({
   const [concluindo, setConcluindo] = React.useState(false);
   /**
    * Ferramenta "Rota" (Tiago, 16/10/2026): toca a partida, toca o destino e o mapa mostra a menor
-   * distância pela estrada. Tocar de novo muda o destino. `pedidoRota` descarta a resposta de um
-   * cálculo antigo que chegue depois do novo.
+   * distância pela estrada. Tocar de novo muda o destino. A resposta só vale se a partida e o
+   * destino ainda forem os mesmos pontos: a de um cálculo antigo que chegue depois é descartada.
    */
   const [rota, setRota] = React.useState<{
     origem: Posicao | null;
@@ -379,7 +379,6 @@ export function TelaMapa({
     resultado: ResultadoRota | null;
     calculando: boolean;
   } | null>(null);
-  const pedidoRota = React.useRef(0);
   // Prévias que valem mais que o banco até gravar: raio do local e rumo da máquina.
   const [raioPrevio, setRaioPrevio] = React.useState<{
     id: string;
@@ -956,13 +955,23 @@ export function TelaMapa({
 
   const calcularRota = React.useCallback(
     async (origem: Posicao, destino: Posicao) => {
-      const n = ++pedidoRota.current;
       const resultado = await medirRotaPelaEstrada(origem, destino);
-      if (pedidoRota.current !== n) return;
-      setRota((r) => (r ? { ...r, resultado, calculando: false } : r));
+      setRota((r) =>
+        r && r.origem === origem && r.destino === destino
+          ? { ...r, resultado, calculando: false }
+          : r,
+      );
     },
     [],
   );
+
+  const alternarRota = React.useCallback(() => {
+    setRota((r) =>
+      r
+        ? null
+        : { origem: null, destino: null, resultado: null, calculando: false },
+    );
+  }, []);
 
   const clicarMapa = React.useCallback(
     (pos: Posicao) => {
@@ -1875,19 +1884,7 @@ export function TelaMapa({
               {botaoAlternar(inclinado, "3D", Box, () =>
                 setInclinado((v) => !v),
               )}
-              {botaoAlternar(rota !== null, "Rota", Route, () => {
-                pedidoRota.current += 1;
-                setRota((r) =>
-                  r
-                    ? null
-                    : {
-                        origem: null,
-                        destino: null,
-                        resultado: null,
-                        calculando: false,
-                      },
-                );
-              })}
+              {botaoAlternar(rota !== null, "Rota", Route, alternarRota)}
               <Button
                 type="button"
                 size="xs"
@@ -2013,15 +2010,14 @@ export function TelaMapa({
                     type="button"
                     size="xs"
                     variant="ghost"
-                    onClick={() => {
-                      pedidoRota.current += 1;
+                    onClick={() =>
                       setRota({
                         origem: null,
                         destino: null,
                         resultado: null,
                         calculando: false,
-                      });
-                    }}
+                      })
+                    }
                   >
                     Recomeçar
                   </Button>
@@ -2030,10 +2026,7 @@ export function TelaMapa({
                   type="button"
                   size="xs"
                   variant="ghost"
-                  onClick={() => {
-                    pedidoRota.current += 1;
-                    setRota(null);
-                  }}
+                  onClick={() => setRota(null)}
                   aria-label="Fechar a rota"
                 >
                   <X className="size-3" />
