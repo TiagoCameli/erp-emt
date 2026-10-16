@@ -112,6 +112,7 @@ import {
   type TrechoMedido,
 } from "@/modules/mapa/geo";
 import { extrasPorLocal } from "@/modules/mapa/dados";
+import { pontoNaObra } from "@/modules/mapa/obra-destino";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
@@ -586,6 +587,36 @@ export function TelaMapa({
         return pos ? [{ id: o.id, nome: o.nome, pos }] : [];
       }),
     [estado.obras, estado.areas, trechosMedidos],
+  );
+  const opcoesObra = React.useMemo(
+    () =>
+      [...estado.obras]
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        .map((o) => ({ id: o.id, nome: o.nome })),
+    [estado.obras],
+  );
+  // "Transferir para obra" da ficha: a máquina vai para o ponto da obra (o mesmo do nome dela no
+  // mapa), num anel em volta se já houver máquina ali.
+  const levarParaObra = React.useCallback(
+    (obraId: string) => {
+      if (pendente?.modo !== "obra") return null;
+      const base = rotulosObra.find((o) => o.id === obraId)?.pos;
+      if (!base) return null;
+      const equipamento = pendente.principal;
+      const ocupados = equipamentosVistos.flatMap((e) =>
+        e.id !== equipamento.id && e.pos ? [e.pos] : [],
+      );
+      const para = pontoNaObra(base, ocupados);
+      return [
+        {
+          equipamento,
+          de: equipamento.pos,
+          para,
+          destino: resolverDestino(para, ctxDestino),
+        },
+      ];
+    },
+    [pendente, rotulosObra, equipamentosVistos, ctxDestino],
   );
   const desenhoDe = React.useCallback(
     (obraId: string) => ({
@@ -1131,12 +1162,19 @@ export function TelaMapa({
   };
 
   const confirmarTransferencia = React.useCallback(
-    async ({ data, motivo, estadoLivre, ajuste }: ConfirmacaoTransferencia) => {
+    async ({
+      data,
+      motivo,
+      estadoLivre,
+      ajuste,
+      itens,
+      obra,
+    }: ConfirmacaoTransferencia) => {
       if (!pendente) return true;
       setSalvando(true);
       try {
         const r = await moverEquipamentos({
-          itens: pendente.itens.map((it) => {
+          itens: itens.map((it) => {
             const pos = it.destino.tipo === "trecho" ? it.destino.pos : it.para;
             return {
               id: it.equipamento.id,
@@ -1151,8 +1189,10 @@ export function TelaMapa({
           data,
           motivo: motivo || undefined,
           ajuste: ajuste || undefined,
+          obra_id: obra?.tipo === "obra" ? obra.obraId : undefined,
+          sem_obra: obra?.tipo === "sem_obra" || undefined,
         });
-        const n = pendente.itens.length;
+        const n = itens.length;
         const ok = aplicar(
           r,
           pendente.modo === "posicionar"
@@ -1485,6 +1525,14 @@ export function TelaMapa({
       onFechar={() => setFicha(null)}
       onFocar={() => equipamentoFicha.pos && focar(equipamentoFicha.pos, 16)}
       onPosicionar={() => iniciarPosicionar(equipamentoFicha)}
+      onTransferirParaObra={() =>
+        setPendente({ modo: "obra", principal: equipamentoFicha, itens: [] })
+      }
+      historicoHref={
+        permissoes.historico
+          ? `/mapa/historico?equipamento=${equipamentoFicha.id}`
+          : null
+      }
       onMarcarEstado={(s) =>
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
@@ -2065,6 +2113,9 @@ export function TelaMapa({
         <DialogoTransferencia
           pendente={pendente}
           hoje={estado.hoje}
+          obras={opcoesObra}
+          obrasNoMapa={rotulosObra}
+          levarParaObra={levarParaObra}
           onCancelar={cancelarTransferencia}
           onConfirmar={confirmarTransferencia}
         />

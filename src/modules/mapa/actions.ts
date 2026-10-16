@@ -116,10 +116,14 @@ export async function moverEquipamentos(
     data,
     motivo,
     ajuste,
+    obra_id,
+    sem_obra,
     deslocamento,
     conserto_motivo,
     conserto_previsao,
   } = validado.data;
+  if (obra_id && sem_obra)
+    return { erro: "Escolha uma obra ou \"Sem obra\", não os dois" };
   const vistos = new Set<string>();
   let total = 0;
   try {
@@ -129,7 +133,13 @@ export async function moverEquipamentos(
       vistos.add(item.id);
       const destino: Record<string, unknown> = { lng: item.lng, lat: item.lat };
       if (ajuste) destino.ajuste = true;
-      else if (item.estado) destino.estado = item.estado;
+      else {
+        if (item.estado) destino.estado = item.estado;
+        // A obra escolhida vence a da zona; "Sem obra" é dito de propósito. Sem nenhum dos dois,
+        // a RPC segue a zona e recusa se a máquina perderia a obra que tinha (v1.21).
+        if (obra_id) destino.obra_id = obra_id;
+        if (sem_obra) destino.sem_obra = true;
+      }
       if (deslocamento) destino.deslocamento = deslocamento;
       if (conserto_motivo) destino.conserto_motivo = conserto_motivo;
       if (conserto_previsao) destino.conserto_previsao = conserto_previsao;

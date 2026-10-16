@@ -11463,6 +11463,39 @@ export type Database = {
         Args: { p_id: string; p_heading: number | null };
         Returns: undefined;
       };
+      fn_mapa_historico: {
+        Args: {
+          p_de?: string;
+          p_ate?: string;
+          p_alvo?: string;
+          p_tipo?: string;
+        };
+        Returns: {
+          id: number;
+          tipo: string;
+          alvo: string;
+          alvo_id: string;
+          alvo_codigo: string;
+          alvo_nome: string;
+          data_efetiva: string;
+          criado_em: string;
+          usuario_nome: string;
+          motivo: string;
+          de_obra: string | null;
+          para_obra: string | null;
+          de_lugar: string | null;
+          para_lugar: string | null;
+          de_km: number | null;
+          para_km: number | null;
+          de_estado: string | null;
+          para_estado: string | null;
+          de_pessoa: string | null;
+          para_pessoa: string | null;
+          de_acoplado: string | null;
+          para_acoplado: string | null;
+          fornecedor: string | null;
+        }[];
+      };
       fn_mapa_local_editar: {
         Args: {
           p_id: string | null;
