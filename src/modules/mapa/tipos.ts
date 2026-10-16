@@ -373,6 +373,17 @@ export interface EstadoMapa {
   pilhas: PilhaMapa[];
   localidadesSemPosicao: LocalSemPosicao[];
   fretesEmRota: FreteEmRota[];
+  /** Implementos ativos (IMP-xxx) e o equipamento em que cada um está acoplado. */
+  implementos: ImplementoMapa[];
+}
+
+/** Implemento (equipamento de tipo "Implementos"): só aparece no card de quem o leva. */
+export interface ImplementoMapa {
+  id: string;
+  codigo: string;
+  descricao: string;
+  /** Equipamento em que está acoplado; null = solto. */
+  acopladoEm: string | null;
 }
 
 /** O que a pessoa pode fazer na tela, decidido no servidor pelo catálogo de permissões. */

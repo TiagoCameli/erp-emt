@@ -338,6 +338,13 @@ export const posicionarObjetoSchema = z.strictObject({
 });
 export type PosicionarObjetoInput = z.infer<typeof posicionarObjetoSchema>;
 
+/** Acopla o implemento no equipamento; equipamentoId null desacopla. */
+export const acoplarImplementoSchema = z.strictObject({
+  implementoId: idSchemaCom("Implemento inválido"),
+  equipamentoId: idSchemaCom("Equipamento inválido").nullable(),
+});
+export type AcoplarImplementoInput = z.infer<typeof acoplarImplementoSchema>;
+
 /** Tamanho do depósito no mapa, em metros (os mesmos limites do banco). */
 export const tamanhoDepositoSchema = z.strictObject({
   id: idSchemaCom("Depósito inválido"),

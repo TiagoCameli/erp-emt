@@ -443,6 +443,12 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       tipos: tiposDoLocal(l.tipos, l.tipo),
     })),
     fretesEmRota: lista(b.fretes_em_rota).map(frete),
+    implementos: lista(b.implementos).map((i) => ({
+      id: texto(i.id),
+      codigo: texto(i.codigo),
+      descricao: texto(i.descricao),
+      acopladoEm: textoOuNulo(i.acoplado_em),
+    })),
   };
 }
 

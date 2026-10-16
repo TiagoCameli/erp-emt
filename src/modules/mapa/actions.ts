@@ -21,6 +21,7 @@ import {
   moverEquipamentosSchema,
   moverPessoasSchema,
   posicionarObjetoSchema,
+  acoplarImplementoSchema,
   tamanhoDepositoSchema,
   rumoDepositoSchema,
   posicionarObraSchema,
@@ -649,6 +650,38 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Acopla um implemento no equipamento do card, ou desacopla (equipamentoId null). */
+export async function acoplarImplemento(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = acoplarImplementoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_acoplar_implemento", {
+      p_implemento: v.implementoId,
+      p_equipamento: v.equipamentoId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.acoplarImplemento",
+        error,
+        mensagemDaRpc(error, "Não foi possível acoplar o implemento"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.acoplarImplemento",
+      erro,
+      `Não foi possível acoplar o implemento: ${textoDoErro(erro)}`,
     );
   }
 }

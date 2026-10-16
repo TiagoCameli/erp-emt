@@ -16,6 +16,7 @@ import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipament
 import { textoDesde } from "@/modules/mapa/desde";
 import { formatarKm } from "@/modules/mapa/geo";
 import { CLASSES_ESTADO } from "@/modules/mapa/rotulos";
+import { implementosDoCard } from "@/modules/mapa/implementos";
 import {
   ESTADOS_MAQUINA,
   ROTULO_ESTADO,
@@ -24,6 +25,7 @@ import {
   type EquipamentoMapa,
   type EstadoMaquina,
   type FreteEmRota,
+  type ImplementoMapa,
   type PermissoesMapa,
   type PessoaMapa,
   type TanqueMapa,
@@ -55,6 +57,10 @@ export interface FichaEquipamentoProps {
   onEncerrarLocacao: () => void;
   /** Gira a máquina: graus a somar ao rumo atual; null volta a seguir a pista. */
   onGirar: (delta: number | null) => void;
+  /** Todos os implementos ativos; o card mostra os acoplados nesta máquina. */
+  implementos: ImplementoMapa[];
+  /** Acopla nesta máquina (id do implemento) ou desacopla (`acoplar` false). */
+  onAcoplar: (implementoId: string, acoplar: boolean) => void;
 }
 
 function Linha({
@@ -88,7 +94,13 @@ export function FichaEquipamento({
   onAssinalarOperador,
   onEncerrarLocacao,
   onGirar,
+  implementos,
+  onAcoplar,
 }: FichaEquipamentoProps) {
+  const { acoplados, opcoes: opcoesImplemento } = implementosDoCard(
+    implementos,
+    e.id,
+  );
   const opcoesOperador = React.useMemo(
     () =>
       pessoas.map((p) => ({
@@ -291,6 +303,54 @@ export function FichaEquipamento({
         equipamentoId={e.id}
         propria={e.propriedade === "propria"}
       />
+
+      {acoplados.length > 0 || (podeEditar && opcoesImplemento.length > 0) ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-legenda font-medium text-muted-foreground">
+            Implementos acoplados
+          </span>
+          {acoplados.length === 0 ? (
+            <p className="text-detalhe text-muted-foreground">Nenhum.</p>
+          ) : (
+            acoplados.map((i) => (
+              <div
+                key={i.id}
+                className="flex items-center justify-between gap-2 text-detalhe"
+              >
+                <span className="min-w-0">
+                  <span className="font-mono">{i.codigo}</span>{" "}
+                  <span className="text-muted-foreground">{i.descricao}</span>
+                </span>
+                {podeEditar ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    disabled={salvando}
+                    onClick={() => onAcoplar(i.id, false)}
+                  >
+                    Desacoplar
+                  </Button>
+                ) : null}
+              </div>
+            ))
+          )}
+          {podeEditar && opcoesImplemento.length > 0 ? (
+            <Combobox
+              valor=""
+              onValorChange={(v) => {
+                if (v) onAcoplar(v, true);
+              }}
+              opcoes={opcoesImplemento}
+              placeholder="Acoplar implemento"
+              buscaPlaceholder="Código ou descrição"
+              size="sm"
+              disabled={salvando}
+              ariaLabel="Acoplar implemento"
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-1.5">
         <span className="text-legenda font-medium text-muted-foreground">
