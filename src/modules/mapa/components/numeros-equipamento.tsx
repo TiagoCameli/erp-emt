@@ -14,10 +14,11 @@ import type { FichaNumeros } from "@/modules/mapa/tipos";
 
 /**
  * Os números da máquina na ficha (pedido do Tiago, 15/10/2026): último abastecimento, consumo dos
- * últimos 30 dias (só máquina própria), última manutenção (OS) e o gasto em manutenção pelo
- * Financeiro (rateio no centro de custo da máquina, categorias de manutenção) desde sempre, nos
- * últimos 12 meses, no ano e no mês passado. Carrega quando a ficha abre; o pai monta com
- * `key` = id da máquina, então cada máquina começa do zero.
+ * últimos 30 dias (só máquina própria), última manutenção (OS) e as despesas no Financeiro
+ * (rateio no centro de custo da máquina, todas as categorias desde 16/10/2026: "deve mostrar todas
+ * as despesas") desde sempre, nos últimos 12 meses, no ano e no mês passado, com a divisão por
+ * categoria. Carrega quando a ficha abre; o pai monta com `key` = id da máquina, então cada
+ * máquina começa do zero.
  *
  * Ao lado do Financeiro, o custo das OS concluídas (16/10/2026): na US-001 o Financeiro dava
  * R$ 0,00 com três OS somando R$ 10.612,97. As fontes podem se sobrepor (a peça da OS pode ter sido
@@ -125,7 +126,7 @@ export function NumerosEquipamento({
 
       <div className="flex flex-col gap-1">
         <span className="text-legenda font-medium text-muted-foreground">
-          Gasto em manutenção (Financeiro)
+          Despesas no Financeiro (centro da máquina)
         </span>
         {gasto.temCentro ? (
           <>
@@ -139,6 +140,18 @@ export function NumerosEquipamento({
             <Linha rotulo={`Em ${formatarMesAno(gasto.mesPassadoRef)}`}>
               {formatarBRL(gasto.mesPassado)}
             </Linha>
+            {gasto.porCategoria.length > 0 ? (
+              <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
+                <span className="text-legenda text-muted-foreground">
+                  Desde sempre, por categoria
+                </span>
+                {gasto.porCategoria.map((c) => (
+                  <Linha key={c.categoria} rotulo={c.categoria}>
+                    {formatarBRL(c.total)}
+                  </Linha>
+                ))}
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="text-detalhe text-muted-foreground">

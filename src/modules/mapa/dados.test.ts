@@ -425,6 +425,10 @@ describe("paraFichaNumeros", () => {
         mes_passado_ref: "2026-09-01",
         ano_ref: 2026,
         tem_centro: true,
+        por_categoria: [
+          { categoria: "Manutenção de equipamentos", total: "35658.97" },
+          { categoria: "Frete", total: 6350.58 },
+        ],
       },
       custo_os: {
         total: "10612.9700",
@@ -445,6 +449,10 @@ describe("paraFichaNumeros", () => {
     expect(f?.ultimaManutencao?.custo).toBe(184);
     expect(f?.gastoManutencao.total).toBe(61225.17);
     expect(f?.gastoManutencao.mesPassadoRef).toBe("2026-09-01");
+    expect(f?.gastoManutencao.porCategoria).toEqual([
+      { categoria: "Manutenção de equipamentos", total: 35658.97 },
+      { categoria: "Frete", total: 6350.58 },
+    ]);
     const vazio = paraFichaNumeros({
       ultimo_abastecimento: null,
       consumo_30_dias: { litros: 0, valor: 0, abastecimentos: 0 },
@@ -464,6 +472,7 @@ describe("paraFichaNumeros", () => {
     expect(vazio?.gastoManutencao.temCentro).toBe(false);
     // RPC antiga, sem custo_os: zero OS, não quebra
     expect(vazio?.custoOs.quantidade).toBe(0);
+    expect(vazio?.gastoManutencao.porCategoria).toEqual([]);
     expect(paraFichaNumeros(null)).toBeNull();
   });
 });
