@@ -123,6 +123,7 @@ import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
+  ROTULO_TIPO_AREA,
   type ConfigGoogle,
   type AlvoObjeto,
   type EquipamentoMapa,
@@ -618,28 +619,61 @@ export function TelaMapa({
         .map((o) => ({ id: o.id, nome: o.nome })),
     [estado.obras],
   );
-  // "Transferir para obra" da ficha: a máquina vai para o ponto da obra (o mesmo do nome dela no
-  // mapa), num anel em volta se já houver máquina ali.
-  const levarParaObra = React.useCallback(
-    (obraId: string) => {
-      if (pendente?.modo !== "obra") return null;
-      const base = rotulosObra.find((o) => o.id === obraId)?.pos;
-      if (!base) return null;
+  // "Transferir" da ficha: para onde a máquina pode ir sem arraste. Obra (no ponto do nome dela
+  // no mapa), local (no ponto dele) ou área (no centro); num anel em volta se já houver máquina.
+  const lugaresDaFicha = React.useMemo(() => {
+    const porNome = (a: { rotulo: string }, b: { rotulo: string }) =>
+      a.rotulo.localeCompare(b.rotulo, "pt-BR");
+    const deObras = rotulosObra
+      .map((o) => ({ chave: `obra:${o.id}`, rotulo: `Obra · ${o.nome}`, pos: o.pos, obra: o.id }))
+      .sort(porNome);
+    const deLocais = estado.localidades
+      .map((l) => ({
+        chave: `local:${l.id}`,
+        rotulo: `Local · ${l.nome} (${rotuloTipoLocalidade(l.tipo).toLowerCase()})`,
+        pos: l.pos,
+        obra: l.obraId,
+      }))
+      .sort(porNome);
+    const deAreas = estado.areas
+      .flatMap((a) =>
+        a.centro
+          ? [
+              {
+                chave: `area:${a.id}`,
+                rotulo: `Área · ${a.nome} (${(ROTULO_TIPO_AREA[a.tipo] ?? a.tipo).toLowerCase()})`,
+                pos: a.centro,
+                obra: a.obraId,
+              },
+            ]
+          : [],
+      )
+      .sort(porNome);
+    return [...deObras, ...deLocais, ...deAreas];
+  }, [rotulosObra, estado.localidades, estado.areas]);
+  const levarPara = React.useCallback(
+    (chave: string) => {
+      if (pendente?.modo !== "destino") return null;
+      const lugar = lugaresDaFicha.find((l) => l.chave === chave);
+      if (!lugar) return null;
       const equipamento = pendente.principal;
       const ocupados = equipamentosVistos.flatMap((e) =>
         e.id !== equipamento.id && e.pos ? [e.pos] : [],
       );
-      const para = pontoNaObra(base, ocupados);
-      return [
-        {
-          equipamento,
-          de: equipamento.pos,
-          para,
-          destino: resolverDestino(para, ctxDestino),
-        },
-      ];
+      const para = pontoNaObra(lugar.pos, ocupados);
+      return {
+        itens: [
+          {
+            equipamento,
+            de: equipamento.pos,
+            para,
+            destino: resolverDestino(para, ctxDestino),
+          },
+        ],
+        obraSugerida: lugar.obra,
+      };
     },
-    [pendente, rotulosObra, equipamentosVistos, ctxDestino],
+    [pendente, lugaresDaFicha, equipamentosVistos, ctxDestino],
   );
   const desenhoDe = React.useCallback(
     (obraId: string) => ({
@@ -1588,7 +1622,7 @@ export function TelaMapa({
       onFocar={() => equipamentoFicha.pos && focar(equipamentoFicha.pos, 16)}
       onPosicionar={() => iniciarPosicionar(equipamentoFicha)}
       onTransferirParaObra={() =>
-        setPendente({ modo: "obra", principal: equipamentoFicha, itens: [] })
+        setPendente({ modo: "destino", principal: equipamentoFicha, itens: [] })
       }
       historicoHref={
         permissoes.historico
@@ -2188,9 +2222,9 @@ export function TelaMapa({
           pendente={pendente}
           hoje={estado.hoje}
           obras={opcoesObra}
-          obrasNoMapa={rotulosObra}
+          lugares={lugaresDaFicha}
           obraCarretasEmt={estado.config.obraCarretasEmt}
-          levarParaObra={levarParaObra}
+          levarPara={levarPara}
           onCancelar={cancelarTransferencia}
           onConfirmar={confirmarTransferencia}
         />

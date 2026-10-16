@@ -69,7 +69,7 @@ export interface FichaEquipamentoProps {
   onFechar: () => void;
   onFocar: () => void;
   onPosicionar: () => void;
-  /** "Transferir para obra": escolhe a obra numa lista, sem arrastar no mapa. */
+  /** "Transferir": escolhe para onde (obra, local, área) e a obra em que trabalha, sem arrastar. */
   onTransferirParaObra?: () => void;
   /** Link para o histórico de movimentações desta máquina (quem pode ver). */
   historicoHref?: string | null;
@@ -244,11 +244,10 @@ export function FichaEquipamento({
         <Linha rotulo="Obra">{e.obraNome || "–"}</Linha>
         <Linha rotulo="Onde">{onde.length ? onde.join(" · ") : "–"}</Linha>
         {e.frenteNome ? <Linha rotulo="Frente">{e.frenteNome}</Linha> : null}
-        {(podeEditar && onTransferirParaObra && !e.carretaEmt) ||
-        historicoHref ? (
+        {(podeEditar && onTransferirParaObra) || historicoHref ? (
           <div className="flex flex-wrap gap-2 pt-1">
-            {/* Carreta da EMT Transportes não troca de obra: é sempre "001 - Carretas EMT". */}
-            {podeEditar && onTransferirParaObra && !e.carretaEmt ? (
+            {/* Carreta da EMT Transportes muda de lugar, não de obra: o diálogo fixa a 001. */}
+            {podeEditar && onTransferirParaObra ? (
               <Button
                 type="button"
                 size="sm"
@@ -264,7 +263,7 @@ export function FichaEquipamento({
                 }
               >
                 <ArrowRightLeft />
-                Transferir para obra
+                Transferir
               </Button>
             ) : null}
             {historicoHref ? (
