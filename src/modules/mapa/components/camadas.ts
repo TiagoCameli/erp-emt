@@ -573,9 +573,11 @@ export function montarCamadas(cena: Cena): Layer[] {
         getColor: (d) =>
           cena.selecao.has(d.id)
             ? [255, 230, 150]
-            : d.estado === "parado"
-              ? [205, 205, 205]
-              : BRANCO,
+            : d.estado === "fora_funcionamento"
+              ? [120, 120, 120]
+              : d.estado === "parado"
+                ? [205, 205, 205]
+                : BRANCO,
         // 3x o tamanho real, em metros no terreno, sem mínimo nem máximo em pixels: o tamanho
         // fica preso ao chão e não cresce ao afastar o zoom (pedido do Tiago, 15/10).
         sizeScale: escala * ESCALA_MAQUINA,

@@ -18,20 +18,20 @@ export const ESTADOS_MAQUINA = [
   "parado",
   "quebrado_obra",
   "conserto",
+  "fora_funcionamento",
 ] as const;
 export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
 
 /**
- * O estado que a tela mostra: os de cima, os dois que o cadastro impõe (sem posição, fora de
- * funcionamento) e os dois que o Frete impõe à carreta (fretes.ts): em frete (frete aberto) e em
- * deslocamento (chegou ao destino e volta para a pedreira).
+ * O estado que a tela mostra: os de cima, o sem posição (fora de funcionamento também vem quando
+ * o cadastro impõe, equipamentos.status) e os dois que o Frete impõe à carreta (fretes.ts): em
+ * frete (frete aberto) e em deslocamento (chegou ao destino e volta para a pedreira).
  */
 export type EstadoEfetivo =
   | EstadoMaquina
   | "em_frete"
   | "em_deslocamento"
-  | "sem_posicao"
-  | "fora_funcionamento";
+  | "sem_posicao";
 
 export const ROTULO_ESTADO: Record<EstadoEfetivo, string> = {
   operando: "Operando",

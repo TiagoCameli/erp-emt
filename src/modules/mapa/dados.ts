@@ -161,7 +161,7 @@ function estadoEfetivo(v: unknown): EstadoEfetivo {
     : "sem_posicao";
 }
 
-/** O estado marcado na ficha; fora dos cinco (RPC antiga sem a chave), null. */
+/** O estado marcado na ficha; fora da lista (RPC antiga sem a chave), null. */
 function estadoMarcado(v: unknown): EstadoMaquina | null {
   return typeof v === "string" &&
     (ESTADOS_MAQUINA as readonly string[]).includes(v)

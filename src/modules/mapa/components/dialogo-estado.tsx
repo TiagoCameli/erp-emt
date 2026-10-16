@@ -15,8 +15,9 @@ import {
 /**
  * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra
  * quer a descrição do defeito; conserto quer a previsão (a máquina fica onde está: só a
- * transferência a leva para outro lugar). Operando e parado só pedem o motivo. Em frete e em
- * deslocamento não se marcam: vêm do Frete (carretas EMT).
+ * transferência a leva para outro lugar); fora de funcionamento quer o motivo. Operando e parado
+ * só pedem o motivo, sem obrigar. Em frete e em deslocamento não se marcam: vêm do Frete
+ * (carretas EMT).
  * Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  */
 
@@ -39,6 +40,8 @@ const DESCRICAO: Record<EstadoMaquina, string> = {
     "Quebrada na frente, aguardando a manutenção. Descreva o defeito para a OS.",
   conserto:
     "Fica onde está no mapa. Para levar a máquina a outro lugar, use a transferência.",
+  fora_funcionamento:
+    "Parada de vez, sem previsão de voltar a trabalhar. Fica no lugar onde está.",
 };
 
 export function DialogoEstado({
@@ -55,7 +58,10 @@ export function DialogoEstado({
   const id = React.useId();
 
   const { equipamento, estado } = pedido;
-  const exigeMotivo = estado === "quebrado_obra" || estado === "conserto";
+  const exigeMotivo =
+    estado === "quebrado_obra" ||
+    estado === "conserto" ||
+    estado === "fora_funcionamento";
 
   return (
     <ConfirmDialog

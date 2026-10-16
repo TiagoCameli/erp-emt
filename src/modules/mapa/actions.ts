@@ -163,7 +163,7 @@ export async function moverEquipamentos(
   }
 }
 
-/** Botões de estado da ficha (operando, parado, quebrado na obra, conserto). */
+/** Botões de estado da ficha (operando, parado, quebrado na obra, conserto, fora). */
 export async function marcarEstado(dados: unknown): Promise<ResultadoMapa> {
   const bloqueio = await semPermissao("editar");
   if (bloqueio) return { erro: bloqueio };

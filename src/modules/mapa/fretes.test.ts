@@ -4,6 +4,7 @@ import {
   FRACAO_MAXIMA,
   aplicarFretes,
   fracaoDaViagem,
+  marcacaoVenceFrete,
   pontoNaRota,
 } from "@/modules/mapa/fretes";
 import { distanciaM } from "@/modules/mapa/geo";
@@ -292,5 +293,36 @@ describe("carreta em deslocamento: volta do destino para a pedreira", () => {
     );
     expect(r.equipamentos[0].estado).toBe("em_frete");
     expect(r.retornoDe.has("cs3")).toBe(false);
+  });
+});
+
+describe("marcacaoVenceFrete", () => {
+  const saida = { criadoEm: "2026-10-16T08:00:00-05:00" };
+  const depois = "2026-10-16T10:00:00-05:00";
+  const antes = "2026-10-16T07:00:00-05:00";
+
+  it("estado que tira da estrada, marcado depois da saída, vence o frete", () => {
+    for (const estado of [
+      "parado",
+      "quebrado_obra",
+      "conserto",
+      "fora_funcionamento",
+    ] as const) {
+      expect(
+        marcacaoVenceFrete({ estadoMarcado: estado, estadoDesde: depois }, saida),
+      ).toBe(true);
+    }
+  });
+
+  it("operando não vence; marcação de antes da saída também não", () => {
+    expect(
+      marcacaoVenceFrete({ estadoMarcado: "operando", estadoDesde: depois }, saida),
+    ).toBe(false);
+    expect(
+      marcacaoVenceFrete(
+        { estadoMarcado: "fora_funcionamento", estadoDesde: antes },
+        saida,
+      ),
+    ).toBe(false);
   });
 });
