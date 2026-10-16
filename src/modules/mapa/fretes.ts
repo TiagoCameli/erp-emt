@@ -64,8 +64,28 @@ export function pontoNaRota(
 }
 
 /**
+ * A marcação da ficha feita depois da saída do frete, em outro estado que não "Em rota", vence o
+ * frete (16/10/2026: "marco as carretas em rota como operando e nada acontece"). Quem marca
+ * operando sabe que a carreta chegou, mesmo sem a chegada lançada no Frete.
+ */
+export function marcacaoVenceFrete(
+  e: Pick<EquipamentoMapa, "estadoMarcado" | "estadoDesde">,
+  f: Pick<FreteEmRota, "criadoEm">,
+): boolean {
+  if (!e.estadoMarcado || e.estadoMarcado === "em_rota" || !e.estadoDesde)
+    return false;
+  const marcada = Date.parse(e.estadoDesde);
+  const saida = Date.parse(f.criadoEm);
+  return Number.isFinite(marcada) && Number.isFinite(saida) && marcada > saida;
+}
+
+/**
  * Põe cada máquina com frete em rota no ponto estimado da rota, em "Em rota", sem trecho nem km
  * (o rumo é o da estrada). Máquina sem frete passa igual. Devolve também o frete de cada máquina.
+ *
+ * Se a marcação da ficha venceu o frete (`marcacaoVenceFrete`), a máquina fica no estado marcado;
+ * sem posição própria, aparece no destino do frete, que é onde ela chegou. O frete sai de
+ * `freteDe` e entra em `fretesVencidos` (a rota dele não é desenhada).
  */
 export function aplicarFretes(
   equipamentos: readonly EquipamentoMapa[],
@@ -74,34 +94,45 @@ export function aplicarFretes(
 ): {
   equipamentos: EquipamentoMapa[];
   freteDe: ReadonlyMap<string, FreteEmRota>;
+  fretesVencidos: ReadonlySet<string>;
 } {
   const freteDe = new Map<string, FreteEmRota>();
+  const fretesVencidos = new Set<string>();
   // O mais recente vale (a lista vem do banco em ordem de saída).
   for (const f of fretes) if (f.equipamentoId) freteDe.set(f.equipamentoId, f);
-  if (freteDe.size === 0) return { equipamentos: [...equipamentos], freteDe };
-  return {
-    equipamentos: equipamentos.map((e) => {
-      const f = freteDe.get(e.id);
-      if (!f) return e;
-      const ponto = pontoNaRota(f.caminho, fracaoDaViagem(f, agora));
-      if (!ponto) return e;
-      return {
-        ...e,
-        pos: ponto.pos,
-        heading: ponto.heading,
-        rumoManual: null,
-        fontePosicao: "frete",
-        estado: "em_rota",
-        estadoDesde: f.criadoEm,
-        trechoId: null,
-        trechoNome: "",
-        km: null,
-        areaId: null,
-        areaNome: "",
-        localidadeId: null,
-        localidadeNome: "",
-      };
-    }),
-    freteDe,
-  };
+  if (freteDe.size === 0)
+    return { equipamentos: [...equipamentos], freteDe, fretesVencidos };
+  const vistos = equipamentos.map((e): EquipamentoMapa => {
+    const f = freteDe.get(e.id);
+    if (!f) return e;
+    if (marcacaoVenceFrete(e, f)) {
+      // Todos os fretes abertos da máquina saíram antes da marcação: nenhum segue em rota.
+      for (const g of fretes)
+        if (g.equipamentoId === e.id && marcacaoVenceFrete(e, g))
+          fretesVencidos.add(g.id);
+      freteDe.delete(e.id);
+      const destino = f.caminho[f.caminho.length - 1];
+      if (e.pos || !destino || e.estado !== "sem_posicao") return e;
+      return { ...e, pos: destino, estado: e.estadoMarcado ?? e.estado };
+    }
+    const ponto = pontoNaRota(f.caminho, fracaoDaViagem(f, agora));
+    if (!ponto) return e;
+    return {
+      ...e,
+      pos: ponto.pos,
+      heading: ponto.heading,
+      rumoManual: null,
+      fontePosicao: "frete",
+      estado: "em_rota",
+      estadoDesde: f.criadoEm,
+      trechoId: null,
+      trechoNome: "",
+      km: null,
+      areaId: null,
+      areaNome: "",
+      localidadeId: null,
+      localidadeNome: "",
+    };
+  });
+  return { equipamentos: vistos, freteDe, fretesVencidos };
 }

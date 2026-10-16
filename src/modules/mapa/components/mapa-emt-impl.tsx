@@ -666,6 +666,10 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         return;
       }
       motorRef.current = motor;
+      // O fundo pode ter mudado enquanto o Google carregava (o salvo no navegador chega depois da
+      // hidratação): o motor nasceu com o da montagem, então aplica o de agora.
+      const atual = propsRef.current;
+      if (atual.fundo !== p.fundo) motor.setFundo(atual.fundo, atual.inclinado);
       setCarregando(false);
       redesenhar();
     };

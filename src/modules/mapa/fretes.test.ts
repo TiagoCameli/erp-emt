@@ -93,4 +93,71 @@ describe("carreta em rota pelo Frete", () => {
     expect(x).toBe(outra);
     expect(freteDe.get("cs3")?.valorTotal).toBe(12346.9);
   });
+
+  describe("marcação da ficha depois da saída vence o frete (16/10/2026)", () => {
+    // Caso real: CS-003 sem posição, frete criado 13:30 UTC, marcada operando 15:49 UTC.
+    const cs3 = {
+      id: "cs3",
+      pos: null,
+      heading: 0,
+      rumoManual: null,
+      fontePosicao: "manual",
+      estado: "sem_posicao",
+      estadoMarcado: "operando",
+      estadoDesde: "2026-10-16T15:49:20Z",
+    } as unknown as EquipamentoMapa;
+    const agora = Date.parse("2026-10-16T16:00:00Z");
+
+    it("sem posição própria, fica operando no destino do frete e a rota some", () => {
+      const r = aplicarFretes([cs3], [frete({})], agora);
+      const [e] = r.equipamentos;
+      expect(e.estado).toBe("operando");
+      expect(e.pos).toEqual([-67, -9]);
+      expect(e.fontePosicao).toBe("manual");
+      expect(r.freteDe.has("cs3")).toBe(false);
+      expect([...r.fretesVencidos]).toEqual(["f1"]);
+    });
+
+    it("com posição própria, fica onde está, no estado marcado", () => {
+      const comPos = {
+        ...cs3,
+        pos: [-72, -7.9],
+        estado: "operando",
+      } as EquipamentoMapa;
+      const [e] = aplicarFretes([comPos], [frete({})], agora).equipamentos;
+      expect(e).toBe(comPos);
+    });
+
+    it("marcação antes da saída perde: o frete põe em rota", () => {
+      const antes = {
+        ...cs3,
+        estadoDesde: "2026-10-16T12:00:00Z",
+      } as EquipamentoMapa;
+      const r = aplicarFretes([antes], [frete({})], agora);
+      expect(r.equipamentos[0].estado).toBe("em_rota");
+      expect(r.equipamentos[0].fontePosicao).toBe("frete");
+      expect(r.fretesVencidos.size).toBe(0);
+    });
+
+    it("marcar em rota não vence o frete, nem a RPC antiga sem o estado marcado", () => {
+      for (const estadoMarcado of ["em_rota", null]) {
+        const e = { ...cs3, estadoMarcado } as EquipamentoMapa;
+        const r = aplicarFretes([e], [frete({})], agora);
+        expect(r.equipamentos[0].estado).toBe("em_rota");
+        expect(r.freteDe.has("cs3")).toBe(true);
+      }
+    });
+
+    it("frete novo depois da marcação volta a pôr em rota", () => {
+      const r = aplicarFretes(
+        [cs3],
+        [frete({}), frete({ id: "f2", criadoEm: "2026-10-16T15:55:00Z" })],
+        agora,
+      );
+      expect(r.equipamentos[0].estado).toBe("em_rota");
+      expect(r.freteDe.get("cs3")?.id).toBe("f2");
+      // O frete antigo, de antes da marcação, não é o que manda: a rota do novo é a que fica.
+      expect(r.fretesVencidos.has("f2")).toBe(false);
+    });
+  });
 });

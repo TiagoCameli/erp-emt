@@ -180,6 +180,39 @@ function assinarPainel(avisar: () => void): () => void {
   };
 }
 
+// Fundo (mapa ou satélite): fica neste navegador como o painel (16/10/2026: "sempre que eu
+// atualizo a página sai do satélite e vai para o mapa").
+const CHAVE_FUNDO = "erp-emt:mapa:fundo";
+const assinantesFundo = new Set<() => void>();
+let fundoNaMemoria: ModoFundo | null = null;
+
+function lerFundo(): ModoFundo {
+  try {
+    const valor = window.localStorage.getItem(CHAVE_FUNDO);
+    if (valor === "satelite" || valor === "mapa") return valor;
+  } catch {
+    // sem storage: cai na memória
+  }
+  return fundoNaMemoria ?? "mapa";
+}
+
+function gravarFundo(fundo: ModoFundo): void {
+  fundoNaMemoria = fundo;
+  try {
+    window.localStorage.setItem(CHAVE_FUNDO, fundo);
+  } catch {
+    // sem storage: fica a memória
+  }
+  for (const avisar of assinantesFundo) avisar();
+}
+
+function assinarFundo(avisar: () => void): () => void {
+  assinantesFundo.add(avisar);
+  return () => {
+    assinantesFundo.delete(avisar);
+  };
+}
+
 const CENTRO_PADRAO: { pos: Posicao; zoom: number } = {
   pos: [-72.47, -7.745],
   zoom: 11.8,
@@ -252,7 +285,11 @@ export function TelaMapa({
     return () => clearInterval(t);
   }, []);
   // A frota como a tela mostra: a máquina com frete aberto vai para o ponto estimado da rota.
-  const { equipamentos: equipamentosVistos, freteDe } = React.useMemo(
+  const {
+    equipamentos: equipamentosVistos,
+    freteDe,
+    fretesVencidos,
+  } = React.useMemo(
     () => aplicarFretes(estado.equipamentos, estado.fretesEmRota, agora),
     [estado.equipamentos, estado.fretesEmRota, agora],
   );
@@ -312,7 +349,11 @@ export function TelaMapa({
     () => true,
   );
   const [hover, setHover] = React.useState<string | null>(null);
-  const [fundo, setFundo] = React.useState<ModoFundo>("mapa");
+  const fundo = React.useSyncExternalStore(
+    assinarFundo,
+    lerFundo,
+    () => "mapa" as const,
+  );
   const [inclinado, setInclinado] = React.useState(true);
   const [multi, setMulti] = React.useState(false);
   const [mostrarPessoas, setMostrarPessoas] = React.useState(true);
@@ -567,9 +608,11 @@ export function TelaMapa({
         return [];
       return [{ ...p, pos }];
     });
-    // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota).
+    // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota). Frete
+    // vencido pela marcação da ficha (a carreta já chegou) não tem rota a desenhar.
     const rotasFrete = estado.fretesEmRota.flatMap((f) =>
       f.caminho.length >= 2 &&
+      !fretesVencidos.has(f.id) &&
       (!f.equipamentoId || idsNaCena.has(f.equipamentoId))
         ? [{ id: f.id, caminho: f.caminho }]
         : [],
@@ -610,6 +653,7 @@ export function TelaMapa({
     estado.pessoas,
     equipamentosVistos,
     estado.fretesEmRota,
+    fretesVencidos,
     estado.areas,
     estado.localidades,
     raioPrevio,
@@ -1549,7 +1593,7 @@ export function TelaMapa({
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
             <div className="pointer-events-auto flex flex-wrap gap-1.5">
               {botaoAlternar(fundo === "satelite", "Satélite", Satellite, () =>
-                setFundo((f) => (f === "satelite" ? "mapa" : "satelite")),
+                gravarFundo(fundo === "satelite" ? "mapa" : "satelite"),
               )}
               {botaoAlternar(inclinado, "3D", Box, () =>
                 setInclinado((v) => !v),
