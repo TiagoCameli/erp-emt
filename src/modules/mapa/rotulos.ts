@@ -11,7 +11,8 @@ export type Rgb = [number, number, number];
 export const COR_ESTADO: Record<EstadoEfetivo, Rgb> = {
   operando: [19, 117, 55], // --status-aprovado
   parado: [95, 102, 115], // --status-rascunho
-  em_rota: [42, 120, 214], // --viz-producao (azul)
+  em_frete: [42, 120, 214], // --viz-producao (azul)
+  em_deslocamento: [74, 58, 167], // --viz-financiamento (roxo)
   quebrado_obra: [185, 28, 28], // --status-rejeitado
   conserto: [161, 74, 7], // --status-pendente
   sem_posicao: [140, 140, 140],
@@ -22,7 +23,8 @@ export const COR_ESTADO: Record<EstadoEfetivo, Rgb> = {
 export const CLASSES_ESTADO: Record<EstadoEfetivo, string> = {
   operando: "bg-status-aprovado/10 text-status-aprovado",
   parado: "bg-status-rascunho/10 text-status-rascunho",
-  em_rota: "bg-[#2a78d6]/10 text-[#2a78d6] dark:text-[#3987e5]",
+  em_frete: "bg-[#2a78d6]/10 text-[#2a78d6] dark:text-[#3987e5]",
+  em_deslocamento: "bg-[#4a3aa7]/10 text-[#4a3aa7] dark:text-[#9085e9]",
   quebrado_obra: "bg-status-rejeitado/10 text-status-rejeitado",
   conserto: "bg-status-pendente/10 text-status-pendente",
   sem_posicao: "bg-muted text-muted-foreground",
@@ -33,7 +35,8 @@ export const CLASSES_ESTADO: Record<EstadoEfetivo, string> = {
 export const ORDEM_ESTADOS: EstadoEfetivo[] = [
   "operando",
   "parado",
-  "em_rota",
+  "em_frete",
+  "em_deslocamento",
   "quebrado_obra",
   "conserto",
   "sem_posicao",

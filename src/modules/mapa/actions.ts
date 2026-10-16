@@ -15,6 +15,7 @@ import {
   desenharObraSchema,
   editarLocalSchema,
   encerrarLocacaoSchema,
+  escolherPedreiraSchema,
   girarEquipamentoSchema,
   iniciarLocacaoSchema,
   marcarEstadoSchema,
@@ -162,7 +163,7 @@ export async function moverEquipamentos(
   }
 }
 
-/** Botões de estado da ficha (operando, parado, em rota, quebrado na obra, conserto). */
+/** Botões de estado da ficha (operando, parado, quebrado na obra, conserto). */
 export async function marcarEstado(dados: unknown): Promise<ResultadoMapa> {
   const bloqueio = await semPermissao("editar");
   if (bloqueio) return { erro: bloqueio };
@@ -511,6 +512,40 @@ export async function girarEquipamento(dados: unknown): Promise<ResultadoMapa> {
       "mapa.girar",
       erro,
       `Não foi possível girar a máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Para qual pedreira a carreta volta depois daquele frete (null = a última de onde ela saiu). Vale
+ * só para esse frete: o próximo volta ao padrão.
+ */
+export async function escolherPedreira(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = escolherPedreiraSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_escolher_pedreira", {
+      p_id: v.equipamentoId,
+      p_frete: v.freteId,
+      p_localidade: v.localidadeId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.pedreira",
+        error,
+        mensagemDaRpc(error, "Não foi possível trocar a pedreira"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.pedreira",
+      erro,
+      `Não foi possível trocar a pedreira: ${textoDoErro(erro)}`,
     );
   }
 }

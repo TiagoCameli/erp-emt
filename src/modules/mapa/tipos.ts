@@ -8,26 +8,36 @@
 
 export type Posicao = [number, number];
 
-/** Estados que a pessoa escolhe (os do banco, `mapa_equipamentos.estado`). */
+/**
+ * Estados que a pessoa escolhe (`mapa_equipamentos.estado`). O banco ainda aceita 'em_rota', mas a
+ * tela não oferece mais (Tiago, 16/10/2026: "em rota só serve para as carretas EMT, que fazem
+ * frete"): quem põe a carreta na estrada é o Frete (`em_frete`, `em_deslocamento`).
+ */
 export const ESTADOS_MAQUINA = [
   "operando",
   "parado",
-  "em_rota",
   "quebrado_obra",
   "conserto",
 ] as const;
 export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
 
-/** O que a view devolve em `estado_efetivo`: os cinco acima mais os dois que o cadastro impõe. */
+/**
+ * O estado que a tela mostra: os de cima, os dois que o cadastro impõe (sem posição, fora de
+ * funcionamento) e os dois que o Frete impõe à carreta (fretes.ts): em frete (frete aberto) e em
+ * deslocamento (chegou ao destino e volta para a pedreira).
+ */
 export type EstadoEfetivo =
   | EstadoMaquina
+  | "em_frete"
+  | "em_deslocamento"
   | "sem_posicao"
   | "fora_funcionamento";
 
 export const ROTULO_ESTADO: Record<EstadoEfetivo, string> = {
   operando: "Operando",
   parado: "Parado",
-  em_rota: "Em rota",
+  em_frete: "Em frete",
+  em_deslocamento: "Em deslocamento",
   quebrado_obra: "Quebrado na obra",
   conserto: "Em conserto",
   sem_posicao: "Sem posição",
@@ -78,7 +88,10 @@ export interface EquipamentoMapa {
   heading: number;
   /** Rumo escolhido na ficha; null = segue o traçado no km da máquina. */
   rumoManual: number | null;
-  /** "frete": em rota por um frete aberto; a posição é estimada no traçado (fretes.ts). */
+  /**
+   * "frete": a posição vem do Frete (em frete, em deslocamento ou chegada à pedreira), estimada
+   * no traçado (fretes.ts).
+   */
   fontePosicao: "manual" | "gps" | "frete";
   estado: EstadoEfetivo;
   /**
@@ -87,6 +100,11 @@ export interface EquipamentoMapa {
    */
   estadoMarcado: EstadoMaquina | null;
   estadoDesde: string | null;
+  /**
+   * A última marcação de estado na ficha, mesmo sem mudar o estado (`estado_desde` só anda quando
+   * muda). É o que diz se a marcação veio depois da saída ou da chegada do frete.
+   */
+  marcadoEm: string | null;
   diasNoEstado: number | null;
   obraId: string | null;
   obraNome: string;
@@ -309,6 +327,29 @@ export interface FreteEmRota {
   caminho: Posicao[];
 }
 
+/**
+ * Carreta cujo último frete já tem chegada lançada (até 7 dias): volta do destino para a pedreira,
+ * a última de onde saiu ou a escolhida na ficha para esta volta.
+ */
+export interface CarretaRetorno {
+  equipamentoId: string;
+  /** O frete que chegou; a pedreira escolhida vale só para ele. */
+  freteId: string;
+  /** Quando a volta começa: o lançamento da chegada, dentro do dia dela. */
+  chegadaEm: string;
+  /** Dia da chegada (yyyy-mm-dd). */
+  chegada: string;
+  /** O destino do frete, de onde a carreta sai na volta. */
+  de: string;
+  pedreiraId: string;
+  pedreira: string;
+  pedreiraEscolhida: boolean;
+  horas: number | null;
+  km: number | null;
+  /** Do destino até a pedreira, em [lng, lat]. */
+  caminho: Posicao[];
+}
+
 /** Tanque, pilha ou depósito: o que o mapa põe no lugar pela mesma RPC. */
 export type AlvoObjeto = "tanque" | "pilha" | "deposito";
 
@@ -373,6 +414,7 @@ export interface EstadoMapa {
   pilhas: PilhaMapa[];
   localidadesSemPosicao: LocalSemPosicao[];
   fretesEmRota: FreteEmRota[];
+  carretasRetorno: CarretaRetorno[];
 }
 
 /** O que a pessoa pode fazer na tela, decidido no servidor pelo catálogo de permissões. */
