@@ -80,7 +80,7 @@ describe("pilha nasce com o insumo", () => {
   it("criada por quem edita o Mapa, volta o endereço que abre o mapa para marcar o lugar", async () => {
     insert.mockResolvedValue({ data: { id: "p9" }, error: null });
     enderecoParaColocar.mockResolvedValue("/mapa?colocar=pilha&id=p9");
-    await expect(criarPilha({ nome: "Brita 1", insumoId: BRITA, observacoes: "" })).resolves.toEqual({
+    await expect(criarPilha({ nome: "Brita 1", localidadeId: GREGORIO, insumoId: BRITA, observacoes: "" })).resolves.toEqual({
       ok: true,
       id: "p9",
       mapa: "/mapa?colocar=pilha&id=p9",
