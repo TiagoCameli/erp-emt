@@ -5,16 +5,21 @@ import type {
   Posicao,
   TanqueMapa,
 } from "@/modules/mapa/tipos";
+import {
+  COMPRIMENTO_HORIZONTAL,
+  PROFUNDIDADE_TAMPO,
+  type FormaTanque,
+} from "@/modules/mapa/malha-tanque";
 
 /**
  * Tanques, pilhas e depósitos do Estoque como objetos 3D do mapa (pedido do Tiago, 15/10/2026).
- * O 3D é gerado pelo próprio mapa (cilindro, cone, caixa), sem arquivo de modelo: o tamanho sai
- * da capacidade do tanque e a cor do que está dentro. Medidas reais, em metros; quem desenha
+ * O 3D é gerado pelo próprio mapa (tanque detalhado, cone, caixa), sem arquivo de modelo: o
+ * tamanho sai da capacidade do tanque e a cor do que está dentro. Medidas reais, em metros; quem desenha
  * aplica a mesma escala das máquinas.
  */
 
 export type Rgb = [number, number, number];
-export type FormaObjeto = "cilindro" | "cone" | "caixa";
+export type FormaObjeto = FormaTanque | "cone" | "caixa";
 
 export interface ObjetoMapa {
   id: string;
@@ -24,9 +29,9 @@ export interface ObjetoMapa {
   detalhe: string;
   pos: Posicao | null;
   forma: FormaObjeto;
-  /** Diâmetro (cilindro e cone) ou largura (caixa), em metros. */
+  /** Diâmetro (tanque e cone) ou largura (caixa), em metros. */
   largura: number;
-  /** Comprimento da caixa (galpão); igual à largura nas formas redondas. */
+  /** Comprimento do tanque horizontal e da caixa (galpão); igual à largura nas formas redondas. */
   comprimento: number;
   altura: number;
   cor: Rgb;
@@ -40,6 +45,13 @@ export const COR_MATERIAL: Rgb = [69, 70, 75];
 export const COR_EXTERNO: Rgb = [150, 150, 150];
 export const COR_DEPOSITO: Rgb = [62, 119, 68];
 
+/** Capacidade do tanque em litros (m³ vira L); sem capacidade, a padrão. */
+function litrosDoTanque(capacidade: number | null, unidade: string): number {
+  if (!capacidade || capacidade <= 0) return CAPACIDADE_PADRAO_L;
+  const u = unidade.toLowerCase();
+  return u === "m3" || u === "m³" ? capacidade * 1000 : capacidade;
+}
+
 /**
  * Tanque vertical com altura 1,5 vez o diâmetro: V = π·d²/4·1,5d, então d = ∛(4V / 1,5π).
  * 15 mil L ≈ 2,3 m × 3,5 m; 100 mil L ≈ 4,4 m × 6,6 m.
@@ -48,15 +60,39 @@ export function dimensoesDoTanque(
   capacidade: number | null,
   unidade: string,
 ): { diametro: number; altura: number } {
-  const litros =
-    capacidade && capacidade > 0
-      ? unidade.toLowerCase() === "m3" || unidade.toLowerCase() === "m³"
-        ? capacidade * 1000
-        : capacidade
-      : CAPACIDADE_PADRAO_L;
-  const volume = litros / 1000;
+  const volume = litrosDoTanque(capacidade, unidade) / 1000;
   const diametro = Math.cbrt((4 * volume) / (1.5 * Math.PI));
   return { diametro, altura: diametro * 1.5 };
+}
+
+/** Acima disto o tanque de combustível já é de usina, em pé (os aéreos de obra vão até 30 mil L). */
+export const LIMITE_HORIZONTAL_L = 30000;
+
+/**
+ * Tanque aéreo deitado: 2,8 diâmetros de tampo a tampo, tampos elípticos 2:1 (d/4 de fundo).
+ * V = π·d²/4·(2,8d − 2·d/4) + π·d³/12 (os dois meio-elipsoides), então d = ∛(V / 0,6583π).
+ * 15 mil L ≈ 1,9 m × 5,4 m; 4 mil L ≈ 1,25 m × 3,5 m.
+ */
+export function dimensoesDoTanqueHorizontal(
+  capacidade: number | null,
+  unidade: string,
+): { diametro: number; comprimento: number } {
+  const volume = litrosDoTanque(capacidade, unidade) / 1000;
+  const k =
+    (COMPRIMENTO_HORIZONTAL - 2 * PROFUNDIDADE_TAMPO) / 4 +
+    PROFUNDIDADE_TAMPO / 3;
+  const diametro = Math.cbrt(volume / (k * Math.PI));
+  return { diametro, comprimento: diametro * COMPRIMENTO_HORIZONTAL };
+}
+
+/** Material (CAP, emulsão, imprimação) e tanque grande ficam em pé; diesel e ARLA de obra, deitados. */
+export function formaDoTanque(
+  t: Pick<TanqueMapa, "uso" | "capacidade" | "unidade">,
+): FormaTanque {
+  return t.uso === "material" ||
+    litrosDoTanque(t.capacidade, t.unidade) > LIMITE_HORIZONTAL_L
+    ? "tanque_vertical"
+    : "tanque_horizontal";
 }
 
 /** 1,5 t de agregado ocupa 1 m³ de pilha (Tiago, 15/10/2026). */
@@ -131,7 +167,21 @@ export function objetosDoEstoque(
   for (const t of tanques) {
     // Tanque de comboio (Meloza) anda com a máquina: é ela que aparece no mapa, não um tanque fixo.
     if (t.equipamentoId) continue;
-    const { diametro, altura } = dimensoesDoTanque(t.capacidade, t.unidade);
+    const forma = formaDoTanque(t);
+    const vertical = dimensoesDoTanque(t.capacidade, t.unidade);
+    const deitado = dimensoesDoTanqueHorizontal(t.capacidade, t.unidade);
+    const medidas =
+      forma === "tanque_vertical"
+        ? {
+            largura: vertical.diametro,
+            comprimento: vertical.diametro,
+            altura: vertical.altura,
+          }
+        : {
+            largura: deitado.diametro,
+            comprimento: deitado.comprimento,
+            altura: deitado.diametro,
+          };
     const capacidade =
       t.capacidade && t.capacidade > 0 ? litrosTexto(t.capacidade) : "";
     objetos.push({
@@ -150,10 +200,8 @@ export function objetosDoEstoque(
         .filter(Boolean)
         .join(" · "),
       pos: t.pos,
-      forma: "cilindro",
-      largura: diametro,
-      comprimento: diametro,
-      altura,
+      forma,
+      ...medidas,
       cor: t.ehExterno
         ? COR_EXTERNO
         : t.uso === "material"

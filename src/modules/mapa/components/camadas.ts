@@ -14,8 +14,7 @@ import { ScenegraphLayer, SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import {
   ConeGeometry,
   CubeGeometry,
-  CylinderGeometry,
-  type Geometry,
+  Geometry,
 } from "@luma.gl/engine";
 
 import {
@@ -23,7 +22,12 @@ import {
   marcosNoZoom,
   type TrechoMedido,
 } from "@/modules/mapa/geo";
-import type { FormaObjeto, ObjetoMapa } from "@/modules/mapa/objetos";
+import {
+  malhaTanqueHorizontal,
+  malhaTanqueVertical,
+  type FormaTanque,
+} from "@/modules/mapa/malha-tanque";
+import type { ObjetoMapa } from "@/modules/mapa/objetos";
 import { COR_AREA, COR_ESTADO, type Rgb } from "@/modules/mapa/rotulos";
 import type {
   AreaMapa,
@@ -98,17 +102,39 @@ export const ID_OBJETOS = "objetos-nome";
 export type ObjetoNoMapa = ObjetoMapa & { pos: Posicao };
 
 /**
- * Malhas de unidade, montadas uma vez: cilindro e cone com diâmetro 1 e altura 1, caixa 2×2×2
- * (a do luma vai de -1 a 1). Vêm em pé no eixo Y; a camada deita para o Z do mapa.
+ * Malhas de unidade, montadas uma vez: cone com diâmetro 1 e altura 1, caixa 2×2×2 (a do luma
+ * vai de -1 a 1). Vêm em pé no eixo Y; a camada deita para o Z do mapa.
  */
-let malhas: Record<FormaObjeto, Geometry> | null = null;
-function malha(forma: FormaObjeto): Geometry {
+let malhas: Record<"cone" | "caixa", Geometry> | null = null;
+function malha(forma: "cone" | "caixa"): Geometry {
   malhas ??= {
-    cilindro: new CylinderGeometry({ radius: 0.5, height: 1, nradial: 40 }),
     cone: new ConeGeometry({ radius: 0.5, height: 1, nradial: 40, cap: true }),
     caixa: new CubeGeometry(),
   };
   return malhas[forma];
+}
+
+/** Malha detalhada do tanque (diâmetro 1, Z para cima), uma por modelo e cor do conteúdo. */
+const malhasTanque = new Map<string, Geometry>();
+function malhaDoTanque(forma: FormaTanque, cor: Rgb): Geometry {
+  const chave = `${forma}:${cor.join(",")}`;
+  let g = malhasTanque.get(chave);
+  if (!g) {
+    const m =
+      forma === "tanque_vertical"
+        ? malhaTanqueVertical(cor)
+        : malhaTanqueHorizontal(cor);
+    g = new Geometry({
+      topology: "triangle-list",
+      attributes: {
+        POSITION: { size: 3, value: m.positions },
+        NORMAL: { size: 3, value: m.normals },
+        COLOR_0: { size: 3, value: m.colors },
+      },
+    });
+    malhasTanque.set(chave, g);
+  }
+  return g;
 }
 
 /** Nome da obra: tocar nele abre a ficha da obra. */
@@ -371,15 +397,53 @@ export function montarCamadas(cena: Cena): Layer[] {
     }),
   );
 
-  // Tanques (cilindro), pilhas (cone) e depósitos (caixa) em pé no chão, na mesma escala das
-  // máquinas, e o nome de cada um (clicável: abre a ficha com "Mover no mapa").
-  for (const forma of ["cilindro", "cone", "caixa"] as const) {
+  // Tanques com o modelo detalhado (aéreo deitado na bacia ou de usina em pé), na escala das
+  // máquinas: uma camada por modelo e cor, com a cor já pintada na malha.
+  const tanquesPorMalha = new Map<string, ObjetoNoMapa[]>();
+  for (const o of cena.objetos) {
+    if (o.forma !== "tanque_horizontal" && o.forma !== "tanque_vertical")
+      continue;
+    const chave = `${o.forma}:${o.cor.join(",")}`;
+    const lista = tanquesPorMalha.get(chave);
+    if (lista) lista.push(o);
+    else tanquesPorMalha.set(chave, [o]);
+  }
+  for (const [chave, dados] of tanquesPorMalha) {
+    const { forma, cor } = dados[0];
+    if (forma !== "tanque_horizontal" && forma !== "tanque_vertical") continue;
+    camadas.push(
+      new SimpleMeshLayer<ObjetoNoMapa>({
+        id: `objetos-${chave}`,
+        data: dados,
+        mesh: malhaDoTanque(forma, cor),
+        getPosition: (d) => d.pos,
+        getColor: BRANCO,
+        // A malha já nasce com Z para cima e o pé no chão.
+        getOrientation: [0, 0, 0],
+        getScale: (d) => {
+          const s = d.largura * ESCALA_MAQUINA;
+          return [s, s, s];
+        },
+        material: {
+          ambient: 0.4,
+          diffuse: 0.65,
+          shininess: 48,
+          specularColor: [70, 70, 70],
+        },
+        pickable: false,
+      }),
+    );
+  }
+
+  // Pilhas (cone) e depósitos (caixa) em pé no chão, e o nome de cada objeto (clicável: abre a
+  // ficha com "Mover no mapa").
+  for (const forma of ["cone", "caixa"] as const) {
     const dados = cena.objetos.filter((o) => o.forma === forma);
     if (dados.length === 0) continue;
-    // A caixa do luma tem 2 de lado; cilindro e cone, 1.
+    // A caixa do luma tem 2 de lado; o cone, 1.
     const unidade = forma === "caixa" ? 0.5 : 1;
     // Pilha em escala real (pedido do Tiago, 15/10/2026: o tamanho dela já é o volume do saldo);
-    // tanque e depósito na escala das máquinas.
+    // depósito na escala das máquinas.
     const escala = forma === "cone" ? 1 : ESCALA_MAQUINA;
     camadas.push(
       new SimpleMeshLayer<ObjetoNoMapa>({

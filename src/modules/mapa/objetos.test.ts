@@ -7,6 +7,8 @@ import {
   corDaPilha,
   dimensoesDaPilha,
   dimensoesDoTanque,
+  dimensoesDoTanqueHorizontal,
+  formaDoTanque,
   linhasDaFicha,
   objetosDoEstoque,
   textoSaldoPilha,
@@ -47,6 +49,58 @@ describe("objetos do Estoque no mapa", () => {
     );
   });
 
+  it("o volume do tanque deitado, com os tampos elípticos, bate com a capacidade", () => {
+    for (const litros of [4000, 15000, 30000]) {
+      const { diametro: d, comprimento } = dimensoesDoTanqueHorizontal(litros, "L");
+      const r = d / 2;
+      const tampo = d / 4;
+      const costado = comprimento - 2 * tampo;
+      const volume =
+        (Math.PI * r * r * costado + (4 / 3) * Math.PI * r * r * tampo) * 1000;
+      expect(volume).toBeCloseTo(litros, 0);
+    }
+    // 15 mil L de obra: uns 1,9 m de diâmetro por 5,4 m, como os aéreos de verdade
+    const { diametro, comprimento } = dimensoesDoTanqueHorizontal(15000, "L");
+    expect(diametro).toBeGreaterThan(1.8);
+    expect(diametro).toBeLessThan(2.1);
+    expect(comprimento).toBeGreaterThan(5);
+    expect(comprimento).toBeLessThan(5.8);
+  });
+
+  it("diesel e ARLA de obra deitam; material e tanque grande ficam em pé", () => {
+    expect(formaDoTanque(tanque({ capacidade: 15000 }))).toBe("tanque_horizontal");
+    expect(formaDoTanque(tanque({ capacidade: 4000 }))).toBe("tanque_horizontal");
+    expect(formaDoTanque(tanque({ capacidade: 30000 }))).toBe("tanque_horizontal");
+    expect(formaDoTanque(tanque({ capacidade: 30001 }))).toBe("tanque_vertical");
+    expect(formaDoTanque(tanque({ capacidade: 60, unidade: "m3" }))).toBe(
+      "tanque_vertical",
+    );
+    expect(
+      formaDoTanque(tanque({ capacidade: 15000, uso: "material" })),
+    ).toBe("tanque_vertical");
+    // posto externo sem capacidade desenha como o de 15 mil L, deitado
+    expect(formaDoTanque(tanque({ capacidade: 0, ehExterno: true }))).toBe(
+      "tanque_horizontal",
+    );
+  });
+
+  it("as medidas do objeto seguem a forma do tanque", () => {
+    const [deitado, emPe] = objetosDoEstoque(
+      [
+        tanque({ id: "a", capacidade: 15000 }),
+        tanque({ id: "b", capacidade: 100000, uso: "material" }),
+      ],
+      [],
+      [],
+    );
+    expect(deitado.forma).toBe("tanque_horizontal");
+    expect(deitado.comprimento).toBeCloseTo(deitado.largura * 2.8, 6);
+    expect(deitado.altura).toBe(deitado.largura);
+    expect(emPe.forma).toBe("tanque_vertical");
+    expect(emPe.comprimento).toBe(emPe.largura);
+    expect(emPe.altura).toBeCloseTo(emPe.largura * 1.5, 6);
+  });
+
   it("cor do tanque pelo uso e da pilha pelo material", () => {
     const [comb, mat, ext] = objetosDoEstoque(
       [
@@ -85,7 +139,7 @@ describe("objetos do Estoque no mapa", () => {
       [{ id: "d1", nome: "Almoxarifado", localidadeId: null, pos: null }],
     );
     expect(objetos.map((o) => [o.alvo, o.forma])).toEqual([
-      ["tanque", "cilindro"],
+      ["tanque", "tanque_horizontal"],
       ["pilha", "cone"],
       ["deposito", "caixa"],
     ]);
