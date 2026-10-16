@@ -456,6 +456,10 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
       mesPassadoRef: texto(gasto.mes_passado_ref),
       anoRef: inteiro(gasto.ano_ref),
       temCentro: gasto.tem_centro === true,
+      porCategoria: lista(gasto.por_categoria).map((c) => ({
+        categoria: texto(c.categoria),
+        total: numero(c.total),
+      })),
     },
     custoOs: {
       total: numero(custoOs.total),

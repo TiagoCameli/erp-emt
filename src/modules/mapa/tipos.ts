@@ -376,6 +376,8 @@ export interface FichaNumeros {
     anoRef: number;
     /** A máquina tem centro de custo (sem ele, não há como somar o Financeiro). */
     temCentro: boolean;
+    /** Desde sempre, por categoria do Financeiro, da maior para a menor. */
+    porCategoria: { categoria: string; total: number }[];
   };
   /**
    * Custo das OS concluídas (Manutenção), pela data de conclusão, nos mesmos períodos. Fonte
