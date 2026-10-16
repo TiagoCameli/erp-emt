@@ -423,6 +423,7 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
   const os = objeto(b.ultima_manutencao);
   const gasto = objeto(b.gasto_manutencao) ?? {};
   const custoOs = objeto(b.custo_os) ?? {};
+  const aquisicao = objeto(b.aquisicao) ?? {};
   return {
     ultimoAbastecimento: abast
       ? {
@@ -467,6 +468,10 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
       ano: numero(custoOs.ano),
       mesPassado: numero(custoOs.mes_passado),
       quantidade: inteiro(custoOs.quantidade),
+    },
+    aquisicao: {
+      valor: numeroOuNulo(aquisicao.valor),
+      data: textoOuNulo(aquisicao.data),
     },
   };
 }

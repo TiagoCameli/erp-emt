@@ -390,4 +390,6 @@ export interface FichaNumeros {
     mesPassado: number;
     quantidade: number;
   };
+  /** Do cadastro do equipamento; valor nulo = não informado (a ficha não mostra a linha). */
+  aquisicao: { valor: number | null; data: string | null };
 }

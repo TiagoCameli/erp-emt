@@ -3022,6 +3022,7 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           data_aquisicao: string | null;
+          valor_aquisicao: number | null;
           data_venda: string | null;
           descricao: string;
           id: string;
@@ -3043,6 +3044,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data_aquisicao?: string | null;
+          valor_aquisicao?: number | null;
           data_venda?: string | null;
           descricao: string;
           id?: string;
@@ -3064,6 +3066,7 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           data_aquisicao?: string | null;
+          valor_aquisicao?: number | null;
           data_venda?: string | null;
           descricao?: string;
           id?: string;

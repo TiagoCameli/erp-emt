@@ -23,6 +23,9 @@ import type { FichaNumeros } from "@/modules/mapa/tipos";
  * Ao lado do Financeiro, o custo das OS concluídas (16/10/2026): na US-001 o Financeiro dava
  * R$ 0,00 com três OS somando R$ 10.612,97. As fontes podem se sobrepor (a peça da OS pode ter sido
  * paga no Financeiro), então ficam em blocos separados, sem total somado.
+ *
+ * Valor de aquisição (16/10/2026, "se tiver"): vem do cadastro do equipamento; sem valor
+ * informado, a linha não aparece.
  */
 
 const ROTULO_STATUS_OS: Record<string, string> = {
@@ -89,11 +92,18 @@ export function NumerosEquipamento({
     ultimaManutencao: os,
     gastoManutencao: gasto,
     custoOs,
+    aquisicao,
   } = resultado.ficha;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
+        {aquisicao.valor !== null ? (
+          <Linha rotulo="Valor de aquisição">
+            {formatarBRL(aquisicao.valor)}
+            {aquisicao.data ? ` · em ${formatarData(aquisicao.data)}` : ""}
+          </Linha>
+        ) : null}
         <Linha rotulo="Último abastecimento">
           {abast
             ? `${formatarData(abast.data)} · ${litros(abast.litros)} · ${formatarBRL(abast.valor)}`

@@ -437,7 +437,9 @@ describe("paraFichaNumeros", () => {
         mes_passado: 0,
         quantidade: 3,
       },
+      aquisicao: { valor: "385000.00", data: "2023-05-12" },
     });
+    expect(f?.aquisicao).toEqual({ valor: 385000, data: "2023-05-12" });
     expect(f?.custoOs).toEqual({
       total: 10612.97,
       ultimos12Meses: 10612.97,
@@ -468,6 +470,11 @@ describe("paraFichaNumeros", () => {
       },
     });
     expect(vazio?.ultimoAbastecimento).toBeNull();
+    // Sem a chave (RPC antiga) ou com valor nulo (não informado no cadastro): a ficha não mostra.
+    expect(vazio?.aquisicao).toEqual({ valor: null, data: null });
+    expect(
+      paraFichaNumeros({ aquisicao: { valor: null, data: "2023-05-12" } })?.aquisicao.valor,
+    ).toBeNull();
     expect(vazio?.ultimaManutencao).toBeNull();
     expect(vazio?.gastoManutencao.temCentro).toBe(false);
     // RPC antiga, sem custo_os: zero OS, não quebra

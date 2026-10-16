@@ -28,6 +28,8 @@ export interface EquipamentoLista {
   medicaoInicial: number | null;
   numeroSerie: string | null;
   dataAquisicao: string | null;
+  /** Valor pago na aquisição, em reais. Nulo = não informado. */
+  valorAquisicao: number | null;
   dataVenda: string | null;
   ativo: boolean;
 }
@@ -49,7 +51,7 @@ export async function listarEquipamentos(): Promise<EquipamentoLista[]> {
   const { data, error } = await supabase
     .from("equipamentos")
     .select(
-      "id, codigo, descricao, tipo, marca, modelo, ano, placa, controle_por, propriedade, status, medicao_inicial, numero_serie, data_aquisicao, data_venda, ativo",
+      "id, codigo, descricao, tipo, marca, modelo, ano, placa, controle_por, propriedade, status, medicao_inicial, numero_serie, data_aquisicao, valor_aquisicao, data_venda, ativo",
     )
     .order("descricao");
 
@@ -72,6 +74,7 @@ export async function listarEquipamentos(): Promise<EquipamentoLista[]> {
     medicaoInicial: equipamento.medicao_inicial,
     numeroSerie: equipamento.numero_serie,
     dataAquisicao: equipamento.data_aquisicao,
+    valorAquisicao: equipamento.valor_aquisicao,
     dataVenda: equipamento.data_venda,
     ativo: equipamento.ativo,
   }));

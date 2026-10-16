@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CASAS_TAXA } from "@/lib/casas-decimais";
+import { CASAS_DINHEIRO, CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
 
@@ -58,6 +58,15 @@ export function medicaoParaNumero(texto: string): number | undefined {
   return normalizado === null ? undefined : Number(normalizado.replace(",", "."));
 }
 
+/**
+ * Valor de aquisição digitado ("1.234,56" ou "1234,56") para número em reais, com até
+ * 2 casas. Vazio ou inválido devolve undefined. Mesmo normalizador do `InputMoeda`.
+ */
+export function valorAquisicaoParaNumero(texto: string): number | undefined {
+  const normalizado = normalizarNumeroDigitado(texto, CASAS_DINHEIRO);
+  return normalizado === null ? undefined : Number(normalizado.replace(",", "."));
+}
+
 /** Ano mínimo aceito num equipamento. Antes disso é digitação errada. */
 const ANO_MINIMO = 1950;
 /** Margem de um ano à frente cobre veículos do ano seguinte. */
@@ -101,6 +110,11 @@ export const equipamentoSchema = z.object({
     .optional(),
   numeroSerie: textoOpcional(80),
   dataAquisicao: z.string().regex(DATA_ISO, { error: "Data inválida" }).optional(),
+  valorAquisicao: z
+    .number({ error: "Valor inválido" })
+    .min(0, { error: "O valor não pode ser negativo" })
+    .max(999999999999.99, { error: "Valor acima do permitido" })
+    .optional(),
   dataVenda: z.string().regex(DATA_ISO, { error: "Data inválida" }).optional(),
   ativo: z.boolean(),
 }).refine(
@@ -152,6 +166,12 @@ export const equipamentoFormSchema = z.object({
     }),
   numeroSerie: z.string().trim().max(80, { error: "Máximo de 80 caracteres" }),
   dataAquisicao: z.string().trim(),
+  valorAquisicao: z
+    .string()
+    .trim()
+    .refine((valor) => valor === "" || valorAquisicaoParaNumero(valor) !== undefined, {
+      error: `Informe o valor com até ${CASAS_DINHEIRO} casas decimais`,
+    }),
   dataVenda: z.string().trim(),
   ativo: z.boolean(),
 }).refine(

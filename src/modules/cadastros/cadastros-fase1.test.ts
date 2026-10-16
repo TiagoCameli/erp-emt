@@ -4,6 +4,7 @@ import {
   equipamentoFormSchema,
   equipamentoSchema,
   medicaoParaNumero,
+  valorAquisicaoParaNumero,
 } from "@/modules/cadastros/equipamentos/schemas";
 import {
   fornecedorSchema,
@@ -73,6 +74,7 @@ const EQUIP_FORM = {
   medicaoInicial: "125.430,5",
   numeroSerie: "",
   dataAquisicao: "2026-03-19",
+  valorAquisicao: "",
   dataVenda: "",
   ativo: true,
 };
@@ -83,6 +85,18 @@ describe("equipamento: propriedade, situação, medição e datas", () => {
     expect(medicaoParaNumero("0,1234")).toBe(0.1234);
     expect(medicaoParaNumero("")).toBeUndefined();
     expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, medicaoInicial: "1,23456" }).success).toBe(false);
+  });
+
+  it("valor de aquisição é opcional, lê pt-BR e tem no máximo 2 casas", () => {
+    expect(valorAquisicaoParaNumero("385.000,00")).toBe(385000);
+    expect(valorAquisicaoParaNumero("1234,5")).toBe(1234.5);
+    expect(valorAquisicaoParaNumero("")).toBeUndefined();
+    expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "" }).success).toBe(true);
+    expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "385.000,00" }).success).toBe(true);
+    expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "12,3,4" }).success).toBe(false);
+    const base = { descricao: "X de teste", controlePor: "km", propriedade: "propria", status: "ativa", ativo: true };
+    expect(equipamentoSchema.safeParse({ ...base, valorAquisicao: 385000 }).success).toBe(true);
+    expect(equipamentoSchema.safeParse({ ...base, valorAquisicao: -1 }).success).toBe(false);
   });
 
   it("só aceita as três propriedades do plano", () => {
