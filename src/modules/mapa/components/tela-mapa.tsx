@@ -70,6 +70,7 @@ import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import { FichaLocal } from "@/modules/mapa/components/ficha-local";
 import { FichaObjeto } from "@/modules/mapa/components/ficha-objeto";
+import { FichaPessoa } from "@/modules/mapa/components/ficha-pessoa";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import {
   ESCALA_MAQUINA,
@@ -95,6 +96,7 @@ import {
   type FiltrosMapa,
 } from "@/modules/mapa/components/painel-mapa";
 import {
+  colarNoLocal,
   maquinaEm,
   marcosKm,
   medirTrecho,
@@ -118,6 +120,7 @@ import {
   type EstadoEfetivo,
   type EstadoMapa,
   type PermissoesMapa,
+  type LocalidadeMapa,
   type PessoaMapa,
   type Posicao,
 } from "@/modules/mapa/tipos";
@@ -395,6 +398,8 @@ export function TelaMapa({
     pessoa: PessoaMapa;
     para: Posicao;
     sobre: EquipamentoMapa | null;
+    /** Local onde a pessoa vai trabalhar (soltou dentro do raio dele, ou escolheu na ficha). */
+    local: LocalidadeMapa | null;
   } | null>(null);
   const [pedidoEstado, setPedidoEstado] = React.useState<PedidoEstado | null>(
     null,
@@ -775,10 +780,19 @@ export function TelaMapa({
           (p) => p.id === arraste.principal.id,
         );
         if (!item || !pessoa) return;
+        const sobre = maquinaEm(item.para, cena.equipamentos);
         setPendentePessoa({
           pessoa,
           para: item.para,
-          sobre: maquinaEm(item.para, cena.equipamentos),
+          sobre,
+          // Soltou dentro do raio de um local: a pessoa passa a trabalhar nele.
+          local: sobre
+            ? null
+            : (colarNoLocal(
+                item.para,
+                estado.localidades,
+                estado.config.snapLocalM,
+              )?.local ?? null),
         });
         return;
       }
@@ -816,6 +830,8 @@ export function TelaMapa({
     [
       permissoes.editar,
       estado.pessoas,
+      estado.localidades,
+      estado.config.snapLocalM,
       equipamentosVistos,
       cena.equipamentos,
       ctxDestino,
@@ -1153,7 +1169,7 @@ export function TelaMapa({
       if (!pendentePessoa) return true;
       setSalvando(true);
       try {
-        const { pessoa, para, sobre } = pendentePessoa;
+        const { pessoa, para, sobre, local } = pendentePessoa;
         const r = sobre
           ? await assinalarOperador({
               equipamentoId: sobre.id,
@@ -1162,7 +1178,9 @@ export function TelaMapa({
             })
           : await moverPessoas({
               ids: [pessoa.id],
-              destino: { lng: para[0], lat: para[1] },
+              destino: local
+                ? { localidade_id: local.id }
+                : { lng: para[0], lat: para[1] },
               data: estado.hoje,
               motivo: motivo?.trim() || undefined,
             });
@@ -1170,7 +1188,9 @@ export function TelaMapa({
           r,
           sobre
             ? `${pessoa.nome} passa a operar ${sobre.codigo}`
-            : `${pessoa.nome} realocado`,
+            : local
+              ? `${pessoa.nome} trabalha em ${local.nome}`
+              : `${pessoa.nome} realocado`,
         );
         if (ok) setPendentePessoa(null);
         return ok;
@@ -1428,31 +1448,31 @@ export function TelaMapa({
       }}
     />
   ) : pessoaFicha ? (
-    <section
-      className="flex flex-col gap-1 rounded-lg border border-border bg-background p-3 text-detalhe"
-      aria-label={`Ficha de ${pessoaFicha.nome}`}
-    >
-      <p className="text-corpo font-semibold">{pessoaFicha.nome}</p>
-      <p className="text-muted-foreground">
-        {[pessoaFicha.funcao, pessoaFicha.vinculo, pessoaFicha.equipeNome]
-          .filter(Boolean)
-          .join(" · ") || "Sem função cadastrada"}
-      </p>
-      <p>
-        Opera:{" "}
-        {pessoaFicha.equipamentoId ? (
-          (equipamentosVistos.find((e) => e.id === pessoaFicha.equipamentoId)
-            ?.codigo ?? "–")
-        ) : (
-          <span className="text-muted-foreground">ninguém assinalado</span>
-        )}
-      </p>
-      {permissoes.editar ? (
-        <p className="text-legenda text-muted-foreground">
-          Arraste a pessoa até uma máquina para assinalar como operador.
-        </p>
-      ) : null}
-    </section>
+    <FichaPessoa
+      key={pessoaFicha.id}
+      pessoa={pessoaFicha}
+      maquina={
+        pessoaFicha.equipamentoId
+          ? (equipamentosVistos.find((e) => e.id === pessoaFicha.equipamentoId)
+              ?.codigo ?? null)
+          : null
+      }
+      localidades={estado.localidades}
+      podeEditar={permissoes.editar}
+      salvando={salvando}
+      onFechar={() => setFicha(null)}
+      onFocar={() => pessoaFicha.pos && focar(pessoaFicha.pos, 17)}
+      onTrocarLocal={(localidadeId) => {
+        const local = estado.localidades.find((l) => l.id === localidadeId);
+        if (local)
+          setPendentePessoa({
+            pessoa: pessoaFicha,
+            para: local.pos,
+            sobre: null,
+            local,
+          });
+      }}
+    />
   ) : objetoDaFicha ? (
     <FichaObjeto
       key={objetoDaFicha.id}
@@ -1597,6 +1617,10 @@ export function TelaMapa({
             onGirarPrevia={girarPeloAnel}
             onGirarFim={soltarAnel}
             onMotor={aoMotor}
+            onClicarVazio={() => {
+              setFicha(null);
+              setObjetoFicha(null);
+            }}
             cartao={cartao}
           />
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
@@ -1967,15 +1991,23 @@ export function TelaMapa({
           titulo={
             pendentePessoa.sobre
               ? `${pendentePessoa.pessoa.nome} opera ${pendentePessoa.sobre.codigo}?`
-              : `Realocar ${pendentePessoa.pessoa.nome}`
+              : pendentePessoa.local
+                ? `${pendentePessoa.pessoa.nome} trabalha em ${pendentePessoa.local.nome}?`
+                : `Realocar ${pendentePessoa.pessoa.nome}`
           }
           descricao={
             pendentePessoa.sobre
               ? `A pessoa passa a ser o operador de ${pendentePessoa.sobre.codigo}${pendentePessoa.sobre.operadorNome ? ` no lugar de ${pendentePessoa.sobre.operadorNome}` : ""} e acompanha a máquina no mapa.`
-              : `A pessoa fica neste ponto (${pendentePessoa.para[1].toFixed(5)}, ${pendentePessoa.para[0].toFixed(5)}) até ser realocada de novo.`
+              : pendentePessoa.local
+                ? `A pessoa aparece no ponto de ${pendentePessoa.local.nome} até ser realocada.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
+                : `A pessoa fica neste ponto (${pendentePessoa.para[1].toFixed(5)}, ${pendentePessoa.para[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
           }
           textoConfirmar={
-            pendentePessoa.sobre ? "Assinalar operador" : "Realocar"
+            pendentePessoa.sobre
+              ? "Assinalar operador"
+              : pendentePessoa.local
+                ? "Pôr no local"
+                : "Realocar"
           }
           exigeMotivo={false}
           onConfirmar={confirmarPessoa}
