@@ -161,6 +161,8 @@ export interface Cena {
   anelGiro: { id: string; pos: Posicao; raioM: number } | null;
   /** Obra sendo desenhada (pavimentação = linha, edificação = polígono): o rascunho. */
   desenho: { forma: "trecho" | "area"; pontos: Posicao[] } | null;
+  /** Ferramenta "Rota": os pontos tocados e o caminho pela estrada (vazio enquanto calcula). */
+  rota: { origem: Posicao; destino: Posicao | null; caminho: Posicao[] } | null;
   modelos: ReadonlyMap<string, Modelo3d>;
   snapLocalM: number;
   selecao: ReadonlySet<string>;
@@ -554,6 +556,56 @@ export function montarCamadas(cena: Cena): Layer[] {
         getLineColor: [31, 31, 31],
         lineWidthMinPixels: 2,
         pickable: false,
+      }),
+    );
+  }
+
+  // Rota medida: a linha pela estrada (contorno branco, eixo âmbar do logo) e as duas pontas.
+  if (cena.rota) {
+    const { origem, destino, caminho } = cena.rota;
+    if (caminho.length >= 2)
+      camadas.push(
+        new PathLayer<{ caminho: Posicao[] }>({
+          id: "rota-contorno",
+          data: [{ caminho }],
+          getPath: (d) => d.caminho,
+          getColor: [255, 255, 255, 235],
+          getWidth: 8,
+          widthUnits: "pixels",
+          capRounded: true,
+          jointRounded: true,
+          pickable: false,
+          parameters: { depthCompare: "always" },
+        }),
+        new PathLayer<{ caminho: Posicao[] }>({
+          id: "rota-linha",
+          data: [{ caminho }],
+          getPath: (d) => d.caminho,
+          getColor: [207, 148, 58],
+          getWidth: 4,
+          widthUnits: "pixels",
+          capRounded: true,
+          jointRounded: true,
+          pickable: false,
+          parameters: { depthCompare: "always" },
+        }),
+      );
+    camadas.push(
+      new ScatterplotLayer<{ pos: Posicao; origem: boolean }>({
+        id: "rota-pontas",
+        data: [
+          { pos: origem, origem: true },
+          ...(destino ? [{ pos: destino, origem: false }] : []),
+        ],
+        getPosition: (d) => d.pos,
+        getRadius: 7,
+        radiusUnits: "pixels",
+        getFillColor: (d) => (d.origem ? VERDE_EMT : [31, 31, 31]),
+        stroked: true,
+        getLineColor: [255, 255, 255],
+        lineWidthMinPixels: 2,
+        pickable: false,
+        parameters: { depthCompare: "always" },
       }),
     );
   }

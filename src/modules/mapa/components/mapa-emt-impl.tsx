@@ -384,7 +384,9 @@ async function criarMotorGoogle(
   const opcoes: google.maps.MapOptions = {
     center: { lat: centro.pos[1], lng: centro.pos[0] },
     zoom: centro.zoom,
-    mapTypeId: fundo === "satelite" ? "satellite" : "roadmap",
+    // "hybrid" é a imagem com os nomes de cidades e estradas por cima; "satellite" vem sem
+    // rótulo nenhum (Tiago, 16/10/2026: "no mapa deve aparecer o nome das cidades").
+    mapTypeId: fundo === "satelite" ? "hybrid" : "roadmap",
     tilt: inclinado && fundo === "mapa" ? 45 : 0,
     heading: 0,
     gestureHandling: "greedy",
@@ -510,7 +512,7 @@ async function criarMotorGoogle(
       });
     },
     setFundo(novo, incl) {
-      map.setMapTypeId(novo === "satelite" ? "satellite" : "roadmap");
+      map.setMapTypeId(novo === "satelite" ? "hybrid" : "roadmap");
       map.setTilt(
         novo === "mapa" &&
           incl &&

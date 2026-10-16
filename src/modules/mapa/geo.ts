@@ -312,6 +312,22 @@ export function resolverDestino(
     const area = dentro[0];
     return { tipo: "area", area, pos: p, estado: estadoDaArea(area.tipo) };
   }
+  // Jazida antes do trecho (banco, v1.20): quem opera na jazida trabalha para a obra dela, mesmo
+  // com a rodovia passando ao lado.
+  const jazida = colarNoLocal(
+    p,
+    ctx.localidades.filter((l) => l.tipos.includes("jazida")),
+    ctx.snapLocalM,
+  );
+  if (jazida) {
+    return {
+      tipo: "localidade",
+      local: jazida.local,
+      pos: p,
+      distanciaM: jazida.distanciaM,
+      estado: estadoDoLocal(jazida.local.tipo),
+    };
+  }
   const colado = colarNoTrecho(p, ctx.trechos, ctx.snapTracadoM);
   if (colado) {
     return {
