@@ -105,6 +105,11 @@ export interface EquipamentoMapa {
    * muda). É o que diz se a marcação veio depois da saída ou da chegada do frete.
    */
   marcadoEm: string | null;
+  /**
+   * Carreta da EMT Transportes (centro sob "001 - Carretas EMT"): só ela fica em frete ou em
+   * deslocamento, e a obra dela é sempre a das carretas.
+   */
+  carretaEmt: boolean;
   diasNoEstado: number | null;
   obraId: string | null;
   obraNome: string;
@@ -393,6 +398,8 @@ export interface ConfigMapa {
   snapLocalM: number;
   fornecedorColorado: string | null;
   tiposForaDoMapa: string[];
+  /** Obra "001 - Carretas EMT": fixa para as carretas da EMT Transportes (v1.22). */
+  obraCarretasEmt: string | null;
 }
 
 export interface EstadoMapa {

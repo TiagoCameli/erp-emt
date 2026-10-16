@@ -326,3 +326,59 @@ describe("marcacaoVenceFrete", () => {
     ).toBe(false);
   });
 });
+
+describe("só carreta da EMT Transportes anda pelo Frete (v1.22)", () => {
+  it("máquina que não é carreta EMT, mesmo casada pela placa, fica como está: sem frete nem volta", () => {
+    const cs6 = {
+      id: "cs6",
+      pos: [-72, -7.9],
+      heading: 0,
+      rumoManual: null,
+      fontePosicao: "manual",
+      estado: "operando",
+      carretaEmt: false,
+    } as unknown as EquipamentoMapa;
+    const r = aplicarFretes(
+      [cs6],
+      [frete({ equipamentoId: "cs6" })],
+      [
+        {
+          equipamentoId: "cs6",
+          freteId: "f0",
+          chegadaEm: "2026-10-16T10:00:00Z",
+          chegada: "2026-10-16",
+          de: "Usina Gregorio",
+          pedreiraId: "britam",
+          pedreira: "Pedreira Britam",
+          pedreiraEscolhida: false,
+          horas: 10,
+          km: 700,
+          caminho: [...reta].reverse(),
+        },
+      ],
+      Date.parse("2026-10-16T15:00:00Z"),
+    );
+    expect(r.equipamentos[0]).toBe(cs6);
+    expect(r.freteDe.has("cs6")).toBe(false);
+    expect(r.retornoDe.has("cs6")).toBe(false);
+  });
+
+  it("a carreta EMT segue em frete", () => {
+    const cs3 = {
+      id: "cs3",
+      pos: null,
+      heading: 0,
+      rumoManual: null,
+      fontePosicao: "manual",
+      estado: "sem_posicao",
+      carretaEmt: true,
+    } as unknown as EquipamentoMapa;
+    const r = aplicarFretes(
+      [cs3],
+      [frete({})],
+      [],
+      Date.parse("2026-10-16T15:00:00Z"),
+    );
+    expect(r.equipamentos[0].estado).toBe("em_frete");
+  });
+});

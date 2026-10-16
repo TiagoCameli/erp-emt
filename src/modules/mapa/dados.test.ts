@@ -139,6 +139,7 @@ describe("paraEstadoMapa", () => {
       snapLocalM: 300,
       fornecedorColorado: "f1",
       tiposForaDoMapa: ["Moto"],
+      obraCarretasEmt: null,
     });
     const [e1, e2] = estado.equipamentos;
     expect(e1.pos).toEqual([-72.45, -7.7]);
@@ -430,6 +431,26 @@ describe("schemas das actions", () => {
         estado: "parado",
       }).success,
     ).toBe(true);
+  });
+
+  it("lê a carreta da EMT Transportes e a obra das carretas; sem a chave, não é carreta", () => {
+    const estado = paraEstadoMapa({
+      equipamentos: [
+        { id: "cs3", codigo: "CS-003", carreta_emt: true },
+        { id: "cs6", codigo: "CS-006", carreta_emt: false },
+        { id: "x", codigo: "EH-001" },
+      ],
+      trechos: [],
+      config: { obra_carretas_emt: "ba9a2017-ab9c-486b-8928-b4dbac372368" },
+    });
+    expect(estado!.equipamentos.map((e) => e.carretaEmt)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(estado!.config.obraCarretasEmt).toBe(
+      "ba9a2017-ab9c-486b-8928-b4dbac372368",
+    );
   });
 
   it("a volta da carreta inverte o traçado da ida quando o Frete não mediu a volta", () => {

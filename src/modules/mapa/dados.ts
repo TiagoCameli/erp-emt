@@ -252,6 +252,7 @@ function equipamento(e: Linha): EquipamentoMapa {
     estadoDesde: textoOuNulo(e.estado_desde),
     // RPC antiga sem a chave: a mudança de estado é a última marcação conhecida.
     marcadoEm: textoOuNulo(e.marcado_em) ?? textoOuNulo(e.estado_desde),
+    carretaEmt: e.carreta_emt === true,
     diasNoEstado: numeroOuNulo(e.dias_no_estado),
     obraId: textoOuNulo(e.obra_id),
     obraNome: texto(e.obra_nome),
@@ -395,6 +396,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       snapLocalM: numeroOuNulo(config.snap_local_m) ?? 300,
       fornecedorColorado: textoOuNulo(config.fornecedor_colorado),
       tiposForaDoMapa: tiposFora,
+      obraCarretasEmt: textoOuNulo(config.obra_carretas_emt),
     },
     modelos: lista(b.modelos).map(modelo),
     equipamentos: lista(b.equipamentos).map(equipamento),

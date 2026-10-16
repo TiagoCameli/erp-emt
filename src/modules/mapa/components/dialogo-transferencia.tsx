@@ -111,10 +111,16 @@ export function DialogoTransferencia({
   obras,
   obrasNoMapa,
   levarParaObra,
+  obraCarretasEmt = null,
   onCancelar,
   onConfirmar,
 }: {
   pendente: Pendente;
+  /**
+   * Obra "001 - Carretas EMT": a das carretas da EMT Transportes, fixa (o banco impõe, v1.22).
+   * Só com carretas na transferência, o campo some e a obra é essa.
+   */
+  obraCarretasEmt?: string | null;
   hoje: string;
   /** Todas as obras, para o campo "Obra de destino". */
   obras: ObraOpcao[];
@@ -142,10 +148,19 @@ export function DialogoTransferencia({
       podeAjustar &&
       pendente.itens.every((i) => sugereAjuste(i.equipamento, i.destino)),
   );
+  const soCarretas =
+    !paraObra &&
+    obraCarretasEmt !== null &&
+    pendente.itens.length > 0 &&
+    pendente.itens.every((i) => i.equipamento.carretaEmt);
   const escolhaInicial = React.useMemo(
     () =>
-      paraObra ? "" : escolhaInicialObra(pendente.itens.map((i) => i.destino)),
-    [paraObra, pendente.itens],
+      paraObra
+        ? ""
+        : soCarretas && obraCarretasEmt
+          ? obraCarretasEmt
+          : escolhaInicialObra(pendente.itens.map((i) => i.destino)),
+    [paraObra, soCarretas, obraCarretasEmt, pendente.itens],
   );
   const [escolhaObra, setEscolhaObra] = React.useState(escolhaInicial);
 
@@ -193,6 +208,11 @@ export function DialogoTransferencia({
     texto: string;
     aviso: string | null;
   } {
+    if (item.equipamento.carretaEmt && obraCarretasEmt)
+      return {
+        texto: `Obra: ${nomeObra.get(obraCarretasEmt) ?? "Carretas EMT"} (fixa: carreta da EMT Transportes)`,
+        aviso: null,
+      };
     const efetiva = obraEfetiva(escolhaObra, item.destino);
     const daZona = obraDoDestino(item.destino);
     const texto = efetiva
@@ -256,7 +276,7 @@ export function DialogoTransferencia({
               </Button>
             </div>
           ) : null}
-          {ajuste ? null : (
+          {ajuste || soCarretas ? null : (
             <div className="flex flex-col gap-2">
               <Label htmlFor={idObra}>Obra de destino</Label>
               <Combobox
