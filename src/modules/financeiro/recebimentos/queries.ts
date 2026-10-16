@@ -1,10 +1,19 @@
 import "server-only";
 
 import { aplicarBusca } from "@/lib/busca";
+import { emLotes, LOTE_IDS_POSTGREST } from "@/lib/lotes-de-ids";
 import { createClient } from "@/lib/supabase/server";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { ORIGEM_APLICACAO } from "@/modules/financeiro/lancamentos/schemas";
-import { subarvoreDosCentros } from "@/modules/financeiro/lancamentos/queries";
+import {
+  arvoreDeCentrosDeCusto,
+  subarvoreDosCentros,
+} from "@/modules/financeiro/lancamentos/queries";
+import {
+  centroEEtapaDoRateio,
+  raizIdDoRateio,
+} from "@/modules/financeiro/lancamentos/hierarquia-centro";
+import type { RecebimentoPlanilha } from "@/modules/financeiro/recebimentos/planilha";
 import {
   facetasNoServidor,
   type FacetasPresentes,
@@ -15,6 +24,7 @@ import {
 } from "@/modules/financeiro/_shared/centro-de-custo";
 import {
   ROTULO_BANCO,
+  SEM_CENTRO_DE_CUSTO,
   STATUS_PARCELA_ABERTA,
   type BancoConta,
   type StatusParcela,
@@ -612,6 +622,119 @@ export async function somarRecebidoNoPeriodo(
     0,
   );
   return centavos / 100;
+}
+
+/** Uma linha crua do select da planilha, como o PostgREST devolve. */
+type LinhaRecebimentoPlanilha = {
+  id: string;
+  numero_parcela: number;
+  status: string;
+  valor: number;
+  desconto: number | null;
+  juros: number | null;
+  valor_liquido: number | null;
+  data_vencimento: string | null;
+  data_pagamento: string | null;
+  contas_bancarias: { nome: string; banco: string } | null;
+  lancamentos: {
+    numero: string | null;
+    numero_documento: string | null;
+    descricao: string | null;
+    mes_competencia: string | null;
+    categorias_financeiras: { nome: string } | null;
+    clientes: { nome: string; nome_fantasia: string | null } | null;
+    lancamento_parcelas: { id: string }[];
+    lancamento_rateios: {
+      valor: number;
+      centros_custo: { id: string; nome: string } | null;
+    }[];
+  } | null;
+};
+
+/**
+ * O detalhe das parcelas que a planilha de Recebimentos exporta, por id.
+ *
+ * Quem escolhe os ids é a action, com os MESMOS filtros da tela; aqui só se lê o
+ * que a planilha precisa e que a lista da tela não traz (valor de cada rateio,
+ * raiz e etapa do centro, quantas parcelas o lançamento tem). Mesmo desenho de
+ * `lerPagamentosParaPlanilha`: em lotes, porque o `in` viaja na URL.
+ */
+export async function lerRecebimentosParaPlanilha(
+  ids: string[],
+): Promise<Map<string, RecebimentoPlanilha>> {
+  const porId = new Map<string, RecebimentoPlanilha>();
+  if (ids.length === 0) return porId;
+
+  const supabase = await createClient();
+
+  const linhas: LinhaRecebimentoPlanilha[] = [];
+  for (const lote of emLotes(ids, LOTE_IDS_POSTGREST)) {
+    const { data, error } = await supabase
+      .from("lancamento_parcelas")
+      .select(
+        `id, numero_parcela, status, valor, desconto, juros, valor_liquido,
+         data_vencimento, data_pagamento,
+         contas_bancarias(nome, banco),
+         lancamentos!inner(
+           numero, numero_documento, descricao, mes_competencia,
+           categorias_financeiras(nome),
+           clientes(nome, nome_fantasia),
+           lancamento_parcelas(id),
+           lancamento_rateios(valor, centros_custo(id, nome))
+         )`,
+      )
+      .in("id", lote);
+
+    if (error) {
+      throw new Error(
+        `Não foi possível carregar os recebimentos para a planilha: ${error.message}`,
+      );
+    }
+    linhas.push(...((data ?? []) as unknown as LinhaRecebimentoPlanilha[]));
+  }
+
+  const arvore = await arvoreDeCentrosDeCusto(supabase);
+
+  for (const linha of linhas) {
+    const lancamento = linha.lancamentos;
+    porId.set(linha.id, {
+      id: linha.id,
+      lancamentoNumero: lancamento?.numero ?? null,
+      numeroDocumento: lancamento?.numero_documento ?? null,
+      numeroParcela: linha.numero_parcela,
+      totalParcelas: lancamento?.lancamento_parcelas?.length ?? null,
+      descricao: lancamento?.descricao ?? "",
+      categoriaNome: lancamento?.categorias_financeiras?.nome ?? null,
+      // O mesmo nome que a tela mostra (fantasia primeiro).
+      clienteNome: nomeCliente(lancamento?.clientes ?? null),
+      mesCompetencia: lancamento?.mes_competencia ?? null,
+      dataVencimento: linha.data_vencimento,
+      dataRecebimento: linha.data_pagamento,
+      contaNome: linha.contas_bancarias
+        ? rotuloConta(linha.contas_bancarias.nome, linha.contas_bancarias.banco)
+        : null,
+      status: linha.status,
+      valor: linha.valor,
+      desconto: linha.desconto ?? 0,
+      juros: linha.juros ?? 0,
+      valorLiquido: linha.valor_liquido ?? linha.valor,
+      rateios: (lancamento?.lancamento_rateios ?? []).map((rateio) => {
+        const centro = rateio.centros_custo;
+        const nome = centro?.nome ?? SEM_CENTRO_DE_CUSTO;
+        const hierarquia = centro
+          ? centroEEtapaDoRateio(centro.id, nome, arvore)
+          : { raizNome: nome, etapaNome: null };
+        return {
+          centroId: centro?.id ?? null,
+          raizId: centro ? raizIdDoRateio(centro.id, arvore) : null,
+          valor: rateio.valor,
+          ...hierarquia,
+        };
+      }),
+    });
+  }
+
+  return porId;
 }
 
 /** Categorias de RECEITA ativas, em ordem alfabética. */

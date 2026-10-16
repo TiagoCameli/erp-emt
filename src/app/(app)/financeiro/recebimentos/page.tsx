@@ -22,6 +22,13 @@ import {
   somarRecebidoNoPeriodo,
 } from "@/modules/financeiro/recebimentos/queries";
 
+/**
+ * A Server Action de exportar (o botão do cabeçalho) roda na função DESTA
+ * página: com o teto padrão da Vercel ela morre no meio da leitura. Mesmo motivo
+ * de /financeiro/pagamentos, e `max-duration-de-quem-exporta.test.ts` cobra.
+ */
+export const maxDuration = 60;
+
 const TAMANHO_PAGINA = 25;
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;

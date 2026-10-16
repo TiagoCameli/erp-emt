@@ -190,14 +190,48 @@ export function expandirPagamentos(
   formato: FormatoPlanilhaPagamentos,
   aba: AbaPagamentos,
 ): LinhaPagamento[] {
-  const linhas: LinhaPagamento[] = [];
+  return expandirPorRateio(itens, formato, (pagamento) =>
+    valorBaseDoPagamento(pagamento, aba),
+  ).map(({ item, ...linha }) => ({ pagamento: item, ...linha }));
+}
+
+/**
+ * Uma linha de planilha rateada: a parcela (de pagamento ou de recebimento)
+ * mais o destino e a fatia dele. Os mesmos campos de `LinhaPagamento`, com a
+ * parcela em `item`.
+ */
+export interface LinhaRateada<T> {
+  item: T;
+  centroNome: string;
+  etapaNome: string | null;
+  valorFatia: number;
+  parte: number;
+  partes: number;
+}
+
+/**
+ * O miolo de `expandirPagamentos`, sem saber para que lado o dinheiro anda.
+ *
+ * Exportado para a planilha de Recebimentos: a parcela a receber também é
+ * rateada pelo lançamento, e uma segunda cópia desta repartição divergiria na
+ * primeira correção feita de um lado só. `valorBase` diz o que se reparte (o
+ * devido na fila, o líquido no histórico).
+ */
+export function expandirPorRateio<
+  T extends { rateios: readonly RateioDoPagamento[] },
+>(
+  itens: readonly T[],
+  formato: FormatoPlanilhaPagamentos,
+  valorBase: (item: T) => number,
+): LinhaRateada<T>[] {
+  const linhas: LinhaRateada<T>[] = [];
 
   for (const pagamento of itens) {
-    const base = valorBaseDoPagamento(pagamento, aba);
+    const base = valorBase(pagamento);
 
     if (formato === "pagamento" || pagamento.rateios.length === 0) {
       linhas.push({
-        pagamento,
+        item: pagamento,
         centroNome:
           pagamento.rateios.length === 0
             ? SEM_CENTRO_DE_CUSTO
@@ -219,7 +253,7 @@ export function expandirPagamentos(
       pagamento.rateios.map((rateio) => centavos(rateio.valor)),
     );
 
-    const porDestino = new Map<string, LinhaPagamento & { centavos: number }>();
+    const porDestino = new Map<string, LinhaRateada<T> & { centavos: number }>();
     for (const [indice, rateio] of pagamento.rateios.entries()) {
       const id = formato === "centro" ? rateio.raizId : rateio.centroId;
       // Sem id (centro apagado do cadastro), cada parte fica na sua linha: a
@@ -231,7 +265,7 @@ export function expandirPagamentos(
         continue;
       }
       porDestino.set(chave, {
-        pagamento,
+        item: pagamento,
         centroNome: rateio.raizNome,
         // No formato por CENTRO a etapa não vai: a linha soma todas as etapas
         // daquele centro, então nomear uma delas descreveria a linha errado.
@@ -258,14 +292,17 @@ export function expandirPagamentos(
 /* As colunas                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Uma coluna da planilha de pagamentos. */
-export interface ColunaPagamentos {
+/** Uma coluna de planilha rateada, para o tipo de linha `L`. */
+export interface ColunaPlanilhaRateada<L> {
   cabecalho: string;
   /** Largura em caracteres, o que o exceljs entende. */
   largura: number;
   tipo: TipoColunaPlanilha;
-  celula: (linha: LinhaPagamento) => CelulaPlanilha;
+  celula: (linha: L) => CelulaPlanilha;
 }
+
+/** Uma coluna da planilha de pagamentos. */
+export type ColunaPagamentos = ColunaPlanilhaRateada<LinhaPagamento>;
 
 /** Rótulo da situação da parcela, o mesmo que o selo da tela mostra. */
 function rotuloSituacao(status: string): string {
@@ -281,7 +318,9 @@ function rotuloSituacao(status: string): string {
  * cadastros homônimos são dois centros, e juntá-los aqui faria a coluna dizer
  * "1 centro de custo" sobre um custo que está em dois lugares.
  */
-function raizesDoRateio(pagamento: PagamentoPlanilha): string[] {
+export function raizesDoRateio(pagamento: {
+  rateios: readonly RateioDoPagamento[];
+}): string[] {
   const nomes = new Map<string, string>();
   for (const [indice, rateio] of pagamento.rateios.entries()) {
     nomes.set(rateio.raizId ?? `sem-centro:${indice}`, rateio.raizNome);
@@ -472,7 +511,9 @@ function colunasDaAba(aba: AbaPagamentos): ColunaPagamentos[] {
 }
 
 /** Uma coluna que só é preenchida na PRIMEIRA linha da parcela. */
-function soNaPrimeira(coluna: ColunaPagamentos): ColunaPagamentos {
+export function soNaPrimeira<L extends { parte: number }>(
+  coluna: ColunaPlanilhaRateada<L>,
+): ColunaPlanilhaRateada<L> {
   return {
     ...coluna,
     // Repetido em todas as linhas do rateio, o valor da parcela infla a soma em
@@ -587,12 +628,28 @@ export function colunasPagamentos(
   const basicas = [...colunasComuns(), ...colunasDaAba(aba)];
   if (formato === "pagamento") return basicas;
 
-  const trocas = colunasTrocadas(aba, formato === "rateio");
+  return aplicarTrocas(
+    basicas,
+    colunasTrocadas(aba, formato === "rateio"),
+    "A planilha de pagamentos",
+  );
+}
+
+/**
+ * Troca cada coluna pelas que a substituem, pelo cabeçalho, e QUEBRA se um
+ * cabeçalho trocado não existir mais nas básicas (o motivo está em
+ * `colunasPagamentos`). `planilha` só entra na mensagem do erro.
+ */
+export function aplicarTrocas<L>(
+  basicas: readonly ColunaPlanilhaRateada<L>[],
+  trocas: Record<string, ColunaPlanilhaRateada<L>[]>,
+  planilha: string,
+): ColunaPlanilhaRateada<L>[] {
   const existentes = new Set(basicas.map((coluna) => coluna.cabecalho));
   for (const cabecalho of Object.keys(trocas)) {
     if (!existentes.has(cabecalho)) {
       throw new Error(
-        `A planilha de pagamentos troca a coluna "${cabecalho}", que não existe mais na versão por pagamento`,
+        `${planilha} troca a coluna "${cabecalho}", que não existe mais na versão de uma linha por parcela`,
       );
     }
   }
@@ -668,12 +725,42 @@ function escreverAba(
   formato: FormatoPlanilhaPagamentos,
   itens: readonly PagamentoPlanilha[],
 ): void {
-  const colunas = colunasPagamentos(aba, formato);
   const linhas = expandirPagamentos(itens, formato, aba);
-
-  const worksheet = workbook.addWorksheet(NOME_DA_ABA[aba]);
-  escreverCabecalhoMarca(workbook, worksheet, {
+  escreverAbaRateada(workbook, {
+    nome: NOME_DA_ABA[aba],
     titulo: TITULO_DA_ABA[aba],
+    colunas: colunasPagamentos(aba, formato),
+    linhas,
+    rotuloTotal:
+      formato === "pagamento"
+        ? `Total (${linhas.length.toLocaleString("pt-BR")} pagamentos)`
+        : `Total (${linhas.length.toLocaleString("pt-BR")} linhas de ${itens.length.toLocaleString("pt-BR")} pagamentos)`,
+  });
+}
+
+/**
+ * O corpo de `escreverAba`, para qualquer planilha rateada: a de Recebimentos
+ * escreve as abas dela por aqui, com marca, filtro, congelamento e total iguais.
+ */
+export function escreverAbaRateada<L>(
+  workbook: ExcelJS.Workbook,
+  {
+    nome,
+    titulo,
+    colunas,
+    linhas,
+    rotuloTotal,
+  }: {
+    nome: string;
+    titulo: string;
+    colunas: readonly ColunaPlanilhaRateada<L>[];
+    linhas: readonly L[];
+    rotuloTotal: string;
+  },
+): void {
+  const worksheet = workbook.addWorksheet(nome);
+  escreverCabecalhoMarca(workbook, worksheet, {
+    titulo,
     colunas: colunas.length,
   });
 
@@ -712,10 +799,7 @@ function escreverAba(
   }
 
   const linhaTotais = worksheet.addRow([]);
-  linhaTotais.getCell(1).value =
-    formato === "pagamento"
-      ? `Total (${linhas.length.toLocaleString("pt-BR")} pagamentos)`
-      : `Total (${linhas.length.toLocaleString("pt-BR")} linhas de ${itens.length.toLocaleString("pt-BR")} pagamentos)`;
+  linhaTotais.getCell(1).value = rotuloTotal;
 
   // Total por FÓRMULA, não por soma calculada aqui: quem recebe a planilha
   // filtra e apaga linha, e um total fixo passaria a mentir na primeira mexida.
