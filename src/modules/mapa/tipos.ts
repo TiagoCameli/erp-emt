@@ -260,7 +260,6 @@ export interface TanqueMapa {
   nome: string;
   apelido: string;
   uso: string;
-  ehExterno: boolean;
   localidadeId: string | null;
   /** Tanque de comboio (meloza): anda com a máquina, não tem local fixo. */
   equipamentoId: string | null;

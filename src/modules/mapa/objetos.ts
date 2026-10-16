@@ -42,12 +42,11 @@ export interface ObjetoMapa {
   rumo?: number;
 }
 
-/** Tanque sem capacidade cadastrada (posto externo, por exemplo) desenha como um de 15 mil L. */
+/** Tanque sem capacidade cadastrada desenha como um de 15 mil L. */
 export const CAPACIDADE_PADRAO_L = 15000;
 
 export const COR_COMBUSTIVEL: Rgb = [207, 148, 58];
 export const COR_MATERIAL: Rgb = [69, 70, 75];
-export const COR_EXTERNO: Rgb = [150, 150, 150];
 export const COR_DEPOSITO: Rgb = [62, 119, 68];
 
 /**
@@ -204,11 +203,7 @@ export function objetosDoEstoque(
       alvo: "tanque",
       nome: t.nome,
       detalhe: [
-        t.ehExterno
-          ? "posto externo"
-          : t.uso === "material"
-            ? "tanque de material"
-            : "tanque",
+        t.uso === "material" ? "tanque de material" : "tanque",
         capacidade,
         t.insumo,
       ]
@@ -217,11 +212,7 @@ export function objetosDoEstoque(
       pos: t.pos,
       forma,
       ...medidas,
-      cor: t.ehExterno
-        ? COR_EXTERNO
-        : t.uso === "material"
-          ? COR_MATERIAL
-          : COR_COMBUSTIVEL,
+      cor: t.uso === "material" ? COR_MATERIAL : COR_COMBUSTIVEL,
     });
   }
   for (const p of pilhas) {
@@ -363,22 +354,18 @@ export function linhasDaFicha(
     const linhas: LinhaFicha[] = [
       {
         rotulo: "Tipo",
-        valor: t.ehExterno
-          ? "Posto externo"
-          : t.uso === "material"
-            ? "Tanque de material"
-            : "Tanque de combustível",
+        valor:
+          t.uso === "material" ? "Tanque de material" : "Tanque de combustível",
       },
       { rotulo: "Conteúdo", valor: t.insumo || "vazio" },
-    ];
-    if (!t.ehExterno)
-      linhas.push({
+      {
         rotulo: "Nível",
         valor: capacidade
           ? `${numeroTexto(nivel, 1)} de ${numeroTexto(capacidade, 0)} ${un} (${numeroTexto((nivel / capacidade) * 100, 0)}%)`
           : `${numeroTexto(nivel, 1)} ${un}`,
-      });
-    if (!t.ehExterno) linhas.push(...linhaValor(t.id, fontes));
+      },
+      ...linhaValor(t.id, fontes),
+    ];
     const maquina = t.equipamentoId
       ? fontes.equipamentos.find((e) => e.id === t.equipamentoId)
       : null;
