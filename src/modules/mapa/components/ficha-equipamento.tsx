@@ -1,11 +1,20 @@
 "use client";
 
 import * as React from "react";
-import { Crosshair, LocateFixed, RotateCcw, RotateCw, X } from "lucide-react";
+import Link from "next/link";
+import {
+  ArrowRightLeft,
+  Crosshair,
+  History,
+  LocateFixed,
+  RotateCcw,
+  RotateCw,
+  X,
+} from "lucide-react";
 
 import { Combobox, MoneyText } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   formatarData,
   formatarDataHora,
@@ -52,6 +61,10 @@ export interface FichaEquipamentoProps {
   onFechar: () => void;
   onFocar: () => void;
   onPosicionar: () => void;
+  /** "Transferir para obra": escolhe a obra numa lista, sem arrastar no mapa. */
+  onTransferirParaObra?: () => void;
+  /** Link para o histórico de movimentações desta máquina (quem pode ver). */
+  historicoHref?: string | null;
   onMarcarEstado: (estado: EstadoMaquina) => void;
   onAssinalarOperador: (colaboradorId: string | null) => void;
   onEncerrarLocacao: () => void;
@@ -90,6 +103,8 @@ export function FichaEquipamento({
   onFechar,
   onFocar,
   onPosicionar,
+  onTransferirParaObra,
+  historicoHref = null,
   onMarcarEstado,
   onAssinalarOperador,
   onEncerrarLocacao,
@@ -215,6 +230,38 @@ export function FichaEquipamento({
         <Linha rotulo="Obra">{e.obraNome || "–"}</Linha>
         <Linha rotulo="Onde">{onde.length ? onde.join(" · ") : "–"}</Linha>
         {e.frenteNome ? <Linha rotulo="Frente">{e.frenteNome}</Linha> : null}
+        {(podeEditar && onTransferirParaObra) || historicoHref ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {podeEditar && onTransferirParaObra ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onTransferirParaObra}
+                disabled={salvando || e.fontePosicao !== "manual"}
+                title={
+                  e.fontePosicao === "gps"
+                    ? "Tem posição por GPS: não pode ser transferida pelo mapa"
+                    : e.fontePosicao === "frete"
+                      ? "Em rota pelo Frete: a posição segue a rota até a chegada ser lançada no Frete"
+                      : undefined
+                }
+              >
+                <ArrowRightLeft />
+                Transferir para obra
+              </Button>
+            ) : null}
+            {historicoHref ? (
+              <Link
+                href={historicoHref}
+                className={buttonVariants({ size: "sm", variant: "ghost" })}
+              >
+                <History />
+                Histórico
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
         {frete ? (
           <div className="mt-1 flex flex-col gap-1 rounded-md border border-border bg-surface p-2">
             <span className="text-legenda font-medium text-muted-foreground">

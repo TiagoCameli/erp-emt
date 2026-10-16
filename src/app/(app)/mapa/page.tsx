@@ -88,6 +88,7 @@ export default async function PaginaMapa({
         permissoes={{
           editar: temPermissao(usuario, "mapa.mapa", "editar"),
           criar: temPermissao(usuario, "mapa.mapa", "criar"),
+          historico: temPermissao(usuario, "mapa.historico", "ver"),
         }}
       />
     </div>

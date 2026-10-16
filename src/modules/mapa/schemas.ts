@@ -77,6 +77,10 @@ export const moverEquipamentosSchema = z.strictObject({
   motivo: motivoOpcional,
   /** Só corrige o ponto no mapa: não é transferência (estado, obra e frente ficam). */
   ajuste: z.boolean().optional(),
+  /** Obra escolhida na confirmação; vence a obra da zona onde o ponto caiu. */
+  obra_id: idSchemaCom("Obra inválida").optional(),
+  /** "Sem obra" de propósito: a máquina sai da obra mesmo caindo numa zona de obra. */
+  sem_obra: z.boolean().optional(),
   deslocamento: deslocamentoSchema,
   conserto_motivo: z.string().trim().max(TEXTO_CURTO).optional(),
   conserto_previsao: dataOpcional,

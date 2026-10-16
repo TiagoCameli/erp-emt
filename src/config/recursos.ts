@@ -75,14 +75,21 @@ export const RECURSOS = [
     rota: "/gestao",
     acoes: ["ver"],
   },
-  // Mapa (frota e pessoas em 3D sobre a BR-364). O recurso mapa.historico, que o
-  // banco já conhece (RLS das movimentações), entra no catálogo quando a tela dele existir.
+  // Mapa (frota e pessoas em 3D sobre a BR-364). O Histórico é a trilha de movimentações
+  // (transferências, estados, operador); o banco já o conhecia na RLS de mapa_movimentacoes.
   {
     id: "mapa.mapa",
     nome: "Mapa",
     modulo: "mapa",
     rota: "/mapa",
     acoes: CRUD,
+  },
+  {
+    id: "mapa.historico",
+    nome: "Histórico",
+    modulo: "mapa",
+    rota: "/mapa/historico",
+    acoes: ["ver"],
   },
   // Cadastros
   {

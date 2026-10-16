@@ -391,6 +391,8 @@ export interface ImplementoMapa {
 export interface PermissoesMapa {
   editar: boolean;
   criar: boolean;
+  /** mapa.historico/ver: a ficha mostra o link para o histórico de movimentações. */
+  historico?: boolean;
 }
 
 /** Chave da configuração do Google Maps que chega ao cliente (as duas são NEXT_PUBLIC). */
