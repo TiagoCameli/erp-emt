@@ -61,6 +61,10 @@ export async function carregarHistorico(
       deAcoplado: r.de_acoplado,
       paraAcoplado: r.para_acoplado,
       fornecedor: r.fornecedor,
+      desfeitaEm: r.desfeita_em,
+      desfeitaPorNome: r.desfeita_por_nome,
+      desfeitaMotivo: r.desfeita_motivo,
+      podeDesfazer: r.pode_desfazer === true,
     }),
   );
   return { linhas, erro: null };

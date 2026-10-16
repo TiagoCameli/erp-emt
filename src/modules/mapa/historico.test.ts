@@ -30,6 +30,10 @@ const base: MovimentacaoMapa = {
   deAcoplado: null,
   paraAcoplado: null,
   fornecedor: null,
+  desfeitaEm: null,
+  desfeitaPorNome: null,
+  desfeitaMotivo: null,
+  podeDesfazer: false,
 };
 
 describe("resumirMovimentacao", () => {
