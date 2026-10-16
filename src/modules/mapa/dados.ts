@@ -434,20 +434,23 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       noMapa: o.no_mapa === true,
       pos: posicao(o.lng, o.lat),
     })),
-    tanques: lista(b.tanques).map((t) => ({
-      id: texto(t.id),
-      nome: texto(t.nome),
-      apelido: texto(t.apelido),
-      uso: texto(t.uso),
-      ehExterno: t.eh_externo === true,
-      localidadeId: textoOuNulo(t.localidade_id),
-      equipamentoId: textoOuNulo(t.equipamento_id),
-      pos: posicao(t.lng, t.lat),
-      capacidade: numeroOuNulo(t.capacidade),
-      nivel: numeroOuNulo(t.nivel),
-      unidade: texto(t.unidade) || "L",
-      insumo: texto(t.insumo),
-    })),
+    // Tanque externo (posto de terceiro, ex. Posto Progresso, Transterra Areacre) não é da EMT e
+    // não entra no mapa (pedido do Tiago, 16/10/2026).
+    tanques: lista(b.tanques)
+      .filter((t) => t.eh_externo !== true)
+      .map((t) => ({
+        id: texto(t.id),
+        nome: texto(t.nome),
+        apelido: texto(t.apelido),
+        uso: texto(t.uso),
+        localidadeId: textoOuNulo(t.localidade_id),
+        equipamentoId: textoOuNulo(t.equipamento_id),
+        pos: posicao(t.lng, t.lat),
+        capacidade: numeroOuNulo(t.capacidade),
+        nivel: numeroOuNulo(t.nivel),
+        unidade: texto(t.unidade) || "L",
+        insumo: texto(t.insumo),
+      })),
     depositos: lista(b.depositos).map((d) => ({
       id: texto(d.id),
       nome: texto(d.nome),

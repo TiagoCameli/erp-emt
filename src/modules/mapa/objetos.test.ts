@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   COR_COMBUSTIVEL,
-  COR_EXTERNO,
   COR_MATERIAL,
   corDaPilha,
   dimensoesDaPilha,
@@ -24,7 +23,6 @@ const tanque = (t: Partial<TanqueMapa>): TanqueMapa => ({
   nome: "Tanque",
   apelido: "",
   uso: "combustivel",
-  ehExterno: false,
   localidadeId: null,
   equipamentoId: null,
   pos: null,
@@ -43,7 +41,7 @@ describe("objetos do Estoque no mapa", () => {
       expect(volume).toBeCloseTo(litros, 0);
       expect(altura / diametro).toBeCloseTo(1.5, 5);
     }
-    // sem capacidade (posto externo) desenha como 15 mil L
+    // sem capacidade desenha como 15 mil L
     expect(dimensoesDoTanque(0, "L")).toEqual(dimensoesDoTanque(15000, "L"));
     expect(dimensoesDoTanque(15, "m3").diametro).toBeCloseTo(
       dimensoesDoTanque(15000, "L").diametro,
@@ -91,10 +89,8 @@ describe("objetos do Estoque no mapa", () => {
     expect(formaDoTanque(tanque({ capacidade: 15000, uso: "material" }))).toBe(
       "tanque_vertical",
     );
-    // posto externo sem capacidade desenha como o de 15 mil L, deitado
-    expect(formaDoTanque(tanque({ capacidade: 0, ehExterno: true }))).toBe(
-      "tanque_horizontal",
-    );
+    // sem capacidade desenha como o de 15 mil L, deitado
+    expect(formaDoTanque(tanque({ capacidade: 0 }))).toBe("tanque_horizontal");
   });
 
   it("as medidas do objeto seguem a forma do tanque", () => {
@@ -115,19 +111,13 @@ describe("objetos do Estoque no mapa", () => {
   });
 
   it("cor do tanque pelo uso e da pilha pelo material", () => {
-    const [comb, mat, ext] = objetosDoEstoque(
-      [
-        tanque({ id: "a" }),
-        tanque({ id: "b", uso: "material" }),
-        tanque({ id: "c", ehExterno: true, capacidade: 0 }),
-      ],
+    const [comb, mat] = objetosDoEstoque(
+      [tanque({ id: "a" }), tanque({ id: "b", uso: "material" })],
       [],
       [],
     );
     expect(comb.cor).toEqual(COR_COMBUSTIVEL);
     expect(mat.cor).toEqual(COR_MATERIAL);
-    expect(ext.cor).toEqual(COR_EXTERNO);
-    expect(ext.detalhe).toBe("posto externo");
     expect(corDaPilha("Areia média - Pátio")).not.toEqual(
       corDaPilha("Brita 1 - Pátio"),
     );
@@ -311,14 +301,7 @@ describe("linhas da ficha do objeto", () => {
     ]);
   });
 
-  it("posto externo não tem nível; objeto que sumiu do cadastro não inventa linha", () => {
-    const linhas = linhasDaFicha(
-      { id: "t", alvo: "tanque" },
-      fontes({
-        tanques: [tanque({ id: "t", ehExterno: true, localidadeId: "l1" })],
-      }),
-    );
-    expect(linhas.map((l) => l.rotulo)).toEqual(["Tipo", "Conteúdo", "Local"]);
+  it("objeto que sumiu do cadastro não inventa linha", () => {
     expect(linhasDaFicha({ id: "x", alvo: "pilha" }, fontes({}))).toEqual([]);
   });
 
@@ -351,7 +334,7 @@ describe("linhas da ficha do objeto", () => {
     expect(linhas.find((l) => l.rotulo === "Local")?.valor).toBe("Colorado");
   });
 
-  it("valor do que está dentro só para quem vê a Posição; posto externo não tem valor", () => {
+  it("valor do que está dentro só para quem vê a Posição", () => {
     const valores = new Map([
       ["t", 15234.5],
       ["p", 109912.32],
@@ -370,11 +353,6 @@ describe("linhas da ficha do objeto", () => {
     expect(pilhaComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(
       formatarBRL(109912.32),
     );
-    const externo = linhasDaFicha(
-      { id: "t", alvo: "tanque" },
-      fontes({ tanques: [tanque({ id: "t", ehExterno: true })], valores }),
-    );
-    expect(externo.some((l) => l.rotulo === "Valor")).toBe(false);
     expect(
       linhasDaFicha(
         { id: "t", alvo: "tanque" },

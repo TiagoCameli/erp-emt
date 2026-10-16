@@ -196,6 +196,15 @@ describe("paraEstadoMapa", () => {
           localidade_id: "l1",
           equipamento_id: null,
         },
+        {
+          id: "t2",
+          nome: "Posto Progresso",
+          apelido: null,
+          uso: "combustivel",
+          eh_externo: true,
+          localidade_id: null,
+          equipamento_id: null,
+        },
       ],
       depositos: [
         { id: "d1", nome: "Almoxarifado Central", localidade_id: null },
@@ -220,6 +229,8 @@ describe("paraEstadoMapa", () => {
       pos: [-72.7, -7.63],
     });
     expect(estado.obras[1].pos).toBeNull();
+    // Tanque externo (posto de terceiro) não entra no mapa.
+    expect(estado.tanques.map((t) => t.id)).toEqual(["t1"]);
     expect(estado.tanques[0].localidadeId).toBe("l1");
     expect(estado.tanques[0].apelido).toBe("");
     expect(estado.depositos[0].localidadeId).toBeNull();
@@ -294,7 +305,6 @@ describe("paraEstadoMapa", () => {
       nome: id,
       apelido: "",
       uso: "combustivel",
-      ehExterno: false,
       localidadeId,
       equipamentoId,
       pos: null,
@@ -418,7 +428,12 @@ describe("schemas das actions", () => {
   });
 
   it("marcar estado recusa estado fora da lista, inclusive em rota (vem do Frete desde a v1.19)", () => {
-    for (const estado of ["sem_posicao", "em_rota", "em_frete", "em_deslocamento"])
+    for (const estado of [
+      "sem_posicao",
+      "em_rota",
+      "em_frete",
+      "em_deslocamento",
+    ])
       expect(
         marcarEstadoSchema.safeParse({
           id: "c4e0f922-3aec-8c72-7089-225523e04557",
