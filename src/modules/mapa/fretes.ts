@@ -64,15 +64,25 @@ export function pontoNaRota(
 }
 
 /**
- * A marcação da ficha feita depois da saída do frete, em outro estado que não "Em rota", vence o
- * frete (16/10/2026: "marco as carretas em rota como operando e nada acontece"). Quem marca
- * operando sabe que a carreta chegou, mesmo sem a chegada lançada no Frete.
+ * A marcação da ficha feita depois da saída do frete vence o frete quando tira a carreta da
+ * estrada: parado, quebrado na obra ou em conserto. Operando NÃO vence (Tiago, 16/10/2026:
+ * "carreta operando quer dizer que está em rota"), e em rota é o próprio frete.
  */
+const ESTADOS_QUE_TIRAM_DA_ROTA: ReadonlySet<string> = new Set([
+  "parado",
+  "quebrado_obra",
+  "conserto",
+]);
+
 export function marcacaoVenceFrete(
   e: Pick<EquipamentoMapa, "estadoMarcado" | "estadoDesde">,
   f: Pick<FreteEmRota, "criadoEm">,
 ): boolean {
-  if (!e.estadoMarcado || e.estadoMarcado === "em_rota" || !e.estadoDesde)
+  if (
+    !e.estadoMarcado ||
+    !ESTADOS_QUE_TIRAM_DA_ROTA.has(e.estadoMarcado) ||
+    !e.estadoDesde
+  )
     return false;
   const marcada = Date.parse(e.estadoDesde);
   const saida = Date.parse(f.criadoEm);

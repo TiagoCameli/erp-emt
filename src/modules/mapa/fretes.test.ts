@@ -95,7 +95,7 @@ describe("carreta em rota pelo Frete", () => {
   });
 
   describe("marcação da ficha depois da saída vence o frete (16/10/2026)", () => {
-    // Caso real: CS-003 sem posição, frete criado 13:30 UTC, marcada operando 15:49 UTC.
+    // CS-003 sem posição, frete criado 13:30 UTC, marcada parada 15:49 UTC.
     const cs3 = {
       id: "cs3",
       pos: null,
@@ -103,15 +103,15 @@ describe("carreta em rota pelo Frete", () => {
       rumoManual: null,
       fontePosicao: "manual",
       estado: "sem_posicao",
-      estadoMarcado: "operando",
+      estadoMarcado: "parado",
       estadoDesde: "2026-10-16T15:49:20Z",
     } as unknown as EquipamentoMapa;
     const agora = Date.parse("2026-10-16T16:00:00Z");
 
-    it("sem posição própria, fica operando no destino do frete e a rota some", () => {
+    it("sem posição própria, fica parada no destino do frete e a rota some", () => {
       const r = aplicarFretes([cs3], [frete({})], agora);
       const [e] = r.equipamentos;
-      expect(e.estado).toBe("operando");
+      expect(e.estado).toBe("parado");
       expect(e.pos).toEqual([-67, -9]);
       expect(e.fontePosicao).toBe("manual");
       expect(r.freteDe.has("cs3")).toBe(false);
@@ -122,7 +122,7 @@ describe("carreta em rota pelo Frete", () => {
       const comPos = {
         ...cs3,
         pos: [-72, -7.9],
-        estado: "operando",
+        estado: "parado",
       } as EquipamentoMapa;
       const [e] = aplicarFretes([comPos], [frete({})], agora).equipamentos;
       expect(e).toBe(comPos);
@@ -139,8 +139,10 @@ describe("carreta em rota pelo Frete", () => {
       expect(r.fretesVencidos.size).toBe(0);
     });
 
-    it("marcar em rota não vence o frete, nem a RPC antiga sem o estado marcado", () => {
-      for (const estadoMarcado of ["em_rota", null]) {
+    it("operando, em rota ou RPC antiga sem o estado marcado não vencem: segue em rota", () => {
+      // Caso real: CS-003/004/005 marcadas operando 15:49 UTC com frete aberto. Carreta operando
+      // é carreta rodando (Tiago, 16/10/2026).
+      for (const estadoMarcado of ["operando", "em_rota", null]) {
         const e = { ...cs3, estadoMarcado } as EquipamentoMapa;
         const r = aplicarFretes([e], [frete({})], agora);
         expect(r.equipamentos[0].estado).toBe("em_rota");
