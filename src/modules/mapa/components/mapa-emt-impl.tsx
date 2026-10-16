@@ -393,6 +393,9 @@ async function criarMotorGoogle(
     disableDefaultUI: true,
     zoomControl: true,
     fullscreenControl: false,
+    // Desliga os atalhos de teclado do Google (setas, +/-) e com eles o link "Atalhos do teclado"
+    // da barra de baixo; no mapa se navega com o mouse e o toque.
+    keyboardShortcuts: false,
     isFractionalZoomEnabled: true,
     maxZoom: ZOOM_MAXIMO,
     minZoom: ZOOM_MINIMO,

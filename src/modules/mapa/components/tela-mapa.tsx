@@ -1874,7 +1874,11 @@ export function TelaMapa({
         }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
-        <div className="relative h-[48dvh] shrink-0 overflow-hidden rounded-lg border border-border md:h-auto md:min-h-0 md:flex-1">
+        {/* O motor do mapa fica só no atributo, para conferir em produção sem poluir a tela. */}
+        <div
+          className="relative h-[48dvh] shrink-0 overflow-hidden rounded-lg border border-border md:h-auto md:min-h-0 md:flex-1"
+          data-motor={motor ? ROTULO_MOTOR[motor.tipo] : undefined}
+        >
           <MapaEmt
             google={google}
             cena={cena}
@@ -2139,15 +2143,6 @@ export function TelaMapa({
                   Cancelar
                 </Button>
               </div>
-            </div>
-          ) : null}
-          {/* No canto de cima para não cobrir o logo nem a atribuição do Google (ficam embaixo). */}
-          {motor ? (
-            <div
-              className="pointer-events-none absolute top-11 right-2 max-w-[60%] truncate rounded-md bg-background/90 px-2 py-0.5 text-legenda text-muted-foreground backdrop-blur"
-              title={motor.aviso ?? undefined}
-            >
-              {ROTULO_MOTOR[motor.tipo]}
             </div>
           ) : null}
         </div>
