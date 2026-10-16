@@ -3,7 +3,10 @@
 import * as React from "react";
 import { Move, X } from "lucide-react";
 
+import { InputQuantidade } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { CASAS_TAXA } from "@/lib/casas-decimais";
+import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
 import type { LinhaFicha, ObjetoMapa } from "@/modules/mapa/objetos";
 
 /**
@@ -11,7 +14,100 @@ import type { LinhaFicha, ObjetoMapa } from "@/modules/mapa/objetos";
  * o que é, o que o cadastro diz dele (material e saldo da pilha, conteúdo e nível do tanque, local)
  * e "Mover no mapa" (ou "Pôr no mapa", quando ainda não tem lugar). O cadastro continua no
  * Estoque.
+ *
+ * Depósito: "Tamanho no mapa" (16/10/2026, "deixa eu poder escolher o tamanho dele"), em metros e
+ * em tamanho real.
  */
+
+export interface TamanhoDeposito {
+  largura: number;
+  comprimento: number;
+  altura: number;
+}
+
+/** "12,5" para 12.5; vazio ou inválido, null. */
+function metros(texto: string): number | null {
+  const n = normalizarNumeroDigitado(texto, CASAS_TAXA);
+  return n === null ? null : Number(n.replace(",", "."));
+}
+
+const paraTexto = (n: number) => String(n).replace(".", ",");
+
+function TamanhoNoMapa({
+  objeto,
+  onSalvar,
+}: {
+  objeto: ObjetoMapa;
+  onSalvar: (t: TamanhoDeposito) => Promise<boolean>;
+}) {
+  const [largura, setLargura] = React.useState(paraTexto(objeto.largura));
+  const [comprimento, setComprimento] = React.useState(
+    paraTexto(objeto.comprimento),
+  );
+  const [altura, setAltura] = React.useState(paraTexto(objeto.altura));
+  const [salvando, setSalvando] = React.useState(false);
+  const t = {
+    largura: metros(largura),
+    comprimento: metros(comprimento),
+    altura: metros(altura),
+  };
+  const valido =
+    t.largura !== null &&
+    t.largura > 0 &&
+    t.comprimento !== null &&
+    t.comprimento > 0 &&
+    t.altura !== null &&
+    t.altura > 0;
+  const mudou =
+    t.largura !== objeto.largura ||
+    t.comprimento !== objeto.comprimento ||
+    t.altura !== objeto.altura;
+  const campos: [string, string, (v: string) => void][] = [
+    ["Largura", largura, setLargura],
+    ["Comprimento", comprimento, setComprimento],
+    ["Altura", altura, setAltura],
+  ];
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-legenda font-medium text-muted-foreground">
+        Tamanho no mapa (m)
+      </span>
+      <div className="grid grid-cols-3 gap-2">
+        {campos.map(([rotulo, valor, mudar]) => (
+          <label key={rotulo} className="flex flex-col gap-1 text-legenda">
+            <span className="text-muted-foreground">{rotulo}</span>
+            <InputQuantidade
+              valor={valor}
+              onValorChange={mudar}
+              disabled={salvando}
+              ariaLabel={`${rotulo} do depósito em metros`}
+            />
+          </label>
+        ))}
+      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={!valido || !mudou || salvando}
+        onClick={async () => {
+          if (!valido) return;
+          setSalvando(true);
+          try {
+            await onSalvar({
+              largura: t.largura!,
+              comprimento: t.comprimento!,
+              altura: t.altura!,
+            });
+          } finally {
+            setSalvando(false);
+          }
+        }}
+      >
+        Salvar tamanho
+      </Button>
+    </div>
+  );
+}
 
 const ROTULO_ALVO: Record<ObjetoMapa["alvo"], string> = {
   tanque: "Tanque",
@@ -25,12 +121,14 @@ export function FichaObjeto({
   podeEditar,
   onFechar,
   onMover,
+  onSalvarTamanho,
 }: {
   objeto: ObjetoMapa;
   linhas: LinhaFicha[];
   podeEditar: boolean;
   onFechar: () => void;
   onMover: () => void;
+  onSalvarTamanho: (t: TamanhoDeposito) => Promise<boolean>;
 }) {
   return (
     <section
@@ -74,6 +172,9 @@ export function FichaObjeto({
           Ainda sem lugar no mapa.
         </p>
       )}
+      {podeEditar && objeto.alvo === "deposito" ? (
+        <TamanhoNoMapa objeto={objeto} onSalvar={onSalvarTamanho} />
+      ) : null}
       {podeEditar ? (
         <Button type="button" size="sm" variant="outline" onClick={onMover}>
           <Move />

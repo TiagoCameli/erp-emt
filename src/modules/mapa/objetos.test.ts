@@ -11,6 +11,7 @@ import {
   formaDoTanque,
   linhasDaFicha,
   objetosDoEstoque,
+  TAMANHO_DEPOSITO_PADRAO,
   textoSaldoPilha,
   volumeDaPilha,
   type FontesFicha,
@@ -52,7 +53,10 @@ describe("objetos do Estoque no mapa", () => {
 
   it("o volume do tanque deitado, com os tampos elípticos, bate com a capacidade", () => {
     for (const litros of [4000, 15000, 30000]) {
-      const { diametro: d, comprimento } = dimensoesDoTanqueHorizontal(litros, "L");
+      const { diametro: d, comprimento } = dimensoesDoTanqueHorizontal(
+        litros,
+        "L",
+      );
       const r = d / 2;
       const tampo = d / 4;
       const costado = comprimento - 2 * tampo;
@@ -69,16 +73,24 @@ describe("objetos do Estoque no mapa", () => {
   });
 
   it("diesel e ARLA de obra deitam; material e tanque grande ficam em pé", () => {
-    expect(formaDoTanque(tanque({ capacidade: 15000 }))).toBe("tanque_horizontal");
-    expect(formaDoTanque(tanque({ capacidade: 4000 }))).toBe("tanque_horizontal");
-    expect(formaDoTanque(tanque({ capacidade: 30000 }))).toBe("tanque_horizontal");
-    expect(formaDoTanque(tanque({ capacidade: 30001 }))).toBe("tanque_vertical");
+    expect(formaDoTanque(tanque({ capacidade: 15000 }))).toBe(
+      "tanque_horizontal",
+    );
+    expect(formaDoTanque(tanque({ capacidade: 4000 }))).toBe(
+      "tanque_horizontal",
+    );
+    expect(formaDoTanque(tanque({ capacidade: 30000 }))).toBe(
+      "tanque_horizontal",
+    );
+    expect(formaDoTanque(tanque({ capacidade: 30001 }))).toBe(
+      "tanque_vertical",
+    );
     expect(formaDoTanque(tanque({ capacidade: 60, unidade: "m3" }))).toBe(
       "tanque_vertical",
     );
-    expect(
-      formaDoTanque(tanque({ capacidade: 15000, uso: "material" })),
-    ).toBe("tanque_vertical");
+    expect(formaDoTanque(tanque({ capacidade: 15000, uso: "material" }))).toBe(
+      "tanque_vertical",
+    );
     // posto externo sem capacidade desenha como o de 15 mil L, deitado
     expect(formaDoTanque(tanque({ capacidade: 0, ehExterno: true }))).toBe(
       "tanque_horizontal",
@@ -137,7 +149,17 @@ describe("objetos do Estoque no mapa", () => {
           pos: null,
         },
       ],
-      [{ id: "d1", nome: "Almoxarifado", localidadeId: null, pos: null }],
+      [
+        {
+          id: "d1",
+          nome: "Almoxarifado",
+          localidadeId: null,
+          pos: null,
+          larguraM: null,
+          comprimentoM: null,
+          alturaM: null,
+        },
+      ],
     );
     expect(objetos.map((o) => [o.alvo, o.forma])).toEqual([
       ["tanque", "tanque_horizontal"],
@@ -146,6 +168,35 @@ describe("objetos do Estoque no mapa", () => {
     ]);
     expect(objetos[0].detalhe).toBe("tanque · 15.000 L · Diesel S10");
     expect(objetos.filter((o) => o.pos === null)).toHaveLength(2);
+  });
+});
+
+describe("tamanho do depósito (16/10/2026)", () => {
+  const deposito = {
+    id: "d1",
+    nome: "Almoxarifado Central",
+    localidadeId: null,
+    pos: [-72.7, -7.6] as [number, number],
+  };
+  it("sem tamanho escolhido, o padrão em metros", () => {
+    const [d] = objetosDoEstoque(
+      [],
+      [],
+      [{ ...deposito, larguraM: null, comprimentoM: null, alturaM: null }],
+    );
+    expect([d.largura, d.comprimento, d.altura]).toEqual([
+      TAMANHO_DEPOSITO_PADRAO.largura,
+      TAMANHO_DEPOSITO_PADRAO.comprimento,
+      TAMANHO_DEPOSITO_PADRAO.altura,
+    ]);
+  });
+  it("com tamanho escolhido na ficha, o escolhido", () => {
+    const [d] = objetosDoEstoque(
+      [],
+      [],
+      [{ ...deposito, larguraM: 4, comprimentoM: 6.5, alturaM: 3 }],
+    );
+    expect([d.largura, d.comprimento, d.altura]).toEqual([4, 6.5, 3]);
   });
 });
 
@@ -191,7 +242,12 @@ const pilha = (p: Partial<PilhaMapa>): PilhaMapa => ({
 // Posições reais (16/10): Usina Gregorio tem raio de 110 m; Colorado não tem raio (vale o padrão).
 const GREGORIO: [number, number] = [-71.4914, -7.9517];
 const COLORADO: [number, number] = [-72.6, -7.6];
-const local = (id: string, nome: string, pos: [number, number], raioM: number | null) => ({
+const local = (
+  id: string,
+  nome: string,
+  pos: [number, number],
+  raioM: number | null,
+) => ({
   id,
   nome,
   tipo: "patio",
@@ -205,7 +261,10 @@ const fontes = (f: Partial<FontesFicha>): FontesFicha => ({
   tanques: [],
   pilhas: [],
   depositos: [],
-  localidades: [local("l1", "Usina Gregorio", GREGORIO, 110), local("l2", "Colorado", COLORADO, null)],
+  localidades: [
+    local("l1", "Usina Gregorio", GREGORIO, 110),
+    local("l2", "Colorado", COLORADO, null),
+  ],
   equipamentos: [{ id: "e1", codigo: "CB-001" }],
   snapLocalM: 300,
   valores: null,
@@ -262,15 +321,20 @@ describe("linhas da ficha do objeto", () => {
   });
 
   const localDaFicha = (pos: [number, number] | null) =>
-    linhasDaFicha({ id: "t", alvo: "tanque" }, fontes({ tanques: [tanque({ id: "t", pos })] })).find(
-      (l) => l.rotulo === "Local",
-    )?.valor;
+    linhasDaFicha(
+      { id: "t", alvo: "tanque" },
+      fontes({ tanques: [tanque({ id: "t", pos })] }),
+    ).find((l) => l.rotulo === "Local")?.valor;
 
   it("tanque sem local cadastrado pega o local de onde está no mapa", () => {
     // 17 m da Usina Gregorio (Tanque Canteiro 2): dentro do raio de 110 m.
-    expect(localDaFicha([GREGORIO[0] + 0.00015, GREGORIO[1]])).toBe("Usina Gregorio");
+    expect(localDaFicha([GREGORIO[0] + 0.00015, GREGORIO[1]])).toBe(
+      "Usina Gregorio",
+    );
     // ~370 m do Colorado, fora dos 300 m padrão: diz "perto de", não que está dentro.
-    expect(localDaFicha([COLORADO[0] + 0.00336, COLORADO[1]])).toBe("perto de Colorado (370 m)");
+    expect(localDaFicha([COLORADO[0] + 0.00336, COLORADO[1]])).toBe(
+      "perto de Colorado (370 m)",
+    );
     expect(localDaFicha([-70, -9])).toBe("fora de um local");
     expect(localDaFicha(null)).toBe("sem lugar no mapa");
   });
@@ -278,7 +342,9 @@ describe("linhas da ficha do objeto", () => {
   it("o local cadastrado manda sobre o lugar no mapa", () => {
     const linhas = linhasDaFicha(
       { id: "t", alvo: "tanque" },
-      fontes({ tanques: [tanque({ id: "t", localidadeId: "l2", pos: GREGORIO })] }),
+      fontes({
+        tanques: [tanque({ id: "t", localidadeId: "l2", pos: GREGORIO })],
+      }),
     );
     expect(linhas.find((l) => l.rotulo === "Local")?.valor).toBe("Colorado");
   });
@@ -292,20 +358,27 @@ describe("linhas da ficha do objeto", () => {
       { id: "t", alvo: "tanque" },
       fontes({ tanques: [tanque({ id: "t", pos: GREGORIO })], valores }),
     );
-    expect(tanqueComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(formatarBRL(15234.5));
+    expect(tanqueComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(
+      formatarBRL(15234.5),
+    );
     const pilhaComValor = linhasDaFicha(
       { id: "p", alvo: "pilha" },
       fontes({ pilhas: [pilha({ saldo: 282, totalEntrada: 282 })], valores }),
     );
-    expect(pilhaComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(formatarBRL(109912.32));
+    expect(pilhaComValor.find((l) => l.rotulo === "Valor")?.valor).toBe(
+      formatarBRL(109912.32),
+    );
     const externo = linhasDaFicha(
       { id: "t", alvo: "tanque" },
       fontes({ tanques: [tanque({ id: "t", ehExterno: true })], valores }),
     );
     expect(externo.some((l) => l.rotulo === "Valor")).toBe(false);
-    expect(linhasDaFicha({ id: "t", alvo: "tanque" }, fontes({ tanques: [tanque({ id: "t" })] })).some(
-      (l) => l.rotulo === "Valor",
-    )).toBe(false);
+    expect(
+      linhasDaFicha(
+        { id: "t", alvo: "tanque" },
+        fontes({ tanques: [tanque({ id: "t" })] }),
+      ).some((l) => l.rotulo === "Valor"),
+    ).toBe(false);
   });
 });
 

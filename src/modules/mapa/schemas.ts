@@ -337,3 +337,21 @@ export const posicionarObjetoSchema = z.strictObject({
   lat: latitudeSchema,
 });
 export type PosicionarObjetoInput = z.infer<typeof posicionarObjetoSchema>;
+
+/** Tamanho do depósito no mapa, em metros (os mesmos limites do banco). */
+export const tamanhoDepositoSchema = z.strictObject({
+  id: idSchemaCom("Depósito inválido"),
+  largura: z
+    .number({ error: "Informe a largura" })
+    .positive({ error: "A largura precisa ser maior que zero" })
+    .max(500, { error: "Largura até 500 m" }),
+  comprimento: z
+    .number({ error: "Informe o comprimento" })
+    .positive({ error: "O comprimento precisa ser maior que zero" })
+    .max(500, { error: "Comprimento até 500 m" }),
+  altura: z
+    .number({ error: "Informe a altura" })
+    .positive({ error: "A altura precisa ser maior que zero" })
+    .max(100, { error: "Altura até 100 m" }),
+});
+export type TamanhoDepositoInput = z.infer<typeof tamanhoDepositoSchema>;

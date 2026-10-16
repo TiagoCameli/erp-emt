@@ -21,6 +21,7 @@ import {
   moverEquipamentosSchema,
   moverPessoasSchema,
   posicionarObjetoSchema,
+  tamanhoDepositoSchema,
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
@@ -647,6 +648,40 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Tamanho do depósito no mapa (largura, comprimento e altura em metros), escolhido na ficha. */
+export async function definirTamanhoDeposito(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = tamanhoDepositoSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_deposito_tamanho", {
+      p_id: v.id,
+      p_largura: v.largura,
+      p_comprimento: v.comprimento,
+      p_altura: v.altura,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.depositoTamanho",
+        error,
+        mensagemDaRpc(error, "Não foi possível mudar o tamanho do depósito"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.depositoTamanho",
+      erro,
+      `Não foi possível mudar o tamanho do depósito: ${textoDoErro(erro)}`,
     );
   }
 }

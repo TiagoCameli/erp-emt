@@ -198,6 +198,14 @@ describe("paraEstadoMapa", () => {
       ],
       depositos: [
         { id: "d1", nome: "Almoxarifado Central", localidade_id: null },
+        {
+          id: "d2",
+          nome: "Depósito Gregório",
+          localidade_id: null,
+          largura_m: "4.0",
+          comprimento_m: 6.5,
+          altura_m: 3,
+        },
       ],
       localidades_sem_posicao: [{ id: "l9", nome: "Escola", tipo: "canteiro" }],
     });
@@ -214,6 +222,13 @@ describe("paraEstadoMapa", () => {
     expect(estado.tanques[0].localidadeId).toBe("l1");
     expect(estado.tanques[0].apelido).toBe("");
     expect(estado.depositos[0].localidadeId).toBeNull();
+    // Sem a chave (RPC antiga) o tamanho é nulo e a tela usa o padrão; com ela, número.
+    expect(estado.depositos[0].larguraM).toBeNull();
+    expect(estado.depositos[1]).toMatchObject({
+      larguraM: 4,
+      comprimentoM: 6.5,
+      alturaM: 3,
+    });
     expect(estado.localidadesSemPosicao).toEqual([
       { id: "l9", nome: "Escola", tipo: "canteiro", tipos: ["canteiro"] },
     ]);
