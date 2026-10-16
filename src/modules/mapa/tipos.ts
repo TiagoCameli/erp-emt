@@ -81,6 +81,11 @@ export interface EquipamentoMapa {
   /** "frete": em rota por um frete aberto; a posição é estimada no traçado (fretes.ts). */
   fontePosicao: "manual" | "gps" | "frete";
   estado: EstadoEfetivo;
+  /**
+   * O estado marcado na ficha (`mapa_equipamentos.estado`), antes do cadastro e da falta de posição
+   * entrarem no efetivo. É o que diz que a carreta sem posição foi marcada operando.
+   */
+  estadoMarcado: EstadoMaquina | null;
   estadoDesde: string | null;
   diasNoEstado: number | null;
   obraId: string | null;
