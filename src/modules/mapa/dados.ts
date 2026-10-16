@@ -474,6 +474,12 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
     })),
     fretesEmRota: lista(b.fretes_em_rota).map(frete),
     carretasRetorno: lista(b.carretas_retorno).map(retorno),
+    implementos: lista(b.implementos).map((i) => ({
+      id: texto(i.id),
+      codigo: texto(i.codigo),
+      descricao: texto(i.descricao),
+      acopladoEm: textoOuNulo(i.acoplado_em),
+    })),
   };
 }
 

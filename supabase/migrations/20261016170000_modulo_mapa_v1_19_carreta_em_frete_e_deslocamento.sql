@@ -84,6 +84,12 @@ declare
             and regexp_replace(upper(coalesce(e.placa, '') || ' ' || coalesce(e.descricao, '')), '[^A-Z0-9]', '', 'g')
                 like '%' || regexp_replace(upper(f.placa_carreta), '[^A-Z0-9]', '', 'g') || '%')$t$;
 begin
+  -- A v1.19 do implemento acoplado (20261016160000) refez a função a partir da viva já com esta
+  -- parte: reaplicada em sequência, esta migration encontra tudo pronto e não mexe.
+  if position('carretas_retorno' in v_def) > 0 and position('''marcado_em''' in v_def) > 0 then
+    raise notice 'fn_mapa_estado já tem carretas_retorno e marcado_em; nada a fazer';
+    return;
+  end if;
   if (length(v_def) - length(replace(v_def, v_marcado, ''))) / length(v_marcado) <> 1 then
     raise exception 'fn_mapa_estado sem o estado marcado esperado; nada alterado';
   end if;

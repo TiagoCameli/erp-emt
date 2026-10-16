@@ -11535,6 +11535,10 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_mapa_acoplar_implemento: {
+        Args: { p_implemento: string; p_equipamento: string | null };
+        Returns: undefined;
+      };
       fn_mapa_deposito_tamanho: {
         Args: {
           p_id: string;

@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
+  acoplarImplemento,
   ajustarRaioLocal,
   assinalarOperador,
   colocarLocal,
@@ -1319,6 +1320,31 @@ export function TelaMapa({
     [equipamentoFicha, aplicar],
   );
 
+  const acoplar = React.useCallback(
+    async (implementoId: string, acoplarNela: boolean) => {
+      if (!equipamentoFicha) return;
+      const codigo =
+        estado.implementos.find((i) => i.id === implementoId)?.codigo ??
+        "Implemento";
+      setSalvando(true);
+      try {
+        const r = await acoplarImplemento({
+          implementoId,
+          equipamentoId: acoplarNela ? equipamentoFicha.id : null,
+        });
+        aplicar(
+          r,
+          acoplarNela
+            ? `${codigo} acoplado em ${equipamentoFicha.codigo}`
+            : `${codigo} desacoplado de ${equipamentoFicha.codigo}`,
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [equipamentoFicha, estado.implementos, aplicar],
+  );
+
   const confirmarEncerramento = React.useCallback(
     async (motivo?: string) => {
       if (!encerrando) return true;
@@ -1516,6 +1542,8 @@ export function TelaMapa({
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
       onAssinalarOperador={assinalar}
+      implementos={estado.implementos}
+      onAcoplar={acoplar}
       onEncerrarLocacao={() => {
         setFimLocacao(estado.hoje);
         setEncerrando(equipamentoFicha);
