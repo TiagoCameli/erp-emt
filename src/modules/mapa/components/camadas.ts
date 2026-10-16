@@ -196,11 +196,19 @@ export function orientacao(heading: number): [number, number, number] {
   return [0, -heading, 0];
 }
 
+/**
+ * Arquivo do modelo com a versão na URL (`?v=`): trocar o .glb e subir `mapa_modelos_3d.versao`
+ * faz o navegador baixar o novo em vez de usar o que guardou (16/10/2026, trator de esteira).
+ */
 export function arquivoDoModelo(
   modelos: ReadonlyMap<string, Modelo3d>,
   chave: string,
 ): string {
-  return modelos.get(chave)?.arquivo || ARQUIVO_GENERICO;
+  const modelo = modelos.get(chave);
+  if (!modelo?.arquivo) return ARQUIVO_GENERICO;
+  return modelo.versao > 1
+    ? `${modelo.arquivo}?v=${modelo.versao}`
+    : modelo.arquivo;
 }
 
 function posicaoDe(
