@@ -21,6 +21,7 @@ import {
   formatarQuantidade,
 } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { CentrosEquipamento } from "@/modules/mapa/components/centros-equipamento";
 import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipamento";
 import { textoDesde } from "@/modules/mapa/desde";
 import { formatarKm } from "@/modules/mapa/geo";
@@ -72,6 +73,8 @@ export interface FichaEquipamentoProps {
   onTransferirParaObra?: () => void;
   /** Link para o histórico de movimentações desta máquina (quem pode ver). */
   historicoHref?: string | null;
+  /** Relatório mensal de dias por centro de custo (quem pode ver os relatórios do Mapa). */
+  relatorioCentrosHref?: string | null;
   onMarcarEstado: (estado: EstadoMaquina) => void;
   onAssinalarOperador: (colaboradorId: string | null) => void;
   onEncerrarLocacao: () => void;
@@ -115,6 +118,7 @@ export function FichaEquipamento({
   onPosicionar,
   onTransferirParaObra,
   historicoHref = null,
+  relatorioCentrosHref = null,
   onMarcarEstado,
   onAssinalarOperador,
   onEncerrarLocacao,
@@ -406,6 +410,13 @@ export function FichaEquipamento({
         key={e.id}
         equipamentoId={e.id}
         propria={e.propriedade === "propria"}
+      />
+
+      <CentrosEquipamento
+        key={`centros-${e.id}`}
+        equipamentoId={e.id}
+        podeEditar={podeEditar}
+        relatorioHref={relatorioCentrosHref}
       />
 
       {acoplados.length > 0 || (podeEditar && opcoesImplemento.length > 0) ? (

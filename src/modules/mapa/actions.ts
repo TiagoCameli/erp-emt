@@ -10,6 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 import { carregarEstadoMapa } from "@/modules/mapa/queries";
 import { paraFichaNumeros } from "@/modules/mapa/dados";
 import {
+  paraCentrosEquipamento,
+  type CentrosEquipamento,
+} from "@/modules/mapa/centros";
+import {
   assinalarOperadorSchema,
   colocarLocalSchema,
   desenharObraSchema,
@@ -29,6 +33,7 @@ import {
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
+  variosCentrosSchema,
   vincularLocalSchema,
 } from "@/modules/mapa/schemas";
 import type { EstadoMapa, FichaNumeros } from "@/modules/mapa/tipos";
@@ -740,6 +745,74 @@ export async function carregarFichaEquipamento(
       "mapa.fichaEquipamento",
       erro,
       `Não foi possível carregar os números da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Centro de custo da máquina na ficha: o de agora, os dias do mês e os períodos. Pede só ver. */
+export async function carregarCentrosEquipamento(
+  equipamentoId: string,
+): Promise<{ ok: true; centros: CentrosEquipamento } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.mapa", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver o Mapa" };
+  }
+  const id = idSchemaCom("Equipamento inválido").safeParse(equipamentoId);
+  if (!id.success) return { erro: "Equipamento inválido" };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_mapa_centros_equipamento", {
+      p_id: id.data,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.centrosEquipamento",
+        error,
+        mensagemDaRpc(error, "Não foi possível carregar os centros de custo da máquina"),
+      );
+    const centros = paraCentrosEquipamento(data);
+    if (!centros) return { erro: "Resposta inesperada ao carregar os centros de custo" };
+    return { ok: true, centros };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.centrosEquipamento",
+      erro,
+      `Não foi possível carregar os centros de custo da máquina: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Liga ou desliga "atende vários centros". Não relê o mapa: a marca não muda o desenho, só o
+ * centro dos dias; a ficha recarrega o próprio bloco.
+ */
+export async function marcarVariosCentros(
+  dados: unknown,
+): Promise<{ ok: true } | { erro: string }> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = variosCentrosSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_marcar_varios_centros", {
+      p_id: validado.data.equipamentoId,
+      p_valor: validado.data.valor,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.variosCentros",
+        error,
+        mensagemDaRpc(error, "Não foi possível gravar a marca de vários centros"),
+      );
+    return { ok: true };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.variosCentros",
+      erro,
+      `Não foi possível gravar a marca de vários centros: ${textoDoErro(erro)}`,
     );
   }
 }
