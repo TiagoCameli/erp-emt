@@ -15,14 +15,15 @@ export const ESTADOS_MAQUINA = [
   "em_rota",
   "quebrado_obra",
   "conserto",
+  "fora_funcionamento",
 ] as const;
 export type EstadoMaquina = (typeof ESTADOS_MAQUINA)[number];
 
-/** O que a view devolve em `estado_efetivo`: os cinco acima mais os dois que o cadastro impõe. */
-export type EstadoEfetivo =
-  | EstadoMaquina
-  | "sem_posicao"
-  | "fora_funcionamento";
+/**
+ * O que a view devolve em `estado_efetivo`: os de cima mais o sem posição. Fora de funcionamento
+ * também vem quando o cadastro impõe (equipamentos.status), sem ninguém ter marcado no mapa.
+ */
+export type EstadoEfetivo = EstadoMaquina | "sem_posicao";
 
 export const ROTULO_ESTADO: Record<EstadoEfetivo, string> = {
   operando: "Operando",

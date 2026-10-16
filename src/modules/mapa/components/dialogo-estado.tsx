@@ -15,8 +15,8 @@ import {
 /**
  * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra
  * quer a descrição do defeito; conserto quer a previsão (a máquina fica onde está: só a
- * transferência a leva para outro lugar); em rota
- * quer o trajeto (de onde, para onde, com o quê). Operando e parado só pedem o motivo.
+ * transferência a leva para outro lugar); em rota quer o trajeto (de onde, para onde, com
+ * o quê); fora de funcionamento quer o motivo. Operando e parado só pedem o motivo, sem obrigar.
  * Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  */
 
@@ -46,6 +46,8 @@ const DESCRICAO: Record<EstadoMaquina, string> = {
     "Quebrada na frente, aguardando a manutenção. Descreva o defeito para a OS.",
   conserto:
     "Fica onde está no mapa. Para levar a máquina a outro lugar, use a transferência.",
+  fora_funcionamento:
+    "Parada de vez, sem previsão de voltar a trabalhar. Fica no lugar onde está.",
 };
 
 export function DialogoEstado({
@@ -66,7 +68,10 @@ export function DialogoEstado({
 
   const { equipamento, estado } = pedido;
   const exigeMotivo =
-    estado === "quebrado_obra" || estado === "conserto" || estado === "em_rota";
+    estado === "quebrado_obra" ||
+    estado === "conserto" ||
+    estado === "em_rota" ||
+    estado === "fora_funcionamento";
 
   return (
     <ConfirmDialog
