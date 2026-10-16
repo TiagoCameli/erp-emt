@@ -8,7 +8,9 @@ import { mensagemDeNegocio } from "@/lib/erros-banco";
 import { idSchema } from "@/lib/id";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import { listarCentrosCusto, type CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { traduzErroExclusao } from "@/modules/cadastros/_shared/exclusao";
+import { codificarLocal } from "@/modules/estoque/calculo";
 import { traduzirErroEstoque } from "@/modules/estoque/erros";
 import { pilhaSchema, type PilhaInput } from "@/modules/estoque/pilhas/schemas";
 import { enderecoParaColocar } from "@/modules/mapa/colocar-na-criacao";
@@ -137,5 +139,67 @@ export async function excluirPilha(id: string, motivo: string): Promise<Resultad
 
     revalidar();
     return { ok: true };
+  });
+}
+
+/** O que o Mapa precisa para abrir a entrada avulsa ou a saída já na pilha tocada. */
+export type DadosMovimentoPilha =
+  | {
+      ok: true;
+      /** `codificarLocal("pilha", id)`. */
+      local: string;
+      nome: string;
+      insumo: { id: string; nome: string; unidade: string | null };
+      saldo: number;
+      /** Só para quem registra saída; vazio para quem só dá entrada. */
+      centros: CentroCustoOpcao[];
+    }
+  | { erro: string };
+
+async function temAcaoEm(recurso: "estoque.entradas" | "estoque.saidas"): Promise<boolean> {
+  try {
+    await exigirPermissao(recurso, "criar");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Carregado ao clicar no card da pilha no Mapa, não junto com o Mapa: a tela já é pesada e os
+ * centros de custo só interessam a quem registra a saída. Quem decide é a action de salvar.
+ */
+export async function carregarMovimentoDaPilha(id: string): Promise<DadosMovimentoPilha> {
+  return semLancar("estoque.pilhas.movimento", async (): Promise<DadosMovimentoPilha> => {
+    const [entrada, saida] = await Promise.all([temAcaoEm("estoque.entradas"), temAcaoEm("estoque.saidas")]);
+    if (!entrada && !saida) return { erro: "Sem permissão para registrar entrada ou saída" };
+    const idValido = idSchema.safeParse(id);
+    if (!idValido.success) return { erro: "Pilha inválida" };
+
+    const supabase = await createClient();
+    const [{ data, error }, centros] = await Promise.all([
+      supabase
+        .from("estoque_pilhas")
+        .select("id, nome, saldo, insumo_id, insumos(nome, unidades_medida(sigla))")
+        .eq("id", idValido.data)
+        .maybeSingle(),
+      saida ? listarCentrosCusto() : Promise.resolve<CentroCustoOpcao[]>([]),
+    ]);
+    if (error) return erroAcao("estoque.pilhas.movimento", error, "Não foi possível carregar a pilha. Tente novamente");
+    if (!data) return { erro: "Pilha não encontrada" };
+    if (!data.insumo_id) return { erro: "Esta pilha está sem material: escolha o insumo dela no Estoque, aba Pilhas" };
+
+    return {
+      ok: true,
+      local: codificarLocal("pilha", data.id),
+      nome: data.nome,
+      insumo: {
+        id: data.insumo_id,
+        nome: data.insumos?.nome ?? "",
+        unidade: data.insumos?.unidades_medida?.sigla ?? null,
+      },
+      saldo: Number(data.saldo),
+      centros,
+    };
   });
 }
