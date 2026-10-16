@@ -6,6 +6,7 @@ import type {
   EstadoEfetivo,
   EstadoMapa,
   FichaNumeros,
+  FreteEmRota,
   FrenteHoje,
   LocacaoMapa,
   LocalidadeMapa,
@@ -65,6 +66,54 @@ function posicao(lng: unknown, lat: unknown): Posicao | null {
   const x = numeroOuNulo(lng);
   const y = numeroOuNulo(lat);
   return x === null || y === null ? null : [x, y];
+}
+
+/**
+ * O traçado do Frete (frete_rotas_tracado) vem em [lat, lng]; o mapa usa [lng, lat]. Sem traçado,
+ * a reta da origem ao destino (quando os dois locais têm ponto).
+ */
+function caminhoDoFrete(
+  tracado: unknown,
+  origem: Posicao | null,
+  destino: Posicao | null,
+): Posicao[] {
+  const pontos = Array.isArray(tracado)
+    ? tracado.flatMap((p): Posicao[] => {
+        if (!Array.isArray(p) || p.length < 2) return [];
+        const lat = numeroOuNulo(p[0]);
+        const lng = numeroOuNulo(p[1]);
+        return lat === null || lng === null ? [] : [[lng, lat]];
+      })
+    : [];
+  if (pontos.length >= 2) return pontos;
+  return origem && destino ? [origem, destino] : [];
+}
+
+function frete(f: Linha): FreteEmRota {
+  return {
+    id: texto(f.id),
+    tipo: texto(f.tipo),
+    data: texto(f.data),
+    criadoEm: texto(f.criado_em),
+    placa: texto(f.placa),
+    motorista: texto(f.motorista),
+    transportadora: texto(f.transportadora),
+    equipamentoId: textoOuNulo(f.equipamento_id),
+    origem: texto(f.origem),
+    destino: texto(f.destino),
+    material: texto(f.material),
+    peso: numeroOuNulo(f.peso),
+    km: numeroOuNulo(f.km),
+    valorTkm: numeroOuNulo(f.valor_tkm),
+    valorTotal: numeroOuNulo(f.valor_total),
+    valorMaterial: numeroOuNulo(f.valor_material),
+    horas: numeroOuNulo(f.horas),
+    caminho: caminhoDoFrete(
+      f.tracado,
+      posicao(f.origem_lng, f.origem_lat),
+      posicao(f.destino_lng, f.destino_lat),
+    ),
+  };
 }
 
 const ESTADOS: ReadonlySet<string> = new Set([
@@ -379,6 +428,7 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       tipo: texto(l.tipo),
       tipos: tiposDoLocal(l.tipos, l.tipo),
     })),
+    fretesEmRota: lista(b.fretes_em_rota).map(frete),
   };
 }
 

@@ -6,7 +6,11 @@ import { Crosshair, LocateFixed, RotateCcw, RotateCw, X } from "lucide-react";
 import { Combobox, MoneyText } from "@/components/canonicos";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatarData } from "@/lib/formatadores";
+import {
+  formatarData,
+  formatarDataHora,
+  formatarQuantidade,
+} from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipamento";
 import { textoDesde } from "@/modules/mapa/desde";
@@ -19,8 +23,10 @@ import {
   ROTULO_TIPO_ALUGUEL,
   type EquipamentoMapa,
   type EstadoMaquina,
+  type FreteEmRota,
   type PermissoesMapa,
   type PessoaMapa,
+  type TanqueMapa,
 } from "@/modules/mapa/tipos";
 
 /**
@@ -34,6 +40,10 @@ export interface FichaEquipamentoProps {
   pessoas: PessoaMapa[];
   /** yyyy-mm-dd de Rio Branco, do servidor (conta "desde ontem"). */
   hoje: string;
+  /** Frete aberto da máquina (carreta em rota): material, peso, valor e a rota. */
+  frete?: FreteEmRota | null;
+  /** Tanque que anda com a máquina (Meloza): conteúdo e nível. */
+  tanque?: TanqueMapa | null;
   permissoes: PermissoesMapa;
   selecionados: number;
   salvando: boolean;
@@ -66,6 +76,8 @@ export function FichaEquipamento({
   equipamento: e,
   pessoas,
   hoje,
+  frete = null,
+  tanque = null,
   permissoes,
   selecionados,
   salvando,
@@ -188,7 +200,56 @@ export function FichaEquipamento({
         <Linha rotulo="Obra">{e.obraNome || "–"}</Linha>
         <Linha rotulo="Onde">{onde.length ? onde.join(" · ") : "–"}</Linha>
         {e.frenteNome ? <Linha rotulo="Frente">{e.frenteNome}</Linha> : null}
-        {e.estado === "em_rota" && e.deslocamento ? (
+        {frete ? (
+          <div className="mt-1 flex flex-col gap-1 rounded-md border border-border bg-surface p-2">
+            <span className="text-legenda font-medium text-muted-foreground">
+              Frete em rota
+            </span>
+            <Linha rotulo="Rota">
+              {frete.origem || "–"} → {frete.destino || "–"}
+            </Linha>
+            <Linha rotulo="Material">{frete.material || "–"}</Linha>
+            <Linha rotulo="Peso">
+              {frete.peso !== null
+                ? `${formatarQuantidade(frete.peso)} t`
+                : "–"}
+            </Linha>
+            {frete.valorTotal !== null ? (
+              <Linha rotulo="Valor do transporte">
+                <MoneyText valor={frete.valorTotal} />
+                {frete.km !== null && frete.valorTkm !== null
+                  ? ` (${formatarQuantidade(frete.km)} km × R$ ${formatarQuantidade(frete.valorTkm)}/t·km)`
+                  : ""}
+              </Linha>
+            ) : null}
+            {frete.valorMaterial !== null ? (
+              <Linha rotulo="Valor do material">
+                <MoneyText valor={frete.valorMaterial} />
+              </Linha>
+            ) : null}
+            <Linha rotulo="Motorista">{frete.motorista || "–"}</Linha>
+            <Linha rotulo="Saída">
+              {frete.criadoEm ? formatarDataHora(frete.criadoEm) : "–"}
+            </Linha>
+            <p className="text-legenda text-muted-foreground">
+              Posição estimada pelo tempo desde a saída. A chegada se lança no
+              Frete.
+            </p>
+          </div>
+        ) : null}
+        {tanque ? (
+          <Linha rotulo={`Tanque (${tanque.nome})`}>
+            {tanque.insumo || "vazio"}
+            {tanque.nivel !== null
+              ? ` · ${formatarQuantidade(tanque.nivel)}${
+                  tanque.capacidade
+                    ? ` de ${formatarQuantidade(tanque.capacidade)}`
+                    : ""
+                } ${tanque.unidade || "L"}`
+              : ""}
+          </Linha>
+        ) : null}
+        {e.estado === "em_rota" && e.deslocamento && !frete ? (
           <Linha rotulo="Rota">
             {[e.deslocamento.origem, e.deslocamento.destino]
               .filter(Boolean)
@@ -297,7 +358,7 @@ export function FichaEquipamento({
         </div>
       ) : null}
 
-      {podeEditar && e.pos && e.fontePosicao !== "gps" ? (
+      {podeEditar && e.pos && e.fontePosicao === "manual" ? (
         <div className="flex flex-col gap-1.5">
           <span className="text-legenda font-medium text-muted-foreground">
             Rumo {Math.round(((e.heading % 360) + 360) % 360)}°{" "}

@@ -78,7 +78,8 @@ export interface EquipamentoMapa {
   heading: number;
   /** Rumo escolhido na ficha; null = segue o traçado no km da máquina. */
   rumoManual: number | null;
-  fontePosicao: "manual" | "gps";
+  /** "frete": em rota por um frete aberto; a posição é estimada no traçado (fretes.ts). */
+  fontePosicao: "manual" | "gps" | "frete";
   estado: EstadoEfetivo;
   estadoDesde: string | null;
   diasNoEstado: number | null;
@@ -268,6 +269,35 @@ export interface PilhaMapa {
   pos: Posicao | null;
 }
 
+/**
+ * Frete aberto (sem chegada) do módulo Frete, com a máquina casada pela placa da carreta. Os
+ * valores vêm null para quem não vê a aba Fretes.
+ */
+export interface FreteEmRota {
+  id: string;
+  tipo: string;
+  /** Dia da saída (yyyy-mm-dd). */
+  data: string;
+  /** Quando o frete foi registrado: a hora da saída que o mapa usa para estimar a posição. */
+  criadoEm: string;
+  placa: string;
+  motorista: string;
+  transportadora: string;
+  equipamentoId: string | null;
+  origem: string;
+  destino: string;
+  material: string;
+  peso: number | null;
+  km: number | null;
+  valorTkm: number | null;
+  valorTotal: number | null;
+  valorMaterial: number | null;
+  /** Tempo da rota medido pelo Frete (null = sem medida). */
+  horas: number | null;
+  /** O traçado da rota em [lng, lat]; sem traçado salvo, a reta da origem ao destino. */
+  caminho: Posicao[];
+}
+
 /** Tanque, pilha ou depósito: o que o mapa põe no lugar pela mesma RPC. */
 export type AlvoObjeto = "tanque" | "pilha" | "deposito";
 
@@ -331,6 +361,7 @@ export interface EstadoMapa {
   depositos: DepositoMapa[];
   pilhas: PilhaMapa[];
   localidadesSemPosicao: LocalSemPosicao[];
+  fretesEmRota: FreteEmRota[];
 }
 
 /** O que a pessoa pode fazer na tela, decidido no servidor pelo catálogo de permissões. */

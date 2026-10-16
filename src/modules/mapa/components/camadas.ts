@@ -122,6 +122,8 @@ export interface Cena {
   equipamentos: EquipamentoMapa[];
   pessoas: PessoaMapa[];
   trechos: TrechoMedido[];
+  /** Rotas dos fretes em rota (a carreta anda nelas), em [lng, lat]. */
+  rotasFrete: { id: string; caminho: Posicao[] }[];
   marcos: { km: number; pos: Posicao }[];
   areas: AreaMapa[];
   localidades: LocalidadeMapa[];
@@ -261,6 +263,26 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: false,
     }),
   );
+
+  // Rota do frete: contorno branco e miolo asfalto, como uma estrada; abaixo dos marcos e das
+  // máquinas, acima dos trechos das obras (a BR-364 é a mesma estrada).
+  for (const [id, cor, largura] of [
+    ["rotas-frete-contorno", [255, 255, 255, 220], 7],
+    ["rotas-frete", [69, 70, 75, 235], 3],
+  ] as const)
+    camadas.push(
+      new PathLayer<{ id: string; caminho: Posicao[] }>({
+        id,
+        data: cena.rotasFrete,
+        getPath: (d) => d.caminho,
+        getColor: [...cor],
+        getWidth: largura,
+        widthUnits: "pixels",
+        capRounded: true,
+        jointRounded: true,
+        pickable: false,
+      }),
+    );
 
   camadas.push(
     new TextLayer<{ km: number; pos: Posicao }>({

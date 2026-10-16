@@ -191,3 +191,17 @@ describe("linhas da ficha do objeto", () => {
     expect(linhasDaFicha({ id: "x", alvo: "pilha" }, fontes({}))).toEqual([]);
   });
 });
+
+describe("tanque de comboio", () => {
+  it("tanque ligado a uma máquina (Meloza) não vira tanque fixo no mapa", () => {
+    const objetos = objetosDoEstoque(
+      [
+        tanque({ id: "fixo", pos: [-72.7, -7.6] }),
+        tanque({ id: "meloza", equipamentoId: "mz1", pos: null }),
+      ],
+      [],
+      [],
+    );
+    expect(objetos.map((o) => o.id)).toEqual(["fixo"]);
+  });
+});
