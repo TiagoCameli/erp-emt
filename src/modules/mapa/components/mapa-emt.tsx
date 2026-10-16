@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export type {
   Alvo,
   ArrasteSolto,
+  CartaoNoMapa,
   CenaBase,
   Foco,
   GiroMapa,

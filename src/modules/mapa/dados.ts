@@ -367,6 +367,10 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
       id: texto(p.id),
       nome: texto(p.nome),
       saldo: numero(p.saldo),
+      totalEntrada: numero(p.total_entrada),
+      insumo: texto(p.insumo),
+      unidade: texto(p.unidade) || "t",
+      localidadeId: textoOuNulo(p.localidade_id),
       pos: posicao(p.lng, p.lat),
     })),
     localidadesSemPosicao: lista(b.localidades_sem_posicao).map((l) => ({
@@ -418,6 +422,7 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
   const consumo = objeto(b.consumo_30_dias) ?? {};
   const os = objeto(b.ultima_manutencao);
   const gasto = objeto(b.gasto_manutencao) ?? {};
+  const custoOs = objeto(b.custo_os) ?? {};
   return {
     ultimoAbastecimento: abast
       ? {
@@ -451,6 +456,13 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
       mesPassadoRef: texto(gasto.mes_passado_ref),
       anoRef: inteiro(gasto.ano_ref),
       temCentro: gasto.tem_centro === true,
+    },
+    custoOs: {
+      total: numero(custoOs.total),
+      ultimos12Meses: numero(custoOs.ultimos_12_meses),
+      ano: numero(custoOs.ano),
+      mesPassado: numero(custoOs.mes_passado),
+      quantidade: inteiro(custoOs.quantidade),
     },
   };
 }

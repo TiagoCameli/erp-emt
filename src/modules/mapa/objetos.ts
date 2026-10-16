@@ -66,18 +66,34 @@ export const VOLUME_MINIMO_PILHA_M3 = 1;
 /** Altura/raio do cone: ângulo de repouso de agregado, uns 35° (tg 35° ≈ 0,7). */
 const INCLINACAO_PILHA = 0.7;
 
+/** A unidade é de volume (m³)? As demais (t, kg não) entram como massa. */
+function ehMetroCubico(unidade: string): boolean {
+  const u = unidade.trim().toLowerCase();
+  return u === "m3" || u === "m³";
+}
+
+/** Volume da pilha em m³: saldo em t ÷ 1,5, ou o próprio saldo quando o material é medido em m³. */
+export function volumeDaPilha(saldo: number, unidade = "t"): number {
+  const s = Number.isFinite(saldo) ? Math.max(saldo, 0) : 0;
+  return ehMetroCubico(unidade) ? s : s / TONELADAS_POR_M3;
+}
+
 /**
- * Tamanho da pilha pelo saldo em toneladas: volume = saldo ÷ 1,5; cone com altura 0,7 do raio, então
- * V = π·r²·h/3 = 0,7·π·r³/3 e r = ∛(3V / 0,7π). 150 t = 100 m³ ≈ 10,3 m de base × 3,6 m de altura.
+ * Tamanho da pilha pelo saldo: volume pela unidade do material (t ÷ 1,5 ou m³ direto); cone com
+ * altura 0,7 do raio, então V = π·r²·h/3 = 0,7·π·r³/3 e r = ∛(3V / 0,7π). 150 t = 100 m³ ≈ 10,3 m
+ * de base × 3,6 m de altura.
  */
-export function dimensoesDaPilha(saldoToneladas: number): {
+export function dimensoesDaPilha(
+  saldo: number,
+  unidade = "t",
+): {
   diametro: number;
   altura: number;
   volume: number;
 } {
   const volume = Math.max(
     VOLUME_MINIMO_PILHA_M3,
-    (Number.isFinite(saldoToneladas) ? saldoToneladas : 0) / TONELADAS_POR_M3,
+    volumeDaPilha(saldo, unidade),
   );
   const raio = Math.cbrt((3 * volume) / (INCLINACAO_PILHA * Math.PI));
   return { diametro: raio * 2, altura: raio * INCLINACAO_PILHA, volume };
@@ -94,6 +110,16 @@ export function corDaPilha(nome: string): Rgb {
 
 const litrosTexto = (n: number) =>
   `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(n)} L`;
+
+const numeroTexto = (n: number, casas: number) =>
+  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: casas }).format(n);
+
+/** "282 t ≈ 188 m³" (t) ou "40 m³": o saldo e, quando em massa, o volume que ele ocupa. */
+export function textoSaldoPilha(saldo: number, unidade: string): string {
+  const base = `${numeroTexto(saldo, 1)} ${unidade}`;
+  if (ehMetroCubico(unidade) || saldo <= 0) return base;
+  return `${base} ≈ ${numeroTexto(volumeDaPilha(saldo, unidade), 0)} m³`;
+}
 
 /** Todos os tanques, pilhas e depósitos ativos como objetos do mapa (com ou sem lugar). */
 export function objetosDoEstoque(
@@ -134,15 +160,12 @@ export function objetosDoEstoque(
     });
   }
   for (const p of pilhas) {
-    const { diametro, altura, volume } = dimensoesDaPilha(p.saldo);
+    const { diametro, altura } = dimensoesDaPilha(p.saldo, p.unidade);
     objetos.push({
       id: p.id,
       alvo: "pilha",
       nome: p.nome,
-      detalhe:
-        p.saldo > 0
-          ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(p.saldo)} t ≈ ${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(volume)} m³`
-          : "vazia",
+      detalhe: p.saldo > 0 ? textoSaldoPilha(p.saldo, p.unidade) : "vazia",
       pos: p.pos,
       forma: "cone",
       largura: diametro,
@@ -165,4 +188,87 @@ export function objetosDoEstoque(
       cor: COR_DEPOSITO,
     });
   return objetos;
+}
+
+export interface LinhaFicha {
+  rotulo: string;
+  valor: string;
+}
+
+/** O que a ficha do objeto lê além dele: o cadastro de onde ele veio, locais e máquinas. */
+export interface FontesFicha {
+  tanques: readonly TanqueMapa[];
+  pilhas: readonly PilhaMapa[];
+  depositos: readonly DepositoMapa[];
+  localidades: readonly { id: string; nome: string }[];
+  equipamentos: readonly { id: string; codigo: string }[];
+}
+
+/**
+ * As linhas da ficha do tanque, pilha ou depósito, lidas do cadastro do Estoque e do Combustível
+ * (pedido do Tiago, 16/10/2026: "com informações corretas"). Pilha: material, saldo (com o volume
+ * quando em t), o que entrou e saiu, local. Tanque: conteúdo, nível sobre a capacidade, local ou
+ * máquina que o leva. Depósito: local.
+ */
+export function linhasDaFicha(
+  objeto: Pick<ObjetoMapa, "id" | "alvo">,
+  fontes: FontesFicha,
+): LinhaFicha[] {
+  const nomeDoLocal = (id: string | null) =>
+    id ? (fontes.localidades.find((l) => l.id === id)?.nome ?? null) : null;
+  if (objeto.alvo === "pilha") {
+    const p = fontes.pilhas.find((x) => x.id === objeto.id);
+    if (!p) return [];
+    const saiu = Math.max(p.totalEntrada - p.saldo, 0);
+    return [
+      { rotulo: "Material", valor: p.insumo || "sem material" },
+      {
+        rotulo: "Saldo",
+        valor: p.saldo > 0 ? textoSaldoPilha(p.saldo, p.unidade) : "vazia",
+      },
+      {
+        rotulo: "Já entrou",
+        valor: `${numeroTexto(p.totalEntrada, 1)} ${p.unidade}`,
+      },
+      { rotulo: "Já saiu", valor: `${numeroTexto(saiu, 1)} ${p.unidade}` },
+      { rotulo: "Local", valor: nomeDoLocal(p.localidadeId) ?? "–" },
+    ];
+  }
+  if (objeto.alvo === "tanque") {
+    const t = fontes.tanques.find((x) => x.id === objeto.id);
+    if (!t) return [];
+    const un = t.unidade || "L";
+    const capacidade = t.capacidade && t.capacidade > 0 ? t.capacidade : null;
+    const nivel = t.nivel ?? 0;
+    const linhas: LinhaFicha[] = [
+      {
+        rotulo: "Tipo",
+        valor: t.ehExterno
+          ? "Posto externo"
+          : t.uso === "material"
+            ? "Tanque de material"
+            : "Tanque de combustível",
+      },
+      { rotulo: "Conteúdo", valor: t.insumo || "vazio" },
+    ];
+    if (!t.ehExterno)
+      linhas.push({
+        rotulo: "Nível",
+        valor: capacidade
+          ? `${numeroTexto(nivel, 1)} de ${numeroTexto(capacidade, 0)} ${un} (${numeroTexto((nivel / capacidade) * 100, 0)}%)`
+          : `${numeroTexto(nivel, 1)} ${un}`,
+      });
+    const maquina = t.equipamentoId
+      ? fontes.equipamentos.find((e) => e.id === t.equipamentoId)
+      : null;
+    linhas.push(
+      maquina
+        ? { rotulo: "Anda com", valor: maquina.codigo }
+        : { rotulo: "Local", valor: nomeDoLocal(t.localidadeId) ?? "–" },
+    );
+    return linhas;
+  }
+  const d = fontes.depositos.find((x) => x.id === objeto.id);
+  if (!d) return [];
+  return [{ rotulo: "Local", valor: nomeDoLocal(d.localidadeId) ?? "–" }];
 }

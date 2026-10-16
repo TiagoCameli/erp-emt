@@ -18,6 +18,10 @@ import type { FichaNumeros } from "@/modules/mapa/tipos";
  * Financeiro (rateio no centro de custo da máquina, categorias de manutenção) desde sempre, nos
  * últimos 12 meses, no ano e no mês passado. Carrega quando a ficha abre; o pai monta com
  * `key` = id da máquina, então cada máquina começa do zero.
+ *
+ * Ao lado do Financeiro, o custo das OS concluídas (16/10/2026): na US-001 o Financeiro dava
+ * R$ 0,00 com três OS somando R$ 10.612,97. As fontes podem se sobrepor (a peça da OS pode ter sido
+ * paga no Financeiro), então ficam em blocos separados, sem total somado.
  */
 
 const ROTULO_STATUS_OS: Record<string, string> = {
@@ -83,6 +87,7 @@ export function NumerosEquipamento({
     consumo30Dias: consumo,
     ultimaManutencao: os,
     gastoManutencao: gasto,
+    custoOs,
   } = resultado.ficha;
 
   return (
@@ -108,7 +113,7 @@ export function NumerosEquipamento({
                   : os.abertura
                     ? ` desde ${formatarData(os.abertura)}`
                     : ""
-              }`
+              }${os.custo ? ` · ${formatarBRL(os.custo)}` : ""}`
             : "–"}
         </Linha>
         {os?.descricao ? (
@@ -140,6 +145,36 @@ export function NumerosEquipamento({
             A máquina não tem centro de custo no Financeiro.
           </p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-legenda font-medium text-muted-foreground">
+          Custo das OS concluídas (Manutenção)
+        </span>
+        {custoOs.quantidade > 0 ? (
+          <>
+            <Linha rotulo={`Desde sempre (${custoOs.quantidade} OS)`}>
+              {formatarBRL(custoOs.total)}
+            </Linha>
+            <Linha rotulo="Últimos 12 meses">
+              {formatarBRL(custoOs.ultimos12Meses)}
+            </Linha>
+            <Linha rotulo={`Em ${gasto.anoRef}`}>
+              {formatarBRL(custoOs.ano)}
+            </Linha>
+            <Linha rotulo={`Em ${formatarMesAno(gasto.mesPassadoRef)}`}>
+              {formatarBRL(custoOs.mesPassado)}
+            </Linha>
+          </>
+        ) : (
+          <p className="text-detalhe text-muted-foreground">
+            Nenhuma OS concluída.
+          </p>
+        )}
+        <p className="text-legenda text-muted-foreground">
+          Fontes diferentes: a mesma peça pode estar nas duas, por isso não se
+          somam.
+        </p>
       </div>
     </div>
   );

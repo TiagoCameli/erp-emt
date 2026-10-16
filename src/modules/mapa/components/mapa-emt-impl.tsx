@@ -24,6 +24,7 @@ import {
   PREFIXO_MAQUINA,
   type Cena,
 } from "@/modules/mapa/components/camadas";
+import { pontoAoLeste, posicaoDoCartao } from "@/modules/mapa/cartao";
 import { rumo } from "@/modules/mapa/geo";
 import { ROTULO_ESTADO } from "@/modules/mapa/tipos";
 import type {
@@ -88,6 +89,21 @@ export interface GiroMapa {
   chave: number;
 }
 
+/**
+ * Card preso a um ponto do mapa (a ficha da máquina ou do objeto tocado): fica ao lado dele, fora
+ * do raio, e acompanha quando o mapa anda, gira ou aproxima.
+ */
+export interface CartaoNoMapa {
+  /** Muda quando o card passa a ser de outro objeto. */
+  chave: string;
+  pos: Posicao;
+  /** Raio do objeto (ou do anel em volta dele), em metros: o card começa depois dele. */
+  raioM: number;
+  /** O raio nunca é menor que isto na tela (o anel tem tamanho mínimo). */
+  raioMinimoPx: number;
+  conteudo: React.ReactNode;
+}
+
 export interface MapaEmtProps {
   google: ConfigGoogle;
   cena: CenaBase;
@@ -118,6 +134,8 @@ export interface MapaEmtProps {
   /** Soltou o anel de giro: grava o rumo. */
   onGirarFim: (id: string, rumo: number) => void;
   onMotor: (motor: TipoMotor, aviso: string | null) => void;
+  /** Ficha aberta ao lado do objeto (null = nenhuma, ou mostrada fora do mapa). */
+  cartao?: CartaoNoMapa | null;
   className?: string;
 }
 
@@ -126,6 +144,8 @@ interface Motor {
   setLayers(layers: Layer[]): void;
   pegar(x: number, y: number, ids: string[]): PickingInfo[];
   pixelParaCoord(x: number, y: number): Posicao | null;
+  /** Ponto do mapa em pixels do container (null enquanto o motor não tem projeção). */
+  coordParaPixel(pos: Posicao): [number, number] | null;
   travar(travar: boolean): void;
   setFundo(fundo: ModoFundo, inclinado: boolean): void;
   setInclinado(inclinado: boolean, fundo: ModoFundo): void;
@@ -289,6 +309,12 @@ function criarMotorTiles(
       if (!vp) return null;
       const [lng, lat] = vp.unproject([x, y]);
       return [lng, lat];
+    },
+    coordParaPixel(pos) {
+      const vp = deck.getViewports()[0];
+      if (!vp) return null;
+      const [x, y] = vp.project([pos[0], pos[1]]);
+      return [x, y];
     },
     travar(travar) {
       deck.setProps({ controller: travar ? false : { ...CONTROLE_DECK } });
@@ -468,6 +494,13 @@ async function criarMotorGoogle(
       );
       return ll ? [ll.lng(), ll.lat()] : null;
     },
+    coordParaPixel(pos) {
+      if (!projecao) return null;
+      const p = projecao.fromLatLngToContainerPixel(
+        new google.maps.LatLng(pos[1], pos[0]),
+      );
+      return p ? [p.x, p.y] : null;
+    },
     travar(travar) {
       map.setOptions({
         gestureHandling: travar ? "none" : "greedy",
@@ -519,6 +552,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   const { chave: chaveGoogle, mapId: mapIdGoogle } = props.google;
   const containerRef = React.useRef<HTMLDivElement>(null);
   const tooltipRef = React.useRef<HTMLDivElement>(null);
+  const cartaoRef = React.useRef<HTMLDivElement>(null);
   const propsRef = React.useRef(props);
   // Antes dos demais efeitos (layout effect roda primeiro): os handlers leem as props daqui.
   React.useLayoutEffect(() => {
@@ -667,6 +701,46 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   React.useEffect(() => {
     if (giroMapa) motorRef.current?.girarMapa(giroMapa.delta);
   }, [giroMapa]);
+
+  // Card ao lado do objeto: a cada quadro projeta o ponto (o Google anima o zoom e o giro sem
+  // avisar o React) e move o card por transform, sem renderizar.
+  const temCartao = Boolean(props.cartao);
+  React.useEffect(() => {
+    if (!temCartao) return;
+    let quadro = 0;
+    const passo = () => {
+      quadro = requestAnimationFrame(passo);
+      const c = propsRef.current.cartao;
+      const el = cartaoRef.current;
+      const cont = containerRef.current;
+      const motor = motorRef.current;
+      if (!c || !el || !cont || !motor) return;
+      // Arrastando o próprio objeto, o card vai junto.
+      const pos = arrastoRef.current?.posicoes.get(c.chave) ?? c.pos;
+      const p = motor.coordParaPixel(pos);
+      if (!p) {
+        el.style.visibility = "hidden";
+        return;
+      }
+      const leste = motor.coordParaPixel(pontoAoLeste(pos, c.raioM));
+      const raioPx = Math.max(
+        leste ? Math.hypot(leste[0] - p[0], leste[1] - p[1]) : 0,
+        c.raioMinimoPx,
+      );
+      const { x, y } = posicaoDoCartao({
+        ponto: p,
+        raioPx,
+        largura: el.offsetWidth,
+        altura: el.offsetHeight,
+        larguraMapa: cont.clientWidth,
+        alturaMapa: cont.clientHeight,
+      });
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.style.visibility = "visible";
+    };
+    quadro = requestAnimationFrame(passo);
+    return () => cancelAnimationFrame(quadro);
+  }, [temCartao]);
 
   // Ponteiro: clique, hover e arraste (mouse e toque), como no spike.
   React.useEffect(() => {
@@ -962,6 +1036,15 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       {carregando ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-detalhe text-muted-foreground">
           Carregando o mapa...
+        </div>
+      ) : null}
+      {props.cartao ? (
+        <div
+          key={props.cartao.chave}
+          ref={cartaoRef}
+          className="invisible absolute top-0 left-0 z-[5] max-h-[calc(100%-3.5rem)] w-72 overflow-y-auto rounded-lg shadow-lg"
+        >
+          {props.cartao.conteudo}
         </div>
       ) : null}
       <div
