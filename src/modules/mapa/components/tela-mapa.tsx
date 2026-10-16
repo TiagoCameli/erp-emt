@@ -37,6 +37,7 @@ import {
   assinalarOperador,
   colocarLocal,
   definirTamanhoDeposito,
+  girarDeposito,
   desenharObra,
   editarLocal,
   encerrarLocacao,
@@ -344,6 +345,14 @@ export function TelaMapa({
     rumo: number;
   } | null>(null);
   const timerGiro = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Giro do depósito: prévia na hora, grava 600 ms depois do último toque (como a máquina).
+  const [rumoDepositoPrevio, setRumoDepositoPrevio] = React.useState<{
+    id: string;
+    rumo: number;
+  } | null>(null);
+  const timerGiroDeposito = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [giroMapa, setGiroMapa] = React.useState<GiroMapa | null>(null);
   const girarMapa = (delta: number | null) =>
     setGiroMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
@@ -534,8 +543,17 @@ export function TelaMapa({
     [estado.tanques, estado.pilhas, estado.depositos],
   );
   const objetosNoMapa = React.useMemo(
-    () => objetos.flatMap((o) => (o.pos ? [{ ...o, pos: o.pos }] : [])),
-    [objetos],
+    () =>
+      objetos.flatMap((o) =>
+        o.pos
+          ? [
+              rumoDepositoPrevio?.id === o.id
+                ? { ...o, pos: o.pos, rumo: rumoDepositoPrevio.rumo }
+                : { ...o, pos: o.pos },
+            ]
+          : [],
+      ),
+    [objetos, rumoDepositoPrevio],
   );
   const objetosSemLugar = React.useMemo(
     () =>
@@ -1497,6 +1515,27 @@ export function TelaMapa({
           rotulo: objetoDaFicha.nome,
         })
       }
+      rumo={
+        rumoDepositoPrevio?.id === objetoDaFicha.id
+          ? rumoDepositoPrevio.rumo
+          : (objetoDaFicha.rumo ?? 0)
+      }
+      onGirar={(delta) => {
+        if (timerGiroDeposito.current) clearTimeout(timerGiroDeposito.current);
+        const base =
+          rumoDepositoPrevio?.id === objetoDaFicha.id
+            ? rumoDepositoPrevio.rumo
+            : (objetoDaFicha.rumo ?? 0);
+        const rumo = delta === null ? 0 : (((base + delta) % 360) + 360) % 360;
+        const id = objetoDaFicha.id;
+        setRumoDepositoPrevio({ id, rumo });
+        timerGiroDeposito.current = setTimeout(async () => {
+          const r = await girarDeposito({ id, rumo });
+          if ("erro" in r) toast.error(r.erro);
+          else if (r.estado) setEstado(r.estado);
+          setRumoDepositoPrevio(null);
+        }, 600);
+      }}
       onSalvarTamanho={async (t) =>
         aplicar(
           await definirTamanhoDeposito({ id: objetoDaFicha.id, ...t }),

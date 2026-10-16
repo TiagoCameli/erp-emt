@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Move, X } from "lucide-react";
+import { Compass, Move, RotateCcw, RotateCw, X } from "lucide-react";
 
 import { InputQuantidade } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,8 @@ export function FichaObjeto({
   onFechar,
   onMover,
   onSalvarTamanho,
+  rumo = 0,
+  onGirar,
 }: {
   objeto: ObjetoMapa;
   linhas: LinhaFicha[];
@@ -129,6 +131,10 @@ export function FichaObjeto({
   onFechar: () => void;
   onMover: () => void;
   onSalvarTamanho: (t: TamanhoDeposito) => Promise<boolean>;
+  /** Rumo mostrado (com a prévia do giro), em graus. */
+  rumo?: number;
+  /** Gira o depósito: graus a somar; null volta ao norte. */
+  onGirar?: (delta: number | null) => void;
 }) {
   return (
     <section
@@ -174,6 +180,49 @@ export function FichaObjeto({
       )}
       {podeEditar && objeto.alvo === "deposito" ? (
         <TamanhoNoMapa objeto={objeto} onSalvar={onSalvarTamanho} />
+      ) : null}
+      {podeEditar && objeto.alvo === "deposito" && objeto.pos && onGirar ? (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-legenda font-medium text-muted-foreground">
+            Girar no mapa ·{" "}
+            <span className="tabular-nums">{Math.round(rumo)}°</span>
+          </span>
+          <div className="flex gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onGirar(-15)}
+              aria-label="Girar 15° para a esquerda"
+              title="Girar 15° para a esquerda"
+            >
+              <RotateCcw />
+              15°
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onGirar(15)}
+              aria-label="Girar 15° para a direita"
+              title="Girar 15° para a direita"
+            >
+              <RotateCw />
+              15°
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onGirar(null)}
+              disabled={rumo === 0}
+              title="Voltar ao norte"
+            >
+              <Compass />
+              Norte
+            </Button>
+          </div>
+        </div>
       ) : null}
       {podeEditar ? (
         <Button type="button" size="sm" variant="outline" onClick={onMover}>

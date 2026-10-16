@@ -260,6 +260,8 @@ export interface DepositoMapa {
   larguraM: number | null;
   comprimentoM: number | null;
   alturaM: number | null;
+  /** Rumo da caixa em graus a partir do norte, sentido horário (0 = comprimento norte-sul). */
+  rumo: number;
 }
 
 /** Pilha de agregado do Estoque (areia, brita...). */

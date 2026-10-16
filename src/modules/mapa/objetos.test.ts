@@ -158,6 +158,7 @@ describe("objetos do Estoque no mapa", () => {
           larguraM: null,
           comprimentoM: null,
           alturaM: null,
+          rumo: 0,
         },
       ],
     );
@@ -177,6 +178,7 @@ describe("tamanho do depósito (16/10/2026)", () => {
     nome: "Almoxarifado Central",
     localidadeId: null,
     pos: [-72.7, -7.6] as [number, number],
+    rumo: 0,
   };
   it("sem tamanho escolhido, o padrão em metros", () => {
     const [d] = objetosDoEstoque(
@@ -393,5 +395,28 @@ describe("tanque de comboio", () => {
       [],
     );
     expect(objetos.map((o) => o.id)).toEqual(["fixo"]);
+  });
+});
+
+describe("rumo do depósito", () => {
+  it("o depósito leva o rumo escolhido; tanque e pilha não giram", () => {
+    const objetos = objetosDoEstoque(
+      [tanque({ id: "t", pos: [-72.7, -7.6] })],
+      [],
+      [
+        {
+          id: "d",
+          nome: "Almoxarifado Central",
+          localidadeId: null,
+          pos: [-72.7, -7.6],
+          larguraM: null,
+          comprimentoM: null,
+          alturaM: null,
+          rumo: 30,
+        },
+      ],
+    );
+    expect(objetos.find((o) => o.id === "d")?.rumo).toBe(30);
+    expect(objetos.find((o) => o.id === "t")?.rumo).toBeUndefined();
   });
 });

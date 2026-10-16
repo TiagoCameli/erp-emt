@@ -228,6 +228,7 @@ describe("paraEstadoMapa", () => {
       larguraM: 4,
       comprimentoM: 6.5,
       alturaM: 3,
+      rumo: 0,
     });
     expect(estado.localidadesSemPosicao).toEqual([
       { id: "l9", nome: "Escola", tipo: "canteiro", tipos: ["canteiro"] },
@@ -318,6 +319,7 @@ describe("paraEstadoMapa", () => {
           larguraM: null,
           comprimentoM: null,
           alturaM: null,
+          rumo: 0,
         },
       ],
     );

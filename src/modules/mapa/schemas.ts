@@ -355,3 +355,13 @@ export const tamanhoDepositoSchema = z.strictObject({
     .max(100, { error: "Altura até 100 m" }),
 });
 export type TamanhoDepositoInput = z.infer<typeof tamanhoDepositoSchema>;
+
+/** Rumo do depósito no mapa (graus; o banco normaliza para 0 a 360). */
+export const rumoDepositoSchema = z.strictObject({
+  id: idSchemaCom("Depósito inválido"),
+  rumo: z
+    .number({ error: "Informe o rumo" })
+    .min(-360, { error: "Rumo inválido" })
+    .max(720, { error: "Rumo inválido" }),
+});
+export type RumoDepositoInput = z.infer<typeof rumoDepositoSchema>;

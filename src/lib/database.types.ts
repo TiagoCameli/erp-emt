@@ -10351,7 +10351,12 @@ export type Database = {
         Returns: undefined;
       };
       fn_almox_recalcular_saldo: {
-        Args: { p_deposito: string; p_insumo: string; p_pilha: string; p_tanque: string };
+        Args: {
+          p_deposito: string;
+          p_insumo: string;
+          p_pilha: string;
+          p_tanque: string;
+        };
         Returns: undefined;
       };
       fn_almox_registrar_entrada: {
@@ -10375,7 +10380,12 @@ export type Database = {
         }[];
       };
       fn_alterar_saldo_inicial: {
-        Args: { p_conta: string; p_data: string | null; p_motivo: string; p_saldo: number };
+        Args: {
+          p_conta: string;
+          p_data: string | null;
+          p_motivo: string;
+          p_saldo: number;
+        };
         Returns: undefined;
       };
       fn_alterar_mes_competencia: {
@@ -10779,7 +10789,11 @@ export type Database = {
         Returns: undefined;
       };
       fn_fornecedor_apelido_salvar: {
-        Args: { p_apelido: string; p_colaborador_id: string; p_fornecedor_id: string };
+        Args: {
+          p_apelido: string;
+          p_colaborador_id: string;
+          p_fornecedor_id: string;
+        };
         Returns: string;
       };
       fn_conciliacao_aplicar_regra: {
@@ -10848,11 +10862,20 @@ export type Database = {
         Returns: undefined;
       };
       fn_conciliacao_casar_estorno: {
-        Args: { p_automatica?: boolean; p_par_id: string; p_transacao_id: string };
+        Args: {
+          p_automatica?: boolean;
+          p_par_id: string;
+          p_transacao_id: string;
+        };
         Returns: undefined;
       };
       fn_conciliacao_casar_fatura: {
-        Args: { p_cartao_id: string; p_encargos?: Json; p_parcela_ids: string[]; p_transacao_id: string };
+        Args: {
+          p_cartao_id: string;
+          p_encargos?: Json;
+          p_parcela_ids: string[];
+          p_transacao_id: string;
+        };
         Returns: string;
       };
       fn_conciliacao_compras_do_cartao: {
@@ -11427,7 +11450,11 @@ export type Database = {
       // spliced: o arquivo inteiro nao e regenerado). Assinaturas em
       // supabase/migrations/20261014120000_modulo_mapa_v1.sql e ..._v1_3_tela.sql.
       fn_mapa_assinalar_operador: {
-        Args: { p_equipamento: string; p_colaborador: string | null; p_motivo?: string | null };
+        Args: {
+          p_equipamento: string;
+          p_colaborador: string | null;
+          p_motivo?: string | null;
+        };
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
@@ -11437,7 +11464,13 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_local_editar: {
-        Args: { p_id: string | null; p_nome: string | null; p_tipos: string[] | null; p_lng: number | null; p_lat: number | null };
+        Args: {
+          p_id: string | null;
+          p_nome: string | null;
+          p_tipos: string[] | null;
+          p_lng: number | null;
+          p_lat: number | null;
+        };
         Returns: string;
       };
       fn_mapa_local_raio: {
@@ -11445,11 +11478,22 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_local_salvar: {
-        Args: { p_id: string | null; p_nome: string | null; p_tipo: string | null; p_lng: number; p_lat: number };
+        Args: {
+          p_id: string | null;
+          p_nome: string | null;
+          p_tipo: string | null;
+          p_lng: number;
+          p_lat: number;
+        };
         Returns: string;
       };
       fn_mapa_locacao_encerrar: {
-        Args: { p_equipamento: string; p_fim?: string | null; p_medicao_fim?: number | null; p_motivo?: string | null };
+        Args: {
+          p_equipamento: string;
+          p_fim?: string | null;
+          p_medicao_fim?: number | null;
+          p_motivo?: string | null;
+        };
         Returns: undefined;
       };
       fn_mapa_locacao_iniciar: {
@@ -11479,7 +11523,12 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_mover_colaboradores: {
-        Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
+        Args: {
+          p_ids: string[];
+          p_destino: Json;
+          p_data: string;
+          p_motivo: string;
+        };
         Returns: number;
       };
       fn_mapa_deposito_tamanho: {
@@ -11489,6 +11538,10 @@ export type Database = {
           p_comprimento: number;
           p_altura: number;
         };
+        Returns: undefined;
+      };
+      fn_mapa_deposito_rumo: {
+        Args: { p_id: string; p_rumo: number };
         Returns: undefined;
       };
       fn_mapa_objeto_posicionar: {
@@ -11512,7 +11565,12 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_mover_equipamentos: {
-        Args: { p_ids: string[]; p_destino: Json; p_data: string; p_motivo: string };
+        Args: {
+          p_ids: string[];
+          p_destino: Json;
+          p_data: string;
+          p_motivo: string;
+        };
         Returns: number;
       };
       fn_mapa_obra_tirar: {
@@ -11990,7 +12048,11 @@ export type Database = {
       };
       fn_rateio_indireto_periodo: {
         Args: { p_fim: string; p_inicio: string };
-        Returns: { centro_id: string | null; indireto: number; nao_rateado: number }[];
+        Returns: {
+          centro_id: string | null;
+          indireto: number;
+          nao_rateado: number;
+        }[];
       };
       fn_rel_rateio_indireto_meses: {
         Args: { p_fim: string; p_inicio: string };
@@ -12010,7 +12072,12 @@ export type Database = {
         Returns: { termo: string; valor: number }[];
       };
       fn_rateio_indireto_salvar: {
-        Args: { p_confirmar: boolean; p_mes: string; p_motivo: string; p_percentuais: Json };
+        Args: {
+          p_confirmar: boolean;
+          p_mes: string;
+          p_motivo: string;
+          p_percentuais: Json;
+        };
         Returns: undefined;
       };
       fn_rateio_indireto_automatico: {
@@ -12190,7 +12257,11 @@ export type Database = {
         }[];
       };
       fn_rel_custo_itens_oc: {
-        Args: { p_fim?: string; p_inicio?: string; p_incluir_investimento?: boolean };
+        Args: {
+          p_fim?: string;
+          p_inicio?: string;
+          p_incluir_investimento?: boolean;
+        };
         Returns: {
           categoria_financeira_id: string;
           categoria_insumo_id: string;
@@ -12713,7 +12784,12 @@ export type Database = {
         }[];
       };
       fn_salvar_saldo_inicial_subconta: {
-        Args: { p_data: string; p_motivo: string; p_saldos: Json; p_subconta: string };
+        Args: {
+          p_data: string;
+          p_motivo: string;
+          p_saldos: Json;
+          p_subconta: string;
+        };
         Returns: undefined;
       };
       fn_criar_etapa_de_investimento: {

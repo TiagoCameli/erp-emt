@@ -447,13 +447,19 @@ export function montarCamadas(cena: Cena): Layer[] {
         mesh: malha(forma),
         getPosition: (d) => d.pos,
         getColor: (d) => d.cor,
-        // Malha em pé no Y: roll de 90° põe o Y no Z (para cima) do mapa.
-        getOrientation: [0, 0, 90],
-        getScale: (d) => [
-          d.largura * unidade,
-          d.altura * unidade,
-          d.comprimento * unidade,
-        ],
+        // Cone: malha em pé no Y, o roll de 90° põe o Y no Z (para cima) do mapa. Caixa: o cubo é
+        // simétrico, então a escala já vai em X (largura), Y (comprimento, norte) e Z (altura), e o
+        // giro é só o rumo em volta do Z, como o das máquinas (16/10/2026: girar o almoxarifado).
+        getOrientation:
+          forma === "caixa" ? (d) => orientacao(d.rumo ?? 0) : [0, 0, 90],
+        getScale: (d) =>
+          forma === "caixa"
+            ? [d.largura * unidade, d.comprimento * unidade, d.altura * unidade]
+            : [
+                d.largura * unidade,
+                d.altura * unidade,
+                d.comprimento * unidade,
+              ],
         // A malha nasce centrada: sobe meia altura para apoiar no chão.
         getTranslation: (d) => [0, 0, d.altura / 2],
         pickable: false,
