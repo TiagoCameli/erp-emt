@@ -83,6 +83,7 @@ import {
   facetarFilaAReceber,
   type ValoresFiltrosAReceber,
 } from "@/modules/financeiro/recebimentos/fila-a-receber";
+import { BotaoExportarRecebimentos } from "./botao-exportar-recebimentos";
 import { DarComoRecebidoDialog } from "./dar-como-recebido-dialog";
 import {
   restringirOpcoes,
@@ -1075,16 +1076,24 @@ export function RecebimentosCliente({
         titulo="Recebimentos"
         descricao="O que a empresa tem a receber e o que já entrou nas contas"
         acoes={
-          podeCriar ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setDrawerAberto(true)}
-            >
-              <Plus />
-              Novo recebimento
-            </Button>
-          ) : undefined
+          <>
+            {/* Os dois recortes vão como a página os leu da URL, os mesmos que
+                montaram as duas listas: a planilha não pode discordar da tela. */}
+            <BotaoExportarRecebimentos
+              valoresAReceber={valoresAReceber}
+              filtrosRecebidas={filtrosRecebidas}
+            />
+            {podeCriar ? (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setDrawerAberto(true)}
+              >
+                <Plus />
+                Novo recebimento
+              </Button>
+            ) : null}
+          </>
         }
       />
 

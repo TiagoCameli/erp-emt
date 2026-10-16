@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { idSchemaCom } from "@/lib/id";
+import { idSchema, idSchemaCom } from "@/lib/id";
+import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
 
 /** Tamanho padrão de página da aba "Recebidos". */
 export const TAMANHO_PAGINA_PADRAO = 25;
@@ -30,3 +31,30 @@ export const darComoRecebidoFormSchema = z.object({
 export type DarComoRecebidoFormInput = z.infer<
   typeof darComoRecebidoFormSchema
 >;
+
+/** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
+const VALOR_MAXIMO = 999999999999.99;
+
+const valorFiltroSchema = z.number().min(0).max(VALOR_MAXIMO).optional();
+
+/**
+ * Filtros da aba "Recebidos" vindos do cliente, revalidados na action de
+ * exportar (a mesma `FiltrosRecebidas` que a página monta da URL). Mesmo
+ * desenho de `filtrosPagasSchema`: `strictObject`, e o teste confere as chaves
+ * contra a interface.
+ */
+export const filtrosRecebidasSchema = z.strictObject({
+  busca: z.string().trim().max(120).optional(),
+  clienteId: idSchema.optional(),
+  contaBancariaId: idSchema.optional(),
+  categoriaId: idSchema.optional(),
+  centroCustoIds: z.array(idSchema).max(MAX_ITENS_FILTRO).optional(),
+  /** yyyy-MM-dd, primeiro dia do mês de referência. */
+  mesCompetencia: z.iso.date().optional(),
+  valorDe: valorFiltroSchema,
+  valorAte: valorFiltroSchema,
+  vencimentoDe: z.iso.date().optional(),
+  vencimentoAte: z.iso.date().optional(),
+  recebimentoDe: z.iso.date().optional(),
+  recebimentoAte: z.iso.date().optional(),
+});

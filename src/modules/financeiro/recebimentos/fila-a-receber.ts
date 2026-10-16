@@ -11,12 +11,17 @@
  * guardado na coluna.
  */
 
+import { z } from "zod";
+
 import {
   filtrarFacetado,
   selecao,
   type ResultadoFacetado,
 } from "@/modules/_shared/filtros-facetados";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
+import { idSchema } from "@/lib/id";
+import { STATUS_PARCELA_ABERTA } from "@/modules/financeiro/_shared/formato";
+import { MAX_ITENS_FILTRO } from "@/modules/financeiro/_shared/listas-na-url";
 import type { ParcelaAReceber } from "@/modules/financeiro/recebimentos/queries";
 
 /** Valores dos filtros da aba "A receber", como vivem na URL. */
@@ -50,6 +55,53 @@ export const VALORES_FILTROS_A_RECEBER_VAZIOS: ValoresFiltrosAReceber = {
   vencDe: "",
   vencAte: "",
 };
+
+/** Teto do filtro de valor: o mesmo da coluna NUMERIC(14,2). */
+const VALOR_MAXIMO = 999999999999.99;
+
+/** Valor em texto como o campo o escreve, ou vazio. */
+const valorTextoSchema = z
+  .string()
+  .refine(
+    (texto) =>
+      texto === "" ||
+      (Number.isFinite(Number(texto)) &&
+        Number(texto) >= 0 &&
+        Number(texto) <= VALOR_MAXIMO),
+    "valor fora da faixa",
+  );
+
+/** Data yyyy-MM-dd, ou vazio para "sem limite deste lado". */
+const dataTextoSchema = z.union([z.literal(""), z.iso.date()]);
+
+/** Id de um seletor de escolha única, ou vazio para "todos". */
+const idOuVazioSchema = z.union([z.literal(""), idSchema]);
+
+/**
+ * Os valores da fila "A receber" vindos do cliente, revalidados na action de
+ * exportar. Mesmo desenho de `valoresFiltrosAPagarSchema`: `strictObject`
+ * RECUSA chave desconhecida em vez de descartá-la, e o teste confere que o
+ * schema e a interface têm as mesmas chaves — filtro que a action descarta
+ * calada vira planilha com a base inteira e cara de recorte.
+ */
+export const valoresFiltrosAReceberSchema = z.strictObject({
+  busca: z.string().max(120),
+  cliente: idOuVazioSchema,
+  conta: idOuVazioSchema,
+  categoria: idOuVazioSchema,
+  centroIds: z.array(idSchema).max(MAX_ITENS_FILTRO),
+  mes: z.union([z.literal(""), z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)]),
+  status: z.union([
+    z.literal(""),
+    z
+      .string()
+      .refine((status) => (STATUS_PARCELA_ABERTA as string[]).includes(status)),
+  ]),
+  valorDe: valorTextoSchema,
+  valorAte: valorTextoSchema,
+  vencDe: dataTextoSchema,
+  vencAte: dataTextoSchema,
+});
 
 /** Os filtros de seleção da aba, no id da barra. */
 export type FacetaAReceber =
