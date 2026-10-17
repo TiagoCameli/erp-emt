@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
-import { History, Undo2 } from "lucide-react";
+import { History, Trash2, Undo2 } from "lucide-react";
 
 import {
   ConfirmDialog,
@@ -16,6 +16,8 @@ import {
 import { toast } from "@/components/canonicos/toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { dataLocalISO, formatarData, formatarDataHora } from "@/lib/formatadores";
 import {
@@ -24,7 +26,10 @@ import {
   rotuloTipoMovimentacao,
   type MovimentacaoMapa,
 } from "@/modules/mapa/historico";
-import { desfazerMovimentacao } from "@/modules/mapa/historico-actions";
+import {
+  desfazerMovimentacao,
+  excluirMovimentacao,
+} from "@/modules/mapa/historico-actions";
 import type { MaquinaOpcao } from "@/modules/mapa/historico-queries";
 
 interface Linha extends MovimentacaoMapa {
@@ -152,6 +157,17 @@ export interface HistoricoTabelaProps {
   noTeto: boolean;
   /** mapa.mapa/editar: mostra "Desfazer" na última movimentação de cada máquina. */
   podeDesfazer: boolean;
+  /** mapa.mapa/excluir: mostra "Excluir" em toda linha (lançamento errado sai da trilha). */
+  podeExcluir: boolean;
+}
+
+/** O que a exclusão faz com a máquina, dito no diálogo antes de confirmar. */
+function descricaoExclusao(m: Linha, voltar: boolean): string {
+  if (m.desfeitaEm)
+    return "A linha sai do histórico. A máquina já tinha voltado quando ela foi desfeita.";
+  if (m.podeDesfazer && voltar)
+    return `A máquina volta para como estava antes (${m.de}) e a linha sai do histórico.`;
+  return "Só o registro sai do histórico: o estado atual da máquina não muda.";
 }
 
 /**
@@ -165,9 +181,12 @@ export function HistoricoTabela({
   maquinaInicial,
   noTeto,
   podeDesfazer,
+  podeExcluir,
 }: HistoricoTabelaProps) {
   const router = useRouter();
   const [desfazendo, setDesfazendo] = React.useState<Linha | null>(null);
+  const [excluindo, setExcluindo] = React.useState<Linha | null>(null);
+  const [voltar, setVoltar] = React.useState(true);
   const [busca, setBusca] = React.useState("");
   const [maquina, setMaquina] = React.useState(maquinaInicial);
   const [tipo, setTipo] = React.useState("");
@@ -220,27 +239,45 @@ export function HistoricoTabela({
       <DataTable
         idTabela="mapa.historico"
         columns={
-          podeDesfazer
+          podeDesfazer || podeExcluir
             ? [
                 ...colunas,
                 {
                   id: "acoes",
                   header: "",
-                  size: 120,
+                  size: 160,
                   enableSorting: false,
-                  cell: ({ row }) =>
-                    row.original.podeDesfazer ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDesfazendo(row.original)}
-                        title="Desfaz esta movimentação e volta a máquina para como estava antes"
-                      >
-                        <Undo2 />
-                        Desfazer
-                      </Button>
-                    ) : null,
+                  cell: ({ row }) => (
+                    <div className="flex items-center justify-end gap-1">
+                      {podeDesfazer && row.original.podeDesfazer ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDesfazendo(row.original)}
+                          title="Desfaz esta movimentação e volta a máquina para como estava antes"
+                        >
+                          <Undo2 />
+                          Desfazer
+                        </Button>
+                      ) : null}
+                      {podeExcluir ? (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setVoltar(true);
+                            setExcluindo(row.original);
+                          }}
+                          title="Excluir esta linha do histórico"
+                          aria-label="Excluir esta linha do histórico"
+                        >
+                          <Trash2 />
+                        </Button>
+                      ) : null}
+                    </div>
+                  ),
                 },
               ]
             : colunas
@@ -351,6 +388,49 @@ export function HistoricoTabela({
               `${desfazendo.alvoCodigo || "Máquina"} voltou para como estava antes`,
             );
             setDesfazendo(null);
+            router.refresh();
+            return true;
+          }}
+        />
+      ) : null}
+      {excluindo ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setExcluindo(null);
+          }}
+          titulo={`Excluir ${rotuloTipoMovimentacao(excluindo.tipo).toLowerCase()} de ${excluindo.alvoCodigo || excluindo.alvoNome} do histórico?`}
+          descricao={descricaoExclusao(excluindo, voltar)}
+          textoConfirmar="Excluir do histórico"
+          variante="destrutivo"
+          conteudo={
+            excluindo.podeDesfazer ? (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="historico-excluir-voltar"
+                  checked={voltar}
+                  onCheckedChange={(valor) => setVoltar(valor === true)}
+                />
+                <Label
+                  htmlFor="historico-excluir-voltar"
+                  className="text-detalhe font-normal"
+                >
+                  Voltar a máquina para como estava antes
+                </Label>
+              </div>
+            ) : undefined
+          }
+          onConfirmar={async () => {
+            const r = await excluirMovimentacao({
+              id: excluindo.id,
+              voltar: excluindo.podeDesfazer && voltar,
+            });
+            if ("erro" in r) {
+              toast.error(r.erro);
+              return false;
+            }
+            toast.success("Linha excluída do histórico");
+            setExcluindo(null);
             router.refresh();
             return true;
           }}
