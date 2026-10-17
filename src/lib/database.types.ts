@@ -11674,6 +11674,18 @@ export type Database = {
         };
         Returns: undefined;
       };
+      fn_mapa_marcar_estado_na_data: {
+        Args: {
+          p_id: string;
+          p_estado: string;
+          p_motivo: string;
+          p_data: string;
+          p_descricao?: string | null;
+          p_deslocamento?: Json | null;
+          p_previsao?: string | null;
+        };
+        Returns: undefined;
+      };
       fn_mapa_mover_colaboradores: {
         Args: {
           p_ids: string[];

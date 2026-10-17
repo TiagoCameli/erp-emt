@@ -98,6 +98,8 @@ export const marcarEstadoSchema = z.strictObject({
     .optional(),
   deslocamento: deslocamentoSchema,
   previsao: dataOpcional,
+  /** Desde quando vale o estado novo (v1.28). Hoje ou antes; o banco recusa depois de hoje. */
+  data: dataSchema,
 });
 export type MarcarEstadoInput = z.infer<typeof marcarEstadoSchema>;
 

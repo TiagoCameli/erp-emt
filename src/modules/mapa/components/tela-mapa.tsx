@@ -1735,6 +1735,7 @@ export function TelaMapa({
           motivo: dados.motivo || undefined,
           descricao: dados.descricao || undefined,
           previsao: dados.previsao || undefined,
+          data: dados.data,
         });
         const ok = aplicar(
           r,
@@ -2788,6 +2789,7 @@ export function TelaMapa({
       {pedidoEstado ? (
         <DialogoEstado
           pedido={pedidoEstado}
+          hoje={estado.hoje}
           onCancelar={() => setPedidoEstado(null)}
           onConfirmar={confirmarEstado}
         />

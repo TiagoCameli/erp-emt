@@ -197,14 +197,16 @@ export async function marcarEstado(dados: unknown): Promise<ResultadoMapa> {
   const validado = marcarEstadoSchema.safeParse(dados);
   if (!validado.success)
     return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
-  const { id, estado, motivo, descricao, deslocamento, previsao } =
+  const { id, estado, motivo, descricao, deslocamento, previsao, data } =
     validado.data;
   try {
     const supabase = await createClient();
-    const { error } = await supabase.rpc("fn_mapa_marcar_estado", {
+    // Data no passado também refaz os dias de centro já fechados da máquina (v1.28).
+    const { error } = await supabase.rpc("fn_mapa_marcar_estado_na_data", {
       p_id: id,
       p_estado: estado,
       p_motivo: motivo ?? "",
+      p_data: data,
       p_descricao: descricao || null,
       p_deslocamento: deslocamento ? (deslocamento as Json) : null,
       p_previsao: previsao || null,
