@@ -57,9 +57,11 @@ export const ESCALA_MAQUINA = 3;
 
 /**
  * Quantas vezes o boneco cresce sobre a escala base (pedido do Tiago, 17/10/2026: "os bonecos
- * estão pequenos demais"; no mesmo dia, 10x "ficaram muito grandes", foi pela metade). Vale para a pessoa sozinha, a equipe e o operador na máquina (é a mesma
- * camada), multiplica também o mínimo e o máximo em pixels, e o card da ficha se afasta na mesma
- * proporção. O toque e o arraste pegam pela malha desenhada, então crescem junto.
+ * estão pequenos demais"; no mesmo dia, 10x "ficaram muito grandes", foi pela metade). Vale para
+ * a pessoa sozinha, a equipe e o operador na máquina (é a mesma camada), e o card da ficha se
+ * afasta na mesma proporção. Como as máquinas, o tamanho é em metros no terreno, sem mínimo nem
+ * máximo em pixels ("bonecos devem se comportar da mesma maneira dos equipamentos"): fica preso ao
+ * chão quando o zoom muda. O toque e o arraste pegam pela malha desenhada.
  */
 export const ESCALA_BONECO = 5;
 /** Afastamento do card da ficha da pessoa: em metros e o mínimo em pixels. */
@@ -672,10 +674,8 @@ export function montarCamadas(cena: Cena): Layer[] {
         getPosition: (d) => posicaoDe(cena, d),
         getOrientation: orientacao(0),
         getColor: (d) => (cena.selecao.has(d.id) ? [255, 230, 150] : BRANCO),
-        // Segue o zoom entre o mínimo e o máximo em pixels; os três levam o ESCALA_BONECO.
+        // Em metros no terreno, como as máquinas: sem mínimo nem máximo em pixels.
         sizeScale: 1.6 * ESCALA_BONECO,
-        sizeMinPixels: 5 * ESCALA_BONECO,
-        sizeMaxPixels: 120 * ESCALA_BONECO,
         _lighting: "pbr",
         updateTriggers: { getPosition: gatilho, getColor: gatilho },
       }),
