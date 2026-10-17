@@ -109,6 +109,14 @@ export const assinalarOperadorSchema = z.strictObject({
 });
 export type AssinalarOperadorInput = z.infer<typeof assinalarOperadorSchema>;
 
+/** Centro de custo da pessoa no Mapa (não mexe no do cadastro nem na folha). */
+export const centroCustoPessoaSchema = z.strictObject({
+  colaboradorId: idSchemaCom("Colaborador inválido"),
+  /** null tira o centro. */
+  centroCustoId: idSchemaCom("Centro de custo inválido").nullable(),
+});
+export type CentroCustoPessoaInput = z.infer<typeof centroCustoPessoaSchema>;
+
 export const moverPessoasSchema = z.strictObject({
   ids: z
     .array(idSchemaCom("Colaborador inválido"))

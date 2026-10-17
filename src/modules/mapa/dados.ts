@@ -309,6 +309,8 @@ function pessoa(p: Linha): PessoaMapa {
     localidadeId: textoOuNulo(p.localidade_id),
     pos: posicao(p.lng, p.lat),
     posicaoManual: p.posicao_manual === true,
+    centroCustoId: textoOuNulo(p.centro_custo_id),
+    centroCustoNome: texto(p.centro_custo_nome),
   };
 }
 

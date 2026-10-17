@@ -164,6 +164,16 @@ export interface PessoaMapa {
   localidadeId: string | null;
   pos: Posicao | null;
   posicaoManual: boolean;
+  /** Centro de custo da pessoa no Mapa (independente do cadastro e da folha). */
+  centroCustoId: string | null;
+  centroCustoNome: string;
+}
+
+/** Centro de custo ativo para escolher na ficha da pessoa. */
+export interface CentroCustoOpcaoMapa {
+  id: string;
+  /** "Raiz › Etapa" nas etapas, para não confundir etapas de nome igual. */
+  nome: string;
 }
 
 export interface TrechoMapa {

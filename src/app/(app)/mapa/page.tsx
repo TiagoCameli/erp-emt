@@ -6,7 +6,10 @@ import { idSchema } from "@/lib/id";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import { listarPosicao } from "@/modules/estoque/queries";
 import { TelaMapa } from "@/modules/mapa/components/tela-mapa";
-import { carregarEstadoMapa } from "@/modules/mapa/queries";
+import {
+  carregarEstadoMapa,
+  listarCentrosCustoMapa,
+} from "@/modules/mapa/queries";
 import type { AlvoObjeto } from "@/modules/mapa/tipos";
 
 /**
@@ -50,9 +53,12 @@ export default async function PaginaMapa({
 
   // Valor do que está em cada tanque e pilha: o mesmo da aba Posição, só para quem a vê.
   const verValor = temPermissao(usuario, "estoque.posicao", "ver");
-  const [{ estado, erro }, valoresEstoque] = await Promise.all([
+  // A lista de centros só serve a quem troca o centro da pessoa na ficha.
+  const editar = temPermissao(usuario, "mapa.mapa", "editar");
+  const [{ estado, erro }, valoresEstoque, centrosCusto] = await Promise.all([
     carregarEstadoMapa(),
     verValor ? valoresDoEstoque() : Promise.resolve(null),
+    editar ? listarCentrosCustoMapa() : Promise.resolve([]),
   ]);
   if (!estado) {
     return (
@@ -75,6 +81,7 @@ export default async function PaginaMapa({
         inicial={estado}
         colocarInicial={colocarInicial}
         valoresEstoque={valoresEstoque}
+        centrosCusto={centrosCusto}
         google={{
           chave:
             process.env.NEXT_GOOGLE_MAPS_API_KEY ||
@@ -86,7 +93,7 @@ export default async function PaginaMapa({
             "",
         }}
         permissoes={{
-          editar: temPermissao(usuario, "mapa.mapa", "editar"),
+          editar,
           criar: temPermissao(usuario, "mapa.mapa", "criar"),
           historico: temPermissao(usuario, "mapa.historico", "ver"),
         }}

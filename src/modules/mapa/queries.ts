@@ -1,8 +1,9 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { paraEstadoMapa } from "@/modules/mapa/dados";
-import type { EstadoMapa } from "@/modules/mapa/tipos";
+import type { CentroCustoOpcaoMapa, EstadoMapa } from "@/modules/mapa/tipos";
 
 /**
  * Tudo que o mapa desenha, numa chamada: `fn_mapa_estado()` já devolve equipamentos no mapa,
@@ -28,4 +29,24 @@ export async function carregarEstadoMapa(): Promise<{
       erro: "O banco devolveu o mapa num formato inesperado.",
     };
   return { estado, erro: null };
+}
+
+/**
+ * Centros de custo ativos para a ficha da pessoa (centro dela no Mapa). Etapa leva o nome da
+ * raiz na frente ("Obra 001 › Terraplenagem"): há etapas de nome igual em obras diferentes.
+ * Falha de leitura: lista vazia, a ficha só mostra o centro atual.
+ */
+export async function listarCentrosCustoMapa(): Promise<
+  CentroCustoOpcaoMapa[]
+> {
+  try {
+    const centros = await listarCentrosCusto();
+    const nomes = new Map(centros.map((c) => [c.id, c.nome]));
+    return centros.map((c) => {
+      const pai = c.paiId ? nomes.get(c.paiId) : undefined;
+      return { id: c.id, nome: pai ? `${pai} › ${c.nome}` : c.nome };
+    });
+  } catch {
+    return [];
+  }
 }
