@@ -1407,8 +1407,11 @@ export function TelaMapa({
               id: it.equipamento.id,
               lng: pos[0],
               lat: pos[1],
+              // Só quem entra no mapa agora recebe estado; quem já está mantém o seu (v1.27).
               estado:
-                !ajuste && it.destino.tipo === "livre"
+                !ajuste &&
+                it.destino.tipo === "livre" &&
+                it.equipamento.pos === null
                   ? estadoLivre
                   : undefined,
             };

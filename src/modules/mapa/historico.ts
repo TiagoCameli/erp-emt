@@ -95,7 +95,8 @@ export function resumirMovimentacao(m: MovimentacaoMapa): ResumoMovimentacao {
   switch (m.tipo) {
     case "transferencia":
     case "posicao": {
-      // Na posição (1ª entrada ou ajuste) a obra não muda: só o lugar.
+      // Na posição (1ª entrada) a obra não muda: só o lugar. Ajuste de posição o banco não lista
+      // (fn_mapa_historico, v1.27).
       const comObra = m.tipo === "transferencia";
       const deObra = comObra ? (m.deObra ?? "Sem obra") : null;
       const paraObra = comObra ? (m.paraObra ?? "Sem obra") : null;
