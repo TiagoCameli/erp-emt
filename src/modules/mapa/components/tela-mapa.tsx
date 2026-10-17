@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
+  ChevronDown,
+  ChevronUp,
   Compass,
   HardHat,
   Layers,
@@ -102,6 +104,7 @@ import {
   type CenaBase,
   type Foco,
   type GiroMapa,
+  type InclinacaoMapa,
   type ModoFundo,
   type TipoMotor,
 } from "@/modules/mapa/components/mapa-emt";
@@ -402,6 +405,10 @@ export function TelaMapa({
   const [giroMapa, setGiroMapa] = React.useState<GiroMapa | null>(null);
   const girarMapa = (delta: number | null) =>
     setGiroMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
+  const [inclinacaoMapa, setInclinacaoMapa] =
+    React.useState<InclinacaoMapa | null>(null);
+  const inclinarMapa = (delta: number) =>
+    setInclinacaoMapa((g) => ({ delta, chave: (g?.chave ?? 0) + 1 }));
   // Lista lateral recolhível; a escolha fica neste navegador (conveniência, não dado). A ficha
   // mora na lateral, então ficha aberta mostra a lateral mesmo com a lista recolhida.
   const telaLarga = React.useSyncExternalStore(
@@ -2013,6 +2020,7 @@ export function TelaMapa({
             }
             foco={foco}
             giroMapa={giroMapa}
+            inclinacaoMapa={inclinacaoMapa}
             centroInicial={centroInicial}
             onSelecionar={selecionar}
             onHover={setHover}
@@ -2043,6 +2051,28 @@ export function TelaMapa({
                 "3D. No computador, Shift + arrastar inclina e gira o mapa",
               )}
               {botaoAlternar(rota !== null, "Rota", Route, alternarRota)}
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => inclinarMapa(15)}
+                title="Inclinar mais (olhar para o horizonte)"
+                aria-label="Inclinar mais"
+                className="bg-background/95 backdrop-blur"
+              >
+                <ChevronUp className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => inclinarMapa(-15)}
+                title="Inclinar menos (olhar de cima)"
+                aria-label="Inclinar menos"
+                className="bg-background/95 backdrop-blur"
+              >
+                <ChevronDown className="size-3" />
+              </Button>
               <Button
                 type="button"
                 size="xs"

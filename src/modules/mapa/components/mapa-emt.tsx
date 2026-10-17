@@ -11,6 +11,7 @@ export type {
   CenaBase,
   Foco,
   GiroMapa,
+  InclinacaoMapa,
   ItemSolto,
   MapaEmtProps,
   ModoFundo,
