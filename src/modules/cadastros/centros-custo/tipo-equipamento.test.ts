@@ -16,3 +16,11 @@ describe("tipo de centro 'equipamento'", () => {
     expect(ROTULO_TIPO_CENTRO.equipamento).toBe("Equipamento");
   });
 });
+
+/** "Pessoal Sem Alocação" (17/10/2026): raiz de tipo 'pessoal', pelo mesmo motivo. */
+describe("tipo de centro 'pessoal'", () => {
+  it("está no catálogo e tem rótulo", () => {
+    expect(TIPOS_CENTRO).toContain("pessoal");
+    expect(ROTULO_TIPO_CENTRO.pessoal).toBe("Pessoal");
+  });
+});

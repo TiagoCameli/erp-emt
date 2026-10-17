@@ -35,12 +35,20 @@ export default async function PaginaHistoricoMapa({
       titulo="Histórico"
       descricao="Cada transferência, ajuste de posição e mudança de estado feita no mapa, com quem fez e quando. A última de cada máquina pode ser desfeita, e qualquer linha lançada errada pode ser excluída."
       acoes={
-        <Button asChild variant="outline" size="sm">
-          <Link href="/mapa/dias-por-centro">
-            <CalendarDays />
-            Dias por centro
-          </Link>
-        </Button>
+        <>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/mapa/dias-por-centro">
+              <CalendarDays />
+              Dias por centro
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/mapa/dias-de-pessoa">
+              <CalendarDays />
+              Dias de pessoa
+            </Link>
+          </Button>
+        </>
       }
     />
   );

@@ -14,12 +14,17 @@ import {
   type CentrosEquipamento,
 } from "@/modules/mapa/centros";
 import {
+  paraCentrosColaborador,
+  type CentrosColaborador,
+} from "@/modules/mapa/centros-pessoa";
+import {
   assinalarOperadorSchema,
   colocarLocalSchema,
   desenharObraSchema,
   editarLocalSchema,
   inativarLocalSchema,
   encerrarLocacaoSchema,
+  estadoPessoaSchema,
   escolherPedreiraSchema,
   girarEquipamentoSchema,
   iniciarLocacaoSchema,
@@ -975,6 +980,104 @@ export async function girarDeposito(dados: unknown): Promise<ResultadoMapa> {
       "mapa.depositoRumo",
       erro,
       `Não foi possível girar o depósito: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Centro de custo e estado da pessoa na ficha: o de agora, os dias do mês e os períodos. */
+export async function carregarCentrosColaborador(
+  colaboradorId: string,
+): Promise<{ ok: true; centros: CentrosColaborador } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.mapa", "ver");
+  } catch {
+    return { erro: "Sem permissão para ver o Mapa" };
+  }
+  const id = idSchemaCom("Colaborador inválido").safeParse(colaboradorId);
+  if (!id.success) return { erro: "Colaborador inválido" };
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_mapa_centros_colaborador", {
+      p_id: id.data,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.centrosColaborador",
+        error,
+        mensagemDaRpc(error, "Não foi possível carregar os dias da pessoa"),
+      );
+    const centros = paraCentrosColaborador(data);
+    if (!centros) return { erro: "Resposta inesperada ao carregar os dias da pessoa" };
+    return { ok: true, centros };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.centrosColaborador",
+      erro,
+      `Não foi possível carregar os dias da pessoa: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Trabalhando/parado da pessoa (ficha). Parado: os dias vão para Pessoal Sem Alocação. */
+export async function marcarEstadoPessoa(
+  dados: unknown,
+): Promise<{ ok: true } | { erro: string }> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = estadoPessoaSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_marcar_estado_pessoa", {
+      p_id: validado.data.colaboradorId,
+      p_estado: validado.data.estado,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.estadoPessoa",
+        error,
+        mensagemDaRpc(error, "Não foi possível marcar a pessoa"),
+      );
+    return { ok: true };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.estadoPessoa",
+      erro,
+      `Não foi possível marcar a pessoa: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** Planilha do relatório "Dias de pessoa por centro" do mês. */
+export async function gerarPlanilhaDiasPessoa(
+  mes: string,
+): Promise<{ ok: true; base64: string; nomeArquivo: string } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.historico", "ver");
+  } catch {
+    return { erro: "Sem permissão para exportar os relatórios do Mapa" };
+  }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { erro: "Mês inválido" };
+  try {
+    const { carregarRelDiasPessoa } = await import("@/modules/mapa/centros-queries");
+    const { linhas, erro } = await carregarRelDiasPessoa(mes);
+    if (erro) return { erro };
+    const { agruparRelatorioPessoas } = await import("@/modules/mapa/centros-pessoa");
+    const { rotuloMes } = await import("@/modules/mapa/centros");
+    const { montarPlanilhaDiasPessoa } = await import("@/modules/mapa/centros-planilha");
+    const workbook = montarPlanilhaDiasPessoa(agruparRelatorioPessoas(linhas), rotuloMes(mes));
+    const conteudo = await workbook.xlsx.writeBuffer();
+    return {
+      ok: true,
+      base64: Buffer.from(conteudo).toString("base64"),
+      nomeArquivo: `dias-de-pessoa-por-centro-${mes}.xlsx`,
+    };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.planilhaDiasPessoa",
+      erro,
+      `Não foi possível gerar a planilha: ${textoDoErro(erro)}`,
     );
   }
 }

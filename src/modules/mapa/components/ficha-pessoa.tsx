@@ -5,6 +5,7 @@ import { Crosshair, LocateFixed, X } from "lucide-react";
 
 import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import { CentrosPessoa } from "@/modules/mapa/components/centros-pessoa";
 import type {
   EquipamentoMapa,
   LocalidadeMapa,
@@ -35,6 +36,7 @@ export function FichaPessoa({
   onTrocarLocal,
   onOperar,
   onPosicionar,
+  relatorioDiasHref = null,
 }: {
   pessoa: PessoaMapa;
   /** Código da máquina que a pessoa opera (null = nenhuma). */
@@ -51,6 +53,8 @@ export function FichaPessoa({
   onTrocarLocal: (localidadeId: string) => void;
   onOperar: (equipamentoId: string) => void;
   onPosicionar: () => void;
+  /** Relatório "Dias de pessoa por centro"; nulo sem permissão de ver os relatórios do Mapa. */
+  relatorioDiasHref?: string | null;
 }) {
   const opcoes = React.useMemo(
     () =>
@@ -166,6 +170,13 @@ export function FichaPessoa({
           <p>{local?.nome ?? "–"}</p>
         )}
       </div>
+
+      <CentrosPessoa
+        colaboradorId={pessoa.id}
+        podeEditar={podeEditar}
+        relatorioHref={relatorioDiasHref}
+        lugar={[pessoa.obraId, pessoa.localidadeId, pessoa.equipamentoId].join("|")}
+      />
 
       {podeEditar ? (
         <>
