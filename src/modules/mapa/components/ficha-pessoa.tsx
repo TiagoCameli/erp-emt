@@ -33,6 +33,10 @@ import type {
  * obra estiver ativa"): a lista traz as obras ativas antes dos locais. Obra encerrada some da lista
  * e deixa de ser o local; os dias dela vão para Pessoal Sem Alocação (fn_colab_centro_regra).
  *
+ * Operador (17/10/2026, "se colaborador opera um equipamento nao tenho que escolher local de
+ * trabalho para ele pois ele deve acompanhar o seu equipamento"): com máquina, a ficha não oferece
+ * local; mostra que a pessoa acompanha a máquina.
+ *
  * Centro de custo (17/10/2026): o da pessoa no Mapa, trocado só aqui. O do cadastro do
  * colaborador, que a folha usa, não muda.
  */
@@ -203,31 +207,44 @@ export function FichaPessoa({
         </div>
       )}
 
-      <div className="flex flex-col gap-1">
-        <span className="text-muted-foreground">Local de trabalho</span>
-        {podeEditar ? (
-          <Combobox
-            valor={lugar}
-            onValorChange={(v) => {
-              if (!v || v === lugar) return;
-              const [tipo, id] = v.split(":");
-              if (!id) return;
-              if (tipo === "obra") onTrocarObra(id);
-              else onTrocarLocal(id);
-            }}
-            opcoes={opcoes}
-            rotuloDoValor={rotuloLugar}
-            placeholder="Escolher o local"
-            buscaPlaceholder="Nome do local"
-            size="sm"
-            disabled={salvando}
-            ariaLabel="Local de trabalho"
-          />
-        ) : (
-          <p>{rotuloLugar ?? "–"}</p>
-        )}
-        <HistoricoLocal dados={diasPessoa} />
-      </div>
+      {pessoa.equipamentoId ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Local de trabalho</span>
+          <p>Acompanha {maquina ?? "a máquina"}</p>
+          <p className="text-legenda text-muted-foreground">
+            Quem opera uma máquina trabalha onde ela estiver.
+            {podeEditar
+              ? " Para escolher um local, tire da máquina: arraste a pessoa ou posicione no mapa."
+              : ""}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground">Local de trabalho</span>
+          {podeEditar ? (
+            <Combobox
+              valor={lugar}
+              onValorChange={(v) => {
+                if (!v || v === lugar) return;
+                const [tipo, id] = v.split(":");
+                if (!id) return;
+                if (tipo === "obra") onTrocarObra(id);
+                else onTrocarLocal(id);
+              }}
+              opcoes={opcoes}
+              rotuloDoValor={rotuloLugar}
+              placeholder="Escolher o local"
+              buscaPlaceholder="Nome do local"
+              size="sm"
+              disabled={salvando}
+              ariaLabel="Local de trabalho"
+            />
+          ) : (
+            <p>{rotuloLugar ?? "–"}</p>
+          )}
+          <HistoricoLocal dados={diasPessoa} />
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <span className="text-muted-foreground">Centro de custo no mapa</span>
