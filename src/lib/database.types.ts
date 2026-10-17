@@ -11480,6 +11480,23 @@ export type Database = {
           propriedade: string;
         }[];
       };
+      fn_mapa_centros_colaborador: { Args: { p_id: string }; Returns: Json };
+      fn_mapa_marcar_estado_pessoa: {
+        Args: { p_id: string; p_estado: string; p_motivo?: string | null };
+        Returns: undefined;
+      };
+      fn_mapa_rel_dias_pessoa: {
+        Args: { p_mes: string };
+        Returns: {
+          centro_custo_id: string;
+          centro_nome: string;
+          colaborador_id: string;
+          dias: number;
+          estado: string;
+          funcao: string | null;
+          nome: string;
+        }[];
+      };
       fn_mapa_girar_equipamento: {
         Args: { p_id: string; p_heading: number | null };
         Returns: undefined;

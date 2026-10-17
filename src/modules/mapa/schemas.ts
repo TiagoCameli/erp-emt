@@ -387,6 +387,15 @@ export const variosCentrosSchema = z.strictObject({
 });
 export type VariosCentrosInput = z.infer<typeof variosCentrosSchema>;
 
+/** Trabalhando/parado da pessoa, marcado na ficha: parado manda os dias para Pessoal Sem Alocação. */
+export const estadoPessoaSchema = z.strictObject({
+  colaboradorId: idSchemaCom("Colaborador inválido"),
+  estado: z.enum(["trabalhando", "parado"], {
+    error: "Estado inválido: use trabalhando ou parado",
+  }),
+});
+export type EstadoPessoaInput = z.infer<typeof estadoPessoaSchema>;
+
 /** Tamanho do depósito no mapa, em metros (os mesmos limites do banco). */
 export const tamanhoDepositoSchema = z.strictObject({
   id: idSchemaCom("Depósito inválido"),

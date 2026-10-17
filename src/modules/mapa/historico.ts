@@ -67,6 +67,8 @@ export function rotuloTipoMovimentacao(tipo: string): string {
 
 function rotuloEstado(e: string | null): string | null {
   if (!e) return null;
+  // "trabalhando" é estado de pessoa (17/10/2026); "parado" serve aos dois.
+  if (e === "trabalhando") return "Trabalhando";
   return ROTULO_ESTADO[e as keyof typeof ROTULO_ESTADO] ?? e;
 }
 

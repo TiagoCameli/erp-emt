@@ -1802,6 +1802,7 @@ export function TelaMapa({
       podeEditar={permissoes.editar}
       salvando={salvando}
       posicionando={posicionandoPessoa === pessoaFicha.id}
+      relatorioDiasHref={permissoes.historico ? "/mapa/dias-de-pessoa" : null}
       onFechar={() => setFicha(null)}
       onFocar={() => pessoaFicha.pos && focar(pessoaFicha.pos, 17)}
       onPosicionar={() =>
