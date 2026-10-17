@@ -498,6 +498,8 @@ export function TelaMapa({
     sobre: EquipamentoMapa | null;
     /** Local onde a pessoa vai trabalhar (soltou dentro do raio dele, ou escolheu na ficha). */
     local: LocalidadeMapa | null;
+    /** Obra escolhida na ficha como local de trabalho (só quando `local` é null). */
+    obra?: ObraMapa | null;
   } | null>(null);
   const [pedidoEstado, setPedidoEstado] = React.useState<PedidoEstado | null>(
     null,
@@ -1689,8 +1691,8 @@ export function TelaMapa({
       if (!pendentePessoa) return true;
       setSalvando(true);
       try {
-        const { pessoa, para, sobre, local } = pendentePessoa;
-        const destino = destinoDaPessoa(para, local);
+        const { pessoa, para, sobre, local, obra = null } = pendentePessoa;
+        const destino = destinoDaPessoa(para, local, obra);
         if (!sobre && !destino) return true;
         const r = sobre
           ? await assinalarOperador({
@@ -1710,7 +1712,9 @@ export function TelaMapa({
             ? `${pessoa.nome} passa a operar ${sobre.codigo}`
             : local
               ? `${pessoa.nome} trabalha em ${local.nome}`
-              : `${pessoa.nome} realocado`,
+              : obra
+                ? `${pessoa.nome} trabalha na obra ${obra.nome}`
+                : `${pessoa.nome} realocado`,
         );
         if (ok) {
           setPendentePessoa(null);
@@ -2032,6 +2036,7 @@ export function TelaMapa({
       }
       maquinas={equipamentosVistos}
       localidades={estado.localidades}
+      obras={estado.obras}
       centrosCusto={centrosCusto}
       onTrocarCentro={(centroCustoId) =>
         trocarCentroPessoa(pessoaFicha, centroCustoId)
@@ -2066,6 +2071,21 @@ export function TelaMapa({
             sobre: null,
             local,
           });
+      }}
+      onTrocarObra={(obraId) => {
+        const obra = estado.obras.find((o) => o.id === obraId);
+        if (!obra) return;
+        // A pessoa vai para o ponto do nome da obra no mapa; obra sem ponto (sem trecho, área nem
+        // centro) deixa a pessoa onde está.
+        const para =
+          rotulosObra.find((o) => o.id === obraId)?.pos ?? pessoaFicha.pos;
+        setPendentePessoa({
+          pessoa: pessoaFicha,
+          para,
+          sobre: null,
+          local: null,
+          obra,
+        });
       }}
     />
   ) : objetoDaFicha ? (
@@ -2806,21 +2826,27 @@ export function TelaMapa({
               ? `${pendentePessoa.pessoa.nome} opera ${pendentePessoa.sobre.codigo}?`
               : pendentePessoa.local
                 ? `${pendentePessoa.pessoa.nome} trabalha em ${pendentePessoa.local.nome}?`
-                : `Realocar ${pendentePessoa.pessoa.nome}`
+                : pendentePessoa.obra
+                  ? `${pendentePessoa.pessoa.nome} trabalha na obra ${pendentePessoa.obra.nome}?`
+                  : `Realocar ${pendentePessoa.pessoa.nome}`
           }
           descricao={
             pendentePessoa.sobre
               ? `A pessoa passa a ser o operador de ${pendentePessoa.sobre.codigo}${pendentePessoa.sobre.operadorNome ? ` no lugar de ${pendentePessoa.sobre.operadorNome}` : ""} e acompanha a máquina no mapa.`
               : pendentePessoa.local
                 ? `${pendentePessoa.para ? `A pessoa trabalha em ${pendentePessoa.local.nome} e fica no ponto tocado` : `A pessoa aparece no ponto de ${pendentePessoa.local.nome}`} até ser realocada.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
-                : `A pessoa fica neste ponto (${pendentePessoa.para?.[1].toFixed(5)}, ${pendentePessoa.para?.[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
+                : pendentePessoa.obra
+                  ? `A obra passa a ser o local de trabalho enquanto estiver ativa: os dias trabalhados contam na obra (ou no centro escolhido na ficha).${pendentePessoa.para ? "" : " A pessoa fica sem posição até ser posta no mapa."}${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
+                  : `A pessoa fica neste ponto (${pendentePessoa.para?.[1].toFixed(5)}, ${pendentePessoa.para?.[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
           }
           textoConfirmar={
             pendentePessoa.sobre
               ? "Assinalar operador"
               : pendentePessoa.local
                 ? "Pôr no local"
-                : "Realocar"
+                : pendentePessoa.obra
+                  ? "Pôr na obra"
+                  : "Realocar"
           }
           exigeMotivo={false}
           onConfirmar={confirmarPessoa}

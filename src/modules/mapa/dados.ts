@@ -303,6 +303,7 @@ function pessoa(p: Linha): PessoaMapa {
     equipeId: textoOuNulo(p.equipe_id),
     equipeNome: texto(p.equipe_nome),
     obraId: textoOuNulo(p.obra_id),
+    obraMapaId: textoOuNulo(p.obra_mapa_id),
     frenteId: textoOuNulo(p.frente_id),
     equipamentoId: textoOuNulo(p.equipamento_id),
     areaId: textoOuNulo(p.area_id),
