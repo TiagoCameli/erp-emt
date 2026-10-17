@@ -145,6 +145,7 @@ import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import {
   destinoDaPessoa,
   pessoaNoFiltro,
+  pessoaSemPosicaoNaTela,
   posicaoDoOperador,
 } from "@/modules/mapa/pessoas";
 import {
@@ -788,7 +789,6 @@ export function TelaMapa({
     const idsNaCena = new Set(equipamentos.map((e) => e.id));
     const pessoas = estado.pessoas.flatMap((p) => {
       const pos = posicoesPendentes.get(p.id) ?? p.pos;
-      if (!pos) return [];
       // Operador de máquina filtrada para fora some junto com ela.
       if (
         p.equipamentoId &&
@@ -817,6 +817,9 @@ export function TelaMapa({
             ),
           },
         ];
+      // Sem ponto próprio, só aparece ao lado da máquina (acima): a carreta em frete ou na volta
+      // tem ponto só na tela, pela rota, e o motorista dela não tem nenhum no banco.
+      if (!pos) return [];
       return [{ ...p, pos }];
     });
     // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota). Frete
@@ -918,9 +921,13 @@ export function TelaMapa({
     ficha?.tipo === "equipamento"
       ? (equipamentosVistos.find((e) => e.id === ficha.id) ?? null)
       : null;
+  // Com o ponto da cena: o operador está ao lado da máquina, mesmo sem ponto no banco (carreta em
+  // frete), e a ficha centraliza nele.
   const pessoaFicha =
     ficha?.tipo === "pessoa"
-      ? (estado.pessoas.find((p) => p.id === ficha.id) ?? null)
+      ? (cena.pessoas.find((p) => p.id === ficha.id) ??
+        estado.pessoas.find((p) => p.id === ficha.id) ??
+        null)
       : null;
   const posicionandoEquipamento = posicionando
     ? (equipamentosVistos.find((e) => e.id === posicionando) ?? null)
@@ -936,15 +943,29 @@ export function TelaMapa({
       ),
     [cena.pessoas, filtros.busca, filtros.obraId],
   );
+  // Máquinas com ponto na tela (a carreta em frete ganha o da rota): o operador delas aparece ao lado.
+  const maquinasNoMapa = React.useMemo(
+    () => new Set(equipamentosVistos.filter((e) => e.pos).map((e) => e.id)),
+    [equipamentosVistos],
+  );
   const pessoasSemPosicao = React.useMemo(
     () =>
       estado.pessoas.filter(
         (p) =>
-          p.pos === null &&
-          !posicoesPendentes.has(p.id) &&
+          pessoaSemPosicaoNaTela(
+            p,
+            posicoesPendentes.has(p.id),
+            maquinasNoMapa,
+          ) &&
           pessoaNoFiltro(p, { busca: filtros.busca, obraId: filtros.obraId }),
       ),
-    [estado.pessoas, posicoesPendentes, filtros.busca, filtros.obraId],
+    [
+      estado.pessoas,
+      posicoesPendentes,
+      maquinasNoMapa,
+      filtros.busca,
+      filtros.obraId,
+    ],
   );
   const tiposConhecidos = React.useMemo(
     () =>
