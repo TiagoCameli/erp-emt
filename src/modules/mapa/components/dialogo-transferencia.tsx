@@ -41,7 +41,8 @@ import {
 /**
  * Confirmação do arraste (ou do "posicionar"): diz onde cada máquina vai cair, segundo a mesma
  * regra do banco (área > trecho > local > livre), pede a data efetiva e o motivo, e só pergunta
- * o estado quando alguma caiu fora de qualquer zona. No arraste, a pessoa escolhe entre
+ * o estado quando alguma que ainda não está no mapa caiu fora de qualquer zona. Transferir não muda o
+ * estado de quem já está no mapa (v1.27): o da zona só vale na primeira entrada. No arraste, a pessoa escolhe entre
  * transferência e ajuste de localização (só corrige o ponto: estado, obra e frente ficam, sem data
  * nem estado); a sugestão vem de `sugereAjuste` (continua na mesma zona = ajuste). Confirmar grava; cancelar devolve as
  * máquinas para onde estavam. Montado pelo pai só enquanto há pedido, por isso nasce limpo.
@@ -87,7 +88,10 @@ export interface ConfirmacaoTransferencia {
 
 const ESTADOS_LIVRE: EstadoMaquina[] = ["operando", "parado"];
 
-/** Onde a máquina cai; no ajuste sem o estado da zona, que não muda. */
+/**
+ * Onde a máquina cai. O estado da zona só aparece para quem entra no mapa agora (`comEstado`);
+ * quem já está mantém o seu, e no ajuste nada muda.
+ */
 function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
   const estado = (e: EstadoMaquina) =>
     comEstado ? ` · ${ROTULO_ESTADO[e].toLowerCase()}` : "";
@@ -221,7 +225,9 @@ export function DialogoTransferencia({
   );
 
   const n = daFicha ? 1 : pendente.itens.length;
-  const algumLivre = !ajuste && itens.some((i) => i.destino.tipo === "livre");
+  const algumLivre =
+    !ajuste &&
+    itens.some((i) => i.destino.tipo === "livre" && i.equipamento.pos === null);
   const alvo = n > 1 ? `${n} equipamentos` : pendente.principal.codigo;
   const titulo =
     pendente.modo === "posicionar"
@@ -269,7 +275,7 @@ export function DialogoTransferencia({
             ? "Escolha para onde a máquina vai e em que obra ela trabalha. Depois, se quiser, arraste para o lugar exato (ajuste de localização)."
             : ajuste
               ? "Só corrige o ponto no mapa. Estado, obra e frente continuam os mesmos; não conta como transferência."
-              : "A posição nova vale a partir da data efetiva e fica na trilha de movimentações."
+              : "A posição nova vale a partir da data efetiva e fica na trilha de movimentações. O estado da máquina não muda."
       }
       textoConfirmar={
         pendente.modo === "posicionar"
@@ -336,6 +342,7 @@ export function DialogoTransferencia({
             <ul className="flex flex-col gap-2 text-detalhe">
               {itens.map((item) => {
                 const linha = ajuste ? null : obraDaLinha(item);
+                const entra = item.equipamento.pos === null;
                 return (
                   <li
                     key={item.equipamento.id}
@@ -348,8 +355,13 @@ export function DialogoTransferencia({
                       </span>
                     </p>
                     <p className="text-muted-foreground">
-                      {descreverDestino(item.destino, !ajuste)}
+                      {descreverDestino(item.destino, !ajuste && entra)}
                     </p>
+                    {!ajuste && !entra ? (
+                      <p className="text-muted-foreground">
+                        Continua {ROTULO_ESTADO[item.equipamento.estado].toLowerCase()}.
+                      </p>
+                    ) : null}
                     {linha ? (
                       <p className="text-foreground">{linha.texto}</p>
                     ) : null}
