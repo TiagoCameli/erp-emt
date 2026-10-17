@@ -16,7 +16,9 @@ import {
   paraCentrosColaborador,
   type CentrosColaborador,
 } from "@/modules/mapa/centros-pessoa";
+import { itemParaRpc } from "@/modules/mapa/alocacao";
 import {
+  alocarSchema,
   assinalarOperadorSchema,
   centroCustoPessoaSchema,
   colocarLocalSchema,
@@ -257,6 +259,41 @@ export async function assinalarOperador(
       "mapa.operador",
       erro,
       `Não foi possível assinalar o operador: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Alocação em lote (v1.30): máquina, local/obra e centro de uma ou de trinta pessoas, numa
+ * transação só (fn_mapa_alocar). É o caminho da ficha, do quadro de alocação e da seleção
+ * múltipla. Campo ausente não mexe; null limpa.
+ */
+export async function alocar(dados: unknown): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = alocarSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const { itens, data, motivo } = validado.data;
+  try {
+    const supabase = await createClient();
+    const { data: total, error } = await supabase.rpc("fn_mapa_alocar", {
+      p_itens: itens.map(itemParaRpc) as unknown as Json,
+      p_data: data || undefined,
+      p_motivo: motivo || undefined,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.alocar",
+        error,
+        mensagemDaRpc(error, "Não foi possível alocar"),
+      );
+    return concluir(total ?? 0);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.alocar",
+      erro,
+      `Não foi possível alocar: ${textoDoErro(erro)}`,
     );
   }
 }
