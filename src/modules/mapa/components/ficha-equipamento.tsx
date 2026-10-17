@@ -84,6 +84,11 @@ export interface FichaEquipamentoProps {
   implementos: ImplementoMapa[];
   /** Acopla nesta máquina (id do implemento) ou desacopla (`acoplar` false). */
   onAcoplar: (implementoId: string, acoplar: boolean) => void;
+  /**
+   * Registra a chegada do frete aberto (hoje) sem sair do mapa. Só vem para quem edita Frete; sem
+   * ele a ficha manda lançar no Frete.
+   */
+  onRegistrarChegada?: (() => void) | null;
 }
 
 function Linha({
@@ -125,6 +130,7 @@ export function FichaEquipamento({
   onGirar,
   implementos,
   onAcoplar,
+  onRegistrarChegada = null,
 }: FichaEquipamentoProps) {
   const { acoplados, opcoes: opcoesImplemento } = implementosDoCard(
     implementos,
@@ -306,9 +312,21 @@ export function FichaEquipamento({
               {frete.criadoEm ? formatarDataHora(frete.criadoEm) : "–"}
             </Linha>
             <p className="text-legenda text-muted-foreground">
-              Posição estimada pelo tempo desde a saída. A chegada se lança no
-              Frete.
+              Posição estimada pelo tempo desde a saída.
+              {onRegistrarChegada ? "" : " A chegada se lança no Frete."}
             </p>
+            {onRegistrarChegada ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="mt-1 self-start"
+                disabled={salvando}
+                onClick={onRegistrarChegada}
+              >
+                Registrar chegada hoje
+              </Button>
+            ) : null}
           </div>
         ) : null}
         {tanque ? (

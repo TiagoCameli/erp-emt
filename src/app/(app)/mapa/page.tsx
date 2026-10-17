@@ -82,6 +82,7 @@ export default async function PaginaMapa({
         colocarInicial={colocarInicial}
         valoresEstoque={valoresEstoque}
         centrosCusto={centrosCusto}
+        podeRegistrarChegada={temPermissao(usuario, "frete.fretes", "editar")}
         google={{
           chave:
             process.env.NEXT_GOOGLE_MAPS_API_KEY ||

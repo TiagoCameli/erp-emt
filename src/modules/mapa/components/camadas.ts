@@ -187,8 +187,16 @@ export interface Cena {
   mostrarPessoas: boolean;
   mostrarRotulos: boolean;
   mostrarAreas: boolean;
-  /** Muda a cada arraste/seleção para o deck.gl reavaliar os accessors. */
-  tick: number;
+  /**
+   * Sobe só quando as posições que valem mais que as do banco mudam (arraste em curso, solto à
+   * espera do OK). É o único gatilho de `getPosition`: seleção e mouse não movem nada, então não
+   * recalculam a posição de toda a frota (17/10/2026, fluidez).
+   */
+  versaoPosicoes: number;
+  /** Rumo em prévia (anel de giro em curso), que vale mais que o `heading` da máquina. */
+  rumos: ReadonlyMap<string, number> | null;
+  /** Sobe a cada passo do giro em curso: gatilho de `getOrientation`. */
+  versaoRumos: number;
   /** Zoom atual do mapa (degrau de meio nível): os nomes só aparecem de perto. */
   zoom: number;
 }
@@ -235,14 +243,96 @@ function posicaoDe(
   return cena.posicoes?.get(d.id) ?? d.pos ?? [0, 0];
 }
 
+function rumoDe(cena: Cena, d: EquipamentoMapa): number {
+  return cena.rumos?.get(d.id) ?? d.heading;
+}
+
+/**
+ * Derivados das listas da cena guardados pela referência da lista: o deck.gl compara `data` por
+ * referência, e um array novo a cada redesenho (cada pixel de arraste, cada passo de mouse) fazia
+ * todas as camadas regerarem todos os atributos. A cena só troca as listas quando o dado muda.
+ */
+function guardado<K extends object, V>(
+  cache: WeakMap<K, V>,
+  chave: K,
+  calcular: () => V,
+): V {
+  let v = cache.get(chave);
+  if (v === undefined) {
+    v = calcular();
+    cache.set(chave, v);
+  }
+  return v;
+}
+const cacheAreas = new WeakMap<
+  readonly AreaMapa[],
+  {
+    partes: { area: AreaMapa; poligono: Posicao[][] }[];
+    nomes: AreaMapa[];
+  }
+>();
+const cachePorModelo = new WeakMap<
+  readonly EquipamentoMapa[],
+  Map<string, EquipamentoMapa[]>
+>();
+const cacheObjetos = new WeakMap<
+  readonly ObjetoNoMapa[],
+  {
+    tanques: Map<string, ObjetoNoMapa[]>;
+    cone: ObjetoNoMapa[];
+    caixa: ObjetoNoMapa[];
+  }
+>();
+const cacheAnelGiro = new WeakMap<
+  { id: string; pos: Posicao; raioM: number },
+  { id: string; pos: Posicao; raioM: number }[]
+>();
+/** Anel de seleção: refeito só quando a frota, a seleção ou o item sob o mouse mudam. */
+let ultimoAnel: {
+  equipamentos: readonly EquipamentoMapa[];
+  selecao: ReadonlySet<string>;
+  hover: string | null;
+  marcados: EquipamentoMapa[];
+} | null = null;
+function marcadosDe(cena: Cena): EquipamentoMapa[] {
+  const u = ultimoAnel;
+  if (
+    u &&
+    u.equipamentos === cena.equipamentos &&
+    u.selecao === cena.selecao &&
+    u.hover === cena.hover
+  )
+    return u.marcados;
+  const marcados = cena.equipamentos.filter(
+    (d) => cena.selecao.has(d.id) || cena.hover === d.id,
+  );
+  ultimoAnel = {
+    equipamentos: cena.equipamentos,
+    selecao: cena.selecao,
+    hover: cena.hover,
+    marcados,
+  };
+  return marcados;
+}
+
 export function montarCamadas(cena: Cena): Layer[] {
   const camadas: Layer[] = [];
-  const gatilho = [cena.tick, cena.selecao.size, cena.hover];
+  // Gatilhos separados: posição só com o arraste; cor só com a seleção; o anel com os dois e o
+  // mouse. O resto (estado, rumo gravado, rótulo) vem no próprio dado, que troca de referência.
+  const gatilhoPosicao = [cena.versaoPosicoes];
+  const gatilhoCor = [cena.selecao];
+  const gatilhoAnel = [cena.versaoPosicoes, cena.selecao, cena.hover];
 
   if (cena.mostrarAreas && cena.areas.length > 0) {
-    const partes = cena.areas.flatMap((area) =>
-      area.poligonos.map((poligono) => ({ area, poligono })),
-    );
+    const { partes, nomes } = guardado(cacheAreas, cena.areas, () => ({
+      partes: cena.areas.flatMap((area) =>
+        area.poligonos.map((poligono) => ({ area, poligono })),
+      ),
+      // Área de edificação de uma obra leva o nome da obra (rótulo da obra, clicável).
+      nomes: cena.areas.filter(
+        (a) => a.centro && !(a.tipo === "edificacao" && a.obraId),
+      ),
+    }));
     camadas.push(
       new PolygonLayer<{ area: AreaMapa; poligono: Posicao[][] }>({
         id: "areas",
@@ -272,10 +362,7 @@ export function montarCamadas(cena: Cena): Layer[] {
       new TextLayer<AreaMapa>({
         id: "areas-nome",
         visible: cena.zoom >= ZOOM_NOMES.areas,
-        // Área de edificação de uma obra leva o nome da obra (rótulo da obra, clicável).
-        data: cena.areas.filter(
-          (a) => a.centro && !(a.tipo === "edificacao" && a.obraId),
-        ),
+        data: nomes,
         getPosition: (d) => d.centro ?? [0, 0],
         getText: (d) => d.nome,
         getSize: 12,
@@ -420,16 +507,23 @@ export function montarCamadas(cena: Cena): Layer[] {
 
   // Tanques com o modelo detalhado (aéreo deitado na bacia ou de usina em pé), na escala das
   // máquinas: uma camada por modelo e cor, com a cor já pintada na malha.
-  const tanquesPorMalha = new Map<string, ObjetoNoMapa[]>();
-  for (const o of cena.objetos) {
-    if (o.forma !== "tanque_horizontal" && o.forma !== "tanque_vertical")
-      continue;
-    const chave = `${o.forma}:${o.cor.join(",")}`;
-    const lista = tanquesPorMalha.get(chave);
-    if (lista) lista.push(o);
-    else tanquesPorMalha.set(chave, [o]);
-  }
-  for (const [chave, dados] of tanquesPorMalha) {
+  const objetosPorForma = guardado(cacheObjetos, cena.objetos, () => {
+    const tanques = new Map<string, ObjetoNoMapa[]>();
+    for (const o of cena.objetos) {
+      if (o.forma !== "tanque_horizontal" && o.forma !== "tanque_vertical")
+        continue;
+      const chave = `${o.forma}:${o.cor.join(",")}`;
+      const lista = tanques.get(chave);
+      if (lista) lista.push(o);
+      else tanques.set(chave, [o]);
+    }
+    return {
+      tanques,
+      cone: cena.objetos.filter((o) => o.forma === "cone"),
+      caixa: cena.objetos.filter((o) => o.forma === "caixa"),
+    };
+  });
+  for (const [chave, dados] of objetosPorForma.tanques) {
     const { forma, cor } = dados[0];
     if (forma !== "tanque_horizontal" && forma !== "tanque_vertical") continue;
     camadas.push(
@@ -459,7 +553,7 @@ export function montarCamadas(cena: Cena): Layer[] {
   // Pilhas (cone) e depósitos (caixa) em pé no chão, e o nome de cada objeto (clicável: abre a
   // ficha com "Mover no mapa").
   for (const forma of ["cone", "caixa"] as const) {
-    const dados = cena.objetos.filter((o) => o.forma === forma);
+    const dados = objetosPorForma[forma];
     if (dados.length === 0) continue;
     // A caixa do luma tem 2 de lado; o cone, 1.
     const unidade = forma === "caixa" ? 0.5 : 1;
@@ -514,11 +608,12 @@ export function montarCamadas(cena: Cena): Layer[] {
 
   // Anel de giro: só o contorno (o miolo deixa a máquina clicável para arrastar), com mínimo em
   // pixels para dar para pegar mesmo de longe.
-  if (cena.anelGiro)
+  const anelGiro = cena.anelGiro;
+  if (anelGiro)
     camadas.push(
       new ScatterplotLayer<{ id: string; pos: Posicao; raioM: number }>({
         id: ID_GIRO,
-        data: [cena.anelGiro],
+        data: guardado(cacheAnelGiro, anelGiro, () => [anelGiro]),
         getPosition: (d) => d.pos,
         getRadius: (d) => d.raioM,
         radiusUnits: "meters",
@@ -629,12 +724,15 @@ export function montarCamadas(cena: Cena): Layer[] {
   // chão eles sumiriam atrás do corpo da máquina, que fica na frente para a câmera.
   const porCima = { depthCompare: "always" as const };
 
-  const porModelo = new Map<string, EquipamentoMapa[]>();
-  for (const d of cena.equipamentos) {
-    const lista = porModelo.get(d.modelo3d);
-    if (lista) lista.push(d);
-    else porModelo.set(d.modelo3d, [d]);
-  }
+  const porModelo = guardado(cachePorModelo, cena.equipamentos, () => {
+    const mapa = new Map<string, EquipamentoMapa[]>();
+    for (const d of cena.equipamentos) {
+      const lista = mapa.get(d.modelo3d);
+      if (lista) lista.push(d);
+      else mapa.set(d.modelo3d, [d]);
+    }
+    return mapa;
+  });
   for (const [chave, dados] of porModelo) {
     const escala = cena.modelos.get(chave)?.escala ?? 1;
     camadas.push(
@@ -644,7 +742,7 @@ export function montarCamadas(cena: Cena): Layer[] {
         scenegraph: arquivoDoModelo(cena.modelos, chave),
         pickable: true,
         getPosition: (d) => posicaoDe(cena, d),
-        getOrientation: (d) => orientacao(d.heading),
+        getOrientation: (d) => orientacao(rumoDe(cena, d)),
         getColor: (d) =>
           cena.selecao.has(d.id)
             ? [255, 230, 150]
@@ -658,9 +756,9 @@ export function montarCamadas(cena: Cena): Layer[] {
         sizeScale: escala * ESCALA_MAQUINA,
         _lighting: "pbr",
         updateTriggers: {
-          getPosition: gatilho,
-          getOrientation: gatilho,
-          getColor: gatilho,
+          getPosition: gatilhoPosicao,
+          getOrientation: [cena.versaoRumos],
+          getColor: gatilhoCor,
         },
       }),
     );
@@ -679,7 +777,7 @@ export function montarCamadas(cena: Cena): Layer[] {
         // Em metros no terreno, como as máquinas: sem mínimo nem máximo em pixels.
         sizeScale: TAMANHO_BONECO,
         _lighting: "pbr",
-        updateTriggers: { getPosition: gatilho, getColor: gatilho },
+        updateTriggers: { getPosition: gatilhoPosicao, getColor: gatilhoCor },
       }),
     );
   }
@@ -687,9 +785,7 @@ export function montarCamadas(cena: Cena): Layer[] {
   // Anel de seleção/hover por cima das miniaturas (e dos rótulos não): só o contorno, para a
   // máquina continuar visível dentro dele. Branco com contorno escuro aparece no satélite
   // (escuro) e no mapa (claro), e não some sobre o traçado amarelo do Lote 09.
-  const marcados = cena.equipamentos.filter(
-    (d) => cena.selecao.has(d.id) || cena.hover === d.id,
-  );
+  const marcados = marcadosDe(cena);
   camadas.push(
     new ScatterplotLayer<EquipamentoMapa>({
       id: "anel",
@@ -708,9 +804,9 @@ export function montarCamadas(cena: Cena): Layer[] {
       pickable: false,
       parameters: porCima,
       updateTriggers: {
-        getPosition: gatilho,
-        getFillColor: gatilho,
-        getLineColor: gatilho,
+        getPosition: gatilhoAnel,
+        getFillColor: gatilhoAnel,
+        getLineColor: gatilhoAnel,
       },
     }),
   );
@@ -735,7 +831,7 @@ export function montarCamadas(cena: Cena): Layer[] {
         characterSet: "auto",
         pickable: false,
         parameters: porCima,
-        updateTriggers: { getPosition: gatilho, getBackgroundColor: gatilho },
+        updateTriggers: { getPosition: gatilhoPosicao },
       }),
     );
   }
