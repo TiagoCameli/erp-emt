@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  NENHUM,
   avisoDaTrocaPelaMaquina,
   avisoDaTrocaPelaPessoa,
+  edicaoDaCelula,
+  operadorComPendente,
+  pessoaComPendente,
+  semAlocacao,
   itemDeVolta,
   itemParaRpc,
   loteDeVolta,
@@ -234,6 +239,60 @@ describe("sugestões de um clique", () => {
     });
     expect(sugestaoDoLocal(comCentro, { obraId: null })).toBeNull();
     expect(sugestaoDoLocal(pessoa(P1, "João"), { obraId: OBRA })).toBeNull();
+  });
+});
+
+describe("quadro de alocação", () => {
+  const base = {
+    id: P1,
+    equipamentoId: null,
+    localidadeId: null,
+    obraMapaId: null,
+    centroCustoId: null,
+    areaId: null,
+  };
+
+  it("sem alocação: nem máquina, nem local, nem obra do mapa, nem área", () => {
+    expect(semAlocacao(base)).toBe(true);
+    expect(semAlocacao({ ...base, obraMapaId: OBRA })).toBe(false);
+    expect(semAlocacao({ ...base, equipamentoId: M1 })).toBe(false);
+  });
+
+  it("célula vira campo do lote; nenhum limpa", () => {
+    expect(edicaoDaCelula(P1, "maquina", M1)).toEqual({ colaboradorId: P1, equipamentoId: M1 });
+    expect(edicaoDaCelula(P1, "maquina", NENHUM)).toEqual({ colaboradorId: P1, equipamentoId: null });
+    expect(edicaoDaCelula(P1, "lugar", `obra:${OBRA}`)).toEqual({ colaboradorId: P1, obraId: OBRA });
+    expect(edicaoDaCelula(P1, "lugar", `local:${SILO}`)).toEqual({ colaboradorId: P1, localidadeId: SILO });
+    expect(edicaoDaCelula(P1, "lugar", NENHUM)).toEqual({
+      colaboradorId: P1,
+      localidadeId: null,
+      obraId: null,
+    });
+    expect(edicaoDaCelula(P1, "lugar", "lixo")).toBeNull();
+    expect(edicaoDaCelula(P1, "centro", NENHUM)).toEqual({ colaboradorId: P1, centroCustoId: null });
+  });
+
+  it("a linha mostra o pendente: obra como local zera o local", () => {
+    const comLocal = { ...base, localidadeId: SILO };
+    expect(pessoaComPendente(comLocal, { colaboradorId: P1, obraId: OBRA })).toMatchObject({
+      localidadeId: null,
+      obraMapaId: OBRA,
+    });
+    expect(pessoaComPendente(comLocal, undefined)).toBe(comLocal);
+  });
+
+  it("operador da máquina com o pendente: quem pegou, ou ninguém se o de agora saiu", () => {
+    const cb = { id: M1, operadorId: P2 };
+    expect(operadorComPendente(cb, new Map())).toBe(P2);
+    expect(
+      operadorComPendente(cb, new Map([[P1, { colaboradorId: P1, equipamentoId: M1 }]])),
+    ).toBe(P1);
+    expect(
+      operadorComPendente(cb, new Map([[P2, { colaboradorId: P2, equipamentoId: null }]])),
+    ).toBeNull();
+    expect(
+      operadorComPendente(cb, new Map([[P2, { colaboradorId: P2, centroCustoId: C1 }]])),
+    ).toBe(P2);
   });
 });
 

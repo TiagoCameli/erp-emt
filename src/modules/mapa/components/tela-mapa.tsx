@@ -8,6 +8,7 @@ import {
   CheckSquare,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Compass,
   HardHat,
   Layers,
@@ -67,9 +68,14 @@ import {
 } from "@/modules/mapa/actions";
 import {
   loteDeVolta,
+  semAlocacao,
   textoDaAlocacao,
 } from "@/modules/mapa/alocacao";
 import type { ItemAlocacao } from "@/modules/mapa/schemas";
+import {
+  QuadroAlocacao,
+  type PedidoQuadro,
+} from "@/modules/mapa/components/quadro-alocacao";
 import {
   DialogoEstado,
   type ConfirmacaoEstado,
@@ -544,6 +550,8 @@ export function TelaMapa({
   } | null>(null);
   const [pendentePessoa, setPendentePessoa] =
     React.useState<PedidoPessoa | null>(null);
+  // Quadro de alocação aberto (v1.30): tudo, só a seleção, ou só quem está sem alocação.
+  const [quadro, setQuadro] = React.useState<PedidoQuadro | null>(null);
   const [pedidoEstado, setPedidoEstado] = React.useState<PedidoEstado | null>(
     null,
   );
@@ -998,6 +1006,11 @@ export function TelaMapa({
           pessoaNoFiltro(p, { busca: filtros.busca, obraId: filtros.obraId }),
       ),
     [estado.pessoas, posicoesPendentes, filtros.busca, filtros.obraId],
+  );
+  // Sem máquina, local, obra nem área no Mapa: vão para o topo do painel com "Alocar".
+  const pessoasSemAlocacao = React.useMemo(
+    () => estado.pessoas.filter(semAlocacao).length,
+    [estado.pessoas],
   );
   const tiposConhecidos = React.useMemo(
     () =>
@@ -2645,6 +2658,21 @@ export function TelaMapa({
                   <ArrowRightLeft />
                   Transferir
                 </Button>
+                {pessoasDoLote.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setQuadro({ idsPessoas: pessoasDoLote.map((p) => p.id) })
+                    }
+                    disabled={salvando}
+                    title="Máquina, local e centro das pessoas selecionadas, de uma vez"
+                  >
+                    <ClipboardList />
+                    Alocar
+                  </Button>
+                ) : null}
                 {noMapa.some((e) => !selecao.has(e.id)) ? (
                   <Button
                     type="button"
@@ -2740,6 +2768,15 @@ export function TelaMapa({
               {permissoes.editar
                 ? botaoAlternar(multi, "Seleção múltipla", MousePointer2, () =>
                     alternarMulti(),
+                  )
+                : null}
+              {permissoes.editar
+                ? botaoAlternar(
+                    quadro !== null,
+                    "Alocação",
+                    ClipboardList,
+                    () => setQuadro({}),
+                    "Quadro de alocação: máquina, local e centro de todo mundo",
                   )
                 : null}
               {botaoAlternar(mostrarPessoas, "Pessoas", Users, () =>
@@ -2981,6 +3018,8 @@ export function TelaMapa({
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
+            pessoasSemAlocacao={pessoasSemAlocacao}
+            onAlocarSemAlocacao={() => setQuadro({ soSemAlocacao: true })}
             objetosSemLugar={objetosSemLugar}
             onEscolherObjeto={clicarObjeto}
           >
@@ -3190,6 +3229,18 @@ export function TelaMapa({
         />
       ) : null}
 
+      <QuadroAlocacao
+        pedido={quadro}
+        onFechar={() => setQuadro(null)}
+        telaLarga={telaLarga}
+        pessoas={estado.pessoas}
+        maquinas={equipamentosVistos}
+        localidades={estado.localidades}
+        obras={estado.obras}
+        centrosCusto={centrosCusto}
+        salvando={salvando}
+        onSalvar={(itens) => alocarComDesfazer(itens)}
+      />
       {pendentePessoa ? (
         <ConfirmDialog
           aberto
