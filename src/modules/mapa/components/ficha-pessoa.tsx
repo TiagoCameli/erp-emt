@@ -5,7 +5,11 @@ import { Crosshair, LocateFixed, X } from "lucide-react";
 
 import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
-import { CentrosPessoa } from "@/modules/mapa/components/centros-pessoa";
+import {
+  CentrosPessoa,
+  HistoricoLocal,
+  useDiasPessoa,
+} from "@/modules/mapa/components/centros-pessoa";
 import type {
   EquipamentoMapa,
   LocalidadeMapa,
@@ -78,6 +82,10 @@ export function FichaPessoa({
             .join(" · "),
         })),
     [maquinas],
+  );
+  const diasPessoa = useDiasPessoa(
+    pessoa.id,
+    [pessoa.obraId, pessoa.localidadeId, pessoa.equipamentoId].join("|"),
   );
   const local = pessoa.localidadeId
     ? (localidades.find((l) => l.id === pessoa.localidadeId) ?? null)
@@ -169,13 +177,14 @@ export function FichaPessoa({
         ) : (
           <p>{local?.nome ?? "–"}</p>
         )}
+        <HistoricoLocal dados={diasPessoa} />
       </div>
 
       <CentrosPessoa
         colaboradorId={pessoa.id}
         podeEditar={podeEditar}
         relatorioHref={relatorioDiasHref}
-        lugar={[pessoa.obraId, pessoa.localidadeId, pessoa.equipamentoId].join("|")}
+        dados={diasPessoa}
       />
 
       {podeEditar ? (

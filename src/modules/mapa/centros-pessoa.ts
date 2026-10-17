@@ -37,6 +37,21 @@ export interface CentrosColaborador {
   } | null;
   mes: { centroId: string; centroNome: string; dias: number }[];
   periodos: PeriodoCentro[];
+  /** Centro de agora e o dia em que a pessoa entrou nele (só o centro, sem olhar o motivo). */
+  centroAtual: { centroId: string; centroNome: string; desde: string } | null;
+  /** Local de agora (nome vazio = sem local) e o dia em que entrou nele. */
+  localAtual: { localidadeId: string | null; nome: string; desde: string } | null;
+  /** Cada troca, a mais nova primeiro; a última da lista é o primeiro dia registrado. */
+  mudancasCentro: MudancaPessoa[];
+  mudancasLocal: MudancaPessoa[];
+}
+
+/** Uma troca de centro ou de local: o dia e para onde foi (nome vazio = sem local). */
+export interface MudancaPessoa {
+  data: string;
+  nome: string;
+  /** De onde saiu; null no primeiro dia registrado. */
+  antes: string | null;
 }
 
 const objeto = (v: unknown): Record<string, unknown> | null =>
@@ -60,6 +75,8 @@ export function paraCentrosColaborador(
   const b = objeto(bruto);
   if (!b) return null;
   const atual = objeto(b.atual);
+  const centroAtual = objeto(b.centro_atual);
+  const localAtual = objeto(b.local_atual);
   return {
     estado: b.estado === "parado" ? "parado" : "trabalhando",
     trabalhados: inteiro(b.trabalhados),
@@ -76,6 +93,30 @@ export function paraCentrosColaborador(
       centroId: texto(m.centro_id),
       centroNome: texto(m.centro_nome),
       dias: inteiro(m.dias),
+    })),
+    centroAtual: centroAtual
+      ? {
+          centroId: texto(centroAtual.centro_id),
+          centroNome: texto(centroAtual.centro_nome),
+          desde: texto(centroAtual.desde),
+        }
+      : null,
+    localAtual: localAtual
+      ? {
+          localidadeId: texto(localAtual.localidade_id) || null,
+          nome: texto(localAtual.nome),
+          desde: texto(localAtual.desde),
+        }
+      : null,
+    mudancasCentro: lista(b.mudancas_centro).map((m, i, todas) => ({
+      data: texto(m.data),
+      nome: texto(m.centro_nome),
+      antes: i === todas.length - 1 ? null : texto(m.antes_nome),
+    })),
+    mudancasLocal: lista(b.mudancas_local).map((m, i, todas) => ({
+      data: texto(m.data),
+      nome: texto(m.nome),
+      antes: i === todas.length - 1 ? null : texto(m.antes_nome),
     })),
     periodos: lista(b.periodos).map((p) => ({
       centroId: texto(p.centro_id),
