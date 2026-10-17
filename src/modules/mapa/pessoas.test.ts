@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { destinoDaPessoa, pessoaNoFiltro } from "@/modules/mapa/pessoas";
+import { distanciaM } from "@/modules/mapa/geo";
+import {
+  destinoDaPessoa,
+  pessoaNoFiltro,
+  posicaoDoOperador,
+} from "@/modules/mapa/pessoas";
 import type { PessoaMapa } from "@/modules/mapa/tipos";
 
 function pessoa(parcial: Partial<PessoaMapa>): PessoaMapa {
@@ -91,5 +96,19 @@ describe("destinoDaPessoa", () => {
 
   it("sem ponto e sem local: nada a mover", () => {
     expect(destinoDaPessoa(null, null)).toBeNull();
+  });
+});
+
+describe("posicaoDoOperador", () => {
+  const maquina: [number, number] = [-72.7067, -7.6121];
+
+  it("fica à esquerda (oeste) da máquina, na mesma latitude", () => {
+    const p = posicaoDoOperador(maquina, 39);
+    expect(p[0]).toBeLessThan(maquina[0]);
+    expect(p[1]).toBeCloseTo(maquina[1], 9);
+  });
+
+  it("à distância pedida, para não cair em cima da máquina", () => {
+    expect(distanciaM(maquina, posicaoDoOperador(maquina, 39))).toBeCloseTo(39, 0);
   });
 });

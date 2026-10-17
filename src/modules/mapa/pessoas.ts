@@ -1,5 +1,18 @@
 import { normalizarBusca } from "@/lib/busca";
+import { deslocar } from "@/modules/mapa/geo";
 import type { PessoaMapa, Posicao } from "@/modules/mapa/tipos";
+
+/**
+ * Onde o boneco de quem opera uma máquina aparece: ao lado esquerdo dela (pedido do Tiago,
+ * 17/10/2026), a `afastamentoM` metros para o oeste — a esquerda da tela com o norte para cima.
+ * O afastamento é o raio do anel da máquina, que já a contém: o boneco nunca cai em cima dela.
+ */
+export function posicaoDoOperador(
+  maquina: Posicao,
+  afastamentoM: number,
+): Posicao {
+  return deslocar(maquina, 270, afastamentoM);
+}
 
 /**
  * Destino de `fn_mapa_mover_colaboradores` para uma pessoa posta no mapa. Tocou (ou soltou) dentro

@@ -140,7 +140,11 @@ import { extrasPorLocal } from "@/modules/mapa/dados";
 import { pontoNaObra } from "@/modules/mapa/obra-destino";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
-import { destinoDaPessoa, pessoaNoFiltro } from "@/modules/mapa/pessoas";
+import {
+  destinoDaPessoa,
+  pessoaNoFiltro,
+  posicaoDoOperador,
+} from "@/modules/mapa/pessoas";
 import {
   destinoDaPessoaNoLote,
   pontosDoLote,
@@ -788,6 +792,19 @@ export function TelaMapa({
         equipamentosVistos.some((e) => e.id === p.equipamentoId)
       )
         return [];
+      // Operador: ao lado esquerdo da máquina (onde ela está na cena, inclusive arrastada). A
+      // pessoa que está sendo movida segue o arraste, não a máquina de antes.
+      const maquina =
+        p.equipamentoId && pendentePessoa?.pessoa.id !== p.id
+          ? equipamentos.find((e) => e.id === p.equipamentoId)
+          : undefined;
+      if (maquina)
+        return [
+          {
+            ...p,
+            pos: posicaoDoOperador(maquina.pos, raioDoAnelM(maquina.modelo3d)),
+          },
+        ];
       return [{ ...p, pos }];
     });
     // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota). Frete
@@ -849,6 +866,7 @@ export function TelaMapa({
     filtrados,
     posicoesPendentes,
     pendente,
+    pendentePessoa,
     medidosPorId,
     estado.pessoas,
     equipamentosVistos,
