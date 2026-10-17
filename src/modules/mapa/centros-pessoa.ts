@@ -17,6 +17,7 @@ export const ROTULO_MOTIVO_PESSOA: Record<string, string> = {
   escolhido: "Centro escolhido na ficha",
   sem_obra: "Trabalhando sem obra",
   obra_sem_centro: "Obra sem centro de custo",
+  obra_inativa: "Obra inativa",
   parado: "Parado",
 };
 

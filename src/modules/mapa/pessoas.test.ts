@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { distanciaM } from "@/modules/mapa/geo";
 import {
   destinoDaPessoa,
+  lugarDaPessoa,
   pessoaNoFiltro,
   posicaoDoOperador,
 } from "@/modules/mapa/pessoas";
@@ -17,6 +18,7 @@ function pessoa(parcial: Partial<PessoaMapa>): PessoaMapa {
     equipeId: null,
     equipeNome: "",
     obraId: "obra-a",
+    obraMapaId: null,
     frenteId: null,
     equipamentoId: null,
     areaId: null,
@@ -96,6 +98,63 @@ describe("destinoDaPessoa", () => {
 
   it("sem ponto e sem local: nada a mover", () => {
     expect(destinoDaPessoa(null, null)).toBeNull();
+  });
+
+  it("obra como local: grava a obra, sem local, no ponto dado", () => {
+    expect(destinoDaPessoa([-72.5, -7.5], null, { id: "obra-a" })).toEqual({
+      obra_id: "obra-a",
+      lng: -72.5,
+      lat: -7.5,
+    });
+    expect(destinoDaPessoa(null, null, { id: "obra-a" })).toEqual({
+      obra_id: "obra-a",
+    });
+  });
+
+  it("local ganha da obra (o local já diz a obra dele)", () => {
+    expect(destinoDaPessoa(null, { id: "silo" }, { id: "obra-a" })).toEqual({
+      localidade_id: "silo",
+    });
+  });
+});
+
+describe("lugarDaPessoa", () => {
+  const ativas = new Set(["obra-a"]);
+
+  it("local escolhido aparece como local", () => {
+    expect(lugarDaPessoa(pessoa({ localidadeId: "silo" }), ativas)).toBe(
+      "local:silo",
+    );
+  });
+
+  it("obra do Mapa, ativa, sem local: a obra é o local", () => {
+    expect(lugarDaPessoa(pessoa({ obraMapaId: "obra-a" }), ativas)).toBe(
+      "obra:obra-a",
+    );
+  });
+
+  it("obra só do RH não conta como local escolhido", () => {
+    expect(
+      lugarDaPessoa(pessoa({ obraId: "obra-a", obraMapaId: null }), ativas),
+    ).toBe("");
+  });
+
+  it("obra inativa deixa de ser o local", () => {
+    expect(lugarDaPessoa(pessoa({ obraMapaId: "obra-velha" }), ativas)).toBe(
+      "",
+    );
+  });
+
+  it("quem opera máquina ou está numa área não mostra a obra como local", () => {
+    expect(
+      lugarDaPessoa(
+        pessoa({ obraMapaId: "obra-a", equipamentoId: "eq-1" }),
+        ativas,
+      ),
+    ).toBe("");
+    expect(
+      lugarDaPessoa(pessoa({ obraMapaId: "obra-a", areaId: "area-1" }), ativas),
+    ).toBe("");
   });
 });
 

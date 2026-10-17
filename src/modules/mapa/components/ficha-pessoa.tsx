@@ -10,10 +10,12 @@ import {
   HistoricoLocal,
   useDiasPessoa,
 } from "@/modules/mapa/components/centros-pessoa";
+import { lugarDaPessoa } from "@/modules/mapa/pessoas";
 import type {
   CentroCustoOpcaoMapa,
   EquipamentoMapa,
   LocalidadeMapa,
+  ObraMapa,
   PessoaMapa,
 } from "@/modules/mapa/tipos";
 
@@ -27,6 +29,10 @@ import type {
  * assinalar os colaboradores aqui, somente equipamentos"): a ficha escolhe a máquina que a pessoa
  * opera, o local, ou "Posicionar no mapa" (toque num ponto, como o das máquinas).
  *
+ * Obra como local (17/10/2026, "uma obra pode ser o local de trabalho de um funcionario enquanto a
+ * obra estiver ativa"): a lista traz as obras ativas antes dos locais. Obra encerrada some da lista
+ * e deixa de ser o local; os dias dela vão para Pessoal Sem Alocação (fn_colab_centro_regra).
+ *
  * Centro de custo (17/10/2026): o da pessoa no Mapa, trocado só aqui. O do cadastro do
  * colaborador, que a folha usa, não muda.
  */
@@ -34,11 +40,15 @@ import type {
 /** Valor da opção "Sem centro de custo" no Combobox (o vazio é "nada escolhido"). */
 const SEM_CENTRO = "__sem_centro__";
 
+const porNome = (a: { nome: string }, b: { nome: string }) =>
+  a.nome.localeCompare(b.nome, "pt-BR");
+
 export function FichaPessoa({
   pessoa,
   maquina,
   maquinas,
   localidades,
+  obras,
   centrosCusto,
   podeEditar,
   salvando,
@@ -46,6 +56,7 @@ export function FichaPessoa({
   onFechar,
   onFocar,
   onTrocarLocal,
+  onTrocarObra,
   onOperar,
   onPosicionar,
   onTrocarCentro,
@@ -57,6 +68,8 @@ export function FichaPessoa({
   /** Máquinas do mapa que a pessoa pode passar a operar. */
   maquinas: readonly EquipamentoMapa[];
   localidades: readonly LocalidadeMapa[];
+  /** Obras ativas: também servem de local de trabalho. */
+  obras: readonly ObraMapa[];
   /** Centros ativos para escolher (vazio para quem não edita). */
   centrosCusto: readonly CentroCustoOpcaoMapa[];
   podeEditar: boolean;
@@ -66,6 +79,7 @@ export function FichaPessoa({
   onFechar: () => void;
   onFocar: () => void;
   onTrocarLocal: (localidadeId: string) => void;
+  onTrocarObra: (obraId: string) => void;
   onOperar: (equipamentoId: string) => void;
   onPosicionar: () => void;
   /** null tira o centro. */
@@ -74,11 +88,15 @@ export function FichaPessoa({
   relatorioDiasHref?: string | null;
 }) {
   const opcoes = React.useMemo(
-    () =>
-      [...localidades]
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-        .map((l) => ({ valor: l.id, rotulo: l.nome })),
-    [localidades],
+    () => [
+      ...[...obras]
+        .sort(porNome)
+        .map((o) => ({ valor: `obra:${o.id}`, rotulo: `Obra · ${o.nome}` })),
+      ...[...localidades]
+        .sort(porNome)
+        .map((l) => ({ valor: `local:${l.id}`, rotulo: l.nome })),
+    ],
+    [obras, localidades],
   );
   const opcoesMaquina = React.useMemo(
     () =>
@@ -115,9 +133,8 @@ export function FichaPessoa({
       pessoa.centroCustoId,
     ].join("|"),
   );
-  const local = pessoa.localidadeId
-    ? (localidades.find((l) => l.id === pessoa.localidadeId) ?? null)
-    : null;
+  const lugar = lugarDaPessoa(pessoa, new Set(obras.map((o) => o.id)));
+  const rotuloLugar = opcoes.find((o) => o.valor === lugar)?.rotulo;
 
   return (
     <section
@@ -190,12 +207,16 @@ export function FichaPessoa({
         <span className="text-muted-foreground">Local de trabalho</span>
         {podeEditar ? (
           <Combobox
-            valor={pessoa.localidadeId ?? ""}
+            valor={lugar}
             onValorChange={(v) => {
-              if (v && v !== pessoa.localidadeId) onTrocarLocal(v);
+              if (!v || v === lugar) return;
+              const [tipo, id] = v.split(":");
+              if (!id) return;
+              if (tipo === "obra") onTrocarObra(id);
+              else onTrocarLocal(id);
             }}
             opcoes={opcoes}
-            rotuloDoValor={local?.nome}
+            rotuloDoValor={rotuloLugar}
             placeholder="Escolher o local"
             buscaPlaceholder="Nome do local"
             size="sm"
@@ -203,7 +224,7 @@ export function FichaPessoa({
             ariaLabel="Local de trabalho"
           />
         ) : (
-          <p>{local?.nome ?? "–"}</p>
+          <p>{rotuloLugar ?? "–"}</p>
         )}
         <HistoricoLocal dados={diasPessoa} />
       </div>

@@ -157,7 +157,10 @@ export interface PessoaMapa {
   vinculo: string;
   equipeId: string | null;
   equipeNome: string;
+  /** Obra do Mapa, senão a do cadastro do colaborador (RH): serve ao filtro por obra. */
   obraId: string | null;
+  /** Só a obra gravada no Mapa (a do RH não entra): é a obra que vale como local de trabalho. */
+  obraMapaId: string | null;
   frenteId: string | null;
   equipamentoId: string | null;
   areaId: string | null;
