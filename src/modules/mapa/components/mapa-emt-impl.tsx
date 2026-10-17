@@ -89,6 +89,16 @@ export interface GiroMapa {
   chave: number;
 }
 
+/** Pedido de inclinar o mapa: graus a somar à inclinação atual (negativo volta para de cima). */
+export interface InclinacaoMapa {
+  delta: number;
+  /** Muda a cada pedido, como no giro. */
+  chave: number;
+}
+
+/** Teto da inclinação pelos botões: o do Google vetorial em zoom alto (ele ainda corta no baixo). */
+const INCLINACAO_MAXIMA = 67.5;
+
 /**
  * Card preso a um ponto do mapa (a ficha da máquina ou do objeto tocado): fica ao lado dele, fora
  * do raio, e acompanha quando o mapa anda, gira ou aproxima.
@@ -118,6 +128,7 @@ export interface MapaEmtProps {
   modoPosicionar: boolean;
   foco: Foco | null;
   giroMapa: GiroMapa | null;
+  inclinacaoMapa: InclinacaoMapa | null;
   centroInicial: { pos: Posicao; zoom: number };
   onSelecionar: (alvo: Alvo | null, multi: boolean) => void;
   onHover: (id: string | null) => void;
@@ -154,6 +165,8 @@ interface Motor {
   voarPara(pos: Posicao, zoom?: number): void;
   /** Soma graus ao rumo do mapa; null volta ao norte. */
   girarMapa(delta: number | null): void;
+  /** Soma graus à inclinação, entre 0 (de cima) e o teto do motor. */
+  inclinarMapa(delta: number): void;
   finalizar(): void;
 }
 
@@ -354,6 +367,15 @@ function criarMotorTiles(
         },
       });
     },
+    inclinarMapa(delta) {
+      deck.setProps({
+        initialViewState: {
+          ...vista,
+          pitch: Math.min(70, Math.max(0, (vista.pitch ?? 0) + delta)),
+          transitionDuration: 400,
+        },
+      });
+    },
     finalizar() {
       deck.finalize();
       palco.remove();
@@ -536,6 +558,12 @@ async function criarMotorGoogle(
       // Só o mapa vetorial gira; no raster o Google ignora o rumo.
       map.setHeading(delta === null ? 0 : (map.getHeading() ?? 0) + delta);
     },
+    inclinarMapa(delta) {
+      // O Google corta sozinho no teto do zoom atual; no raster fica em 0.
+      map.setTilt(
+        Math.min(INCLINACAO_MAXIMA, Math.max(0, (map.getTilt() ?? 0) + delta)),
+      );
+    },
     voarPara(pos, zoom) {
       map.panTo({ lat: pos[1], lng: pos[0] });
       const atual = map.getZoom() ?? centro.zoom;
@@ -696,7 +724,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     redesenhar();
   }, [cena, selecao, hover, posicoesPendentes, redesenhar]);
 
-  const { fundo, inclinado, foco, giroMapa } = props;
+  const { fundo, inclinado, foco, giroMapa, inclinacaoMapa } = props;
   React.useEffect(() => {
     motorRef.current?.setFundo(fundo, inclinado);
     redesenhar();
@@ -712,6 +740,10 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   React.useEffect(() => {
     if (giroMapa) motorRef.current?.girarMapa(giroMapa.delta);
   }, [giroMapa]);
+
+  React.useEffect(() => {
+    if (inclinacaoMapa) motorRef.current?.inclinarMapa(inclinacaoMapa.delta);
+  }, [inclinacaoMapa]);
 
   // Card ao lado do objeto: a cada quadro projeta o ponto (o Google anima o zoom e o giro sem
   // avisar o React) e move o card por transform, sem renderizar.
