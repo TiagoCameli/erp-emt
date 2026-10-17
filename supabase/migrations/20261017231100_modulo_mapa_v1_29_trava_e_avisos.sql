@@ -4,7 +4,8 @@
 --    um "de" velho em mapa_movimentacoes, e o Desfazer (que restaura pelo "de") voltava para o
 --    lugar errado. O corpo vai INTEIRO aqui (CREATE OR REPLACE), copiado do banco vivo em
 --    17/10/2026 (md5 conferido antes de editar; reconferido no rebase: o vivo ganhou a trava de
---    funcionário inativo no RH, que segue aqui): a versão vigente passa a estar no repositório,
+--    funcionário inativo no RH e a do diarista fora do mapa, 20261017230000, que seguem aqui; por
+--    isso a versão vem depois dela): a versão vigente passa a estar no repositório,
 --    em vez de remendada por troca de texto (v1.19 a v1.27). fn_mapa_marcar_estado e
 --    fn_mapa_marcar_estado_na_data ficam como a v1.28 (data efetiva) deixou: a trava nelas vai
 --    junto da próxima mudança dessas funções.
@@ -26,6 +27,9 @@ begin
   perform public.fn_mapa_exigir('editar');
   if exists (select 1 from unnest(p_ids) i where not public.fn_mapa_colaborador_ativo(i)) then
     raise exception 'Funcionário inativo no RH não entra no Mapa.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from unnest(p_ids) i where not public.fn_mapa_colaborador_no_mapa(i)) then
+    raise exception 'Diarista fora do mapa: entra por "Adicionar diarista".' using errcode = 'P0001';
   end if;
   if p_destino ? 'equipamento_id' and (p_destino->>'equipamento_id') is not null then
     foreach v_id in array p_ids loop
