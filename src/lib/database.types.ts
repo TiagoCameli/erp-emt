@@ -11502,6 +11502,10 @@ export type Database = {
       // Modulo Mapa (editado a mao em 15/10/2026, como as demais entradas fn_*
       // spliced: o arquivo inteiro nao e regenerado). Assinaturas em
       // supabase/migrations/20261014120000_modulo_mapa_v1.sql e ..._v1_3_tela.sql.
+      fn_mapa_alocar: {
+        Args: { p_data?: string; p_itens: Json; p_motivo?: string };
+        Returns: number;
+      };
       fn_mapa_assinalar_operador: {
         Args: {
           p_equipamento: string;
