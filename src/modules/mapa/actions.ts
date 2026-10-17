@@ -19,6 +19,7 @@ import {
 } from "@/modules/mapa/centros-pessoa";
 import {
   assinalarOperadorSchema,
+  centroCustoPessoaSchema,
   colocarLocalSchema,
   desenharObraSchema,
   editarLocalSchema,
@@ -253,6 +254,41 @@ export async function assinalarOperador(
       "mapa.operador",
       erro,
       `Não foi possível assinalar o operador: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Troca (ou tira, com null) o centro de custo da pessoa no Mapa. Só o do Mapa: o do cadastro do
+ * colaborador, que a folha usa, não muda (pedido do Tiago, 17/10/2026).
+ */
+export async function trocarCentroCustoPessoa(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = centroCustoPessoaSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const { colaboradorId, centroCustoId } = validado.data;
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_centro_custo_pessoa", {
+      p_colaborador: colaboradorId,
+      p_centro_custo: centroCustoId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.centro_pessoa",
+        error,
+        mensagemDaRpc(error, "Não foi possível trocar o centro de custo"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.centro_pessoa",
+      erro,
+      `Não foi possível trocar o centro de custo: ${textoDoErro(erro)}`,
     );
   }
 }

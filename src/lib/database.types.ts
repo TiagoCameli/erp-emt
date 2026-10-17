@@ -11515,6 +11515,10 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_centro_custo_pessoa: {
+        Args: { p_centro_custo: string | null; p_colaborador: string };
+        Returns: undefined;
+      };
       fn_mapa_centros_equipamento: { Args: { p_id: string }; Returns: Json };
       fn_mapa_ficha_equipamento: { Args: { p_id: string }; Returns: Json };
       fn_mapa_marcar_varios_centros: {
