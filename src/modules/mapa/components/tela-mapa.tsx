@@ -84,7 +84,9 @@ import { FichaPessoa } from "@/modules/mapa/components/ficha-pessoa";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import {
   ESCALA_MAQUINA,
+  RAIO_BONECO_M,
   RAIO_MINIMO_ANEL_PX,
+  RAIO_MINIMO_BONECO_PX,
   RAIO_MINIMO_GIRO_PX,
   raioDoAnelM,
 } from "@/modules/mapa/components/camadas";
@@ -1919,8 +1921,8 @@ export function TelaMapa({
       return {
         chave: naCena.id,
         pos: naCena.pos,
-        raioM: 3,
-        raioMinimoPx: 14,
+        raioM: RAIO_BONECO_M,
+        raioMinimoPx: RAIO_MINIMO_BONECO_PX,
         conteudo: fichaFlutuante,
       };
     }

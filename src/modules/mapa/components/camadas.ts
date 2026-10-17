@@ -55,6 +55,17 @@ export const ID_LOCAIS = "locais-nome";
 /** Quantas vezes o tamanho real a miniatura aparece (fixo no terreno, em metros). */
 export const ESCALA_MAQUINA = 3;
 
+/**
+ * Quantas vezes o boneco cresce sobre a escala base (pedido do Tiago, 17/10/2026: "os bonecos
+ * estão pequenos demais"). Vale para a pessoa sozinha, a equipe e o operador na máquina (é a mesma
+ * camada), multiplica também o mínimo e o máximo em pixels, e o card da ficha se afasta na mesma
+ * proporção. O toque e o arraste pegam pela malha desenhada, então crescem junto.
+ */
+export const ESCALA_BONECO = 10;
+/** Afastamento do card da ficha da pessoa: em metros e o mínimo em pixels. */
+export const RAIO_BONECO_M = 3 * ESCALA_BONECO;
+export const RAIO_MINIMO_BONECO_PX = 14 * ESCALA_BONECO;
+
 /** Raio do anel de seleção da máquina, em metros (a usina é maior). */
 export function raioDoAnelM(modelo3d: string): number {
   return (modelo3d === "usina_asfalto" ? 28 : 13) * ESCALA_MAQUINA;
@@ -661,9 +672,10 @@ export function montarCamadas(cena: Cena): Layer[] {
         getPosition: (d) => posicaoDe(cena, d),
         getOrientation: orientacao(0),
         getColor: (d) => (cena.selecao.has(d.id) ? [255, 230, 150] : BRANCO),
-        sizeScale: 1.6,
-        sizeMinPixels: 5,
-        sizeMaxPixels: 120,
+        // Segue o zoom entre o mínimo e o máximo em pixels; os três levam o ESCALA_BONECO.
+        sizeScale: 1.6 * ESCALA_BONECO,
+        sizeMinPixels: 5 * ESCALA_BONECO,
+        sizeMaxPixels: 120 * ESCALA_BONECO,
         _lighting: "pbr",
         updateTriggers: { getPosition: gatilho, getColor: gatilho },
       }),
