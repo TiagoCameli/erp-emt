@@ -63,3 +63,56 @@ export async function desfazerMovimentacao(
   }
   return { ok: true };
 }
+
+/**
+ * Excluir uma linha do Histórico de vez (`fn_mapa_excluir_movimentacao`, v1.26). Com `voltar`,
+ * desfaz antes (mesmas recusas do desfazer); sem ele, só o registro sai e o estado atual fica.
+ * A linha apagada continua no audit_log.
+ */
+
+const excluirSchema = z.strictObject({
+  id: z.number().int().positive({ error: "Movimentação inválida" }),
+  voltar: z.boolean(),
+});
+
+export async function excluirMovimentacao(
+  dados: unknown,
+): Promise<{ ok: true } | { erro: string }> {
+  try {
+    await exigirPermissao("mapa.mapa", "excluir");
+  } catch {
+    return { erro: "Sem permissão para excluir no Mapa" };
+  }
+  const validado = excluirSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_excluir_movimentacao", {
+      p_id: validado.data.id,
+      p_voltar: validado.data.voltar,
+    });
+    if (error) {
+      const negocio =
+        (error.code === "P0001" || error.code === "42501") && error.message;
+      return erroAcao(
+        "mapa.historico.excluir",
+        error,
+        negocio || "Não foi possível excluir a movimentação",
+      );
+    }
+  } catch (erro) {
+    return erroAcao(
+      "mapa.historico.excluir",
+      erro,
+      `Não foi possível excluir: ${textoDoErro(erro)}`,
+    );
+  }
+  try {
+    revalidatePath("/mapa/historico");
+    revalidatePath("/mapa");
+  } catch {
+    // a gravação já aconteceu
+  }
+  return { ok: true };
+}

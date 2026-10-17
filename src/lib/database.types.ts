@@ -11525,6 +11525,10 @@ export type Database = {
         Args: { p_id: number; p_motivo: string };
         Returns: undefined;
       };
+      fn_mapa_excluir_movimentacao: {
+        Args: { p_id: number; p_voltar: boolean };
+        Returns: undefined;
+      };
       fn_mapa_local_editar: {
         Args: {
           p_id: string | null;
