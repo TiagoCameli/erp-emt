@@ -305,6 +305,7 @@ describe("marcacaoVenceFrete", () => {
     for (const estado of [
       "parado",
       "quebrado_obra",
+      "esperando_conserto",
       "conserto",
       "fora_funcionamento",
     ] as const) {

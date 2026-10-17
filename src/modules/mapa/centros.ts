@@ -14,6 +14,7 @@ export const ROTULO_MOTIVO_CENTRO: Record<string, string> = {
   parado: "Parado",
   em_rota: "Em rota",
   quebrado_obra: "Quebrado na obra",
+  esperando_conserto: "Quebrado esperando conserto",
   conserto: "Em conserto",
   sem_posicao: "Sem posição no mapa",
   acoplado: "Acoplado",

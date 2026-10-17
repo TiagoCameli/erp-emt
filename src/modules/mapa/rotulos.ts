@@ -14,6 +14,7 @@ export const COR_ESTADO: Record<EstadoEfetivo, Rgb> = {
   em_frete: [42, 120, 214], // --viz-producao (azul)
   em_deslocamento: [74, 58, 167], // --viz-financiamento (roxo)
   quebrado_obra: [185, 28, 28], // --status-rejeitado
+  esperando_conserto: [235, 104, 52], // --viz-custo (laranja)
   conserto: [161, 74, 7], // --status-pendente
   sem_posicao: [140, 140, 140],
   fora_funcionamento: [69, 70, 75], // --emt-asfalto
@@ -26,6 +27,8 @@ export const CLASSES_ESTADO: Record<EstadoEfetivo, string> = {
   em_frete: "bg-[#2a78d6]/10 text-[#2a78d6] dark:text-[#3987e5]",
   em_deslocamento: "bg-[#4a3aa7]/10 text-[#4a3aa7] dark:text-[#9085e9]",
   quebrado_obra: "bg-status-rejeitado/10 text-status-rejeitado",
+  esperando_conserto:
+    "bg-[#eb6834]/10 text-[#c2410c] dark:text-[#d95926]",
   conserto: "bg-status-pendente/10 text-status-pendente",
   sem_posicao: "bg-muted text-muted-foreground",
   fora_funcionamento: "bg-muted text-muted-foreground",
@@ -38,6 +41,7 @@ export const ORDEM_ESTADOS: EstadoEfetivo[] = [
   "em_frete",
   "em_deslocamento",
   "quebrado_obra",
+  "esperando_conserto",
   "conserto",
   "sem_posicao",
   "fora_funcionamento",
