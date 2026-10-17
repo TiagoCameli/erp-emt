@@ -1715,6 +1715,7 @@ export function TelaMapa({
     rotulo: string,
     Icone: React.ComponentType<{ className?: string }>,
     onClick: () => void,
+    dica?: string,
   ) => (
     <Button
       type="button"
@@ -1722,7 +1723,7 @@ export function TelaMapa({
       variant={ativo ? "default" : "outline"}
       onClick={onClick}
       aria-pressed={ativo}
-      title={rotulo}
+      title={dica ?? rotulo}
       className="bg-background/95 backdrop-blur data-[ativo=true]:bg-primary"
       data-ativo={ativo}
     >
@@ -2031,8 +2032,12 @@ export function TelaMapa({
               {botaoAlternar(fundo === "satelite", "Satélite", Satellite, () =>
                 gravarFundo(fundo === "satelite" ? "mapa" : "satelite"),
               )}
-              {botaoAlternar(inclinado, "3D", Box, () =>
-                setInclinado((v) => !v),
+              {botaoAlternar(
+                inclinado,
+                "3D",
+                Box,
+                () => setInclinado((v) => !v),
+                "3D. No computador, Shift + arrastar inclina e gira o mapa",
               )}
               {botaoAlternar(rota !== null, "Rota", Route, alternarRota)}
               <Button
