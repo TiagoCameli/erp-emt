@@ -102,13 +102,19 @@ describe("destinoDaPessoa", () => {
 describe("posicaoDoOperador", () => {
   const maquina: [number, number] = [-72.7067, -7.6121];
 
-  it("fica à esquerda (oeste) da máquina, na mesma latitude", () => {
-    const p = posicaoDoOperador(maquina, 39);
+  it("máquina virada para o norte: o boneco fica a oeste, na mesma latitude", () => {
+    const p = posicaoDoOperador(maquina, 0, 8.6);
     expect(p[0]).toBeLessThan(maquina[0]);
     expect(p[1]).toBeCloseTo(maquina[1], 9);
   });
 
-  it("à distância pedida, para não cair em cima da máquina", () => {
-    expect(distanciaM(maquina, posicaoDoOperador(maquina, 39))).toBeCloseTo(39, 0);
+  it("máquina virada para o leste: a esquerda dela é o norte", () => {
+    const p = posicaoDoOperador(maquina, 90, 8.6);
+    expect(p[1]).toBeGreaterThan(maquina[1]);
+    expect(p[0]).toBeCloseTo(maquina[0], 9);
+  });
+
+  it("fica à distância pedida, encostado na lateral", () => {
+    expect(distanciaM(maquina, posicaoDoOperador(maquina, 37, 8.6))).toBeCloseTo(8.6, 1);
   });
 });
