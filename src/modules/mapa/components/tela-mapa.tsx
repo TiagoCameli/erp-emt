@@ -16,6 +16,7 @@ import {
   RotateCw,
   Route,
   Satellite,
+  ArrowRightLeft,
   Tag,
   Users,
   X,
@@ -50,6 +51,7 @@ import {
   marcarEstado,
   moverEquipamentos,
   moverPessoas,
+  moverPessoasEmLote,
   posicionarObjeto,
   posicionarObra,
   recarregarEstado,
@@ -67,6 +69,11 @@ import {
   type ConfirmacaoTransferencia,
   type Pendente,
 } from "@/modules/mapa/components/dialogo-transferencia";
+import {
+  DialogoTransferenciaLote,
+  type ConfirmacaoLote,
+  type DestinoDoLote,
+} from "@/modules/mapa/components/dialogo-transferencia-lote";
 import {
   DialogoAdicionarLocal,
   DialogoAdicionarObra,
@@ -131,6 +138,11 @@ import { pontoNaObra } from "@/modules/mapa/obra-destino";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import { destinoDaPessoa, pessoaNoFiltro } from "@/modules/mapa/pessoas";
+import {
+  destinoDaPessoaNoLote,
+  pontosDoLote,
+  rotuloDoLote,
+} from "@/modules/mapa/lote";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
@@ -461,6 +473,11 @@ export function TelaMapa({
   });
   const [pontoColocar, setPontoColocar] = React.useState<Posicao | null>(null);
   const [pendente, setPendente] = React.useState<Pendente | null>(null);
+  // "Transferir" da seleção múltipla: as máquinas e as pessoas selecionadas, juntas.
+  const [lote, setLote] = React.useState<{
+    equipamentos: EquipamentoMapa[];
+    pessoas: PessoaMapa[];
+  } | null>(null);
   const [pendentePessoa, setPendentePessoa] = React.useState<{
     pessoa: PessoaMapa;
     /** Ponto solto ou tocado; null quando a máquina foi escolhida na ficha (ela pode não ter posição). */
@@ -954,7 +971,9 @@ export function TelaMapa({
           return;
         }
       }
-      if (alvo.tipo === "equipamento") {
+      // Pessoa também entra na seleção múltipla (o id dela não colide com o de máquina): a cena
+      // já pinta quem está em `selecao`, e o "Transferir" do lote leva as duas juntas.
+      if (alvo.tipo === "equipamento" || multi || multiTecla) {
         setSelecao((atual) => {
           if (multi || multiTecla) {
             const nova = new Set(atual);
@@ -965,7 +984,8 @@ export function TelaMapa({
           return new Set([alvo.id]);
         });
       }
-      abrirFicha(alvo);
+      // Com a seleção múltipla ligada, a ficha não abre: só a barra do lote (Tiago, 17/10/2026).
+      if (!multi) abrirFicha(alvo);
     },
     [multi, abrirFicha, pessoaPosicionando, cena.equipamentos],
   );
@@ -1417,6 +1437,150 @@ export function TelaMapa({
     timerGiro.current = setTimeout(() => void gravar(rumo), 600);
   };
 
+  const alternarNaSelecao = React.useCallback((id: string) => {
+    setSelecao((atual) => {
+      const nova = new Set(atual);
+      if (nova.has(id)) nova.delete(id);
+      else nova.add(id);
+      return nova;
+    });
+  }, []);
+
+  /** Ligar a seleção múltipla fecha a ficha (fica a barra); desligar limpa a seleção. */
+  const alternarMulti = React.useCallback(() => {
+    setFicha(null);
+    if (multi) setSelecao(new Set());
+    setMulti(!multi);
+  }, [multi]);
+
+  const equipamentosDoLote = React.useMemo(
+    () => (multi ? equipamentosVistos.filter((e) => selecao.has(e.id)) : []),
+    [multi, equipamentosVistos, selecao],
+  );
+  const pessoasDoLote = React.useMemo(
+    () => (multi ? estado.pessoas.filter((p) => selecao.has(p.id)) : []),
+    [multi, estado.pessoas, selecao],
+  );
+
+  /** Onde cada máquina e cada pessoa do lote cai no lugar escolhido: pontos livres em volta dele. */
+  const levarParaLote = React.useCallback(
+    (chave: string): DestinoDoLote | null => {
+      if (!lote) return null;
+      const lugar = lugaresDaFicha.find((l) => l.chave === chave);
+      if (!lugar) return null;
+      const ids = new Set([
+        ...lote.equipamentos.map((e) => e.id),
+        ...lote.pessoas.map((p) => p.id),
+      ]);
+      const ocupados = equipamentosVistos.flatMap((e) =>
+        !ids.has(e.id) && e.pos ? [e.pos] : [],
+      );
+      const pontos = pontosDoLote(
+        lugar.pos,
+        lote.equipamentos.length + lote.pessoas.length,
+        ocupados,
+      );
+      const n = lote.equipamentos.length;
+      return {
+        itens: lote.equipamentos.map((equipamento, i) => {
+          const para = pontos[i]!;
+          return {
+            equipamento,
+            de: equipamento.pos,
+            para,
+            destino: resolverDestino(para, ctxDestino),
+          };
+        }),
+        pessoas: lote.pessoas.map((pessoa, i) => ({
+          pessoa,
+          para: pontos[n + i]!,
+        })),
+        obraSugerida: lugar.obra,
+      };
+    },
+    [lote, lugaresDaFicha, equipamentosVistos, ctxDestino],
+  );
+
+  const confirmarLote = React.useCallback(
+    async ({
+      data,
+      motivo,
+      estadoLivre,
+      lugar,
+      itens,
+      pessoas,
+      obra,
+    }: ConfirmacaoLote) => {
+      if (!lote) return true;
+      setSalvando(true);
+      try {
+        const obraId = obra.tipo === "obra" ? obra.obraId : null;
+        if (itens.length > 0) {
+          const r = await moverEquipamentos({
+            itens: itens.map((it) => {
+              const pos =
+                it.destino.tipo === "trecho" ? it.destino.pos : it.para;
+              return {
+                id: it.equipamento.id,
+                lng: pos[0],
+                lat: pos[1],
+                // Só quem entra no mapa agora recebe estado (v1.27).
+                estado:
+                  it.destino.tipo === "livre" && it.equipamento.pos === null
+                    ? estadoLivre
+                    : undefined,
+              };
+            }),
+            data,
+            motivo: motivo || undefined,
+            obra_id: obraId ?? undefined,
+            sem_obra: obra.tipo === "sem_obra" || undefined,
+          });
+          if ("erro" in r) {
+            toast.error(r.erro);
+            const r2 = await recarregarEstado();
+            if (!("erro" in r2)) setEstado(r2.estado);
+            return false;
+          }
+          if (r.estado) setEstado(r.estado);
+        }
+        if (pessoas.length > 0) {
+          const r = await moverPessoasEmLote({
+            itens: pessoas.map((p) => ({
+              id: p.pessoa.id,
+              destino: destinoDaPessoaNoLote(lugar, p.para, obraId),
+            })),
+            data,
+            motivo: motivo || undefined,
+          });
+          if ("erro" in r) {
+            toast.error(
+              itens.length > 0
+                ? `Máquinas transferidas, mas as pessoas não: ${r.erro}`
+                : r.erro,
+            );
+            const r2 = await recarregarEstado();
+            if (!("erro" in r2)) setEstado(r2.estado);
+            return false;
+          }
+          if (r.estado) setEstado(r.estado);
+        }
+        const rotulo = rotuloDoLote(itens.length, pessoas.length);
+        toast.success(
+          itens.length + pessoas.length > 1
+            ? `${rotulo} transferidos`
+            : `${rotulo} transferido`,
+        );
+        setLote(null);
+        setSelecao(new Set());
+        return true;
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [lote],
+  );
+
   const confirmarTransferencia = React.useCallback(
     async ({
       data,
@@ -1626,7 +1790,7 @@ export function TelaMapa({
         else nova.add(e.id);
         return nova;
       });
-      abrirFicha({ tipo: "equipamento", id: e.id });
+      if (!multi) abrirFicha({ tipo: "equipamento", id: e.id });
       if (e.pos) focar(e.pos, 15);
     },
     [focar, multi, abrirFicha],
@@ -1766,7 +1930,7 @@ export function TelaMapa({
 
   // A ficha da máquina, da pessoa ou do objeto tocado. Em tela larga ela abre ao lado dele, no
   // mapa (pedido do Tiago, 16/10/2026); no celular, ou sem lugar no mapa, fica na lateral.
-  const fichaFlutuante: React.ReactNode = equipamentoFicha ? (
+  const fichaFlutuante: React.ReactNode = multi ? null : equipamentoFicha ? (
     <FichaEquipamento
       equipamento={
         rumoPrevio?.id === equipamentoFicha.id
@@ -2063,6 +2227,44 @@ export function TelaMapa({
             }}
             cartao={cartao}
           />
+          {multi && equipamentosDoLote.length + pessoasDoLote.length > 0 ? (
+            <div className="pointer-events-none absolute inset-x-2 bottom-3 flex justify-center">
+              <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md backdrop-blur">
+                <span className="text-detalhe text-foreground">
+                  {rotuloDoLote(
+                    equipamentosDoLote.length,
+                    pessoasDoLote.length,
+                  )}{" "}
+                  {equipamentosDoLote.length + pessoasDoLote.length > 1
+                    ? "selecionados"
+                    : "selecionado"}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    setLote({
+                      equipamentos: equipamentosDoLote,
+                      pessoas: pessoasDoLote,
+                    })
+                  }
+                  disabled={salvando}
+                >
+                  <ArrowRightLeft />
+                  Transferir
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setSelecao(new Set())}
+                >
+                  <X />
+                  Limpar
+                </Button>
+              </div>
+            </div>
+          ) : null}
           <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap items-start justify-between gap-2">
             <div className="pointer-events-auto flex flex-wrap gap-1.5">
               {botaoAlternar(fundo === "satelite", "Satélite", Satellite, () =>
@@ -2111,7 +2313,7 @@ export function TelaMapa({
               </Button>
               {permissoes.editar
                 ? botaoAlternar(multi, "Seleção múltipla", MousePointer2, () =>
-                    setMulti((v) => !v),
+                    alternarMulti(),
                   )
                 : null}
               {botaoAlternar(mostrarPessoas, "Pessoas", Users, () =>
@@ -2332,7 +2534,8 @@ export function TelaMapa({
             }}
             onEscolherEquipamento={escolherEquipamento}
             onEscolherPessoa={(p) => {
-              abrirFicha({ tipo: "pessoa", id: p.id });
+              if (multi) alternarNaSelecao(p.id);
+              else abrirFicha({ tipo: "pessoa", id: p.id });
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
@@ -2506,6 +2709,22 @@ export function TelaMapa({
           levarPara={levarPara}
           onCancelar={cancelarTransferencia}
           onConfirmar={confirmarTransferencia}
+        />
+      ) : null}
+      {lote ? (
+        <DialogoTransferenciaLote
+          equipamentos={lote.equipamentos}
+          pessoas={lote.pessoas}
+          hoje={estado.hoje}
+          obras={opcoesObra}
+          lugares={lugaresDaFicha}
+          obraCarretasEmt={estado.config.obraCarretasEmt}
+          levarPara={levarParaLote}
+          codigoDaMaquina={(id) =>
+            equipamentosVistos.find((e) => e.id === id)?.codigo ?? null
+          }
+          onCancelar={() => setLote(null)}
+          onConfirmar={confirmarLote}
         />
       ) : null}
       {pedidoEstado ? (

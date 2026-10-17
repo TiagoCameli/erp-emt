@@ -92,7 +92,7 @@ const ESTADOS_LIVRE: EstadoMaquina[] = ["operando", "parado"];
  * Onde a máquina cai. O estado da zona só aparece para quem entra no mapa agora (`comEstado`);
  * quem já está mantém o seu, e no ajuste nada muda.
  */
-function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
+export function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
   const estado = (e: EstadoMaquina) =>
     comEstado ? ` · ${ROTULO_ESTADO[e].toLowerCase()}` : "";
   switch (d.tipo) {
@@ -108,7 +108,7 @@ function descreverDestino(d: DestinoResolvido, comEstado: boolean): string {
 }
 
 
-const ROTULO_SEM_OBRA = "Sem obra (pátio central, oficina, em trânsito)";
+export const ROTULO_SEM_OBRA = "Sem obra (pátio central, oficina, em trânsito)";
 
 /** Um lugar para onde a ficha manda a máquina: uma obra, um local ou uma área do mapa. */
 export interface LugarOpcao {

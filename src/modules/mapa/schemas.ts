@@ -117,25 +117,46 @@ export const centroCustoPessoaSchema = z.strictObject({
 });
 export type CentroCustoPessoaInput = z.infer<typeof centroCustoPessoaSchema>;
 
+const destinoPessoaSchema = z.strictObject({
+  lng: longitudeSchema.optional(),
+  lat: latitudeSchema.optional(),
+  frente_id: idSchema.optional(),
+  obra_id: idSchema.optional(),
+  equipe_id: idSchema.optional(),
+  equipamento_id: idSchema.optional(),
+  area_id: idSchema.optional(),
+  localidade_id: idSchema.optional(),
+});
+
 export const moverPessoasSchema = z.strictObject({
   ids: z
     .array(idSchemaCom("Colaborador inválido"))
     .min(1, { error: "Nenhuma pessoa selecionada" })
     .max(200),
-  destino: z.strictObject({
-    lng: longitudeSchema.optional(),
-    lat: latitudeSchema.optional(),
-    frente_id: idSchema.optional(),
-    obra_id: idSchema.optional(),
-    equipe_id: idSchema.optional(),
-    equipamento_id: idSchema.optional(),
-    area_id: idSchema.optional(),
-    localidade_id: idSchema.optional(),
-  }),
+  destino: destinoPessoaSchema,
   data: dataSchema,
   motivo: motivoOpcional,
 });
 export type MoverPessoasInput = z.infer<typeof moverPessoasSchema>;
+
+/**
+ * Transferência em lote (seleção múltipla): cada pessoa com o próprio destino (o mesmo lugar, mas
+ * cada uma num ponto, para os bonecos não se empilharem), a mesma data e o mesmo motivo.
+ */
+export const moverPessoasLoteSchema = z.strictObject({
+  itens: z
+    .array(
+      z.strictObject({
+        id: idSchemaCom("Colaborador inválido"),
+        destino: destinoPessoaSchema,
+      }),
+    )
+    .min(1, { error: "Nenhuma pessoa selecionada" })
+    .max(200),
+  data: dataSchema,
+  motivo: motivoOpcional,
+});
+export type MoverPessoasLoteInput = z.infer<typeof moverPessoasLoteSchema>;
 
 function temCasasDemais(valor: number, casas: number): boolean {
   const escala = 10 ** casas;
