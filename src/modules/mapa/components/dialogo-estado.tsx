@@ -13,7 +13,8 @@ import {
 } from "@/modules/mapa/tipos";
 
 /**
- * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra e
+ * Mudança de estado pelo clique na ficha. Todo estado pede a data efetiva (hoje por padrão; uma
+ * data passada refaz os dias de centro já fechados, v1.28). Cada estado pede o que precisa: quebrado na obra e
  * quebrado esperando conserto querem a descrição do defeito; conserto quer a previsão (a máquina
  * fica onde está: só a transferência a leva para outro lugar); fora de funcionamento quer o
  * motivo. Operando e parado
@@ -31,10 +32,12 @@ export interface ConfirmacaoEstado {
   motivo: string;
   descricao: string;
   previsao: string;
+  /** yyyy-mm-dd: desde quando vale o estado novo. */
+  data: string;
 }
 
 const DESCRICAO: Record<EstadoMaquina, string> = {
-  operando: "A máquina volta a contar como operando a partir de agora.",
+  operando: "A máquina volta a contar como operando a partir da data efetiva.",
   parado:
     "Parada na posição atual. Parado por muitos dias vira alerta. Carreta que chegou do frete fica no destino, sem voltar para a pedreira.",
   quebrado_obra:
@@ -49,15 +52,19 @@ const DESCRICAO: Record<EstadoMaquina, string> = {
 
 export function DialogoEstado({
   pedido,
+  hoje,
   onCancelar,
   onConfirmar,
 }: {
   pedido: PedidoEstado;
+  /** yyyy-mm-dd de Rio Branco, vindo do servidor. */
+  hoje: string;
   onCancelar: () => void;
   onConfirmar: (dados: ConfirmacaoEstado) => Promise<boolean>;
 }) {
   const [descricao, setDescricao] = React.useState("");
   const [previsao, setPrevisao] = React.useState("");
+  const [data, setData] = React.useState(hoje);
   const id = React.useId();
 
   const { equipamento, estado } = pedido;
@@ -79,36 +86,55 @@ export function DialogoEstado({
       exigeMotivo={exigeMotivo}
       minMotivo={3}
       conteudo={
-        estado === "quebrado_obra" || estado === "esperando_conserto" ? (
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-defeito`}>Defeito</Label>
-            <Textarea
-              id={`${id}-defeito`}
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              rows={3}
-              maxLength={2000}
-              placeholder="O que quebrou, o que a máquina precisa"
-            />
-          </div>
-        ) : estado === "conserto" ? (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-previsao`}>Previsão de volta</Label>
+            <Label htmlFor={`${id}-data`}>Data efetiva</Label>
             <Input
-              id={`${id}-previsao`}
+              id={`${id}-data`}
               type="date"
-              value={previsao}
-              onChange={(e) => setPrevisao(e.target.value)}
+              value={data}
+              max={hoje}
+              onChange={(e) => setData(e.target.value)}
               className="max-w-[12rem]"
             />
+            {data && data < hoje ? (
+              <p className="text-muted-foreground text-xs">
+                Os dias desde essa data passam a contar com este estado.
+              </p>
+            ) : null}
           </div>
-        ) : undefined
+          {estado === "quebrado_obra" || estado === "esperando_conserto" ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${id}-defeito`}>Defeito</Label>
+              <Textarea
+                id={`${id}-defeito`}
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="O que quebrou, o que a máquina precisa"
+              />
+            </div>
+          ) : estado === "conserto" ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${id}-previsao`}>Previsão de volta</Label>
+              <Input
+                id={`${id}-previsao`}
+                type="date"
+                value={previsao}
+                onChange={(e) => setPrevisao(e.target.value)}
+                className="max-w-[12rem]"
+              />
+            </div>
+          ) : null}
+        </div>
       }
       onConfirmar={(motivo) =>
         onConfirmar({
           motivo: (motivo ?? "").trim(),
           descricao: descricao.trim(),
           previsao,
+          data: data || hoje,
         })
       }
     />

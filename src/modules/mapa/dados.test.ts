@@ -195,6 +195,7 @@ describe("paraEstadoMapa", () => {
       marcarEstadoSchema.safeParse({
         id: "c4e0f922-3aec-8c72-7089-225523e04557",
         estado: "esperando_conserto",
+        data: "2026-10-17",
       }).success,
     ).toBe(true);
   });
@@ -474,14 +475,30 @@ describe("schemas das actions", () => {
         marcarEstadoSchema.safeParse({
           id: "c4e0f922-3aec-8c72-7089-225523e04557",
           estado,
+          data: "2026-10-17",
         }).success,
       ).toBe(false);
     expect(
       marcarEstadoSchema.safeParse({
         id: "c4e0f922-3aec-8c72-7089-225523e04557",
         estado: "parado",
+        data: "2026-10-17",
       }).success,
     ).toBe(true);
+    // v1.28: o estado novo vale desde a data efetiva, que a tela sempre manda.
+    expect(
+      marcarEstadoSchema.safeParse({
+        id: "c4e0f922-3aec-8c72-7089-225523e04557",
+        estado: "parado",
+      }).success,
+    ).toBe(false);
+    expect(
+      marcarEstadoSchema.safeParse({
+        id: "c4e0f922-3aec-8c72-7089-225523e04557",
+        estado: "parado",
+        data: "17/10/2026",
+      }).success,
+    ).toBe(false);
   });
 
   it("lê a carreta da EMT Transportes e a obra das carretas; sem a chave, não é carreta", () => {
