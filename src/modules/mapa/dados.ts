@@ -406,6 +406,15 @@ export function paraEstadoMapa(bruto: unknown): EstadoMapa | null {
     equipamentos: lista(b.equipamentos).map(equipamento),
     foraDoMapa: lista(b.fora_do_mapa).map(foraDoMapa),
     pessoas: lista(b.pessoas).map(pessoa),
+    diaristasFora: lista(b.diaristas_fora).map((d) => ({
+      id: texto(d.id),
+      nome: texto(d.nome),
+      funcao: texto(d.funcao),
+    })),
+    funcoes: lista(b.funcoes).map((f) => ({
+      id: texto(f.id),
+      nome: texto(f.nome),
+    })),
     trechos: lista(b.trechos)
       .map(trecho)
       .filter((t) => t.pontos.length >= 2),

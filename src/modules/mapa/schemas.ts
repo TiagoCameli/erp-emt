@@ -119,6 +119,62 @@ export const centroCustoPessoaSchema = z.strictObject({
 });
 export type CentroCustoPessoaInput = z.infer<typeof centroCustoPessoaSchema>;
 
+/**
+ * "Adicionar diarista": ou `colaboradorId` (diarista do RH fora do mapa) ou `novo` (a RPC cria o
+ * colaborador como diarista; exige cadastros.colaboradores/criar).
+ */
+export const entrarDiaristaSchema = z
+  .strictObject({
+    colaboradorId: idSchemaCom("Diarista inválido").nullable(),
+    novo: z
+      .strictObject({
+        nome: z
+          .string()
+          .trim()
+          .min(1, { error: "Informe o nome" })
+          .max(TEXTO_CURTO),
+        cpf: z.string().trim().max(20).optional(),
+        funcaoId: idSchemaCom("Função inválida").optional(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .refine(
+    (v) =>
+      v.colaboradorId !== null || (v.novo !== null && v.novo !== undefined),
+    { error: "Escolha o diarista ou cadastre um novo" },
+  );
+export type EntrarDiaristaInput = z.infer<typeof entrarDiaristaSchema>;
+
+/** Campos do drawer "Adicionar diarista" (texto cru; o envio monta o EntrarDiaristaInput). */
+export const diaristaFormSchema = z
+  .object({
+    origem: z.enum(["existente", "novo"]),
+    colaboradorId: z.string(),
+    nome: z.string().trim().max(TEXTO_CURTO),
+    cpf: z.string().trim().max(20),
+    funcaoId: z.string(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.origem === "existente" && !v.colaboradorId)
+      ctx.addIssue({
+        code: "custom",
+        path: ["colaboradorId"],
+        message: "Escolha o diarista",
+      });
+    if (v.origem === "novo" && !v.nome)
+      ctx.addIssue({
+        code: "custom",
+        path: ["nome"],
+        message: "Informe o nome",
+      });
+  });
+export type DiaristaFormInput = z.infer<typeof diaristaFormSchema>;
+
+export const sairDiaristaSchema = z.strictObject({
+  colaboradorId: idSchemaCom("Diarista inválido"),
+});
+
 const destinoPessoaSchema = z.strictObject({
   lng: longitudeSchema.optional(),
   lat: latitudeSchema.optional(),
