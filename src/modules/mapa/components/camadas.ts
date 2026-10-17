@@ -57,11 +57,11 @@ export const ESCALA_MAQUINA = 3;
 
 /**
  * Quantas vezes o boneco cresce sobre a escala base (pedido do Tiago, 17/10/2026: "os bonecos
- * estão pequenos demais"). Vale para a pessoa sozinha, a equipe e o operador na máquina (é a mesma
+ * estão pequenos demais"; no mesmo dia, 10x "ficaram muito grandes", foi pela metade). Vale para a pessoa sozinha, a equipe e o operador na máquina (é a mesma
  * camada), multiplica também o mínimo e o máximo em pixels, e o card da ficha se afasta na mesma
  * proporção. O toque e o arraste pegam pela malha desenhada, então crescem junto.
  */
-export const ESCALA_BONECO = 10;
+export const ESCALA_BONECO = 5;
 /** Afastamento do card da ficha da pessoa: em metros e o mínimo em pixels. */
 export const RAIO_BONECO_M = 3 * ESCALA_BONECO;
 export const RAIO_MINIMO_BONECO_PX = 14 * ESCALA_BONECO;
