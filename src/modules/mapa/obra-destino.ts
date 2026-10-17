@@ -4,9 +4,10 @@ import type { Posicao } from "@/modules/mapa/tipos";
 /**
  * Obra de destino da transferência. Antes a obra vinha só do ponto onde a máquina caía: soltar
  * fora de área, trecho ou local de obra gravava `obra_id` nulo, e a máquina perdia a obra sem
- * aviso (Tiago, 16/10/2026). Agora a confirmação mostra a obra, deixa trocar e, quando o ponto
- * não é de obra nenhuma, obriga a escolher: uma obra ou "Sem obra" de propósito. O banco cobra o
- * mesmo (`fn_mapa_mover_equipamentos`, v1.21).
+ * aviso (Tiago, 16/10/2026). Agora a confirmação mostra a obra e deixa trocar. A obra não é
+ * obrigatória (Tiago, 17/10/2026: máquina fora de funcionamento indo para o pátio não trabalha em
+ * obra nenhuma): campo vazio é "Sem obra", dito na linha da máquina junto com a obra que ela deixa.
+ * O banco recebe `sem_obra` explícito (`fn_mapa_mover_equipamentos`, v1.21).
  */
 
 /** "Sem obra" escolhido de propósito (pátio central, oficina, em trânsito). */
@@ -30,7 +31,7 @@ export function obraDoDestino(d: DestinoResolvido): string | null {
 
 /**
  * O que o campo "Obra de destino" mostra ao abrir: a obra do ponto quando todas caem na mesma;
- * "pela zona" quando caem em obras diferentes (todas com obra); vazio (obrigatório escolher)
+ * "pela zona" quando caem em obras diferentes (todas com obra); vazio ("Sem obra", pode trocar)
  * quando algum ponto não é de obra nenhuma.
  */
 export function escolhaInicialObra(destinos: DestinoResolvido[]): string {
@@ -55,11 +56,10 @@ export type DecisaoObra =
   | { tipo: "obra"; obraId: string }
   | { tipo: "sem_obra" };
 
-/** O que vai para o servidor; null = a pessoa ainda não escolheu (não pode confirmar). */
-export function decisaoObra(escolha: string): DecisaoObra | null {
-  if (escolha === "") return null;
+/** O que vai para o servidor; vazio é "Sem obra" (a obra não é obrigatória). */
+export function decisaoObra(escolha: string): DecisaoObra {
   if (escolha === PELA_ZONA) return { tipo: "pela_zona" };
-  if (escolha === SEM_OBRA) return { tipo: "sem_obra" };
+  if (escolha === SEM_OBRA || escolha === "") return { tipo: "sem_obra" };
   return { tipo: "obra", obraId: escolha };
 }
 
