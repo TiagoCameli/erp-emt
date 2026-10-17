@@ -1,30 +1,30 @@
--- Prova de 20261017223100_modulo_mapa_v1_30_alocacao, rodada DEPOIS da migration na mesma
+-- Prova de 20261017233100_modulo_mapa_v1_30_alocacao, rodada DEPOIS da migration na mesma
 -- transação: termina com raise exception, então nada fica gravado. Acha as máquinas e as pessoas
 -- no banco vivo (não fixa id): M1 e M3 com operador, M2 sem, P livre, L um local.
 do $prova$
 declare
   v_tiago uuid := 'c66fca9f-5428-4fb9-855f-dcff548764df';
   m1 uuid; x1 uuid; m2 uuid; m3 uuid; x3 uuid; p uuid; l uuid; o2 uuid; cc uuid;
-  v_obra_m3 uuid; v_obra_x3 uuid; v_mov bigint; v_n int; v_pos jsonb; v_falhou boolean;
+  v_obra_m3 uuid; v_obra_x3 uuid; v_mov bigint; v_n int; v_pos jsonb; v_falhou boolean; v_falhou_id uuid;
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', v_tiago, 'role', 'authenticated')::text, true);
 
   select m.equipamento_id, m.operador_colaborador_id into m1, x1
   from public.mapa_equipamentos m
-  where m.operador_colaborador_id is not null and m.no_mapa and public.fn_mapa_colaborador_ativo(m.operador_colaborador_id)
+  where m.operador_colaborador_id is not null and m.no_mapa and public.fn_mapa_colaborador_no_mapa(m.operador_colaborador_id)
   order by m.equipamento_id limit 1;
   select m.equipamento_id, m.operador_colaborador_id, m.obra_id into m3, x3, v_obra_m3
   from public.mapa_equipamentos m
   where m.operador_colaborador_id is not null and m.no_mapa and m.posicao is not null
     and m.fonte_posicao = 'manual' and m.equipamento_id <> m1 and m.estado not in ('fora_funcionamento')
     and public.fn_mapa_motivo_fora_do_mapa(m.equipamento_id) is null
-    and public.fn_mapa_colaborador_ativo(m.operador_colaborador_id)
+    and public.fn_mapa_colaborador_no_mapa(m.operador_colaborador_id)
   order by m.equipamento_id limit 1;
   select m.equipamento_id into m2 from public.mapa_equipamentos m
   where m.operador_colaborador_id is null and m.no_mapa and m.equipamento_id not in (m1, m3)
   order by m.equipamento_id limit 1;
   select c.id into p from public.colaboradores c
-  where c.ativo and c.data_demissao is null
+  where public.fn_mapa_colaborador_no_mapa(c.id)
     and not exists (select 1 from public.mapa_equipamentos m where m.operador_colaborador_id = c.id)
   order by c.id limit 1;
   select id into l from public.localidades where ativo order by id limit 1;
@@ -148,6 +148,18 @@ begin
      or has_function_privilege('anon', 'public.fn_mapa_alocar(jsonb, date, text)', 'execute')
      or has_function_privilege('authenticated', 'public.fn_mapa_trg_espelho_operador_maquina()', 'execute') then
     raise exception 'FALHA 6: grants';
+  end if;
+
+  -- 7. Diarista fora do mapa não entra pelo lote (entra por "Adicionar diarista").
+  select c.id into v_falhou_id from public.colaboradores c
+  where c.ativo and c.data_demissao is null and not public.fn_mapa_colaborador_no_mapa(c.id) limit 1;
+  if v_falhou_id is not null then
+    v_falhou := false;
+    begin
+      perform public.fn_mapa_alocar(jsonb_build_array(jsonb_build_object('colaborador_id', v_falhou_id, 'localidade_id', l)), null, 'prova');
+    exception when others then v_falhou := true;
+    end;
+    if not v_falhou then raise exception 'FALHA 7: diarista fora do mapa entrou pelo lote'; end if;
   end if;
 
   raise exception 'PROVA OK v1.30: m1 %, m2 %, m3 % (obra % -> % e de volta), x1 %, x3 %, p %',

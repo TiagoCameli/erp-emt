@@ -20,6 +20,8 @@
 --    linhas; a própria vai pelo NEW. Nomes com "zz" para rodar depois de obra_da_jazida e
 --    obra_fixa_carreta, que reescrevem NEW.obra_id.
 -- 4. fn_mapa_assinalar_operador: FOR UPDATE, nada grava se não mudou, e o espelho é dos triggers.
+--    Corpo a partir do vivo de 17/10 depois de 20261017230000 (diarista entra pelo Mapa), com as
+--    travas de inativo e de diarista fora do mapa; por isso esta versão vem depois daquela.
 -- 5. fn_mapa_alocar(p_itens, p_data, p_motivo): o lote atômico que a tela usa para alocar.
 --
 -- A trilha (mapa_movimentacoes) continua gravada pelas RPCs, nunca pelos triggers: uma linha
@@ -164,6 +166,9 @@ begin
   if p_colaborador is not null and not public.fn_mapa_colaborador_ativo(p_colaborador) then
     raise exception 'Funcionário inativo no RH não entra no Mapa.' using errcode = 'P0001';
   end if;
+  if p_colaborador is not null and not public.fn_mapa_colaborador_no_mapa(p_colaborador) then
+    raise exception 'Diarista fora do mapa: entra por "Adicionar diarista".' using errcode = 'P0001';
+  end if;
   insert into public.mapa_equipamentos (equipamento_id) values (p_equipamento) on conflict (equipamento_id) do nothing;
   select operador_colaborador_id into v_antes from public.mapa_equipamentos
   where equipamento_id = p_equipamento for update;
@@ -219,6 +224,10 @@ begin
   if exists (select 1 from jsonb_array_elements(p_itens) i
              where not public.fn_mapa_colaborador_ativo((i->>'colaborador_id')::uuid)) then
     raise exception 'Funcionário inativo no RH não entra no Mapa.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_itens) i
+             where not public.fn_mapa_colaborador_no_mapa((i->>'colaborador_id')::uuid)) then
+    raise exception 'Diarista fora do mapa: entra por "Adicionar diarista".' using errcode = 'P0001';
   end if;
 
   -- Trava as pessoas e as máquinas do lote, em ordem (dois lotes ao mesmo tempo não se cruzam).
