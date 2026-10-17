@@ -52,7 +52,8 @@ function verticesDaCor(m: MalhaTanque, cor: readonly number[]): number {
 describe("malha do tanque deitado", () => {
   const m = malhaTanqueHorizontal(COR_COMBUSTIVEL);
 
-  it("é uma malha válida", () => conferirMalha(m));
+  // Um expect por vértice: no runner do CI passou de 5s (17/10/2026).
+  it("é uma malha válida", () => conferirMalha(m), 30_000);
 
   it("apoia no chão, centrada, com o eixo no X e a bomba fora da bacia", () => {
     const { min, max } = caixaDe(m);
@@ -76,7 +77,8 @@ describe("malha do tanque deitado", () => {
 describe("malha do tanque em pé", () => {
   const m = malhaTanqueVertical(COR_MATERIAL);
 
-  it("é uma malha válida", () => conferirMalha(m));
+  // Um expect por vértice: no runner do CI passou de 5s (17/10/2026).
+  it("é uma malha válida", () => conferirMalha(m), 30_000);
 
   it("apoia no chão, com o costado de 1,5 diâmetro e o teto por cima", () => {
     const { min, max } = caixaDe(m);

@@ -150,7 +150,7 @@ interface Motor {
   coordParaPixel(pos: Posicao): [number, number] | null;
   travar(travar: boolean): void;
   setFundo(fundo: ModoFundo, inclinado: boolean): void;
-  setInclinado(inclinado: boolean, fundo: ModoFundo): void;
+  setInclinado(inclinado: boolean): void;
   voarPara(pos: Posicao, zoom?: number): void;
   /** Soma graus ao rumo do mapa; null volta ao norte. */
   girarMapa(delta: number | null): void;
@@ -387,8 +387,15 @@ async function criarMotorGoogle(
     // "hybrid" é a imagem com os nomes de cidades e estradas por cima; "satellite" vem sem
     // rótulo nenhum (Tiago, 16/10/2026: "no mapa deve aparecer o nome das cidades").
     mapTypeId: fundo === "satelite" ? "hybrid" : "roadmap",
-    tilt: inclinado && fundo === "mapa" ? 45 : 0,
+    // Inclina no satélite também: o "hybrid" do mapa vetorial segue vetorial e aceita tilt (no
+    // iPad o gesto de dois dedos já inclinava; Tiago, 17/10/2026). Se cair em raster, o
+    // `renderingtype_changed` abaixo zera.
+    tilt: inclinado ? 45 : 0,
     heading: 0,
+    // Gestos de inclinar e girar ligados aqui, não só no Map ID: no computador é Shift + arrastar
+    // (o equivalente aos dois dedos do toque).
+    tiltInteractionEnabled: true,
+    headingInteractionEnabled: true,
     gestureHandling: "greedy",
     disableDefaultUI: true,
     zoomControl: true,
@@ -517,20 +524,12 @@ async function criarMotorGoogle(
     setFundo(novo, incl) {
       map.setMapTypeId(novo === "satelite" ? "hybrid" : "roadmap");
       map.setTilt(
-        novo === "mapa" &&
-          incl &&
-          map.getRenderingType() === RenderingType.VECTOR
-          ? 45
-          : 0,
+        incl && map.getRenderingType() === RenderingType.VECTOR ? 45 : 0,
       );
     },
-    setInclinado(incl, fundoAtual) {
+    setInclinado(incl) {
       map.setTilt(
-        incl &&
-          fundoAtual === "mapa" &&
-          map.getRenderingType() === RenderingType.VECTOR
-          ? 45
-          : 0,
+        incl && map.getRenderingType() === RenderingType.VECTOR ? 45 : 0,
       );
     },
     girarMapa(delta) {
@@ -704,8 +703,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- inclinado tem o efeito próprio
   }, [fundo, redesenhar]);
   React.useEffect(() => {
-    motorRef.current?.setInclinado(inclinado, fundo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fundo tem o efeito próprio
+    motorRef.current?.setInclinado(inclinado);
   }, [inclinado]);
   React.useEffect(() => {
     if (foco) motorRef.current?.voarPara(foco.pos, foco.zoom);
