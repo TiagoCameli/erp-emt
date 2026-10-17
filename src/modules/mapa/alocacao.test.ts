@@ -5,12 +5,14 @@ import {
   avisoDaTrocaPelaPessoa,
   itemDeVolta,
   itemParaRpc,
+  loteDeVolta,
   maquinaRepetida,
   montarLote,
   opcoesMaquinaParaPessoa,
   opcoesOperadorParaMaquina,
   sugestaoDaMaquina,
   sugestaoDoLocal,
+  textoDaAlocacao,
 } from "@/modules/mapa/alocacao";
 import { alocarSchema } from "@/modules/mapa/schemas";
 
@@ -235,6 +237,38 @@ describe("sugestões de um clique", () => {
   });
 });
 
+describe("textoDaAlocacao", () => {
+  const ana = pessoa(P2, "Ana", { equipamentoId: M1 });
+  const joao = pessoa(P1, "João", { equipamentoId: "rl" });
+  const ctx = {
+    pessoa: (id: string) => [ana, joao].find((p) => p.id === id),
+    maquina: (id: string) =>
+      [
+        maquina(M1, "CB-001", { operadorId: P2, operadorNome: "Ana" }),
+        maquina("rl", "RL-003", { operadorId: P1, operadorNome: "João" }),
+      ].find((m) => m.id === id),
+    nomeDoLocal: () => "Silo",
+  };
+
+  it("troca de máquina diz quem sai de onde", () => {
+    expect(textoDaAlocacao([{ colaboradorId: P1, equipamentoId: M1 }], ctx)).toBe(
+      "João opera CB-001 · Ana sai da CB-001 · João deixa a RL-003",
+    );
+    expect(textoDaAlocacao([{ colaboradorId: P2, equipamentoId: null }], ctx)).toBe(
+      "Ana saiu da CB-001",
+    );
+  });
+
+  it("local e centro, e lote de várias", () => {
+    expect(
+      textoDaAlocacao([{ colaboradorId: P1, localidadeId: SILO, centroCustoId: null }], ctx),
+    ).toBe("João trabalha em Silo · centro pela obra");
+    expect(textoDaAlocacao([{ colaboradorId: P1 }, { colaboradorId: P2 }], ctx)).toBe(
+      "2 pessoas alocadas",
+    );
+  });
+});
+
 describe("itemDeVolta", () => {
   const antes = {
     ...pessoa(P1, "João", { localidadeId: SILO, centroCustoId: C1 }),
@@ -252,6 +286,28 @@ describe("itemDeVolta", () => {
       localidadeId: SILO,
       obraId: OBRA,
     });
+  });
+
+  it("lote de volta: a pessoa volta e o operador de antes retoma a máquina", () => {
+    const joao = { ...pessoa(P1, "João"), obraMapaId: null };
+    expect(
+      loteDeVolta(
+        [{ colaboradorId: P1, equipamentoId: M1 }],
+        new Map([[P1, joao]]),
+        new Map([[M1, P2]]),
+      ),
+    ).toEqual([
+      { colaboradorId: P1, equipamentoId: null, obraId: null },
+      { colaboradorId: P2, equipamentoId: M1 },
+    ]);
+    // máquina que estava livre, ou cujo operador também está no lote: ninguém retoma
+    expect(
+      loteDeVolta(
+        [{ colaboradorId: P1, equipamentoId: M1 }],
+        new Map([[P1, joao]]),
+        new Map([[M1, null]]),
+      ),
+    ).toHaveLength(1);
   });
 
   it("sem local antes, volta para a obra como local (ou nenhuma)", () => {

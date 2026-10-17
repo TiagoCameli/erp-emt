@@ -1,16 +1,17 @@
 "use client";
 
-import * as React from "react";
 import { Crosshair, LocateFixed, X } from "lucide-react";
 
-import { Combobox } from "@/components/canonicos";
 import { Button } from "@/components/ui/button";
+import {
+  BlocoAlocacaoPessoa,
+  type AlocarNaFicha,
+} from "@/modules/mapa/components/bloco-alocacao";
 import {
   CentrosPessoa,
   HistoricoLocal,
   useDiasPessoa,
 } from "@/modules/mapa/components/centros-pessoa";
-import { lugarDaPessoa } from "@/modules/mapa/pessoas";
 import type {
   CentroCustoOpcaoMapa,
   EquipamentoMapa,
@@ -22,8 +23,8 @@ import type {
 /**
  * Ficha da pessoa tocada no mapa: quem é, qual máquina opera e o local onde trabalha (pedido do
  * Tiago, 16/10/2026: "assinalar pessoas a localizações onde elas estão trabalhando"). Trocar o
- * local põe a pessoa no ponto do local; quem opera uma máquina deixa de operar (o pai confirma).
- * Sem "nenhum local": tirar do local é arrastar a pessoa para outro ponto.
+ * local põe a pessoa no ponto do local. Sem "nenhum local": tirar do local é arrastar a pessoa
+ * para outro ponto.
  *
  * Quem ainda não tem lugar no mapa não tem o que arrastar (Tiago, 16/10/2026: "não tem como
  * assinalar os colaboradores aqui, somente equipamentos"): a ficha escolhe a máquina que a pessoa
@@ -39,13 +40,10 @@ import type {
  *
  * Centro de custo (17/10/2026): o da pessoa no Mapa, trocado só aqui. O do cadastro do
  * colaborador, que a folha usa, não muda.
+ *
+ * Alocação rápida (v1.30, 17/10/2026): máquina, local e centro ficam no bloco "Alocação" do
+ * topo, igual ao da ficha da máquina, e gravam na hora (toast com Desfazer), sem diálogo.
  */
-
-/** Valor da opção "Sem centro de custo" no Combobox (o vazio é "nada escolhido"). */
-const SEM_CENTRO = "__sem_centro__";
-
-const porNome = (a: { nome: string }, b: { nome: string }) =>
-  a.nome.localeCompare(b.nome, "pt-BR");
 
 export function FichaPessoa({
   pessoa,
@@ -59,11 +57,9 @@ export function FichaPessoa({
   posicionando,
   onFechar,
   onFocar,
-  onTrocarLocal,
+  onAlocar,
   onTrocarObra,
-  onOperar,
   onPosicionar,
-  onTrocarCentro,
   relatorioDiasHref = null,
 }: {
   pessoa: PessoaMapa;
@@ -82,51 +78,13 @@ export function FichaPessoa({
   posicionando: boolean;
   onFechar: () => void;
   onFocar: () => void;
-  onTrocarLocal: (localidadeId: string) => void;
+  /** Máquina, local e centro: grava na hora pelo lote (v1.30), com Desfazer no toast. */
+  onAlocar: AlocarNaFicha;
   onTrocarObra: (obraId: string) => void;
-  onOperar: (equipamentoId: string) => void;
   onPosicionar: () => void;
-  /** null tira o centro. */
-  onTrocarCentro: (centroCustoId: string | null) => void;
   /** Relatório "Dias de pessoa por centro"; nulo sem permissão de ver os relatórios do Mapa. */
   relatorioDiasHref?: string | null;
 }) {
-  const opcoes = React.useMemo(
-    () => [
-      ...[...obras]
-        .sort(porNome)
-        .map((o) => ({ valor: `obra:${o.id}`, rotulo: `Obra · ${o.nome}` })),
-      ...[...localidades]
-        .sort(porNome)
-        .map((l) => ({ valor: `local:${l.id}`, rotulo: l.nome })),
-    ],
-    [obras, localidades],
-  );
-  const opcoesMaquina = React.useMemo(
-    () =>
-      [...maquinas]
-        .sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR"))
-        .map((e) => ({
-          valor: e.id,
-          rotulo: [
-            e.codigo,
-            e.descricao,
-            e.operadorNome && `com ${e.operadorNome}`,
-          ]
-            .filter(Boolean)
-            .join(" · "),
-        })),
-    [maquinas],
-  );
-  const opcoesCentro = React.useMemo(
-    () => [
-      { valor: SEM_CENTRO, rotulo: "Sem centro de custo" },
-      ...[...centrosCusto]
-        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
-        .map((c) => ({ valor: c.id, rotulo: c.nome })),
-    ],
-    [centrosCusto],
-  );
   // O centro escolhido também muda o centro do dia: entra na chave que relê os dias.
   const diasPessoa = useDiasPessoa(
     pessoa.id,
@@ -137,8 +95,6 @@ export function FichaPessoa({
       pessoa.centroCustoId,
     ].join("|"),
   );
-  const lugar = lugarDaPessoa(pessoa, new Set(obras.map((o) => o.id)));
-  const rotuloLugar = opcoes.find((o) => o.valor === lugar)?.rotulo;
 
   return (
     <section
@@ -179,99 +135,25 @@ export function FichaPessoa({
         </div>
       </header>
 
-      {podeEditar ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground">Opera</span>
-          <Combobox
-            valor={pessoa.equipamentoId ?? ""}
-            onValorChange={(v) => {
-              if (v && v !== pessoa.equipamentoId) onOperar(v);
-            }}
-            opcoes={opcoesMaquina}
-            rotuloDoValor={maquina ?? undefined}
-            placeholder="Nenhuma máquina"
-            buscaPlaceholder="Código ou descrição"
-            size="sm"
-            disabled={salvando}
-            ariaLabel="Máquina que opera"
-          />
-        </div>
-      ) : (
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="shrink-0 text-muted-foreground">Opera</span>
-          <span className="text-right">
-            {maquina ?? (
-              <span className="text-muted-foreground">nenhuma máquina</span>
-            )}
-          </span>
-        </div>
-      )}
+      <BlocoAlocacaoPessoa
+        pessoa={pessoa}
+        codigoMaquina={maquina}
+        maquinas={maquinas}
+        localidades={localidades}
+        obras={obras}
+        centrosCusto={centrosCusto}
+        podeEditar={podeEditar}
+        salvando={salvando}
+        onAlocar={onAlocar}
+        onTrocarObra={onTrocarObra}
+      />
 
-      {pessoa.equipamentoId ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground">Local de trabalho</span>
-          <p>Acompanha {maquina ?? "a máquina"}</p>
-          <p className="text-legenda text-muted-foreground">
-            Quem opera uma máquina trabalha onde ela estiver.
-            {podeEditar
-              ? " Para escolher um local, tire da máquina: arraste a pessoa ou posicione no mapa."
-              : ""}
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground">Local de trabalho</span>
-          {podeEditar ? (
-            <Combobox
-              valor={lugar}
-              onValorChange={(v) => {
-                if (!v || v === lugar) return;
-                const [tipo, id] = v.split(":");
-                if (!id) return;
-                if (tipo === "obra") onTrocarObra(id);
-                else onTrocarLocal(id);
-              }}
-              opcoes={opcoes}
-              rotuloDoValor={rotuloLugar}
-              placeholder="Escolher o local"
-              buscaPlaceholder="Nome do local"
-              size="sm"
-              disabled={salvando}
-              ariaLabel="Local de trabalho"
-            />
-          ) : (
-            <p>{rotuloLugar ?? "–"}</p>
-          )}
-          <HistoricoLocal dados={diasPessoa} />
-        </div>
-      )}
-
-      <div className="flex flex-col gap-1">
-        <span className="text-muted-foreground">Centro de custo no mapa</span>
-        {podeEditar ? (
-          <Combobox
-            valor={pessoa.centroCustoId ?? SEM_CENTRO}
-            onValorChange={(v) => {
-              if (!v) return;
-              const novo = v === SEM_CENTRO ? null : v;
-              if (novo !== pessoa.centroCustoId) onTrocarCentro(novo);
-            }}
-            opcoes={opcoesCentro}
-            rotuloDoValor={pessoa.centroCustoNome || "Sem centro de custo"}
-            placeholder="Sem centro de custo"
-            buscaPlaceholder="Nome do centro"
-            size="sm"
-            disabled={salvando}
-            ariaLabel="Centro de custo no mapa"
-          />
-        ) : (
-          <p>{pessoa.centroCustoNome || "–"}</p>
-        )}
-        <p className="text-legenda text-muted-foreground">
-          Os dias trabalhados contam neste centro (parado vai para Pessoal Sem
-          Alocação). Só no mapa: o cadastro do colaborador e a folha não mudam.
-        </p>
-      </div>
+      {pessoa.equipamentoId ? null : <HistoricoLocal dados={diasPessoa} />}
+      <p className="text-legenda text-muted-foreground">
+        Os dias trabalhados contam no centro escolhido, senão no da obra (parado
+        vai para Pessoal Sem Alocação). Só no mapa: o cadastro do colaborador e
+        a folha não mudam.
+      </p>
 
       <CentrosPessoa
         colaboradorId={pessoa.id}

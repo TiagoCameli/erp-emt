@@ -194,7 +194,18 @@ interface Arrasto {
   seguidores: { id: string; pos0: Posicao }[];
   movendo: boolean;
   posicoes: Map<string, Posicao>;
+  /**
+   * No toque o arraste só vale depois de segurar parado (ESPERA_TOQUE_MS): antes disso o dedo
+   * está movendo o mapa, e puxar a pessoa ou a máquina sem querer era o defeito (17/10/2026).
+   * No mouse nasce armado.
+   */
+  armado: boolean;
 }
+
+/** Quanto segurar o dedo sobre a máquina ou a pessoa para começar a arrastar. */
+const ESPERA_TOQUE_MS = 300;
+/** Quanto o dedo pode andar antes de armar sem virar "mover o mapa". */
+const FOLGA_TOQUE_PX = 10;
 
 const CONTROLE_DECK = {
   dragPan: true,
@@ -926,6 +937,9 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       }
     };
 
+    // Espera do toque longo que arma o arraste (ESPERA_TOQUE_MS).
+    let esperaToque = 0;
+
     const aoPressionar = (e: PointerEvent) => {
       descidaRef.current = { x: e.clientX, y: e.clientY };
       if (e.button !== undefined && e.button !== 0) return;
@@ -994,7 +1008,26 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         seguidores,
         movendo: false,
         posicoes: new Map(),
+        armado: e.pointerType === "mouse",
       };
+      if (e.pointerType !== "mouse") {
+        // Toque: o mapa segue livre até o dedo ficar parado o bastante sobre o item.
+        const id = e.pointerId;
+        window.clearTimeout(esperaToque);
+        esperaToque = window.setTimeout(() => {
+          const a = arrastoRef.current;
+          if (!a || a.pointerId !== id) return;
+          a.armado = true;
+          if (propsRef.current.podeArrastar) motorRef.current?.travar(true);
+          try {
+            el.setPointerCapture(id);
+          } catch {
+            // sem captura o arraste segue
+          }
+          navigator.vibrate?.(15);
+        }, ESPERA_TOQUE_MS);
+        return;
+      }
       if (p.podeArrastar) motor.travar(true);
       try {
         el.setPointerCapture(e.pointerId);
@@ -1046,6 +1079,14 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       }
       const a = arrastoRef.current;
       if (a) {
+        if (!a.armado) {
+          // O dedo andou antes de armar: é o mapa que está sendo movido, não o item.
+          if (Math.hypot(x - a.x0, y - a.y0) > FOLGA_TOQUE_PX) {
+            window.clearTimeout(esperaToque);
+            arrastoRef.current = null;
+          }
+          return;
+        }
         if (!propsRef.current.podeArrastar) return;
         if (!a.movendo && Math.hypot(x - a.x0, y - a.y0) < 4) return;
         a.movendo = true;
@@ -1083,6 +1124,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         if (g.rumo !== null) propsRef.current.onGirarFim(g.id, g.rumo);
         return;
       }
+      window.clearTimeout(esperaToque);
       const a = arrastoRef.current;
       if (!a) return;
       arrastoRef.current = null;
@@ -1172,6 +1214,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       el.removeEventListener("click", aoClicarChao);
       el.removeEventListener("pointerleave", aoSair);
       if (quadroHover) cancelAnimationFrame(quadroHover);
+      window.clearTimeout(esperaToque);
     };
   }, [agendarRedesenho]);
 

@@ -261,3 +261,67 @@ export function itemDeVolta(
     volta.centroCustoId = antes.centroCustoId;
   return volta;
 }
+
+/**
+ * O texto do toast de uma alocação de uma pessoa, com o que a troca levou junto ("Jacson opera
+ * CB-001 · Ana sai da CB-001"). Lote de várias pessoas é "N pessoas alocadas".
+ */
+export function textoDaAlocacao(
+  itens: readonly ItemAlocacao[],
+  ctx: {
+    pessoa: (id: string) => PessoaAlocavel | undefined;
+    maquina: (id: string) => MaquinaAlocavel | undefined;
+    nomeDoLocal: (id: string) => string | undefined;
+  },
+): string {
+  if (itens.length !== 1)
+    return `${itens.length.toLocaleString("pt-BR")} pessoas alocadas`;
+  const item = itens[0]!;
+  const p = ctx.pessoa(item.colaboradorId);
+  const nome = p?.nome ?? "Pessoa";
+  const partes: string[] = [];
+  if (item.equipamentoId) {
+    const m = ctx.maquina(item.equipamentoId);
+    const atual = p?.equipamentoId ? ctx.maquina(p.equipamentoId) : undefined;
+    partes.push(`${nome} opera ${m?.codigo ?? "a máquina"}`);
+    if (p && m) partes.push(...avisoDaTrocaPelaPessoa(p, m, atual?.codigo ?? null));
+  } else if (item.equipamentoId === null) {
+    const atual = p?.equipamentoId ? ctx.maquina(p.equipamentoId) : undefined;
+    partes.push(`${nome} saiu da ${atual?.codigo ?? "máquina"}`);
+  }
+  if (item.localidadeId)
+    partes.push(
+      `${partes.length ? "trabalha" : `${nome} trabalha`} em ${ctx.nomeDoLocal(item.localidadeId) ?? "local escolhido"}`,
+    );
+  if (item.centroCustoId !== undefined)
+    partes.push(
+      item.centroCustoId === null
+        ? `${partes.length ? "centro" : `Centro de ${nome}`} pela obra`
+        : `${partes.length ? "centro" : `Centro de ${nome}`} trocado`,
+    );
+  return partes.join(" · ") || `${nome}: nada mudou`;
+}
+
+/**
+ * O lote do "Desfazer": cada pessoa do lote volta como estava e, quando a máquina que ela pegou
+ * tinha outro operador, ele volta para a máquina (o banco o soltou na troca). As pessoas vêm
+ * antes: soltam as máquinas que os operadores de antes vão retomar.
+ */
+export function loteDeVolta(
+  itens: readonly ItemAlocacao[],
+  pessoasAntes: ReadonlyMap<string, PessoaAlocavel & { obraMapaId: string | null }>,
+  operadorAntesDe: ReadonlyMap<string, string | null>,
+): ItemAlocacao[] {
+  const noLote = new Set(itens.map((i) => i.colaboradorId));
+  const volta: ItemAlocacao[] = [];
+  const retomadas: ItemAlocacao[] = [];
+  for (const item of itens) {
+    const antes = pessoasAntes.get(item.colaboradorId);
+    if (antes) volta.push(itemDeVolta(antes, item));
+    if (!item.equipamentoId) continue;
+    const operador = operadorAntesDe.get(item.equipamentoId);
+    if (operador && operador !== item.colaboradorId && !noLote.has(operador))
+      retomadas.push({ colaboradorId: operador, equipamentoId: item.equipamentoId });
+  }
+  return [...volta, ...retomadas];
+}
