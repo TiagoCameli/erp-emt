@@ -30,6 +30,7 @@ import {
   iniciarLocacaoSchema,
   marcarEstadoSchema,
   moverEquipamentosSchema,
+  moverPessoasLoteSchema,
   moverPessoasSchema,
   posicionarObjetoSchema,
   acoplarImplementoSchema,
@@ -285,6 +286,47 @@ export async function moverPessoas(dados: unknown): Promise<ResultadoMapa> {
   } catch (erro) {
     return erroAcao(
       "mapa.moverPessoas",
+      erro,
+      `Não foi possível mover: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * Pessoas da seleção múltipla: uma chamada da RPC por pessoa (cada uma com o próprio ponto) e uma
+ * releitura do mapa só no fim. Se uma falhar, as anteriores ficam e o erro diz quem parou.
+ */
+export async function moverPessoasEmLote(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = moverPessoasLoteSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const { itens, data, motivo } = validado.data;
+  let total = 0;
+  try {
+    const supabase = await createClient();
+    for (const item of itens) {
+      const { error } = await supabase.rpc("fn_mapa_mover_colaboradores", {
+        p_ids: [item.id],
+        p_destino: item.destino as Json,
+        p_data: data,
+        p_motivo: motivo ?? "",
+      });
+      if (error)
+        return erroAcao(
+          "mapa.moverPessoasEmLote",
+          error,
+          `${total > 0 ? `${total} pessoa(s) transferida(s); ` : ""}${mensagemDaRpc(error, "Não foi possível mover a pessoa")}`,
+        );
+      total += 1;
+    }
+    return concluir(total);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.moverPessoasEmLote",
       erro,
       `Não foi possível mover: ${textoDoErro(erro)}`,
     );
