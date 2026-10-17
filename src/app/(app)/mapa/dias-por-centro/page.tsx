@@ -7,6 +7,8 @@ import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
 import {
   agruparRelatorio,
   mesDoRelatorio,
+  PROPRIEDADES_RELATORIO,
+  propriedadeDoRelatorio,
   rotuloMes,
 } from "@/modules/mapa/centros";
 import { carregarRelDiasCentro } from "@/modules/mapa/centros-queries";
@@ -14,8 +16,6 @@ import { RelDiasCentroTabela } from "@/modules/mapa/components/rel-dias-centro";
 
 // Exportar monta a planilha na função desta página (src/app/max-duration-de-quem-exporta.test.ts).
 export const maxDuration = 60;
-
-const PROPRIEDADES = ["propria", "colorado", "alugada"];
 
 /**
  * Dias de equipamento por centro de custo no mês (pedido do Tiago, 16/10/2026): em que centro cada
@@ -33,9 +33,9 @@ export default async function PaginaDiasPorCentro({
   const params = await searchParams;
   const mesHoje = mesHojeISO();
   const mes = mesDoRelatorio(params.mes, mesHoje);
-  const propriedade = PROPRIEDADES.includes(params.propriedade ?? "")
-    ? (params.propriedade ?? "")
-    : "";
+  // Link antigo com ?propriedade=colorado cai em Alugada, onde a Colorado está agora.
+  const pedida = propriedadeDoRelatorio(params.propriedade ?? "");
+  const propriedade = (PROPRIEDADES_RELATORIO as readonly string[]).includes(pedida) ? pedida : "";
 
   const cabecalho = (
     <PageHeader

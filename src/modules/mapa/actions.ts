@@ -828,7 +828,7 @@ export async function gerarPlanilhaDiasCentro(
     return { erro: "Sem permissão para exportar os relatórios do Mapa" };
   }
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { erro: "Mês inválido" };
-  if (!["", "propria", "colorado", "alugada"].includes(propriedade))
+  if (!["", "propria", "alugada"].includes(propriedade))
     return { erro: "Propriedade inválida" };
   try {
     const { carregarRelDiasCentro } = await import("@/modules/mapa/centros-queries");

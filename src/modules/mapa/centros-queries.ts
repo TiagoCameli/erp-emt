@@ -1,12 +1,12 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
-import type { RelDiasCentroLinha } from "@/modules/mapa/centros";
+import { propriedadeDoRelatorio, type RelDiasCentroLinha } from "@/modules/mapa/centros";
 
 /**
  * Dias de cada máquina em cada centro de custo no mês (`fn_mapa_rel_dias_centro`: dias fechados às
  * 23:59 mais o de hoje ao vivo). A RPC recusa quem não tem mapa.historico/ver.
- * `propriedade` filtra própria/colorado/alugada; vazio traz todas.
+ * `propriedade` filtra própria/alugada (a Colorado entra em alugada); vazio traz todas.
  */
 export async function carregarRelDiasCentro(
   mes: string,
@@ -22,7 +22,7 @@ export async function carregarRelDiasCentro(
       erro: error.message || "Não foi possível carregar os dias por centro.",
     };
   const linhas = (data ?? [])
-    .filter((r) => !propriedade || r.propriedade === propriedade)
+    .filter((r) => !propriedade || propriedadeDoRelatorio(r.propriedade ?? "") === propriedade)
     .map(
       (r): RelDiasCentroLinha => ({
         equipamentoId: r.equipamento_id,
