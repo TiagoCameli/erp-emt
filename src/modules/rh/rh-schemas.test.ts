@@ -46,11 +46,35 @@ describe("diariaSchema", () => {
     meias: ["2026-06-02"],
     faltas: [],
     valorDiaria: 150,
+    rateio: [{ centroCustoId: UUID_A, percentual: 100 }],
   };
 
-  it("aceita diária por período válida (obra opcional)", () => {
+  it("aceita diária por período válida, com uma obra ou rateada", () => {
     expect(diariaSchema.safeParse(base).success).toBe(true);
-    expect(diariaSchema.safeParse({ ...base, obraId: UUID_A }).success).toBe(true);
+    expect(
+      diariaSchema.safeParse({
+        ...base,
+        rateio: [
+          { centroCustoId: UUID_A, percentual: 63.6364 },
+          { centroCustoId: UUID_B, percentual: 36.3636 },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("recusa diária sem obra e rateio que não soma 100", () => {
+    expect(diariaSchema.safeParse({ ...base, rateio: [] }).success).toBe(false);
+    const { rateio: _, ...semRateio } = base;
+    expect(diariaSchema.safeParse(semRateio).success).toBe(false);
+    expect(
+      diariaSchema.safeParse({
+        ...base,
+        rateio: [
+          { centroCustoId: UUID_A, percentual: 60 },
+          { centroCustoId: UUID_B, percentual: 30 },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("recusa sem função, valor zero e data inválida", () => {

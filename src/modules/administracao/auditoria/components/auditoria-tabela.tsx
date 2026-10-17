@@ -81,6 +81,7 @@ const ROTULO_TABELA: Record<string, string> = {
   rh_pontos: "Ponto",
   rh_apontamentos: "Apontamentos",
   rh_diarias: "Diárias",
+  rh_diaria_rateios: "Rateio de diárias",
   rh_adiantamentos: "Adiantamentos",
   rh_ferias: "Férias",
   rh_ocorrencias: "Ocorrências",

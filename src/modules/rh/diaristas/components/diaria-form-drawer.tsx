@@ -30,25 +30,29 @@ import {
   proximoTipoDia,
   type TipoDia,
 } from "@/modules/rh/diaristas/periodo";
-import type { DiariaLista, FuncaoDiaria } from "@/modules/rh/diaristas/queries";
+import type {
+  CentroDiaria,
+  DiariaLista,
+  FuncaoDiaria,
+} from "@/modules/rh/diaristas/queries";
 import {
   diariaFormParaInput,
   diariaFormSchema,
   type DiariaFormInput,
 } from "@/modules/rh/diaristas/schemas";
-import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
+import type { DiaristaOpcao } from "@/modules/rh/_shared/queries";
 import { PeriodoDias } from "./periodo-dias";
+import { RateioObras } from "./rateio-obras";
 
 const ID_FORM = "form-diaria";
-/** Valor da obra "sem obra" no combobox (Radix proíbe value vazio). */
-const SEM_OBRA = "__sem_obra__";
 
 function valoresIniciais(): DiariaFormInput {
   const hoje = dataHojeISO();
   return {
     colaboradorId: "",
     funcaoId: "",
-    obraId: "",
+    // Obra obrigatória: uma linha de 100% esperando a escolha.
+    rateio: [{ centroCustoId: "", percentual: "100" }],
     inicio: hoje,
     fim: hoje,
     meias: [],
@@ -72,7 +76,8 @@ export interface DiariaFormDrawerProps {
   aberto: boolean;
   onAbertoChange: (aberto: boolean) => void;
   diaristas: DiaristaOpcao[];
-  obras: ObraOpcao[];
+  /** Obras e centros raiz que a diária aceita no rateio. */
+  centros: CentroDiaria[];
   /** Funções do catálogo com o último valor de diária. */
   funcoes: FuncaoDiaria[];
   /** Diária em edição. Ausente significa registrar. */
@@ -81,7 +86,7 @@ export interface DiariaFormDrawerProps {
 
 /**
  * Drawer da diária por período: diarista, função (com "criar função" no próprio
- * campo), valor da diária, obra, período e a grade de dias para marcar meia
+ * campo), valor da diária, obra (com rateio por percentual), período e a grade de dias para marcar meia
  * diária e dia sem trabalho. O resumo é a prévia da mesma conta que o banco faz
  * ao gravar (`fn_diaria_calcular`).
  *
@@ -93,7 +98,7 @@ export function DiariaFormDrawer({
   aberto,
   onAbertoChange,
   diaristas,
-  obras,
+  centros,
   funcoes,
   diaria,
 }: DiariaFormDrawerProps) {
@@ -128,7 +133,13 @@ export function DiariaFormDrawer({
       form.reset({
         colaboradorId: diaria.colaboradorId,
         funcaoId: diaria.funcaoId ?? "",
-        obraId: diaria.obraId ?? "",
+        rateio:
+          diaria.rateio.length > 0
+            ? diaria.rateio.map((r) => ({
+                centroCustoId: r.centroCustoId,
+                percentual: valorParaString(r.percentual),
+              }))
+            : [{ centroCustoId: "", percentual: "100" }],
         inicio: diaria.data,
         // Diária antiga é de um dia, com o valor inteiro numa diária.
         fim: diaria.dataFim ?? diaria.data,
@@ -401,30 +412,19 @@ export function DiariaFormDrawer({
           </div>
         ) : null}
 
-        <CampoFormulario
-          id="diaria-obra"
-          rotulo="Obra"
-          erro={form.formState.errors.obraId?.message}
-        >
-          <Combobox
-            valor={valores.obraId === "" ? SEM_OBRA : valores.obraId}
-            onValorChange={(valor) =>
-              form.setValue("obraId", valor === SEM_OBRA ? "" : valor, {
-                shouldDirty: true,
-              })
-            }
-            opcoes={[
-              { valor: SEM_OBRA, rotulo: "Sem obra" },
-              ...obras.map((obra) => ({
-                valor: obra.id,
-                rotulo: obra.nome + (obra.lote ? ` - Lote ${obra.lote}` : ""),
-              })),
-            ]}
-            placeholder="Sem obra"
-            className="w-full"
-            id="diaria-obra"
-          />
-        </CampoFormulario>
+        <RateioObras
+          linhas={valores.rateio}
+          onLinhasChange={(linhas) =>
+            form.setValue("rateio", linhas, {
+              shouldDirty: true,
+              shouldValidate: form.formState.isSubmitted,
+            })
+          }
+          centros={centros}
+          total={"erro" in resumo ? 0 : resumo.total}
+          centrosDaDiaria={diaria?.rateio.map((r) => r.centroCustoId)}
+          erro={form.formState.errors.rateio?.message}
+        />
 
         <LinhaCampos>
           <CampoFormulario

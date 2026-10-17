@@ -25,10 +25,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { formatarBRL, formatarData } from "@/lib/formatadores";
 import { removerDiaria } from "@/modules/rh/diaristas/actions";
-import type { DiariaLista, FuncaoDiaria } from "@/modules/rh/diaristas/queries";
+import type {
+  CentroDiaria,
+  DiariaLista,
+  FuncaoDiaria,
+} from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
 import { filtrarDiarias, SEM_OBRA } from "@/modules/rh/diaristas/filtros";
-import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
+import { formatarPercentual } from "@/modules/rh/diaristas/rateio";
+import type { DiaristaOpcao } from "@/modules/rh/_shared/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
 
@@ -42,7 +47,8 @@ const OPCOES_SITUACAO = [
 export interface DiariasTabelaProps {
   diarias: DiariaLista[];
   diaristas: DiaristaOpcao[];
-  obras: ObraOpcao[];
+  /** Obras e centros raiz do rateio (inativos inclusos, para o filtro). */
+  centros: CentroDiaria[];
   funcoes: FuncaoDiaria[];
   podeCriar: boolean;
   podeEditar: boolean;
@@ -70,14 +76,15 @@ function opcoesCompetencia(diarias: DiariaLista[]) {
 export function DiariasTabela({
   diarias,
   diaristas,
-  obras,
+  centros,
   funcoes,
   podeCriar,
   podeEditar,
 }: DiariasTabelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [competencia, setCompetencia] = useFiltroSessao("competencia", "");
-  const [obraId, setObraId] = useFiltroSessao("obraId", "");
+  // Chave nova: a antiga guardava id de obra, e o filtro agora é por centro.
+  const [obraId, setObraId] = useFiltroSessao("centroId", "");
   const [colaboradorId, setColaboradorId] = useFiltroSessao(
     "colaboradorId",
     "",
@@ -127,15 +134,12 @@ export function DiariasTabela({
 
   const opcoesObra = React.useMemo(
     () => [
-      ...obras.map((obra) => ({
-        valor: obra.id,
-        rotulo: obra.lote ? `${obra.nome} (Lote ${obra.lote})` : obra.nome,
-      })),
-      // A diária pode ser lançada sem obra, e a coluna mostra "Sem obra": sem
-      // essa opção não haveria como achá-las.
+      ...centros.map((centro) => ({ valor: centro.id, rotulo: centro.nome })),
+      // Diária sem rateio não deveria existir desde 17/10/2026; se aparecer,
+      // a coluna mostra "Sem obra" e precisa haver como achá-la.
       { valor: SEM_OBRA, rotulo: "Sem obra" },
     ],
-    [obras],
+    [centros],
   );
 
   const opcoesDiarista = React.useMemo(
@@ -187,17 +191,25 @@ export function DiariasTabela({
         ),
       },
       {
-        accessorKey: "obraNome",
+        id: "obra",
+        accessorFn: (linha) => linha.rateio[0]?.nome ?? "",
         header: "Obra",
         cell: ({ row }) => {
-          const { obraNome, obraLote } = row.original;
-          if (!obraNome) {
+          const { rateio } = row.original;
+          if (rateio.length === 0) {
             return <span className="text-muted-foreground">Sem obra</span>;
           }
+          if (rateio.length === 1) return <span>{rateio[0]!.nome}</span>;
           return (
-            <span>
-              {obraNome}
-              {obraLote ? ` - Lote ${obraLote}` : ""}
+            <span className="flex flex-col gap-0.5">
+              {rateio.map((r) => (
+                <span key={r.centroCustoId}>
+                  {r.nome}{" "}
+                  <span className="tabular-nums text-muted-foreground">
+                    {formatarPercentual(r.percentual)}
+                  </span>
+                </span>
+              ))}
             </span>
           );
         },
@@ -475,7 +487,7 @@ export function DiariasTabela({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           diaristas={diaristas}
-          obras={obras}
+          centros={centros}
           funcoes={funcoes}
           diaria={emEdicao}
         />

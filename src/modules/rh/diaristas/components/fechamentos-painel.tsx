@@ -22,12 +22,13 @@ import { cn } from "@/lib/utils";
 import { fecharDiarias } from "@/modules/rh/diaristas/actions";
 import type { FormaPagamentoOpcao } from "@/modules/financeiro/lancamentos/queries";
 import type {
+  CentroDiaria,
   DiariaLista,
   FechamentoPendente,
   FuncaoDiaria,
 } from "@/modules/rh/diaristas/queries";
 import { formatarCompetencia } from "@/modules/rh/diaristas/schemas";
-import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
+import type { DiaristaOpcao } from "@/modules/rh/_shared/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
 
 export interface FechamentosPainelProps {
@@ -37,7 +38,7 @@ export interface FechamentosPainelProps {
   /** Todas as diárias da página: o painel mostra as em aberto de cada linha. */
   diarias: DiariaLista[];
   diaristas: DiaristaOpcao[];
-  obras: ObraOpcao[];
+  centros: CentroDiaria[];
   funcoes: FuncaoDiaria[];
   /** Mostra o Editar de cada diária. O banco confere de novo ao salvar. */
   podeEditar: boolean;
@@ -99,7 +100,7 @@ export function FechamentosPainel({
   formasPagamento,
   diarias,
   diaristas,
-  obras,
+  centros,
   funcoes,
   podeEditar,
 }: FechamentosPainelProps) {
@@ -283,7 +284,7 @@ export function FechamentosPainel({
           aberto={drawerAberto}
           onAbertoChange={setDrawerAberto}
           diaristas={diaristas}
-          obras={obras}
+          centros={centros}
           funcoes={funcoes}
           diaria={emEdicao}
         />

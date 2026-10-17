@@ -36,6 +36,7 @@ function diaria(parcial: Partial<DiariaLista> = {}): DiariaLista {
     colaboradorNome: "KELVIN COELHO TEIXEIRA",
     obraId: null,
     obraNome: null,
+    rateio: [],
     obraLote: null,
     data: "2026-10-01",
     dataFim: "2026-10-01",
@@ -114,7 +115,7 @@ describe("FechamentosPainel", () => {
         formasPagamento={[]}
         diarias={DIARIAS}
         diaristas={[]}
-        obras={[]}
+        centros={[]}
         funcoes={[]}
         podeEditar={podeEditar}
       />,

@@ -13,14 +13,25 @@ export interface FiltrosDiarias {
   colaboradorId?: string;
 }
 
+/** Uma linha do rateio da diária: obra (ou centro raiz) e percentual. */
+export interface RateioDiaria {
+  centroCustoId: string;
+  /** Nome do centro raiz (o da obra é o nome da obra). */
+  nome: string;
+  percentual: number;
+}
+
 /** Linha da listagem de diárias. */
 export interface DiariaLista {
   id: string;
   colaboradorId: string;
   colaboradorNome: string;
+  /** Obra principal (a da linha de maior percentual). Derivada no banco. */
   obraId: string | null;
   obraNome: string | null;
   obraLote: string | null;
+  /** Rateio por obra, maior percentual primeiro. Vazio só se o banco falhar. */
+  rateio: RateioDiaria[];
   /** Início do período, ou o dia da diária antiga (yyyy-MM-dd). */
   data: string;
   /** Fim do período (yyyy-MM-dd). Null nas diárias antigas, de um dia. */
@@ -60,7 +71,7 @@ export async function listarDiarias(
   let consulta = supabase
     .from("rh_diarias")
     .select(
-      "id, colaborador_id, obra_id, data, data_fim, funcao_id, valor_diaria, qtd_diarias, dias_meia, dias_falta, competencia, valor, observacao, lancamento_id, folha_id, colaboradores(nome), obras(nome, lote)",
+      "id, colaborador_id, obra_id, data, data_fim, funcao_id, valor_diaria, qtd_diarias, dias_meia, dias_falta, competencia, valor, observacao, lancamento_id, folha_id, colaboradores(nome), obras(nome, lote), rh_diaria_rateios(centro_custo_id, percentual)",
     )
     .order("data", { ascending: false });
 
@@ -75,15 +86,22 @@ export async function listarDiarias(
   // quem é só do RH não o enxerga (ver `fn_diarias_status_parcelas`).
   // O nome da função também vem por RPC: o catálogo `funcoes` só abre para
   // quem tem Cadastros (ver `fn_diaria_funcoes`).
-  const [{ data, error }, status, funcoes] = await Promise.all([
+  // O nome do centro do rateio também: `centros_custo` não abre para o RH
+  // (ver `fn_diaria_centros`).
+  const [{ data, error }, status, funcoes, centros] = await Promise.all([
     consulta,
     supabase.rpc("fn_diarias_status_parcelas"),
     supabase.rpc("fn_diaria_funcoes"),
+    supabase.rpc("fn_diaria_centros"),
   ]);
 
-  if (error || status.error || funcoes.error) {
+  if (error || status.error || funcoes.error || centros.error) {
     throw new Error("Não foi possível carregar as diárias");
   }
+
+  const nomeDoCentro = new Map(
+    (centros.data ?? []).map((c) => [c.id, c.nome]),
+  );
 
   const nomeDaFuncao = new Map((funcoes.data ?? []).map((f) => [f.id, f.nome]));
   const parcelasPorLancamento = new Map(
@@ -97,6 +115,18 @@ export async function listarDiarias(
     obraId: linha.obra_id,
     obraNome: linha.obras?.nome ?? null,
     obraLote: linha.obras?.lote ?? null,
+    rateio: (linha.rh_diaria_rateios ?? [])
+      .map((r) => ({
+        centroCustoId: r.centro_custo_id,
+        nome: nomeDoCentro.get(r.centro_custo_id) ?? "",
+        percentual: r.percentual,
+      }))
+      // Mesma ordem do banco: maior percentual, depois menor id.
+      .sort(
+        (a, b) =>
+          b.percentual - a.percentual ||
+          a.centroCustoId.localeCompare(b.centroCustoId),
+      ),
     data: linha.data,
     dataFim: linha.data_fim,
     funcaoId: linha.funcao_id,
@@ -209,5 +239,33 @@ export async function listarFuncoesDiaria(): Promise<FuncaoDiaria[]> {
     valor: f.valor,
     atualizadoEm: f.atualizado_em,
     diariaId: f.diaria_id,
+  }));
+}
+
+/** Obra ou centro raiz que a diária aceita no rateio. */
+export interface CentroDiaria {
+  id: string;
+  nome: string;
+  /** "obra" | "escritorio" | "manutencao" */
+  tipo: string;
+  obraId: string | null;
+  /** Inativo continua na lista para dar nome à diária antiga; o formulário não oferece. */
+  ativo: boolean;
+}
+
+/**
+ * Obras (pelo centro raiz delas), Escritório Central e Manutenção, pela
+ * `fn_diaria_centros`. Alimenta o rateio do formulário e o filtro de obra.
+ */
+export async function listarCentrosDiaria(): Promise<CentroDiaria[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_diaria_centros");
+  if (error) throw new Error("Não foi possível carregar as obras");
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    nome: c.nome,
+    tipo: c.tipo,
+    obraId: c.obra_id,
+    ativo: c.ativo,
   }));
 }
