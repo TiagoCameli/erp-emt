@@ -74,7 +74,40 @@ describe("paraCentrosColaborador", () => {
       atual: { centroId: "c", centroNome: "Sem", motivo: "parado", desde: "2026-10-16" },
       mes: [{ centroId: "c", centroNome: "Sem", dias: 2 }],
       periodos: [],
+      centroAtual: null,
+      localAtual: null,
+      mudancasCentro: [],
+      mudancasLocal: [],
     });
+  });
+
+  it("lê o centro e o local de agora com o dia em que começaram, e as mudanças", () => {
+    const c = paraCentrosColaborador({
+      estado: "trabalhando",
+      centro_atual: { centro_id: "c9", centro_nome: "009", desde: "2026-10-20" },
+      local_atual: { localidade_id: null, nome: null, desde: "2026-10-21" },
+      mudancas_centro: [
+        { data: "2026-10-20", centro_nome: "009", antes_nome: "Pessoal Sem Alocação" },
+        { data: "2026-10-14", centro_nome: "Pessoal Sem Alocação", antes_nome: null },
+      ],
+      mudancas_local: [
+        { data: "2026-10-21", nome: null, antes_nome: "Silo" },
+        { data: "2026-10-16", nome: "Silo", antes_nome: null },
+        { data: "2026-10-14", nome: null, antes_nome: null },
+      ],
+    });
+    expect(c?.centroAtual).toEqual({ centroId: "c9", centroNome: "009", desde: "2026-10-20" });
+    // Sem local também é um lugar com data: saiu do Silo em 21/10.
+    expect(c?.localAtual).toEqual({ localidadeId: null, nome: "", desde: "2026-10-21" });
+    expect(c?.mudancasCentro).toEqual([
+      { data: "2026-10-20", nome: "009", antes: "Pessoal Sem Alocação" },
+      { data: "2026-10-14", nome: "Pessoal Sem Alocação", antes: null },
+    ]);
+    expect(c?.mudancasLocal.map((m) => [m.data, m.nome, m.antes])).toEqual([
+      ["2026-10-21", "", "Silo"],
+      ["2026-10-16", "Silo", ""],
+      ["2026-10-14", "", null],
+    ]);
   });
 
   it("estado desconhecido vira trabalhando (o padrão do banco)", () => {
