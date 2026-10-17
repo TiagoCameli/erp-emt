@@ -8,6 +8,7 @@ import {
   CheckSquare,
   ChevronDown,
   ChevronUp,
+  ClipboardList,
   Compass,
   HardHat,
   Layers,
@@ -43,8 +44,8 @@ import { registrarChegada } from "@/modules/frete/fretes/actions";
 import {
   acoplarImplemento,
   ajustarRaioLocal,
+  alocar,
   assinalarOperador,
-  trocarCentroCustoPessoa,
   colocarLocal,
   definirTamanhoDeposito,
   girarDeposito,
@@ -65,6 +66,16 @@ import {
   vincularLocal,
   type ResultadoMapa,
 } from "@/modules/mapa/actions";
+import {
+  loteDeVolta,
+  semAlocacao,
+  textoDaAlocacao,
+} from "@/modules/mapa/alocacao";
+import type { ItemAlocacao } from "@/modules/mapa/schemas";
+import {
+  QuadroAlocacao,
+  type PedidoQuadro,
+} from "@/modules/mapa/components/quadro-alocacao";
 import {
   DialogoEstado,
   type ConfirmacaoEstado,
@@ -197,6 +208,21 @@ const ROTULO_MOTOR: Record<TipoMotor, string> = {
 };
 
 /** Cruzeiro do Sul e os lotes da BR-364, quando não há trecho cadastrado para enquadrar. */
+/** A pessoa posta num lugar: arrastada, tocada ("Posicionar") ou com a obra escolhida na ficha. */
+type PedidoPessoa = {
+  pessoa: PessoaMapa;
+  /** Ponto solto ou tocado; null quando a máquina foi escolhida na ficha (ela pode não ter posição). */
+  para: Posicao | null;
+  sobre: EquipamentoMapa | null;
+  /** Local onde a pessoa vai trabalhar (soltou dentro do raio dele, ou escolheu na ficha). */
+  local: LocalidadeMapa | null;
+  /** Obra escolhida na ficha como local de trabalho (só quando `local` é null). */
+  obra?: ObraMapa | null;
+};
+
+/** Quanto tempo o toast de alocação fica com o "Desfazer" (o sucesso padrão some em 2 s). */
+const DURACAO_DESFAZER = 8000;
+
 const CHAVE_PAINEL = "erp-emt:mapa:painel";
 /** Raio do anel de giro em volta da máquina (as miniaturas são 3x o tamanho real). */
 const RAIO_GIRO_M = 45;
@@ -522,16 +548,10 @@ export function TelaMapa({
     equipamentos: EquipamentoMapa[];
     pessoas: PessoaMapa[];
   } | null>(null);
-  const [pendentePessoa, setPendentePessoa] = React.useState<{
-    pessoa: PessoaMapa;
-    /** Ponto solto ou tocado; null quando a máquina foi escolhida na ficha (ela pode não ter posição). */
-    para: Posicao | null;
-    sobre: EquipamentoMapa | null;
-    /** Local onde a pessoa vai trabalhar (soltou dentro do raio dele, ou escolheu na ficha). */
-    local: LocalidadeMapa | null;
-    /** Obra escolhida na ficha como local de trabalho (só quando `local` é null). */
-    obra?: ObraMapa | null;
-  } | null>(null);
+  const [pendentePessoa, setPendentePessoa] =
+    React.useState<PedidoPessoa | null>(null);
+  // Quadro de alocação aberto (v1.30): tudo, só a seleção, ou só quem está sem alocação.
+  const [quadro, setQuadro] = React.useState<PedidoQuadro | null>(null);
   const [pedidoEstado, setPedidoEstado] = React.useState<PedidoEstado | null>(
     null,
   );
@@ -987,6 +1007,11 @@ export function TelaMapa({
       ),
     [estado.pessoas, posicoesPendentes, filtros.busca, filtros.obraId],
   );
+  // Sem máquina, local, obra nem área no Mapa: vão para o topo do painel com "Alocar".
+  const pessoasSemAlocacao = React.useMemo(
+    () => estado.pessoas.filter(semAlocacao).length,
+    [estado.pessoas],
+  );
   const tiposConhecidos = React.useMemo(
     () =>
       [
@@ -997,6 +1022,11 @@ export function TelaMapa({
         ),
       ].sort((a, b) => a.localeCompare(b, "pt-BR")),
     [equipamentosVistos, estado.foraDoMapa],
+  );
+
+  const codigoDe = React.useMemo(
+    () => new Map(equipamentosVistos.map((e) => [e.id, e.codigo])),
+    [equipamentosVistos],
   );
 
   /** Aplica a resposta de uma action: estado novo + toast. Devolve se deu certo. */
@@ -1011,6 +1041,143 @@ export function TelaMapa({
       return true;
     },
     [],
+  );
+
+  /**
+   * Alocação que grava na hora (v1.30): manda o lote, troca o estado e oferece "Desfazer" no toast,
+   * que manda o lote de volta montado com o antes de agora (pessoas e operadores das máquinas).
+   */
+  const desfazerCom = React.useCallback(
+    (volta: ItemAlocacao[]) => ({
+      label: "Desfazer",
+      onClick: () => {
+        void (async () => {
+          setSalvando(true);
+          try {
+            const r = await alocar({
+              itens: volta,
+              data: estado.hoje,
+              motivo: "Desfazer",
+            });
+            aplicar(r, "Desfeito");
+          } finally {
+            setSalvando(false);
+          }
+        })();
+      },
+    }),
+    [estado.hoje, aplicar],
+  );
+
+  const voltaDe = React.useCallback(
+    (itens: readonly ItemAlocacao[]) =>
+      loteDeVolta(
+        itens,
+        new Map(estado.pessoas.map((p) => [p.id, p])),
+        new Map(equipamentosVistos.map((e) => [e.id, e.operadorId])),
+      ),
+    [estado.pessoas, equipamentosVistos],
+  );
+
+  const alocarComDesfazer = React.useCallback(
+    async (itens: ItemAlocacao[], texto?: string): Promise<boolean> => {
+      if (itens.length === 0) return true;
+      const volta = voltaDe(itens);
+      const mensagem =
+        texto ??
+        textoDaAlocacao(itens, {
+          pessoa: (id) => estado.pessoas.find((p) => p.id === id),
+          maquina: (id) => equipamentosVistos.find((e) => e.id === id),
+          nomeDoLocal: (id) =>
+            estado.localidades.find((l) => l.id === id)?.nome,
+        });
+      setSalvando(true);
+      try {
+        const r = await alocar({ itens, data: estado.hoje });
+        if ("erro" in r) {
+          toast.error(r.erro);
+          return false;
+        }
+        if (r.estado) setEstado(r.estado);
+        if (r.total === 0) {
+          toast.info("Nada mudou: já estava assim.");
+          return true;
+        }
+        toast.success(mensagem, {
+          duration: DURACAO_DESFAZER,
+          action: desfazerCom(volta),
+        });
+        return true;
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [voltaDe, estado.pessoas, estado.localidades, estado.hoje, equipamentosVistos, desfazerCom],
+  );
+
+  /**
+   * Pessoa solta, tocada ou com obra escolhida na ficha: grava direto, com Desfazer. O diálogo
+   * fica só para o que tira a pessoa da obra em que está (Tiago, 17/10/2026).
+   */
+  const pessoaNoLugar = React.useCallback(
+    async (pedido: PedidoPessoa) => {
+      const { pessoa, para, sobre, local, obra = null } = pedido;
+      const obraDestino = sobre
+        ? sobre.obraId
+        : local
+          ? local.obraId
+          : (obra?.id ?? null);
+      if (obraDestino && pessoa.obraId && obraDestino !== pessoa.obraId) {
+        setPendentePessoa(pedido);
+        return;
+      }
+      if (sobre) {
+        if (sobre.id !== pessoa.equipamentoId)
+          await alocarComDesfazer([
+            { colaboradorId: pessoa.id, equipamentoId: sobre.id },
+          ]);
+        setPosicionandoPessoa(null);
+        return;
+      }
+      const destino = destinoDaPessoa(para, local, obra);
+      if (!destino) return;
+      // O que o mover faz com a pessoa, para o Desfazer saber o que devolver.
+      const efeito: ItemAlocacao = {
+        colaboradorId: pessoa.id,
+        ...(local
+          ? { localidadeId: local.id }
+          : obra
+            ? { obraId: obra.id }
+            : { localidadeId: null }),
+        ...(pessoa.equipamentoId ? { equipamentoId: null } : {}),
+      };
+      const volta = voltaDe([efeito]);
+      setSalvando(true);
+      try {
+        const r = await moverPessoas({
+          ids: [pessoa.id],
+          destino,
+          data: estado.hoje,
+        });
+        if ("erro" in r) {
+          toast.error(r.erro);
+          return;
+        }
+        if (r.estado) setEstado(r.estado);
+        setPosicionandoPessoa(null);
+        toast.success(
+          local
+            ? `${pessoa.nome} trabalha em ${local.nome}`
+            : obra
+              ? `${pessoa.nome} trabalha na obra ${obra.nome}`
+              : `${pessoa.nome} realocado`,
+          { duration: DURACAO_DESFAZER, action: desfazerCom(volta) },
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [alocarComDesfazer, voltaDe, desfazerCom, estado.hoje],
   );
 
   const atualizar = React.useCallback(async () => {
@@ -1080,7 +1247,7 @@ export function TelaMapa({
         );
         if (!item || !pessoa) return;
         const sobre = maquinaEm(item.para, cena.equipamentos);
-        setPendentePessoa({
+        void pessoaNoLugar({
           pessoa,
           para: item.para,
           sobre,
@@ -1136,6 +1303,7 @@ export function TelaMapa({
       equipamentosVistos,
       cena.equipamentos,
       ctxDestino,
+      pessoaNoLugar,
     ],
   );
 
@@ -1181,7 +1349,7 @@ export function TelaMapa({
       if (pessoaPosicionando) {
         // Como soltar a pessoa arrastada: numa máquina vira operador, no raio de um local fica nele.
         const sobre = maquinaEm(pos, cena.equipamentos);
-        setPendentePessoa({
+        void pessoaNoLugar({
           pessoa: pessoaPosicionando,
           para: pos,
           sobre,
@@ -1217,6 +1385,7 @@ export function TelaMapa({
       desenho,
       rota,
       calcularRota,
+      pessoaNoLugar,
     ],
   );
 
@@ -1414,28 +1583,6 @@ export function TelaMapa({
         return aplicar(
           r,
           raioM === null ? "Área voltou ao padrão" : "Área do local salva",
-        );
-      } finally {
-        setSalvando(false);
-      }
-    },
-    [aplicar],
-  );
-
-  // Centro de custo da pessoa no Mapa (o do cadastro e o da folha não mudam).
-  const trocarCentroPessoa = React.useCallback(
-    async (pessoa: PessoaMapa, centroCustoId: string | null) => {
-      setSalvando(true);
-      try {
-        const r = await trocarCentroCustoPessoa({
-          colaboradorId: pessoa.id,
-          centroCustoId,
-        });
-        aplicar(
-          r,
-          centroCustoId === null
-            ? `${pessoa.nome} ficou sem centro de custo no mapa`
-            : `Centro de custo de ${pessoa.nome} trocado`,
         );
       } finally {
         setSalvando(false);
@@ -1793,23 +1940,6 @@ export function TelaMapa({
       }
     },
     [pedidoEstado, aplicar],
-  );
-
-  const assinalar = React.useCallback(
-    async (colaboradorId: string | null) => {
-      if (!equipamentoFicha) return;
-      setSalvando(true);
-      try {
-        const r = await assinalarOperador({
-          equipamentoId: equipamentoFicha.id,
-          colaboradorId,
-        });
-        aplicar(r, colaboradorId ? "Operador assinalado" : "Operador retirado");
-      } finally {
-        setSalvando(false);
-      }
-    },
-    [equipamentoFicha, aplicar],
   );
 
   const acoplar = React.useCallback(
@@ -2224,7 +2354,8 @@ export function TelaMapa({
       onMarcarEstado={(s) =>
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
-      onAssinalarOperador={assinalar}
+      onAlocar={(item) => alocarComDesfazer([item])}
+      codigoDe={codigoDe}
       implementos={estado.implementos}
       onAcoplar={acoplar}
       onRegistrarChegada={(() => {
@@ -2252,9 +2383,7 @@ export function TelaMapa({
       localidades={estado.localidades}
       obras={estado.obras}
       centrosCusto={centrosCusto}
-      onTrocarCentro={(centroCustoId) =>
-        trocarCentroPessoa(pessoaFicha, centroCustoId)
-      }
+      onAlocar={(item) => alocarComDesfazer([item])}
       podeEditar={permissoes.editar}
       salvando={salvando}
       posicionando={posicionandoPessoa === pessoaFicha.id}
@@ -2266,26 +2395,6 @@ export function TelaMapa({
           ? setPosicionandoPessoa(null)
           : iniciarPosicionarPessoa(pessoaFicha)
       }
-      onOperar={(equipamentoId) => {
-        const sobre = equipamentosVistos.find((e) => e.id === equipamentoId);
-        if (sobre)
-          setPendentePessoa({
-            pessoa: pessoaFicha,
-            para: null,
-            sobre,
-            local: null,
-          });
-      }}
-      onTrocarLocal={(localidadeId) => {
-        const local = estado.localidades.find((l) => l.id === localidadeId);
-        if (local)
-          setPendentePessoa({
-            pessoa: pessoaFicha,
-            para: null,
-            sobre: null,
-            local,
-          });
-      }}
       onTrocarObra={(obraId) => {
         const obra = estado.obras.find((o) => o.id === obraId);
         if (!obra) return;
@@ -2293,7 +2402,7 @@ export function TelaMapa({
         // centro) deixa a pessoa onde está.
         const para =
           rotulosObra.find((o) => o.id === obraId)?.pos ?? pessoaFicha.pos;
-        setPendentePessoa({
+        void pessoaNoLugar({
           pessoa: pessoaFicha,
           para,
           sobre: null,
@@ -2549,6 +2658,21 @@ export function TelaMapa({
                   <ArrowRightLeft />
                   Transferir
                 </Button>
+                {pessoasDoLote.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setQuadro({ idsPessoas: pessoasDoLote.map((p) => p.id) })
+                    }
+                    disabled={salvando}
+                    title="Máquina, local e centro das pessoas selecionadas, de uma vez"
+                  >
+                    <ClipboardList />
+                    Alocar
+                  </Button>
+                ) : null}
                 {noMapa.some((e) => !selecao.has(e.id)) ? (
                   <Button
                     type="button"
@@ -2644,6 +2768,15 @@ export function TelaMapa({
               {permissoes.editar
                 ? botaoAlternar(multi, "Seleção múltipla", MousePointer2, () =>
                     alternarMulti(),
+                  )
+                : null}
+              {permissoes.editar
+                ? botaoAlternar(
+                    quadro !== null,
+                    "Alocação",
+                    ClipboardList,
+                    () => setQuadro({}),
+                    "Quadro de alocação: máquina, local e centro de todo mundo",
                   )
                 : null}
               {botaoAlternar(mostrarPessoas, "Pessoas", Users, () =>
@@ -2885,6 +3018,8 @@ export function TelaMapa({
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
+            pessoasSemAlocacao={pessoasSemAlocacao}
+            onAlocarSemAlocacao={() => setQuadro({ soSemAlocacao: true })}
             objetosSemLugar={objetosSemLugar}
             onEscolherObjeto={clicarObjeto}
           >
@@ -3094,6 +3229,18 @@ export function TelaMapa({
         />
       ) : null}
 
+      <QuadroAlocacao
+        pedido={quadro}
+        onFechar={() => setQuadro(null)}
+        telaLarga={telaLarga}
+        pessoas={estado.pessoas}
+        maquinas={equipamentosVistos}
+        localidades={estado.localidades}
+        obras={estado.obras}
+        centrosCusto={centrosCusto}
+        salvando={salvando}
+        onSalvar={(itens) => alocarComDesfazer(itens)}
+      />
       {pendentePessoa ? (
         <ConfirmDialog
           aberto
