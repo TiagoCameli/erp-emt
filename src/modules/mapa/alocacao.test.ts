@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  avisoDaTrocaPelaMaquina,
+  avisoDaTrocaPelaPessoa,
+  itemDeVolta,
   itemParaRpc,
   maquinaRepetida,
   montarLote,
+  opcoesMaquinaParaPessoa,
+  opcoesOperadorParaMaquina,
+  sugestaoDaMaquina,
+  sugestaoDoLocal,
 } from "@/modules/mapa/alocacao";
 import { alocarSchema } from "@/modules/mapa/schemas";
 
@@ -88,5 +95,170 @@ describe("alocarSchema", () => {
       itens: [{ colaboradorId: P1, equipamentoId: null, centroCustoId: null }],
     });
     expect(r.success).toBe(true);
+  });
+});
+
+const OBRA = "55555555-5555-4555-8555-555555555555";
+const OUTRA_OBRA = "66666666-6666-4666-8666-666666666666";
+const SILO = "77777777-7777-4777-8777-777777777777";
+
+const maquina = (
+  id: string,
+  codigo: string,
+  extra: Partial<{
+    obraId: string | null;
+    localidadeId: string | null;
+    operadorId: string | null;
+    operadorNome: string;
+  }> = {},
+) => ({
+  id,
+  codigo,
+  descricao: "Escavadeira",
+  placa: "",
+  obraId: null,
+  localidadeId: null,
+  operadorId: null,
+  operadorNome: "",
+  ...extra,
+});
+const pessoa = (
+  id: string,
+  nome: string,
+  extra: Partial<{
+    funcao: string;
+    obraId: string | null;
+    localidadeId: string | null;
+    equipamentoId: string | null;
+    centroCustoId: string | null;
+  }> = {},
+) => ({
+  id,
+  nome,
+  funcao: "",
+  obraId: null,
+  localidadeId: null,
+  equipamentoId: null,
+  centroCustoId: null,
+  ...extra,
+});
+
+describe("opcoesMaquinaParaPessoa", () => {
+  it("livres da obra da pessoa, depois ocupadas, depois o resto", () => {
+    const joao = pessoa(P1, "João", { obraId: OBRA });
+    const opcoes = opcoesMaquinaParaPessoa(joao, [
+      maquina("a", "CB-009"),
+      maquina("b", "CB-002", { obraId: OBRA, operadorId: P2, operadorNome: "Ana" }),
+      maquina("c", "CB-005", { obraId: OBRA }),
+      maquina("d", "CB-001"),
+    ]);
+    expect(opcoes.map((o) => o.valor)).toEqual(["c", "b", "d", "a"]);
+    expect(opcoes[1]?.rotulo).toBe("CB-002 · Escavadeira · com Ana");
+  });
+
+  it("a máquina que a própria pessoa opera não conta como ocupada", () => {
+    const joao = pessoa(P1, "João", { obraId: OBRA, equipamentoId: "b" });
+    const opcoes = opcoesMaquinaParaPessoa(joao, [
+      maquina("b", "CB-002", { obraId: OBRA, operadorId: P1, operadorNome: "João" }),
+    ]);
+    expect(opcoes[0]?.rotulo).toBe("CB-002 · Escavadeira");
+  });
+});
+
+describe("opcoesOperadorParaMaquina", () => {
+  it("operadores livres da obra primeiro; quem opera outra diz qual", () => {
+    const cb = maquina(M1, "CB-001", { obraId: OBRA });
+    const opcoes = opcoesOperadorParaMaquina(
+      cb,
+      [
+        pessoa("z", "Zé", { obraId: OUTRA_OBRA, funcao: "Operador" }),
+        pessoa("b", "Bia", { obraId: OBRA, funcao: "Servente" }),
+        pessoa("c", "Caio", { obraId: OBRA, funcao: "Operador de máquinas", equipamentoId: "x" }),
+        pessoa("d", "Davi", { obraId: OBRA, funcao: "Operadora de rolo" }),
+      ],
+      new Map([["x", "RL-003"]]),
+    );
+    expect(opcoes.map((o) => o.valor)).toEqual(["d", "b", "c", "z"]);
+    expect(opcoes[2]?.rotulo).toBe("Caio · Operador de máquinas · opera RL-003");
+  });
+});
+
+describe("avisos da troca", () => {
+  it("pela pessoa: quem sai da máquina escolhida e a máquina que ela deixa", () => {
+    const joao = pessoa(P1, "João", { equipamentoId: "velha" });
+    expect(
+      avisoDaTrocaPelaPessoa(
+        joao,
+        maquina(M1, "CB-001", { operadorId: P2, operadorNome: "Ana" }),
+        "RL-003",
+      ),
+    ).toEqual(["Ana sai da CB-001", "João deixa a RL-003"]);
+    expect(
+      avisoDaTrocaPelaPessoa(pessoa(P1, "João"), maquina(M1, "CB-001"), null),
+    ).toEqual([]);
+  });
+
+  it("pela máquina: de onde a pessoa sai e quem fica sem máquina", () => {
+    const cb = maquina(M1, "CB-001", { operadorId: P2, operadorNome: "Ana" });
+    expect(
+      avisoDaTrocaPelaMaquina(
+        cb,
+        pessoa(P1, "João", { equipamentoId: "x" }),
+        new Map([["x", "RL-003"]]),
+      ),
+    ).toEqual(["João sai da RL-003", "Ana fica sem máquina"]);
+    expect(avisoDaTrocaPelaMaquina(cb, null, new Map())).toEqual([
+      "Ana fica sem máquina",
+    ]);
+  });
+});
+
+describe("sugestões de um clique", () => {
+  it("máquina: o local dela e o centro pela obra quando há centro escolhido", () => {
+    const cb = maquina(M1, "CB-001", { localidadeId: SILO });
+    expect(
+      sugestaoDaMaquina(pessoa(P1, "João", { centroCustoId: C1 }), cb),
+    ).toEqual({ colaboradorId: P1, localidadeId: SILO, centroCustoId: null });
+    expect(
+      sugestaoDaMaquina(pessoa(P1, "João", { localidadeId: SILO }), cb),
+    ).toBeNull();
+  });
+
+  it("local: centro da obra só com centro escolhido e local de obra", () => {
+    const comCentro = pessoa(P1, "João", { centroCustoId: C1 });
+    expect(sugestaoDoLocal(comCentro, { obraId: OBRA })).toEqual({
+      colaboradorId: P1,
+      centroCustoId: null,
+    });
+    expect(sugestaoDoLocal(comCentro, { obraId: null })).toBeNull();
+    expect(sugestaoDoLocal(pessoa(P1, "João"), { obraId: OBRA })).toBeNull();
+  });
+});
+
+describe("itemDeVolta", () => {
+  const antes = {
+    ...pessoa(P1, "João", { localidadeId: SILO, centroCustoId: C1 }),
+    obraMapaId: OBRA,
+  };
+
+  it("devolve só os campos mexidos; máquina traz a obra de volta junto", () => {
+    expect(itemDeVolta(antes, { colaboradorId: P1, centroCustoId: null })).toEqual({
+      colaboradorId: P1,
+      centroCustoId: C1,
+    });
+    expect(itemDeVolta(antes, { colaboradorId: P1, equipamentoId: M1 })).toEqual({
+      colaboradorId: P1,
+      equipamentoId: null,
+      localidadeId: SILO,
+      obraId: OBRA,
+    });
+  });
+
+  it("sem local antes, volta para a obra como local (ou nenhuma)", () => {
+    const semLocal = { ...antes, localidadeId: null, obraMapaId: null };
+    expect(itemDeVolta(semLocal, { colaboradorId: P1, localidadeId: SILO })).toEqual({
+      colaboradorId: P1,
+      obraId: null,
+    });
   });
 });
