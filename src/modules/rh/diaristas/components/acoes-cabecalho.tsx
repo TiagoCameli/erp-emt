@@ -4,13 +4,16 @@ import * as React from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { DiaristaOpcao, ObraOpcao } from "@/modules/rh/_shared/queries";
-import type { FuncaoDiaria } from "@/modules/rh/diaristas/queries";
+import type { DiaristaOpcao } from "@/modules/rh/_shared/queries";
+import type {
+  CentroDiaria,
+  FuncaoDiaria,
+} from "@/modules/rh/diaristas/queries";
 import { DiariaFormDrawer } from "./diaria-form-drawer";
 
 export interface AcoesCabecalhoProps {
   diaristas: DiaristaOpcao[];
-  obras: ObraOpcao[];
+  centros: CentroDiaria[];
   funcoes: FuncaoDiaria[];
 }
 
@@ -20,7 +23,7 @@ export interface AcoesCabecalhoProps {
  */
 export function AcoesCabecalho({
   diaristas,
-  obras,
+  centros,
   funcoes,
 }: AcoesCabecalhoProps) {
   const [aberto, setAberto] = React.useState(false);
@@ -35,7 +38,7 @@ export function AcoesCabecalho({
         aberto={aberto}
         onAbertoChange={setAberto}
         diaristas={diaristas}
-        obras={obras}
+        centros={centros}
         funcoes={funcoes}
       />
     </>

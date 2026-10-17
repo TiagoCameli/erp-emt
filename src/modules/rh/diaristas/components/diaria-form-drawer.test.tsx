@@ -9,7 +9,11 @@ import {
 
 import { editarDiaria } from "@/modules/rh/diaristas/actions";
 import { DiariaFormDrawer } from "@/modules/rh/diaristas/components/diaria-form-drawer";
-import type { DiariaLista, FuncaoDiaria } from "@/modules/rh/diaristas/queries";
+import type {
+  CentroDiaria,
+  DiariaLista,
+  FuncaoDiaria,
+} from "@/modules/rh/diaristas/queries";
 
 vi.mock("@/modules/rh/diaristas/actions", () => ({
   criarDiaria: vi.fn(async () => ({ ok: true as const })),
@@ -27,6 +31,13 @@ vi.mock("@/components/canonicos/toast", () => ({
 
 const COLAB = "11111111-1111-4111-8111-111111111111";
 const FUNCAO = "22222222-2222-4222-8222-222222222222";
+const C007 = "55555555-5555-4555-8555-555555555555";
+const C009 = "66666666-6666-4666-8666-666666666666";
+
+const CENTROS: CentroDiaria[] = [
+  { id: C007, nome: "007 - AC 405", tipo: "obra", obraId: null, ativo: true },
+  { id: C009, nome: "009 - BR-364", tipo: "obra", obraId: null, ativo: true },
+];
 
 const FUNCOES: FuncaoDiaria[] = [
   {
@@ -46,6 +57,7 @@ function diaria(parcial: Partial<DiariaLista> = {}): DiariaLista {
     obraId: null,
     obraNome: null,
     obraLote: null,
+    rateio: [{ centroCustoId: C007, nome: "007 - AC 405", percentual: 100 }],
     data: "2026-10-01",
     dataFim: "2026-10-05",
     funcaoId: FUNCAO,
@@ -73,7 +85,7 @@ function abrir(d: DiariaLista) {
       diaristas={[
         { id: COLAB, nome: "LOZADO", valorDiaria: 100, funcaoId: FUNCAO },
       ]}
-      obras={[]}
+      centros={CENTROS}
       funcoes={FUNCOES}
       diaria={d}
     />,
@@ -154,5 +166,78 @@ describe("DiariaFormDrawer (período)", () => {
     expect(screen.getByText(/1 diária/)).toBeTruthy();
     // Aparece duas vezes: valor da diária e total (1 × 3.850 = 3.850).
     expect(screen.getAllByText(/3\.850,00/)).toHaveLength(2);
+  });
+
+  it("salvar manda o rateio da obra", async () => {
+    abrir(diaria());
+    fireEvent.click(screen.getByRole("button", { name: "Salvar diária" }));
+    await waitFor(() => expect(editarDiaria).toHaveBeenCalled());
+    expect(vi.mocked(editarDiaria).mock.calls[0][1].rateio).toEqual([
+      { centroCustoId: C007, percentual: 100 },
+    ]);
+  });
+
+  it("sem obra não salva e avisa", async () => {
+    abrir(diaria({ rateio: [] }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar diária" }));
+    expect(await screen.findByText("Escolha a obra de cada linha")).toBeTruthy();
+    expect(editarDiaria).not.toHaveBeenCalled();
+  });
+
+  it("rateio 70/30 mostra o R$ de cada obra e manda os percentuais", async () => {
+    abrir(
+      diaria({
+        rateio: [
+          { centroCustoId: C007, nome: "007 - AC 405", percentual: 70 },
+          { centroCustoId: C009, nome: "009 - BR-364", percentual: 30 },
+        ],
+      }),
+    );
+    // 3,5 diárias × 120 = 420 -> 294 + 126.
+    expect(screen.getByText(/294,00/)).toBeTruthy();
+    expect(screen.getByText(/126,00/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar diária" }));
+    await waitFor(() => expect(editarDiaria).toHaveBeenCalled());
+    expect(vi.mocked(editarDiaria).mock.calls[0][1].rateio).toEqual([
+      { centroCustoId: C007, percentual: 70 },
+      { centroCustoId: C009, percentual: 30 },
+    ]);
+  });
+
+  it("rateio que não soma 100 não salva", async () => {
+    abrir(
+      diaria({
+        rateio: [
+          { centroCustoId: C007, nome: "007 - AC 405", percentual: 70 },
+          { centroCustoId: C009, nome: "009 - BR-364", percentual: 30 },
+        ],
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("Percentual da obra 2"), {
+      target: { value: "20" },
+    });
+    expect(screen.getByText(/falta 10% para 100%/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar diária" }));
+    expect(
+      await screen.findByText("O rateio tem que somar 100% (está somando 90%)"),
+    ).toBeTruthy();
+    expect(editarDiaria).not.toHaveBeenCalled();
+  });
+
+  it("remover a segunda obra devolve 100% para a que fica", async () => {
+    abrir(
+      diaria({
+        rateio: [
+          { centroCustoId: C007, nome: "007 - AC 405", percentual: 70 },
+          { centroCustoId: C009, nome: "009 - BR-364", percentual: 30 },
+        ],
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remover obra 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar diária" }));
+    await waitFor(() => expect(editarDiaria).toHaveBeenCalled());
+    expect(vi.mocked(editarDiaria).mock.calls[0][1].rateio).toEqual([
+      { centroCustoId: C007, percentual: 100 },
+    ]);
   });
 });

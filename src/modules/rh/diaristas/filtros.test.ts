@@ -7,6 +7,11 @@ import {
 } from "@/modules/rh/diaristas/filtros";
 import type { DiariaLista } from "@/modules/rh/diaristas/queries";
 
+/** Rateio de 100% numa obra (o centro faz as vezes do id da obra aqui). */
+function em(centro: string) {
+  return [{ centroCustoId: centro, nome: centro, percentual: 100 }];
+}
+
 function diaria(parcial: Partial<DiariaLista>): DiariaLista {
   return {
     id: "d",
@@ -15,6 +20,7 @@ function diaria(parcial: Partial<DiariaLista>): DiariaLista {
     obraId: null,
     obraNome: null,
     obraLote: null,
+    rateio: [],
     data: "2026-09-01",
     dataFim: null,
     funcaoId: null,
@@ -47,11 +53,10 @@ const VAZIO: FiltrosTelaDiarias = {
 };
 
 const DIARIAS = [
-  diaria({ id: "1", colaboradorId: "c1", obraId: "o1" }),
+  diaria({ id: "1", colaboradorId: "c1", rateio: em("o1") }),
   diaria({
     id: "2",
     colaboradorId: "c2",
-    obraId: null,
     fechada: true,
     situacao: "paga",
     alteravel: false,
@@ -59,14 +64,14 @@ const DIARIAS = [
   diaria({
     id: "4",
     colaboradorId: "c2",
-    obraId: "o1",
+    rateio: em("o1"),
     fechada: true,
     situacao: "fechada",
   }),
   diaria({
     id: "3",
     colaboradorId: "c3",
-    obraId: "o2",
+    rateio: em("o2"),
     competencia: "2026-08-01",
     data: "2026-08-15",
   }),
@@ -108,5 +113,36 @@ describe("filtrarDiarias (facetado)", () => {
       situacao: "fechada",
     });
     expect(linhas.map((l) => l.id)).toEqual(["4"]);
+  });
+
+  it("diária rateada aparece no filtro de cada obra do rateio", () => {
+    const rateada = diaria({
+      id: "5",
+      colaboradorId: "c4",
+      rateio: [
+        { centroCustoId: "o1", nome: "Obra 1", percentual: 70 },
+        { centroCustoId: "o2", nome: "Obra 2", percentual: 30 },
+      ],
+    });
+    const todas = [...DIARIAS, rateada];
+    expect(
+      filtrarDiarias(todas, { ...VAZIO, obraId: "o2" }).linhas.map((l) => l.id),
+    ).toEqual(["3", "5"]);
+    expect(
+      filtrarDiarias(todas, { ...VAZIO, obraId: "o1" }).linhas.map((l) => l.id),
+    ).toEqual(["1", "4", "5"]);
+  });
+
+  it("a busca acha a diária pelo nome de qualquer obra do rateio", () => {
+    const rateada = diaria({
+      id: "5",
+      rateio: [
+        { centroCustoId: "o1", nome: "007 - AC 405", percentual: 70 },
+        { centroCustoId: "o2", nome: "009 - BR-364", percentual: 30 },
+      ],
+    });
+    expect(
+      filtrarDiarias([rateada], { ...VAZIO, busca: "BR-364" }).linhas,
+    ).toHaveLength(1);
   });
 });

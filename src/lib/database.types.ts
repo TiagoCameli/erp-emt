@@ -8716,6 +8716,48 @@ export type Database = {
           },
         ];
       };
+      rh_diaria_rateios: {
+        Row: {
+          centro_custo_id: string;
+          created_at: string;
+          created_by: string | null;
+          diaria_id: string;
+          id: string;
+          percentual: number;
+        };
+        Insert: {
+          centro_custo_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          diaria_id: string;
+          id?: string;
+          percentual: number;
+        };
+        Update: {
+          centro_custo_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          diaria_id?: string;
+          id?: string;
+          percentual?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rh_diaria_rateios_centro_custo_id_fkey";
+            columns: ["centro_custo_id"];
+            isOneToOne: false;
+            referencedRelation: "centros_custo";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rh_diaria_rateios_diaria_id_fkey";
+            columns: ["diaria_id"];
+            isOneToOne: false;
+            referencedRelation: "rh_diarias";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       rh_diaria_valores: {
         Row: {
           atualizado_em: string;
@@ -11192,6 +11234,16 @@ export type Database = {
         };
         Returns: number;
       };
+      fn_diaria_centros: {
+        Args: never;
+        Returns: {
+          ativo: boolean;
+          id: string;
+          nome: string;
+          obra_id: string;
+          tipo: string;
+        }[];
+      };
       fn_diaria_funcoes: {
         Args: never;
         Returns: {
@@ -11254,6 +11306,7 @@ export type Database = {
           p_meias: string[];
           p_obra: string;
           p_observacao: string;
+          p_rateio?: Json;
           p_valor_diaria: number;
         };
         Returns: string;

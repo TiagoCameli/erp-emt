@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { numeroPositivo, paraNumero, valorValido } from "./numero";
 import { calcularPeriodo, marcacoesNoPeriodo } from "./periodo";
+import { erroDoRateio } from "./rateio";
 
 import { idSchemaCom } from "@/lib/id";
 
@@ -19,12 +20,24 @@ export function formatarCompetencia(competencia: string): string {
 /**
  * Schema de servidor da diária por período (tipos já coeridos), validado na
  * action antes de chamar `fn_salvar_diaria`. Quantidade e total NÃO vêm daqui:
- * o banco calcula a partir dos dias. Obra é opcional; função é obrigatória.
+ * o banco calcula a partir dos dias. Função e obra são obrigatórias; a obra
+ * vem como rateio por percentual (uma linha de 100% quando é uma obra só).
  */
 export const diariaSchema = z.object({
   colaboradorId: idSchemaCom("Selecione o diarista"),
   funcaoId: idSchemaCom("Selecione a função"),
-  obraId: idSchemaCom("Obra inválida").optional(),
+  rateio: z
+    .array(
+      z.object({
+        centroCustoId: idSchemaCom("Escolha a obra de cada linha"),
+        percentual: z.number({ error: "Percentual inválido" }),
+      }),
+    )
+    .max(20)
+    .superRefine((linhas, ctx) => {
+      const erro = erroDoRateio(linhas);
+      if (erro) ctx.addIssue({ code: "custom", message: erro });
+    }),
   inicio: z.string().trim().regex(DATA_REGEX, { error: "Informe o início" }),
   fim: z.string().trim().regex(DATA_REGEX, { error: "Informe o fim" }),
   meias: z.array(z.string().regex(DATA_REGEX)).max(31),
@@ -44,15 +57,17 @@ export const diariaSchema = z.object({
 export type DiariaInput = z.infer<typeof diariaSchema>;
 
 /**
- * Schema do formulário (client). Valor como string pt-BR e obra como string
- * (vazia = sem obra) para casar com os inputs; meias e faltas são as datas
- * marcadas na grade do período. A coerção real é no submit.
+ * Schema do formulário (client). Valor e percentuais como string pt-BR para
+ * casar com os inputs; meias e faltas são as datas marcadas na grade do
+ * período. A coerção real é no submit.
  */
 export const diariaFormSchema = z
   .object({
     colaboradorId: idSchemaCom("Selecione o diarista"),
     funcaoId: z.string().trim().min(1, { error: "Selecione a função" }),
-    obraId: z.string().trim(),
+    rateio: z.array(
+      z.object({ centroCustoId: z.string(), percentual: z.string() }),
+    ),
     inicio: z.string().trim().regex(DATA_REGEX, { error: "Informe o início" }),
     fim: z.string().trim().regex(DATA_REGEX, { error: "Informe o fim" }),
     meias: z.array(z.string()),
@@ -67,6 +82,10 @@ export const diariaFormSchema = z
       .max(500, { error: "Máximo de 500 caracteres" }),
   })
   .superRefine((dados, ctx) => {
+    const erroRateio = erroDoRateio(rateioParaNumeros(dados.rateio));
+    if (erroRateio) {
+      ctx.addIssue({ code: "custom", path: ["rateio"], message: erroRateio });
+    }
     if (!DATA_REGEX.test(dados.inicio) || !DATA_REGEX.test(dados.fim)) return;
     const r = calcularPeriodo({
       inicio: dados.inicio,
@@ -81,12 +100,22 @@ export const diariaFormSchema = z
 
 export type DiariaFormInput = z.infer<typeof diariaFormSchema>;
 
+/** Linhas do rateio do formulário (strings pt-BR) em números. */
+export function rateioParaNumeros(
+  rateio: DiariaFormInput["rateio"],
+): DiariaInput["rateio"] {
+  return rateio.map((l) => ({
+    centroCustoId: l.centroCustoId,
+    percentual: paraNumero(l.percentual),
+  }));
+}
+
 /** Converte o formulário (strings) no input de servidor (números coeridos). */
 export function diariaFormParaInput(dados: DiariaFormInput): DiariaInput {
   return {
     colaboradorId: dados.colaboradorId,
     funcaoId: dados.funcaoId,
-    obraId: dados.obraId === "" ? undefined : dados.obraId,
+    rateio: rateioParaNumeros(dados.rateio),
     inicio: dados.inicio,
     fim: dados.fim,
     // Só o que cai dentro do período: o banco recusa marcação fora dele.

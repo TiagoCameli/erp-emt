@@ -49,11 +49,16 @@ async function salvarDiaria(
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("fn_salvar_diaria", {
-    // As RPCs aceitam null (criar / sem obra); o tipo gerado não sabe disso.
+    // As RPCs aceitam null (criar); o tipo gerado não sabe disso.
     p_id: id as string,
     p_colaborador: validado.data.colaboradorId,
     p_funcao: validado.data.funcaoId,
-    p_obra: (validado.data.obraId ?? null) as string,
+    // p_obra é do cliente antigo; a obra agora vai no rateio.
+    p_obra: null as unknown as string,
+    p_rateio: validado.data.rateio.map((l) => ({
+      centro_custo_id: l.centroCustoId,
+      percentual: l.percentual,
+    })),
     p_inicio: validado.data.inicio,
     p_fim: validado.data.fim,
     p_meias: validado.data.meias,

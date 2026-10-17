@@ -7,12 +7,13 @@ import { DiariasTabela } from "@/modules/rh/diaristas/components/diarias-tabela"
 import { FechamentosPainel } from "@/modules/rh/diaristas/components/fechamentos-painel";
 import { ValoresFuncao } from "@/modules/rh/diaristas/components/valores-funcao";
 import {
+  listarCentrosDiaria,
   listarDiarias,
   listarFechamentosPendentes,
   listarFuncoesDiaria,
 } from "@/modules/rh/diaristas/queries";
 import { listarFormasPagamento } from "@/modules/financeiro/lancamentos/queries";
-import { listarDiaristas, listarObras } from "@/modules/rh/_shared/queries";
+import { listarDiaristas } from "@/modules/rh/_shared/queries";
 
 export default async function PaginaDiaristas() {
   const usuario = await getUsuarioLogado();
@@ -23,12 +24,12 @@ export default async function PaginaDiaristas() {
   const podeCriar = temPermissao(usuario, "rh.diaristas", "criar");
   const podeEditar = temPermissao(usuario, "rh.diaristas", "editar");
 
-  const [diarias, fechamentos, diaristas, obras, formasPagamento, funcoes] =
+  const [diarias, fechamentos, diaristas, centros, formasPagamento, funcoes] =
     await Promise.all([
       listarDiarias(),
       listarFechamentosPendentes(),
       listarDiaristas(),
-      listarObras(),
+      listarCentrosDiaria(),
       // O fechamento exige a forma de pagamento, então a lista vem com a página.
       listarFormasPagamento(),
       listarFuncoesDiaria(),
@@ -44,7 +45,7 @@ export default async function PaginaDiaristas() {
           podeCriar ? (
             <AcoesCabecalho
               diaristas={diaristas}
-              obras={obras}
+              centros={centros}
               funcoes={funcoes}
             />
           ) : undefined
@@ -59,7 +60,7 @@ export default async function PaginaDiaristas() {
             formasPagamento={formasPagamento}
             diarias={diarias}
             diaristas={diaristas}
-            obras={obras}
+            centros={centros}
             funcoes={funcoes}
             podeEditar={podeEditar}
           />
@@ -69,7 +70,7 @@ export default async function PaginaDiaristas() {
       <DiariasTabela
         diarias={diarias}
         diaristas={diaristas}
-        obras={obras}
+        centros={centros}
         funcoes={funcoes}
         podeCriar={podeCriar}
         podeEditar={podeEditar}

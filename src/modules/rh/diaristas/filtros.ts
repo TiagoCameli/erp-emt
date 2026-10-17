@@ -7,7 +7,7 @@ import {
 import { naFaixa, noPeriodo } from "@/modules/rh/_shared/filtros";
 import type { DiariaLista } from "@/modules/rh/diaristas/queries";
 
-/** Valor do filtro de obra para a diária lançada sem obra. */
+/** Valor do filtro de obra para a diária sem rateio (não deveria existir). */
 export const SEM_OBRA = "sem-obra";
 
 /** Estado dos filtros da listagem de diárias ("" = filtro vazio). */
@@ -15,7 +15,7 @@ export interface FiltrosTelaDiarias {
   busca: string;
   /** Competência yyyy-MM-01. */
   competencia: string;
-  /** Id da obra ou `SEM_OBRA`. */
+  /** Id do centro raiz (obra, Escritório, Manutenção) ou `SEM_OBRA`. */
   obraId: string;
   colaboradorId: string;
   /** "aberto" | "fechada" | "paga" */
@@ -43,7 +43,11 @@ export function filtrarDiarias(
     {
       obra: {
         selecionados: selecao(f.obraId),
-        chave: (item) => item.obraId ?? SEM_OBRA,
+        // Diária rateada aparece em cada obra do rateio.
+        chave: (item) =>
+          item.rateio.length > 0
+            ? item.rateio.map((r) => r.centroCustoId)
+            : SEM_OBRA,
       },
       colaborador: {
         selecionados: selecao(f.colaboradorId),
@@ -63,8 +67,7 @@ export function filtrarDiarias(
         casaBusca(
           textoPesquisavel(
             item.colaboradorNome,
-            item.obraNome,
-            item.obraLote,
+            ...item.rateio.map((r) => r.nome),
             item.funcaoNome,
             item.observacao,
             item.situacao,
