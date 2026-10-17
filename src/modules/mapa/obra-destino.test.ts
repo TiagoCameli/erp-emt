@@ -104,7 +104,7 @@ describe("escolhaInicialObra", () => {
     expect(escolhaInicialObra([naArea("o1"), noTrecho("o2")])).toBe(PELA_ZONA);
   });
 
-  it("algum ponto sem obra: vazio, a pessoa tem que escolher", () => {
+  it("algum ponto sem obra: vazio (Sem obra, pode trocar)", () => {
     expect(escolhaInicialObra([livre])).toBe("");
     expect(escolhaInicialObra([naArea("o1"), livre])).toBe("");
     expect(escolhaInicialObra([noLocal(null)])).toBe("");
@@ -123,10 +123,11 @@ describe("obraEfetiva e decisaoObra", () => {
     expect(decisaoObra(PELA_ZONA)).toEqual({ tipo: "pela_zona" });
   });
 
-  it("sem obra é escolha explícita; vazio não deixa confirmar", () => {
+  it("sem obra: escolhido ou deixado vazio, vai explícito para o banco", () => {
     expect(obraEfetiva(SEM_OBRA, naArea("o1"))).toBeNull();
+    expect(obraEfetiva("", naArea("o1"))).toBeNull();
     expect(decisaoObra(SEM_OBRA)).toEqual({ tipo: "sem_obra" });
-    expect(decisaoObra("")).toBeNull();
+    expect(decisaoObra("")).toEqual({ tipo: "sem_obra" });
   });
 });
 

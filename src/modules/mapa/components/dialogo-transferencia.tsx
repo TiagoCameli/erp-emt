@@ -46,8 +46,8 @@ import {
  * nem estado); a sugestão vem de `sugereAjuste` (continua na mesma zona = ajuste). Confirmar grava; cancelar devolve as
  * máquinas para onde estavam. Montado pelo pai só enquanto há pedido, por isso nasce limpo.
  *
- * Fora do ajuste, a "Obra em que trabalha" vem da zona e pode ser trocada; quando o ponto não é
- * de obra nenhuma, a pessoa escolhe a obra ou "Sem obra" (obra-destino.ts). No modo "destino"
+ * Fora do ajuste, a "Obra em que trabalha" vem da zona e pode ser trocada; não é obrigatória:
+ * vazio é "Sem obra", e a linha da máquina diz a obra que ela deixa (obra-destino.ts). No modo "destino"
  * (botão "Transferir" da ficha, sem arraste) a pessoa escolhe primeiro PARA ONDE (uma obra, um
  * local ou uma área do mapa) e depois em que obra a máquina trabalha; o lugar só sugere a obra.
  * O ponto vem do pai (`levarPara`).
@@ -81,7 +81,7 @@ export interface ConfirmacaoTransferencia {
   ajuste: boolean;
   /** Os itens que vão gravar (no modo "destino", os do ponto do lugar escolhido). */
   itens: ItemPendente[];
-  /** Obra de destino; null só no ajuste, que não mexe na obra. */
+  /** Obra de destino; null só no ajuste, que não mexe na obra. Vazio no campo vira "Sem obra". */
   obra: DecisaoObra | null;
 }
 
@@ -244,13 +244,14 @@ export function DialogoTransferencia({
     const daZona = obraDoDestino(item.destino);
     const texto = efetiva
       ? `Obra: ${nomeObra.get(efetiva) ?? "obra escolhida"}`
-      : escolhaObra === SEM_OBRA
-        ? "Sem obra"
-        : "Escolha a obra em que a máquina trabalha";
+      : "Sem obra";
+    const obraAtual = item.equipamento.obraId;
     const aviso =
       !daFicha && efetiva && daZona && daZona !== efetiva
         ? `O ponto é de ${nomeObra.get(daZona) ?? "outra obra"}; a máquina fica com a obra escolhida.`
-        : null;
+        : !efetiva && obraAtual
+          ? `Deixa a obra ${nomeObra.get(obraAtual) ?? item.equipamento.obraNome}.`
+          : null;
     return { texto, aviso };
   }
 
@@ -325,7 +326,7 @@ export function DialogoTransferencia({
                 valor={escolhaObra}
                 onValorChange={setEscolhaObra}
                 opcoes={opcoesObra}
-                placeholder="Selecione a obra"
+                placeholder="Sem obra"
                 buscaPlaceholder="Buscar obra"
                 vazioTexto="Nenhuma obra encontrada"
               />
@@ -350,17 +351,7 @@ export function DialogoTransferencia({
                       {descreverDestino(item.destino, !ajuste)}
                     </p>
                     {linha ? (
-                      <p
-                        className={
-                          obraEfetiva(escolhaObra, item.destino) ||
-                          escolhaObra === SEM_OBRA ||
-                          (item.equipamento.carretaEmt && obraCarretasEmt)
-                            ? "text-foreground"
-                            : "text-destructive"
-                        }
-                      >
-                        {linha.texto}
-                      </p>
+                      <p className="text-foreground">{linha.texto}</p>
                     ) : null}
                     {linha?.aviso ? (
                       <p className="text-muted-foreground">{linha.aviso}</p>
@@ -431,12 +422,6 @@ export function DialogoTransferencia({
           return false;
         }
         const obra = ajuste ? null : decisaoObra(escolhaObra);
-        if (!ajuste && !obra) {
-          toast.warning(
-            `Escolha a obra em que a máquina trabalha, ou "Sem obra" se ela não trabalha em obra nenhuma.`,
-          );
-          return false;
-        }
         if (itens.length === 0) {
           toast.warning("Esse lugar ainda não tem ponto no mapa.");
           return false;
