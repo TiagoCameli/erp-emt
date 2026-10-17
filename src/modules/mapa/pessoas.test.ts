@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pessoaNoFiltro } from "@/modules/mapa/pessoas";
+import { destinoDaPessoa, pessoaNoFiltro } from "@/modules/mapa/pessoas";
 import type { PessoaMapa } from "@/modules/mapa/tipos";
 
 function pessoa(parcial: Partial<PessoaMapa>): PessoaMapa {
@@ -59,5 +59,35 @@ describe("pessoaNoFiltro", () => {
     expect(
       pessoaNoFiltro(pessoa({ obraId: null }), { busca: "", obraId: "obra-a" }),
     ).toBe(false);
+  });
+});
+
+describe("destinoDaPessoa", () => {
+  const silo = { id: "local-silo" };
+
+  it("tocou dentro do raio do local: trabalha nele e fica no ponto tocado", () => {
+    // No pátio cheio de máquinas o centro do local some debaixo delas; o ponto tocado não.
+    expect(destinoDaPessoa([-72.7071, -7.6118], silo)).toEqual({
+      localidade_id: "local-silo",
+      lng: -72.7071,
+      lat: -7.6118,
+    });
+  });
+
+  it("escolheu o local na ficha (sem ponto): vai para o local", () => {
+    expect(destinoDaPessoa(null, silo)).toEqual({
+      localidade_id: "local-silo",
+    });
+  });
+
+  it("ponto fora de qualquer local: só o ponto", () => {
+    expect(destinoDaPessoa([-72.5, -7.5], null)).toEqual({
+      lng: -72.5,
+      lat: -7.5,
+    });
+  });
+
+  it("sem ponto e sem local: nada a mover", () => {
+    expect(destinoDaPessoa(null, null)).toBeNull();
   });
 });

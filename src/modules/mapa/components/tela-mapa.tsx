@@ -127,7 +127,7 @@ import { extrasPorLocal } from "@/modules/mapa/dados";
 import { pontoNaObra } from "@/modules/mapa/obra-destino";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
-import { pessoaNoFiltro } from "@/modules/mapa/pessoas";
+import { destinoDaPessoa, pessoaNoFiltro } from "@/modules/mapa/pessoas";
 import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
@@ -576,7 +576,7 @@ export function TelaMapa({
     if (pendentePessoa) {
       const pos = pendentePessoa.sobre
         ? pendentePessoa.sobre.pos
-        : pendentePessoa.para;
+        : (pendentePessoa.para ?? pendentePessoa.local?.pos ?? null);
       if (pos) mapa.set(pendentePessoa.pessoa.id, pos);
     }
     return mapa;
@@ -1459,11 +1459,7 @@ export function TelaMapa({
       setSalvando(true);
       try {
         const { pessoa, para, sobre, local } = pendentePessoa;
-        const destino = local
-          ? { localidade_id: local.id }
-          : para
-            ? { lng: para[0], lat: para[1] }
-            : null;
+        const destino = destinoDaPessoa(para, local);
         if (!sobre && !destino) return true;
         const r = sobre
           ? await assinalarOperador({
@@ -1828,7 +1824,7 @@ export function TelaMapa({
         if (local)
           setPendentePessoa({
             pessoa: pessoaFicha,
-            para: local.pos,
+            para: null,
             sobre: null,
             local,
           });
@@ -2495,7 +2491,7 @@ export function TelaMapa({
             pendentePessoa.sobre
               ? `A pessoa passa a ser o operador de ${pendentePessoa.sobre.codigo}${pendentePessoa.sobre.operadorNome ? ` no lugar de ${pendentePessoa.sobre.operadorNome}` : ""} e acompanha a máquina no mapa.`
               : pendentePessoa.local
-                ? `A pessoa aparece no ponto de ${pendentePessoa.local.nome} até ser realocada.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
+                ? `${pendentePessoa.para ? `A pessoa trabalha em ${pendentePessoa.local.nome} e fica no ponto tocado` : `A pessoa aparece no ponto de ${pendentePessoa.local.nome}`} até ser realocada.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
                 : `A pessoa fica neste ponto (${pendentePessoa.para?.[1].toFixed(5)}, ${pendentePessoa.para?.[0].toFixed(5)}) até ser realocada de novo.${pendentePessoa.pessoa.equipamentoId ? ` Deixa de operar ${equipamentosVistos.find((e) => e.id === pendentePessoa.pessoa.equipamentoId)?.codigo ?? "a máquina"}.` : ""}`
           }
           textoConfirmar={
