@@ -148,6 +148,7 @@ const ESTADOS: ReadonlySet<string> = new Set([
   "operando",
   "parado",
   "quebrado_obra",
+  "esperando_conserto",
   "conserto",
   "sem_posicao",
   "fora_funcionamento",

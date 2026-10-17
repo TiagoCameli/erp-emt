@@ -163,6 +163,29 @@ describe("paraEstadoMapa", () => {
     expect(estado.areas[0].centro).toEqual([0.5, 0.3]);
   });
 
+  it("quebrado esperando conserto chega como ele mesmo, não como sem posição (v1.25)", () => {
+    const estado = paraEstadoMapa({
+      ...bruto,
+      equipamentos: [
+        {
+          ...bruto.equipamentos[0],
+          estado: "esperando_conserto",
+          estado_mapa: "esperando_conserto",
+        },
+      ],
+    });
+    expect(estado).not.toBeNull();
+    if (!estado) return;
+    expect(estado.equipamentos[0]?.estado).toBe("esperando_conserto");
+    expect(estado.equipamentos[0]?.estadoMarcado).toBe("esperando_conserto");
+    expect(
+      marcarEstadoSchema.safeParse({
+        id: "c4e0f922-3aec-8c72-7089-225523e04557",
+        estado: "esperando_conserto",
+      }).success,
+    ).toBe(true);
+  });
+
   it("lê obras, tanques, depósitos e locais sem ponto (v1.7), e tolera a RPC antiga sem eles", () => {
     const estado = paraEstadoMapa({
       ...bruto,

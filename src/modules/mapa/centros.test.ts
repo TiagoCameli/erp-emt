@@ -123,13 +123,14 @@ describe("propriedade no relatório", () => {
 });
 
 describe("rótulos de motivo", () => {
-  it("cobre os 11 motivos da regra", () => {
+  it("cobre os 12 motivos da regra", () => {
     expect(Object.keys(ROTULO_MOTIVO_CENTRO).sort()).toEqual(
       [
         "acoplado",
         "carreta_emt",
         "conserto",
         "em_rota",
+        "esperando_conserto",
         "obra",
         "obra_sem_centro",
         "parado",

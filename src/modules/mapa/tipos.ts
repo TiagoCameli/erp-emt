@@ -17,6 +17,7 @@ export const ESTADOS_MAQUINA = [
   "operando",
   "parado",
   "quebrado_obra",
+  "esperando_conserto",
   "conserto",
   "fora_funcionamento",
 ] as const;
@@ -39,6 +40,7 @@ export const ROTULO_ESTADO: Record<EstadoEfetivo, string> = {
   em_frete: "Em frete",
   em_deslocamento: "Em deslocamento",
   quebrado_obra: "Quebrado na obra",
+  esperando_conserto: "Quebrado esperando conserto",
   conserto: "Em conserto",
   sem_posicao: "Sem posição",
   fora_funcionamento: "Fora de funcionamento",

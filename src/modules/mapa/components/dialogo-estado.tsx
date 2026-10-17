@@ -13,9 +13,10 @@ import {
 } from "@/modules/mapa/tipos";
 
 /**
- * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra
- * quer a descrição do defeito; conserto quer a previsão (a máquina fica onde está: só a
- * transferência a leva para outro lugar); fora de funcionamento quer o motivo. Operando e parado
+ * Mudança de estado pelo clique na ficha. Cada estado pede o que precisa: quebrado na obra e
+ * quebrado esperando conserto querem a descrição do defeito; conserto quer a previsão (a máquina
+ * fica onde está: só a transferência a leva para outro lugar); fora de funcionamento quer o
+ * motivo. Operando e parado
  * só pedem o motivo, sem obrigar. Em frete e em deslocamento não se marcam: vêm do Frete
  * (carretas EMT).
  * Montado pelo pai só enquanto há pedido, por isso nasce limpo.
@@ -38,6 +39,8 @@ const DESCRICAO: Record<EstadoMaquina, string> = {
     "Parada na posição atual. Parado por muitos dias vira alerta. Carreta que chegou do frete fica no destino, sem voltar para a pedreira.",
   quebrado_obra:
     "Quebrada na frente, aguardando a manutenção. Descreva o defeito para a OS.",
+  esperando_conserto:
+    "Quebrada e parada, esperando a vez na oficina ou a peça. Fica onde está no mapa. Descreva o defeito.",
   conserto:
     "Fica onde está no mapa. Para levar a máquina a outro lugar, use a transferência.",
   fora_funcionamento:
@@ -60,6 +63,7 @@ export function DialogoEstado({
   const { equipamento, estado } = pedido;
   const exigeMotivo =
     estado === "quebrado_obra" ||
+    estado === "esperando_conserto" ||
     estado === "conserto" ||
     estado === "fora_funcionamento";
 
@@ -75,7 +79,7 @@ export function DialogoEstado({
       exigeMotivo={exigeMotivo}
       minMotivo={3}
       conteudo={
-        estado === "quebrado_obra" ? (
+        estado === "quebrado_obra" || estado === "esperando_conserto" ? (
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-defeito`}>Defeito</Label>
             <Textarea

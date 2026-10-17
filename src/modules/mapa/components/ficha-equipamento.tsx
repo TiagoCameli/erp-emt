@@ -375,7 +375,9 @@ export function FichaEquipamento({
             </p>
           </div>
         ) : null}
-        {e.estado === "quebrado_obra" && e.quebraDescricao ? (
+        {(e.estado === "quebrado_obra" ||
+          e.estado === "esperando_conserto") &&
+        e.quebraDescricao ? (
           <Linha rotulo="Defeito">{e.quebraDescricao}</Linha>
         ) : null}
         {e.estado === "conserto" ? (
