@@ -64,6 +64,8 @@ export const ESCALA_MAQUINA = 3;
  * chão quando o zoom muda. O toque e o arraste pegam pela malha desenhada.
  */
 export const ESCALA_BONECO = 5;
+/** sizeScale da camada das pessoas: o boneco tem 1,8 m e aparece 1,6 x ESCALA_BONECO. */
+export const TAMANHO_BONECO = 1.6 * ESCALA_BONECO;
 /** Afastamento do card da ficha da pessoa: em metros e o mínimo em pixels. */
 export const RAIO_BONECO_M = 3 * ESCALA_BONECO;
 export const RAIO_MINIMO_BONECO_PX = 14 * ESCALA_BONECO;
@@ -675,7 +677,7 @@ export function montarCamadas(cena: Cena): Layer[] {
         getOrientation: orientacao(0),
         getColor: (d) => (cena.selecao.has(d.id) ? [255, 230, 150] : BRANCO),
         // Em metros no terreno, como as máquinas: sem mínimo nem máximo em pixels.
-        sizeScale: 1.6 * ESCALA_BONECO,
+        sizeScale: TAMANHO_BONECO,
         _lighting: "pbr",
         updateTriggers: { getPosition: gatilho, getColor: gatilho },
       }),

@@ -3,15 +3,17 @@ import { deslocar } from "@/modules/mapa/geo";
 import type { PessoaMapa, Posicao } from "@/modules/mapa/tipos";
 
 /**
- * Onde o boneco de quem opera uma máquina aparece: ao lado esquerdo dela (pedido do Tiago,
- * 17/10/2026), a `afastamentoM` metros para o oeste — a esquerda da tela com o norte para cima.
- * O afastamento é o raio do anel da máquina, que já a contém: o boneco nunca cai em cima dela.
+ * Onde o boneco de quem opera uma máquina aparece: encostado na lateral esquerda dela (pedido do
+ * Tiago, 17/10/2026: "ao lado do equipamento... bem ao lado mesmo"). Esquerda da própria máquina,
+ * pelo rumo dela (frente em `heading`, graus do norte em sentido horário): assim o boneco fica na
+ * lateral de qualquer jeito que ela esteja virada. `afastamentoM` vem de `afastamentoDoOperadorM`.
  */
 export function posicaoDoOperador(
   maquina: Posicao,
+  heading: number,
   afastamentoM: number,
 ): Posicao {
-  return deslocar(maquina, 270, afastamentoM);
+  return deslocar(maquina, heading - 90, afastamentoM);
 }
 
 /**

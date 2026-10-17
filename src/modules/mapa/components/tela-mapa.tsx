@@ -95,6 +95,7 @@ import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import {
   ESCALA_MAQUINA,
   RAIO_BONECO_M,
+  TAMANHO_BONECO,
   RAIO_MINIMO_ANEL_PX,
   RAIO_MINIMO_BONECO_PX,
   RAIO_MINIMO_GIRO_PX,
@@ -138,6 +139,7 @@ import {
 } from "@/modules/mapa/geo";
 import { extrasPorLocal } from "@/modules/mapa/dados";
 import { pontoNaObra } from "@/modules/mapa/obra-destino";
+import { afastamentoDoOperadorM } from "@/modules/mapa/medidas-modelos";
 import { aplicarFretes } from "@/modules/mapa/fretes";
 import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import {
@@ -802,7 +804,15 @@ export function TelaMapa({
         return [
           {
             ...p,
-            pos: posicaoDoOperador(maquina.pos, raioDoAnelM(maquina.modelo3d)),
+            pos: posicaoDoOperador(
+              maquina.pos,
+              maquina.heading,
+              afastamentoDoOperadorM(
+                maquina.modelo3d,
+                (modelos.get(maquina.modelo3d)?.escala ?? 1) * ESCALA_MAQUINA,
+                TAMANHO_BONECO,
+              ),
+            ),
           },
         ];
       return [{ ...p, pos }];
