@@ -174,6 +174,8 @@ describe("paraEstadoMapa", () => {
         },
       ],
     });
+    expect(estado).not.toBeNull();
+    if (!estado) return;
     expect(estado.equipamentos[0]?.estado).toBe("esperando_conserto");
     expect(estado.equipamentos[0]?.estadoMarcado).toBe("esperando_conserto");
     expect(
