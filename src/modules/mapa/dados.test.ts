@@ -75,6 +75,14 @@ describe("paraEstadoMapa", () => {
     ],
     pessoas: [
       { id: "p1", nome: "João", funcao: "Operador", lng: null, lat: null },
+      {
+        id: "p2",
+        nome: "Maria",
+        lng: null,
+        lat: null,
+        centro_custo_id: "cc1",
+        centro_custo_nome: "Obra 001 › Terraplenagem",
+      },
     ],
     trechos: [
       {
@@ -153,6 +161,11 @@ describe("paraEstadoMapa", () => {
     expect(e2.locacao?.valorUnitario).toBe(1500);
     expect(e2.locacao?.tipoAluguel).toBe("dia");
     expect(estado.pessoas[0].pos).toBeNull();
+    // centro de custo da pessoa no mapa: ausente vira null/""; presente passa
+    expect(estado.pessoas[0].centroCustoId).toBeNull();
+    expect(estado.pessoas[0].centroCustoNome).toBe("");
+    expect(estado.pessoas[1].centroCustoId).toBe("cc1");
+    expect(estado.pessoas[1].centroCustoNome).toBe("Obra 001 › Terraplenagem");
     // trecho sem traçado sai; o MultiLineString vira os pedaços emendados
     expect(estado.trechos).toHaveLength(1);
     expect(estado.trechos[0].pontos).toHaveLength(4);

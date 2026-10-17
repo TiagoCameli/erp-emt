@@ -37,6 +37,7 @@ import {
   acoplarImplemento,
   ajustarRaioLocal,
   assinalarOperador,
+  trocarCentroCustoPessoa,
   colocarLocal,
   definirTamanhoDeposito,
   girarDeposito,
@@ -84,7 +85,9 @@ import { FichaPessoa } from "@/modules/mapa/components/ficha-pessoa";
 import { FichaObra } from "@/modules/mapa/components/ficha-obra";
 import {
   ESCALA_MAQUINA,
+  RAIO_BONECO_M,
   RAIO_MINIMO_ANEL_PX,
+  RAIO_MINIMO_BONECO_PX,
   RAIO_MINIMO_GIRO_PX,
   raioDoAnelM,
 } from "@/modules/mapa/components/camadas";
@@ -134,6 +137,7 @@ import {
   ROTULO_TIPO_AREA,
   type ConfigGoogle,
   type AlvoObjeto,
+  type CentroCustoOpcaoMapa,
   type EquipamentoMapa,
   type ObraMapa,
   type EstadoEfetivo,
@@ -286,6 +290,8 @@ export interface TelaMapaProps {
   valoresEstoque?: Record<string, number> | null;
   /** Entrada avulsa e saída no card da pilha: as permissões são as do Estoque. */
   movimentarPilha?: PermissoesMovimentoPilha;
+  /** Centros de custo para a ficha da pessoa (vazio para quem não edita). */
+  centrosCusto?: readonly CentroCustoOpcaoMapa[];
 }
 
 export function TelaMapa({
@@ -295,6 +301,7 @@ export function TelaMapa({
   colocarInicial = null,
   valoresEstoque = null,
   movimentarPilha = { entrada: false, saida: false },
+  centrosCusto = [],
 }: TelaMapaProps) {
   const router = useRouter();
   const [estado, setEstado] = React.useState(inicial);
@@ -1317,6 +1324,28 @@ export function TelaMapa({
     [aplicar],
   );
 
+  // Centro de custo da pessoa no Mapa (o do cadastro e o da folha não mudam).
+  const trocarCentroPessoa = React.useCallback(
+    async (pessoa: PessoaMapa, centroCustoId: string | null) => {
+      setSalvando(true);
+      try {
+        const r = await trocarCentroCustoPessoa({
+          colaboradorId: pessoa.id,
+          centroCustoId,
+        });
+        aplicar(
+          r,
+          centroCustoId === null
+            ? `${pessoa.nome} ficou sem centro de custo no mapa`
+            : `Centro de custo de ${pessoa.nome} trocado`,
+        );
+      } finally {
+        setSalvando(false);
+      }
+    },
+    [aplicar],
+  );
+
   // Para qual pedreira a carreta volta depois do frete (null = a última de onde saiu).
   const trocarPedreira = React.useCallback(
     async (
@@ -1803,6 +1832,10 @@ export function TelaMapa({
       }
       maquinas={equipamentosVistos}
       localidades={estado.localidades}
+      centrosCusto={centrosCusto}
+      onTrocarCentro={(centroCustoId) =>
+        trocarCentroPessoa(pessoaFicha, centroCustoId)
+      }
       podeEditar={permissoes.editar}
       salvando={salvando}
       posicionando={posicionandoPessoa === pessoaFicha.id}
@@ -1920,8 +1953,8 @@ export function TelaMapa({
       return {
         chave: naCena.id,
         pos: naCena.pos,
-        raioM: 3,
-        raioMinimoPx: 14,
+        raioM: RAIO_BONECO_M,
+        raioMinimoPx: RAIO_MINIMO_BONECO_PX,
         conteudo: fichaFlutuante,
       };
     }

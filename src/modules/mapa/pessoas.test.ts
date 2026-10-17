@@ -18,6 +18,8 @@ function pessoa(parcial: Partial<PessoaMapa>): PessoaMapa {
     localidadeId: null,
     pos: null,
     posicaoManual: false,
+    centroCustoId: null,
+    centroCustoNome: "",
     ...parcial,
   };
 }

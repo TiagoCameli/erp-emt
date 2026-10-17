@@ -11,6 +11,7 @@ import {
   useDiasPessoa,
 } from "@/modules/mapa/components/centros-pessoa";
 import type {
+  CentroCustoOpcaoMapa,
   EquipamentoMapa,
   LocalidadeMapa,
   PessoaMapa,
@@ -25,13 +26,20 @@ import type {
  * Quem ainda não tem lugar no mapa não tem o que arrastar (Tiago, 16/10/2026: "não tem como
  * assinalar os colaboradores aqui, somente equipamentos"): a ficha escolhe a máquina que a pessoa
  * opera, o local, ou "Posicionar no mapa" (toque num ponto, como o das máquinas).
+ *
+ * Centro de custo (17/10/2026): o da pessoa no Mapa, trocado só aqui. O do cadastro do
+ * colaborador, que a folha usa, não muda.
  */
+
+/** Valor da opção "Sem centro de custo" no Combobox (o vazio é "nada escolhido"). */
+const SEM_CENTRO = "__sem_centro__";
 
 export function FichaPessoa({
   pessoa,
   maquina,
   maquinas,
   localidades,
+  centrosCusto,
   podeEditar,
   salvando,
   posicionando,
@@ -40,6 +48,7 @@ export function FichaPessoa({
   onTrocarLocal,
   onOperar,
   onPosicionar,
+  onTrocarCentro,
   relatorioDiasHref = null,
 }: {
   pessoa: PessoaMapa;
@@ -48,6 +57,8 @@ export function FichaPessoa({
   /** Máquinas do mapa que a pessoa pode passar a operar. */
   maquinas: readonly EquipamentoMapa[];
   localidades: readonly LocalidadeMapa[];
+  /** Centros ativos para escolher (vazio para quem não edita). */
+  centrosCusto: readonly CentroCustoOpcaoMapa[];
   podeEditar: boolean;
   salvando: boolean;
   /** A tela espera o toque no mapa para esta pessoa. */
@@ -57,6 +68,8 @@ export function FichaPessoa({
   onTrocarLocal: (localidadeId: string) => void;
   onOperar: (equipamentoId: string) => void;
   onPosicionar: () => void;
+  /** null tira o centro. */
+  onTrocarCentro: (centroCustoId: string | null) => void;
   /** Relatório "Dias de pessoa por centro"; nulo sem permissão de ver os relatórios do Mapa. */
   relatorioDiasHref?: string | null;
 }) {
@@ -83,9 +96,24 @@ export function FichaPessoa({
         })),
     [maquinas],
   );
+  const opcoesCentro = React.useMemo(
+    () => [
+      { valor: SEM_CENTRO, rotulo: "Sem centro de custo" },
+      ...[...centrosCusto]
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
+        .map((c) => ({ valor: c.id, rotulo: c.nome })),
+    ],
+    [centrosCusto],
+  );
+  // O centro escolhido também muda o centro do dia: entra na chave que relê os dias.
   const diasPessoa = useDiasPessoa(
     pessoa.id,
-    [pessoa.obraId, pessoa.localidadeId, pessoa.equipamentoId].join("|"),
+    [
+      pessoa.obraId,
+      pessoa.localidadeId,
+      pessoa.equipamentoId,
+      pessoa.centroCustoId,
+    ].join("|"),
   );
   const local = pessoa.localidadeId
     ? (localidades.find((l) => l.id === pessoa.localidadeId) ?? null)
@@ -178,6 +206,33 @@ export function FichaPessoa({
           <p>{local?.nome ?? "–"}</p>
         )}
         <HistoricoLocal dados={diasPessoa} />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <span className="text-muted-foreground">Centro de custo no mapa</span>
+        {podeEditar ? (
+          <Combobox
+            valor={pessoa.centroCustoId ?? SEM_CENTRO}
+            onValorChange={(v) => {
+              if (!v) return;
+              const novo = v === SEM_CENTRO ? null : v;
+              if (novo !== pessoa.centroCustoId) onTrocarCentro(novo);
+            }}
+            opcoes={opcoesCentro}
+            rotuloDoValor={pessoa.centroCustoNome || "Sem centro de custo"}
+            placeholder="Sem centro de custo"
+            buscaPlaceholder="Nome do centro"
+            size="sm"
+            disabled={salvando}
+            ariaLabel="Centro de custo no mapa"
+          />
+        ) : (
+          <p>{pessoa.centroCustoNome || "–"}</p>
+        )}
+        <p className="text-legenda text-muted-foreground">
+          Os dias trabalhados contam neste centro (parado vai para Pessoal Sem
+          Alocação). Só no mapa: o cadastro do colaborador e a folha não mudam.
+        </p>
       </div>
 
       <CentrosPessoa
