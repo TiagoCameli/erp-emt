@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 
 import type { Json } from "@/lib/database.types";
 import { erroAcao, textoDoErro } from "@/lib/erros";
@@ -86,12 +85,14 @@ async function semPermissao(acao: "editar" | "criar"): Promise<string | null> {
   }
 }
 
+/**
+ * Fecha uma gravação devolvendo o estado novo, que a tela aplica na hora. Sem `revalidatePath`:
+ * numa Server Action ele faz o Next renderizar a página de novo na mesma resposta, o que rodava
+ * `fn_mapa_estado` uma segunda vez (mais o estoque e os centros de custo) a cada clique, e a tela
+ * recebia o estado em dobro (17/10/2026, fluidez). A página do mapa é dinâmica (lê a sessão),
+ * então quem entra depois sempre lê o banco.
+ */
 async function concluir(total: number): Promise<ResultadoMapa> {
-  try {
-    revalidatePath("/mapa");
-  } catch {
-    // a gravação já aconteceu
-  }
   const { estado } = await carregarEstadoMapa();
   return { ok: true, total, estado };
 }

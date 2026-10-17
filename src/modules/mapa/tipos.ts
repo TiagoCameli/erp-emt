@@ -438,6 +438,39 @@ export interface EstadoMapa {
   carretasRetorno: CarretaRetorno[];
   /** Implementos ativos (IMP-xxx) e o equipamento em que cada um está acoplado. */
   implementos: ImplementoMapa[];
+  /**
+   * Alertas abertos e o que mudou hoje (`fn_mapa_avisos`, lida junto com o estado). Opcional e
+   * nulo quando a leitura falha: o mapa segue sem a faixa de alertas.
+   */
+  avisos?: AvisosMapa | null;
+}
+
+/** Alerta aberto do mapa (cron de hora em hora), que ainda vale no estado atual. */
+export interface AlertaMapa {
+  id: string;
+  /** parado_patio, quebrado_obra, esperando_conserto, conserto_atrasado, locacao_vencendo,
+   * tanque_minimo, frete_sem_chegada, diarias_a_pagar. */
+  tipo: string;
+  /** equipamento, tanque, frete ou empresa. */
+  alvo: string;
+  alvoId: string | null;
+  mensagem: string;
+  criadoEm: string;
+}
+
+/** Uma movimentação gravada hoje (desde 0h no Acre), não desfeita. */
+export interface MudancaHoje {
+  /** equipamento ou colaborador. */
+  alvo: string;
+  alvoId: string;
+  tipo: string;
+  criadoEm: string;
+}
+
+export interface AvisosMapa {
+  hoje: string;
+  alertas: AlertaMapa[];
+  mudancasHoje: MudancaHoje[];
 }
 
 /** Implemento (equipamento de tipo "Implementos"): só aparece no card de quem o leva. */
