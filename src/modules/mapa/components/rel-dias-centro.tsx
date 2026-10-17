@@ -22,9 +22,9 @@ import { gerarPlanilhaDiasCentro } from "@/modules/mapa/actions";
 import {
   mesAnteriorDe,
   rotuloMes,
+  rotuloPropriedadeRelatorio,
   type RelDiasCentro,
 } from "@/modules/mapa/centros";
-import { ROTULO_PROPRIEDADE, type Propriedade } from "@/modules/mapa/tipos";
 
 /**
  * Tabela do relatório "Dias por centro de custo": máquina nas linhas, centro nas colunas (por
@@ -35,7 +35,7 @@ import { ROTULO_PROPRIEDADE, type Propriedade } from "@/modules/mapa/tipos";
 const FILTROS: { valor: string; rotulo: string }[] = [
   { valor: "", rotulo: "Todas" },
   { valor: "propria", rotulo: "Própria" },
-  { valor: "colorado", rotulo: "Colorado" },
+  // A Colorado é fornecedora: as máquinas dela estão em Alugada.
   { valor: "alugada", rotulo: "Alugada" },
 ];
 
@@ -152,7 +152,7 @@ export function RelDiasCentroTabela({
                     </span>
                   </TableCell>
                   <TableCell>
-                    {ROTULO_PROPRIEDADE[e.propriedade as Propriedade] ?? e.propriedade}
+                    {rotuloPropriedadeRelatorio(e.propriedade)}
                   </TableCell>
                   {rel.centros.map((c) => (
                     <TableCell key={c.id} className="text-right tabular-nums">

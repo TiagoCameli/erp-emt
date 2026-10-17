@@ -5,9 +5,12 @@ import {
   mesAnteriorDe,
   mesDoRelatorio,
   paraCentrosEquipamento,
+  PROPRIEDADES_RELATORIO,
+  propriedadeDoRelatorio,
   ROTULO_MOTIVO_CENTRO,
   rotuloMes,
   rotuloMotivoCentro,
+  rotuloPropriedadeRelatorio,
 } from "@/modules/mapa/centros";
 
 const RAIZ = "11111111-1111-4111-8111-111111111111";
@@ -104,6 +107,18 @@ describe("agruparRelatorio", () => {
 
   it("vazio dá tudo vazio", () => {
     expect(agruparRelatorio([])).toEqual({ equipamentos: [], centros: [], total: 0 });
+  });
+});
+
+describe("propriedade no relatório", () => {
+  it("Colorado é fornecedora: entra em Alugada e o rótulo diz de quem é", () => {
+    expect(PROPRIEDADES_RELATORIO).toEqual(["propria", "alugada"]);
+    expect(propriedadeDoRelatorio("colorado")).toBe("alugada");
+    expect(propriedadeDoRelatorio("alugada")).toBe("alugada");
+    expect(propriedadeDoRelatorio("propria")).toBe("propria");
+    expect(rotuloPropriedadeRelatorio("colorado")).toBe("Alugada · Colorado");
+    expect(rotuloPropriedadeRelatorio("alugada")).toBe("Alugada");
+    expect(rotuloPropriedadeRelatorio("propria")).toBe("Própria");
   });
 });
 

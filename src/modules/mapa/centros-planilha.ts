@@ -4,8 +4,7 @@ import {
   escreverCabecalhoMarca,
   estilizarCabecalhoColunas,
 } from "@/lib/planilha-marca";
-import type { RelDiasCentro } from "@/modules/mapa/centros";
-import { ROTULO_PROPRIEDADE, type Propriedade } from "@/modules/mapa/tipos";
+import { rotuloPropriedadeRelatorio, type RelDiasCentro } from "@/modules/mapa/centros";
 
 /**
  * Planilha do relatório "Dias por centro de custo": uma linha por máquina, uma coluna por centro
@@ -39,7 +38,7 @@ export function montarPlanilhaDiasCentro(
     ws.getRow(n).values = [
       e.codigo,
       e.descricao,
-      ROTULO_PROPRIEDADE[e.propriedade as Propriedade] ?? e.propriedade,
+      rotuloPropriedadeRelatorio(e.propriedade),
       ...rel.centros.map((c) => e.dias[c.id] ?? 0),
       e.total,
     ];
@@ -51,7 +50,7 @@ export function montarPlanilhaDiasCentro(
 
   ws.getColumn(1).width = 12;
   ws.getColumn(2).width = 36;
-  ws.getColumn(3).width = 12;
+  ws.getColumn(3).width = 20;
   for (let i = 4; i <= colunas; i += 1) ws.getColumn(i).width = 18;
   ws.views = [{ state: "frozen", ySplit: linhaCabecalho, xSplit: 2 }];
   return wb;

@@ -115,6 +115,26 @@ export function rotuloMes(mes: string): string {
   return `${NOMES_MES[Number(mes.slice(5, 7)) - 1] ?? mes} de ${mes.slice(0, 4)}`;
 }
 
+/**
+ * Filtro de propriedade do relatório. A Colorado é fornecedora (pedido do Tiago, 16/10/2026): a
+ * máquina dela entra em "Alugada", não num filtro próprio. O cadastro segue com `colorado`, que é
+ * o que decide a etapa na obra 002.
+ */
+export const PROPRIEDADES_RELATORIO = ["propria", "alugada"] as const;
+
+/** A propriedade do relatório: `colorado` vira `alugada`. */
+export function propriedadeDoRelatorio(propriedade: string): string {
+  return propriedade === "colorado" ? "alugada" : propriedade;
+}
+
+/** "Própria", "Alugada" ou "Alugada · Colorado": a fornecedora fica dita, dentro de Alugada. */
+export function rotuloPropriedadeRelatorio(propriedade: string): string {
+  if (propriedade === "propria") return "Própria";
+  if (propriedade === "alugada") return "Alugada";
+  if (propriedade === "colorado") return "Alugada · Colorado";
+  return propriedade;
+}
+
 /** Uma linha de fn_mapa_rel_dias_centro: dias de uma máquina num centro, no mês. */
 export interface RelDiasCentroLinha {
   equipamentoId: string;
