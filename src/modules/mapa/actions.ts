@@ -23,6 +23,7 @@ import {
   colocarLocalSchema,
   desenharObraSchema,
   editarLocalSchema,
+  entrarDiaristaSchema,
   inativarLocalSchema,
   encerrarLocacaoSchema,
   estadoPessoaSchema,
@@ -37,6 +38,7 @@ import {
   acoplarImplementoSchema,
   tamanhoDepositoSchema,
   rumoDepositoSchema,
+  sairDiaristaSchema,
   posicionarObraSchema,
   raioLocalSchema,
   tirarObraSchema,
@@ -136,7 +138,7 @@ export async function moverEquipamentos(
     conserto_previsao,
   } = validado.data;
   if (obra_id && sem_obra)
-    return { erro: "Escolha uma obra ou \"Sem obra\", não os dois" };
+    return { erro: 'Escolha uma obra ou "Sem obra", não os dois' };
   const vistos = new Set<string>();
   let total = 0;
   try {
@@ -291,6 +293,78 @@ export async function trocarCentroCustoPessoa(
       "mapa.centro_pessoa",
       erro,
       `Não foi possível trocar o centro de custo: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/**
+ * "Adicionar diarista": põe no mapa um diarista do RH ou cadastra um novo (a RPC exige
+ * cadastros.colaboradores/criar). Entra sem lugar; a tela pede para posicionar. Diarista só
+ * entra e sai pelo Mapa, igual máquina alugada (17/10/2026).
+ */
+export async function entrarDiarista(
+  dados: unknown,
+): Promise<ResultadoMapa & { colaboradorId?: string }> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = entrarDiaristaSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  const v = validado.data;
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("fn_mapa_diarista_entrar", {
+      p_colaborador: v.colaboradorId,
+      p_novo: v.novo
+        ? {
+            nome: v.novo.nome,
+            cpf: v.novo.cpf || null,
+            funcao_id: v.novo.funcaoId || null,
+          }
+        : null,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.diaristaEntrar",
+        error,
+        mensagemDaRpc(error, "Não foi possível adicionar o diarista"),
+      );
+    return { ...(await concluir(1)), colaboradorId: data ?? undefined };
+  } catch (erro) {
+    return erroAcao(
+      "mapa.diaristaEntrar",
+      erro,
+      `Não foi possível adicionar o diarista: ${textoDoErro(erro)}`,
+    );
+  }
+}
+
+/** "Tirar do mapa": o diarista sai da máquina e do local e some da tela; o RH não muda. */
+export async function tirarDiaristaDoMapa(
+  dados: unknown,
+): Promise<ResultadoMapa> {
+  const bloqueio = await semPermissao("editar");
+  if (bloqueio) return { erro: bloqueio };
+  const validado = sairDiaristaSchema.safeParse(dados);
+  if (!validado.success)
+    return { erro: validado.error.issues[0]?.message ?? "Pedido inválido" };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("fn_mapa_diarista_sair", {
+      p_colaborador: validado.data.colaboradorId,
+    });
+    if (error)
+      return erroAcao(
+        "mapa.diaristaSair",
+        error,
+        mensagemDaRpc(error, "Não foi possível tirar o diarista do mapa"),
+      );
+    return concluir(1);
+  } catch (erro) {
+    return erroAcao(
+      "mapa.diaristaSair",
+      erro,
+      `Não foi possível tirar o diarista do mapa: ${textoDoErro(erro)}`,
     );
   }
 }
@@ -854,10 +928,14 @@ export async function carregarCentrosEquipamento(
       return erroAcao(
         "mapa.centrosEquipamento",
         error,
-        mensagemDaRpc(error, "Não foi possível carregar os centros de custo da máquina"),
+        mensagemDaRpc(
+          error,
+          "Não foi possível carregar os centros de custo da máquina",
+        ),
       );
     const centros = paraCentrosEquipamento(data);
-    if (!centros) return { erro: "Resposta inesperada ao carregar os centros de custo" };
+    if (!centros)
+      return { erro: "Resposta inesperada ao carregar os centros de custo" };
     return { ok: true, centros };
   } catch (erro) {
     return erroAcao(
@@ -890,7 +968,10 @@ export async function marcarVariosCentros(
       return erroAcao(
         "mapa.variosCentros",
         error,
-        mensagemDaRpc(error, "Não foi possível gravar a marca de vários centros"),
+        mensagemDaRpc(
+          error,
+          "Não foi possível gravar a marca de vários centros",
+        ),
       );
     return { ok: true };
   } catch (erro) {
@@ -906,7 +987,9 @@ export async function marcarVariosCentros(
 export async function gerarPlanilhaDiasCentro(
   mes: string,
   propriedade: string,
-): Promise<{ ok: true; base64: string; nomeArquivo: string } | { erro: string }> {
+): Promise<
+  { ok: true; base64: string; nomeArquivo: string } | { erro: string }
+> {
   try {
     await exigirPermissao("mapa.historico", "ver");
   } catch {
@@ -916,12 +999,18 @@ export async function gerarPlanilhaDiasCentro(
   if (!["", "propria", "alugada"].includes(propriedade))
     return { erro: "Propriedade inválida" };
   try {
-    const { carregarRelDiasCentro } = await import("@/modules/mapa/centros-queries");
+    const { carregarRelDiasCentro } =
+      await import("@/modules/mapa/centros-queries");
     const { linhas, erro } = await carregarRelDiasCentro(mes, propriedade);
     if (erro) return { erro };
-    const { agruparRelatorio, rotuloMes } = await import("@/modules/mapa/centros");
-    const { montarPlanilhaDiasCentro } = await import("@/modules/mapa/centros-planilha");
-    const workbook = montarPlanilhaDiasCentro(agruparRelatorio(linhas), rotuloMes(mes));
+    const { agruparRelatorio, rotuloMes } =
+      await import("@/modules/mapa/centros");
+    const { montarPlanilhaDiasCentro } =
+      await import("@/modules/mapa/centros-planilha");
+    const workbook = montarPlanilhaDiasCentro(
+      agruparRelatorio(linhas),
+      rotuloMes(mes),
+    );
     const conteudo = await workbook.xlsx.writeBuffer();
     return {
       ok: true,
@@ -1087,7 +1176,8 @@ export async function carregarCentrosColaborador(
         mensagemDaRpc(error, "Não foi possível carregar os dias da pessoa"),
       );
     const centros = paraCentrosColaborador(data);
-    if (!centros) return { erro: "Resposta inesperada ao carregar os dias da pessoa" };
+    if (!centros)
+      return { erro: "Resposta inesperada ao carregar os dias da pessoa" };
     return { ok: true, centros };
   } catch (erro) {
     return erroAcao(
@@ -1132,7 +1222,9 @@ export async function marcarEstadoPessoa(
 /** Planilha do relatório "Dias de pessoa por centro" do mês. */
 export async function gerarPlanilhaDiasPessoa(
   mes: string,
-): Promise<{ ok: true; base64: string; nomeArquivo: string } | { erro: string }> {
+): Promise<
+  { ok: true; base64: string; nomeArquivo: string } | { erro: string }
+> {
   try {
     await exigirPermissao("mapa.historico", "ver");
   } catch {
@@ -1140,13 +1232,19 @@ export async function gerarPlanilhaDiasPessoa(
   }
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return { erro: "Mês inválido" };
   try {
-    const { carregarRelDiasPessoa } = await import("@/modules/mapa/centros-queries");
+    const { carregarRelDiasPessoa } =
+      await import("@/modules/mapa/centros-queries");
     const { linhas, erro } = await carregarRelDiasPessoa(mes);
     if (erro) return { erro };
-    const { agruparRelatorioPessoas } = await import("@/modules/mapa/centros-pessoa");
+    const { agruparRelatorioPessoas } =
+      await import("@/modules/mapa/centros-pessoa");
     const { rotuloMes } = await import("@/modules/mapa/centros");
-    const { montarPlanilhaDiasPessoa } = await import("@/modules/mapa/centros-planilha");
-    const workbook = montarPlanilhaDiasPessoa(agruparRelatorioPessoas(linhas), rotuloMes(mes));
+    const { montarPlanilhaDiasPessoa } =
+      await import("@/modules/mapa/centros-planilha");
+    const workbook = montarPlanilhaDiasPessoa(
+      agruparRelatorioPessoas(linhas),
+      rotuloMes(mes),
+    );
     const conteudo = await workbook.xlsx.writeBuffer();
     return {
       ok: true,
