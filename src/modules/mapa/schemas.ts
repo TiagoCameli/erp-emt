@@ -120,6 +120,29 @@ export const centroCustoPessoaSchema = z.strictObject({
 export type CentroCustoPessoaInput = z.infer<typeof centroCustoPessoaSchema>;
 
 /**
+ * Um item do lote de alocação (fn_mapa_alocar). Campo ausente não mexe; null limpa. Local e obra
+ * juntos: o local manda e a obra vai junto; só obra é "obra como local".
+ */
+const itemAlocacaoSchema = z.strictObject({
+  colaboradorId: idSchemaCom("Colaborador inválido"),
+  equipamentoId: idSchemaCom("Equipamento inválido").nullable().optional(),
+  localidadeId: idSchemaCom("Local inválido").nullable().optional(),
+  obraId: idSchemaCom("Obra inválida").nullable().optional(),
+  centroCustoId: idSchemaCom("Centro de custo inválido").nullable().optional(),
+});
+export type ItemAlocacao = z.infer<typeof itemAlocacaoSchema>;
+
+export const alocarSchema = z.strictObject({
+  itens: z
+    .array(itemAlocacaoSchema)
+    .min(1, { error: "Nada para alocar" })
+    .max(500, { error: "Lote grande demais" }),
+  data: dataOpcional,
+  motivo: motivoOpcional,
+});
+export type AlocarInput = z.infer<typeof alocarSchema>;
+
+/**
  * "Adicionar diarista": ou `colaboradorId` (diarista do RH fora do mapa) ou `novo` (a RPC cria o
  * colaborador como diarista; exige cadastros.colaboradores/criar).
  */
