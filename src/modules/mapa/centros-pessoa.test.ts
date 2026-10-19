@@ -124,6 +124,7 @@ describe("rotuloMotivoPessoa", () => {
   it("dá nome aos motivos do banco e devolve o desconhecido como veio", () => {
     expect(rotuloMotivoPessoa("escolhido")).toBe("Centro escolhido na ficha");
     expect(rotuloMotivoPessoa("parado")).toBe("Parado");
+    expect(rotuloMotivoPessoa("carreta_emt")).toBe("Motorista da carreta");
     expect(rotuloMotivoPessoa("novo")).toBe("novo");
   });
 });
