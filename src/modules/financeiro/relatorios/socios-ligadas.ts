@@ -2,25 +2,23 @@
  * Relatório "Sócios e ligadas" (PR 2 do controle total, D3 e D4 de 09/10/2026;
  * repaginado em 15/10/2026).
  *
- * Duas histórias que não se somam, e por isso moram em blocos separados:
+ * EMPRESA LIGADA: o saldo do mútuo, o que a EMT mandou menos o que voltou. É
+ * um direito da EMT, não uma despesa.
  *
- * - SÓCIO: quanto cada um retirou (distribuição), no ano e desde o início, e
- *   quanto disso ainda não saiu do caixa. Sócio não devolve: a coluna
- *   "devolvido" era sempre zero.
- * - EMPRESA LIGADA: o saldo do mútuo, o que a EMT mandou menos o que voltou. É
- *   um direito da EMT, não uma despesa.
+ * Os centros de SÓCIO (distribuição de lucro) saíram dos relatórios em
+ * 19/10/2026, a pedido do Tiago: as funções do banco ainda os devolvem, e é
+ * aqui que eles são descartados, antes de chegar à tela ou à planilha.
  *
- * Somar distribuição com saldo de mútuo (a linha Total da versão anterior) não
- * dá número nenhum. O cálculo mora no banco (`fn_rel_socios_ligadas` para os
- * centros e o total, `fn_rel_socios_ligadas_mensal` para o mês e o em aberto);
- * aqui só se junta e se soma em centavos.
+ * O cálculo mora no banco (`fn_rel_socios_ligadas` para os centros e o total,
+ * `fn_rel_socios_ligadas_mensal` para o mês e o em aberto); aqui só se junta e
+ * se soma em centavos.
  */
 export interface SocioLigadaLinha {
   centroId: string;
   centro: string;
   /**
-   * Tipo do centro raiz. Sócio e empresa ligada sempre aparecem; outro tipo
-   * (uma obra) só aparece quando tem rateio de distribuição ou mútuo.
+   * Tipo do centro raiz. Empresa ligada sempre aparece; outro tipo (uma obra)
+   * só aparece quando tem rateio de mútuo. Sócio é descartado.
    */
   tipo: string;
   ativo: boolean;
@@ -71,22 +69,10 @@ export interface CentroSocioLigada {
   acumulado: ValoresSocioLigada;
 }
 
-export interface MesDaSerie {
-  /** yyyy-MM */
-  mes: string;
-  /** Valor enviado no mês, por centro (só os que tiveram movimento). */
-  porCentro: Record<string, number>;
-  total: number;
-}
-
 export interface SociosLigadasRelatorio {
   ano: number;
-  socios: CentroSocioLigada[];
   ligadas: CentroSocioLigada[];
-  totalSocios: { ano: ValoresSocioLigada; acumulado: ValoresSocioLigada };
   totalLigadas: { ano: ValoresSocioLigada; acumulado: ValoresSocioLigada };
-  /** Janeiro até o mês corrente do ano, um item por mês, mesmo sem movimento. */
-  serieSocios: MesDaSerie[];
   /**
    * Centros cuja soma mensal não fechou com o total da função de origem. Vazio
    * sempre que as duas funções concordam; a tela avisa se não estiver.
@@ -133,18 +119,12 @@ function somarValores(lista: ValoresSocioLigada[]): ValoresSocioLigada {
   return valores(acc);
 }
 
-/** "2026-10" -> ["2026-01", ..., "2026-10"]. */
-export function mesesDoAnoAte(mesCorrente: string): string[] {
-  const ano = mesCorrente.slice(0, 4);
-  const ate = Number(mesCorrente.slice(5, 7));
-  return Array.from({ length: ate }, (_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
-}
-
 /**
- * Junta os centros (com o total da função de origem) e a série mensal.
+ * Junta os centros (com o total da função de origem) e a série mensal, sem os
+ * centros de sócio.
  *
  * `centros` vem de `fn_rel_socios_ligadas` sem corte de período: é quem diz
- * QUAIS centros aparecem (sócio e ligada ativos aparecem mesmo sem movimento).
+ * QUAIS centros aparecem (ligada ativa aparece mesmo sem movimento).
  * O acumulado sai da série, e a soma é conferida contra o total do centro.
  */
 export function montarSociosLigadas(
@@ -167,7 +147,7 @@ export function montarSociosLigadas(
   }
 
   const divergentes: string[] = [];
-  const linhas: CentroSocioLigada[] = centros.map((c) => {
+  const linhas: CentroSocioLigada[] = centros.filter((c) => c.tipo !== "socio").map((c) => {
     const acc = acumulado.get(c.centroId) ?? zerado();
     if (acc.enviado !== centavos(c.enviado) || acc.devolvido !== centavos(c.devolvido)) {
       divergentes.push(c.centro);
@@ -182,43 +162,16 @@ export function montarSociosLigadas(
     };
   });
 
-  // Maior retirada do ano primeiro; empate (ninguém retirou) cai no acumulado.
-  const socios = linhas
-    .filter((l) => l.tipo === "socio")
-    .sort((a, b) => b.ano.enviado - a.ano.enviado || b.acumulado.enviado - a.acumulado.enviado);
-  // Maior saldo devedor primeiro: é a pergunta do bloco.
-  const ligadas = linhas
-    .filter((l) => l.tipo !== "socio")
-    .sort((a, b) => b.acumulado.saldo - a.acumulado.saldo);
-
-  const idsSocios = new Set(socios.map((s) => s.centroId));
-  const serieSocios: MesDaSerie[] = mesesDoAnoAte(mesCorrente).map((mes) => {
-    const porCentroCentavos: Record<string, number> = {};
-    let total = 0;
-    for (const m of meses) {
-      if (m.mes !== mes || !idsSocios.has(m.centroId) || m.enviado === 0) continue;
-      porCentroCentavos[m.centroId] = (porCentroCentavos[m.centroId] ?? 0) + centavos(m.enviado);
-      total += centavos(m.enviado);
-    }
-    const porCentro = Object.fromEntries(
-      Object.entries(porCentroCentavos).map(([id, c]) => [id, c / 100]),
-    );
-    return { mes, porCentro, total: total / 100 };
-  });
+  // Maior saldo devedor primeiro: é a pergunta do relatório.
+  const ligadas = linhas.sort((a, b) => b.acumulado.saldo - a.acumulado.saldo);
 
   return {
     ano,
-    socios,
     ligadas,
-    totalSocios: {
-      ano: somarValores(socios.map((s) => s.ano)),
-      acumulado: somarValores(socios.map((s) => s.acumulado)),
-    },
     totalLigadas: {
       ano: somarValores(ligadas.map((s) => s.ano)),
       acumulado: somarValores(ligadas.map((s) => s.acumulado)),
     },
-    serieSocios,
     divergentes,
   };
 }

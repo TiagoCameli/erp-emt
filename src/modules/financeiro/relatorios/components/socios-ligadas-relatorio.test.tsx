@@ -33,22 +33,11 @@ const DADOS = montarSociosLigadas(
 const texto = (el: HTMLElement) => (el.textContent ?? "").replace(/\s/g, " ");
 
 describe("SociosLigadasRelatorioTela", () => {
-  it("abre o bloco de sócios com a frase do ano, o em aberto e o acumulado", () => {
+  it("não mostra sócio nenhum: nem o bloco, nem o nome, nem a distribuição", () => {
     render(<SociosLigadasRelatorioTela dados={DADOS} />);
-    const socios = screen.getByRole("region", { name: /Sócios/ });
-    expect(texto(socios)).toContain("Em 2026, os sócios retiraram R$ 1.000,00, dos quais R$ 250,00 ainda não foram pagos");
-    expect(texto(socios)).toContain("Desde o início, foram R$ 1.100,00");
-    const james = within(socios).getAllByRole("listitem")[0];
-    // Já pago = 1.000 - 250.
-    expect(texto(james)).toContain("R$ 750,00");
-  });
-
-  it("mostra o mês a mês do ano até o mês corrente", () => {
-    render(<SociosLigadasRelatorioTela dados={DADOS} />);
-    const socios = screen.getByRole("region", { name: /Sócios/ });
-    expect(within(socios).getByText("jan")).toBeTruthy();
-    expect(within(socios).getByText("mar")).toBeTruthy();
-    expect(within(socios).queryByText("abr")).toBeNull();
+    expect(screen.queryByRole("region", { name: /Sócios/ })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/sócio|James/i);
+    expect(document.body.textContent).not.toContain("R$ 1.100,00");
   });
 
   it("o bloco das ligadas fala do saldo do mútuo, sem somar com sócio", () => {

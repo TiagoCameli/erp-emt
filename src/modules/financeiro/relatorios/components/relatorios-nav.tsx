@@ -51,7 +51,7 @@ const APRESENTACAO: Record<RelatorioId, { rotulo: string; icone: LucideIcon }> =
     "resultado-obra": { rotulo: "Resultado por obra", icone: Scale3d },
     "custo-grupo": { rotulo: "Custo por grupo de insumo", icone: Layers },
     "extrato-fornecedor": { rotulo: "Extrato por fornecedor", icone: Users },
-    "socios-ligadas": { rotulo: "Sócios e ligadas", icone: HandCoins },
+    "socios-ligadas": { rotulo: "Empresas ligadas", icone: HandCoins },
     aquisicoes: { rotulo: "Equipamentos e consórcios", icone: Tractor },
     indireto: { rotulo: "Indireto", icone: Split },
   };

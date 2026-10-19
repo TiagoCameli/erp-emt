@@ -65,7 +65,7 @@ export const GRUPOS_RELATORIOS: readonly {
     titulo: "Custo",
     relatorios: ["custo-grupo", "indireto", "extrato-fornecedor"],
   },
-  { titulo: "Patrimônio e sócios", relatorios: ["aquisicoes", "socios-ligadas"] },
+  { titulo: "Patrimônio e ligadas", relatorios: ["aquisicoes", "socios-ligadas"] },
 ];
 
 /**
@@ -84,7 +84,7 @@ export const PERGUNTA_DO_RELATORIO: Record<RelatorioId, string> = {
   indireto: "Quanto custou o escritório e a manutenção em cada mês, e quanto disso cada obra carrega?",
   "extrato-fornecedor": "Quanto devo e quanto já paguei a cada fornecedor?",
   aquisicoes: "Quanto custou cada máquina e quanto falta pagar?",
-  "socios-ligadas": "Quanto foi para os sócios e para as empresas ligadas, e quanto voltou?",
+  "socios-ligadas": "Quanto foi para as empresas ligadas, e quanto voltou?",
 };
 
 export const RELATORIO_PADRAO: RelatorioId = "fluxo-caixa";
