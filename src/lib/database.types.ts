@@ -11525,6 +11525,14 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_centros_equipamento: { Args: { p_id: string }; Returns: Json };
+      fn_mapa_diarista_entrar: {
+        Args: { p_colaborador: string | null; p_novo?: Json | null };
+        Returns: string;
+      };
+      fn_mapa_diarista_sair: {
+        Args: { p_colaborador: string };
+        Returns: undefined;
+      };
       fn_mapa_ficha_equipamento: { Args: { p_id: string }; Returns: Json };
       fn_mapa_marcar_varios_centros: {
         Args: { p_id: string; p_valor: boolean };

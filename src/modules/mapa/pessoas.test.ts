@@ -5,6 +5,7 @@ import {
   destinoDaPessoa,
   lugarDaPessoa,
   pessoaNoFiltro,
+  pessoaSemPosicaoNaTela,
   posicaoDoOperador,
 } from "@/modules/mapa/pessoas";
 import type { PessoaMapa } from "@/modules/mapa/tipos";
@@ -175,5 +176,29 @@ describe("posicaoDoOperador", () => {
 
   it("fica à distância pedida, encostado na lateral", () => {
     expect(distanciaM(maquina, posicaoDoOperador(maquina, 37, 8.6))).toBeCloseTo(8.6, 1);
+  });
+});
+
+describe("pessoaSemPosicaoNaTela", () => {
+  const noMapa = new Set(["carreta-1"]);
+
+  it("operador de máquina que está no mapa não é 'sem posição', mesmo sem ponto próprio", () => {
+    expect(
+      pessoaSemPosicaoNaTela(pessoa({ equipamentoId: "carreta-1" }), false, noMapa),
+    ).toBe(false);
+  });
+
+  it("operador de máquina fora do mapa continua sem posição", () => {
+    expect(
+      pessoaSemPosicaoNaTela(pessoa({ equipamentoId: "carreta-2" }), false, noMapa),
+    ).toBe(true);
+  });
+
+  it("sem máquina e sem ponto é sem posição; com ponto ou ponto pendente, não", () => {
+    expect(pessoaSemPosicaoNaTela(pessoa({}), false, noMapa)).toBe(true);
+    expect(pessoaSemPosicaoNaTela(pessoa({}), true, noMapa)).toBe(false);
+    expect(
+      pessoaSemPosicaoNaTela(pessoa({ pos: [-67.8, -9.97] }), false, noMapa),
+    ).toBe(false);
   });
 });

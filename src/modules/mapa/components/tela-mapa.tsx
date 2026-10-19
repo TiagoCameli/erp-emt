@@ -44,6 +44,7 @@ import {
   acoplarImplemento,
   ajustarRaioLocal,
   assinalarOperador,
+  tirarDiaristaDoMapa,
   trocarCentroCustoPessoa,
   colocarLocal,
   definirTamanhoDeposito,
@@ -90,6 +91,7 @@ import {
   AlertasMapa,
   LegendaMapa,
 } from "@/modules/mapa/components/alertas-mapa";
+import { DrawerDiarista } from "@/modules/mapa/components/drawer-diarista";
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
 import {
   LocalizarNoMapa,
@@ -158,6 +160,7 @@ import { linhasDaFicha, objetosDoEstoque } from "@/modules/mapa/objetos";
 import {
   destinoDaPessoa,
   pessoaNoFiltro,
+  pessoaSemPosicaoNaTela,
   posicaoDoOperador,
 } from "@/modules/mapa/pessoas";
 import {
@@ -540,6 +543,8 @@ export function TelaMapa({
   );
   const [fimLocacao, setFimLocacao] = React.useState("");
   const [drawerLocacao, setDrawerLocacao] = React.useState(false);
+  const [drawerDiarista, setDrawerDiarista] = React.useState(false);
+  const [tirando, setTirando] = React.useState<PessoaMapa | null>(null);
   const [foco, setFoco] = React.useState<Foco | null>(null);
   const [motor, setMotor] = React.useState<{
     tipo: TipoMotor;
@@ -820,7 +825,6 @@ export function TelaMapa({
     const idsNaCena = new Set(equipamentos.map((e) => e.id));
     const pessoas = estado.pessoas.flatMap((p) => {
       const pos = posicoesPendentes.get(p.id) ?? p.pos;
-      if (!pos) return [];
       // "Mudou hoje": a pessoa que mudou, ou que opera máquina que mudou.
       if (
         soHoje &&
@@ -856,6 +860,9 @@ export function TelaMapa({
             ),
           },
         ];
+      // Sem ponto próprio, só aparece ao lado da máquina (acima): a carreta em frete ou na volta
+      // tem ponto só na tela, pela rota, e o motorista dela não tem nenhum no banco.
+      if (!pos) return [];
       return [{ ...p, pos }];
     });
     // Rota de cada frete aberto cuja carreta está na cena (filtrou a carreta, some a rota). Frete
@@ -959,9 +966,13 @@ export function TelaMapa({
     ficha?.tipo === "equipamento"
       ? (equipamentosVistos.find((e) => e.id === ficha.id) ?? null)
       : null;
+  // Com o ponto da cena: o operador está ao lado da máquina, mesmo sem ponto no banco (carreta em
+  // frete), e a ficha centraliza nele.
   const pessoaFicha =
     ficha?.tipo === "pessoa"
-      ? (estado.pessoas.find((p) => p.id === ficha.id) ?? null)
+      ? (cena.pessoas.find((p) => p.id === ficha.id) ??
+        estado.pessoas.find((p) => p.id === ficha.id) ??
+        null)
       : null;
   const posicionandoEquipamento = posicionando
     ? (equipamentosVistos.find((e) => e.id === posicionando) ?? null)
@@ -977,15 +988,29 @@ export function TelaMapa({
       ),
     [cena.pessoas, filtros.busca, filtros.obraId],
   );
+  // Máquinas com ponto na tela (a carreta em frete ganha o da rota): o operador delas aparece ao lado.
+  const maquinasNoMapa = React.useMemo(
+    () => new Set(equipamentosVistos.filter((e) => e.pos).map((e) => e.id)),
+    [equipamentosVistos],
+  );
   const pessoasSemPosicao = React.useMemo(
     () =>
       estado.pessoas.filter(
         (p) =>
-          p.pos === null &&
-          !posicoesPendentes.has(p.id) &&
+          pessoaSemPosicaoNaTela(
+            p,
+            posicoesPendentes.has(p.id),
+            maquinasNoMapa,
+          ) &&
           pessoaNoFiltro(p, { busca: filtros.busca, obraId: filtros.obraId }),
       ),
-    [estado.pessoas, posicoesPendentes, filtros.busca, filtros.obraId],
+    [
+      estado.pessoas,
+      posicoesPendentes,
+      maquinasNoMapa,
+      filtros.busca,
+      filtros.obraId,
+    ],
   );
   const tiposConhecidos = React.useMemo(
     () =>
@@ -1901,6 +1926,39 @@ export function TelaMapa({
     [abrirFicha],
   );
 
+  // Diarista que acabou de entrar: abre a ficha e já pede para posicionar.
+  const aoEntrarDiarista = React.useCallback(
+    (
+      resultado: Extract<ResultadoMapa, { ok: true }>,
+      colaboradorId: string | null,
+    ) => {
+      if (!resultado.estado) return;
+      setEstado(resultado.estado);
+      const alvo = colaboradorId
+        ? resultado.estado.pessoas.find((p) => p.id === colaboradorId)
+        : null;
+      if (alvo) iniciarPosicionarPessoa(alvo);
+    },
+    [iniciarPosicionarPessoa],
+  );
+
+  const confirmarTirarDiarista = React.useCallback(async () => {
+    if (!tirando) return true;
+    setSalvando(true);
+    try {
+      const r = await tirarDiaristaDoMapa({ colaboradorId: tirando.id });
+      const ok = aplicar(r, `${tirando.nome} saiu do mapa`);
+      if (ok) {
+        setTirando(null);
+        setFicha(null);
+        setSelecao(new Set());
+      }
+      return ok;
+    } finally {
+      setSalvando(false);
+    }
+  }, [tirando, aplicar]);
+
   const aoIniciarLocacao = React.useCallback(
     (
       resultado: Extract<ResultadoMapa, { ok: true }>,
@@ -2220,7 +2278,9 @@ export function TelaMapa({
           ? `/mapa/historico?equipamento=${equipamentoFicha.id}`
           : null
       }
-      relatorioCentrosHref={permissoes.historico ? "/mapa/dias-por-centro" : null}
+      relatorioCentrosHref={
+        permissoes.historico ? "/mapa/dias-por-centro" : null
+      }
       onMarcarEstado={(s) =>
         setPedidoEstado({ equipamento: equipamentoFicha, estado: s })
       }
@@ -2259,6 +2319,11 @@ export function TelaMapa({
       salvando={salvando}
       posicionando={posicionandoPessoa === pessoaFicha.id}
       relatorioDiasHref={permissoes.historico ? "/mapa/dias-de-pessoa" : null}
+      onTirarDoMapa={
+        pessoaFicha.vinculo === "diarista"
+          ? () => setTirando(pessoaFicha)
+          : undefined
+      }
       onFechar={() => setFicha(null)}
       onFocar={() => pessoaFicha.pos && focar(pessoaFicha.pos, 17)}
       onPosicionar={() =>
@@ -2885,6 +2950,8 @@ export function TelaMapa({
               if (p.pos) focar(p.pos, 16);
             }}
             onAdicionarAlugada={() => setDrawerLocacao(true)}
+            temCandidatosDiarista={estado.diaristasFora.length > 0}
+            onAdicionarDiarista={() => setDrawerDiarista(true)}
             objetosSemLugar={objetosSemLugar}
             onEscolherObjeto={clicarObjeto}
           >
@@ -3168,6 +3235,29 @@ export function TelaMapa({
         tiposConhecidos={tiposConhecidos}
         onSucesso={aoIniciarLocacao}
       />
+
+      <DrawerDiarista
+        aberto={drawerDiarista}
+        onAbertoChange={setDrawerDiarista}
+        candidatos={estado.diaristasFora}
+        funcoes={estado.funcoes}
+        podeCadastrar={!!permissoes.cadastrarColaborador}
+        onSucesso={aoEntrarDiarista}
+      />
+
+      {tirando ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setTirando(null);
+          }}
+          titulo={`Tirar ${tirando.nome} do mapa`}
+          descricao="O diarista sai da máquina e do local e some do mapa. A partir de amanhã não conta mais dia nem diária. O cadastro no RH não muda; para voltar, use Adicionar diarista."
+          textoConfirmar="Tirar do mapa"
+          variante="destrutivo"
+          onConfirmar={confirmarTirarDiarista}
+        />
+      ) : null}
     </div>
   );
 }
