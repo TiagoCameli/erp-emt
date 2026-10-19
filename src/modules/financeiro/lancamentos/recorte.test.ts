@@ -155,7 +155,7 @@ describe("rotuloRecorte", () => {
         grupo: "socios",
         sentido: "saida",
       }),
-    ).toBe("Caixa de 10/2026, enviado a sócios e ligadas");
+    ).toBe("Caixa de 10/2026, mútuo enviado às ligadas");
     expect(
       rotuloRecorte({ tipo: "fluxo", mes: "2026-10", grupo: "investimento" }),
     ).toBe("Caixa de 10/2026, investimento (CAPEX)");

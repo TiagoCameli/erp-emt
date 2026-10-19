@@ -235,22 +235,28 @@ describe("aplicarGrupoDoFluxo", () => {
   const INVEST = "55555555-5555-4555-8555-555555555555";
   const SOCIO = "66666666-6666-4666-8666-666666666666";
   const MUTUO = "77777777-7777-4777-8777-777777777777";
+  const DISTRIB = "44444444-4444-4444-8444-444444444444";
   const MOV = "88888888-8888-4888-8888-888888888888";
   const DIVIDA = "99999999-9999-4999-8999-999999999999";
   const contexto = {
     categorias: {
       investimento: [INVEST],
       socios: [SOCIO, MUTUO],
+      distribuicao: [DISTRIB],
       movimentacao: [MOV],
     },
     idsDoGrupo: [DIVIDA],
   };
 
-  it("sem grupo, traz os cinco e tira a origem aplicação", () => {
+  it("sem grupo, traz os cinco e tira a origem aplicação e a distribuição a sócio", () => {
     // Rendimento e ajuste de abertura mudam o saldo da subconta, não passam
-    // pela conta corrente: fora do fluxo, como `grupo_fluxo` nulo.
+    // pela conta corrente; a distribuição saiu do fluxo em 19/10/2026. Os dois
+    // ficam fora, como `grupo_fluxo` nulo.
     const consulta = aplicarGrupoDoFluxo(new ConsultaFalsa(), undefined, undefined, contexto);
-    expect(consulta?.chamadas).toEqual(["neq origem aplicacao"]);
+    expect(consulta?.chamadas).toEqual([
+      "neq origem aplicacao",
+      `or - categoria_id.is.null,categoria_id.not.in.(${DISTRIB})`,
+    ]);
   });
 
   it("operação é o complemento das outras naturezas, inclusive SEM categoria", () => {
@@ -261,7 +267,7 @@ describe("aplicarGrupoDoFluxo", () => {
     expect(consulta?.chamadas).toEqual([
       "neq origem aplicacao",
       "eq tipo a_pagar",
-      `or - categoria_id.is.null,categoria_id.not.in.(${INVEST},${SOCIO},${MUTUO},${MOV})`,
+      `or - categoria_id.is.null,categoria_id.not.in.(${INVEST},${SOCIO},${MUTUO},${DISTRIB},${MOV})`,
     ]);
   });
 
@@ -288,7 +294,7 @@ describe("aplicarGrupoDoFluxo", () => {
 
   it("grupo que com certeza está vazio devolve null, não a lista inteira", () => {
     const vazio = {
-      categorias: { investimento: [], socios: [], movimentacao: [] },
+      categorias: { investimento: [], socios: [], distribuicao: [], movimentacao: [] },
       idsDoGrupo: [],
     };
     expect(aplicarGrupoDoFluxo(new ConsultaFalsa(), "investimento", undefined, vazio)).toBeNull();

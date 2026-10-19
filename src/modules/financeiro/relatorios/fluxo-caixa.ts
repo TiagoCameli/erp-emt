@@ -21,7 +21,7 @@ import {
  *
  * `fn_rel_fluxo_caixa_por_grupo` devolve de onde veio ou para onde foi o
  * dinheiro, pela NATUREZA da categoria (ver `GrupoFluxo`): a operação, o CAPEX,
- * sócios e mútuo, a dívida e as aplicações, cada um com o sentido (entrada ou
+ * o mútuo, a dívida e as aplicações, cada um com o sentido (entrada ou
  * saída).
  *
  * Até 15/10 a tela separava por `tipo` em quatro séries e chamava tudo de
@@ -521,7 +521,7 @@ export function saldoDePartida(
 export const ROTULO_GRUPO_FLUXO: Record<GrupoFluxo, string> = {
   operacao: "Operação",
   investimento: "Investimento (CAPEX)",
-  socios: "Sócios e mútuo",
+  socios: "Mútuo com ligadas",
   divida: "Dívida",
   aplicacao: "Aplicações",
 };
@@ -647,8 +647,8 @@ export function fraseDoFluxo(
   if (socios.liquido !== 0) {
     destino.push(
       socios.liquido < 0
-        ? `sócios e mútuo levaram ${brl(-socios.liquido)} líquidos`
-        : `sócios e ligadas devolveram ${brl(socios.liquido)} líquidos`,
+        ? `o mútuo com as ligadas levou ${brl(-socios.liquido)} líquidos`
+        : `as ligadas devolveram ${brl(socios.liquido)} líquidos de mútuo`,
     );
   }
   const divida = fluxo.grupos.divida;

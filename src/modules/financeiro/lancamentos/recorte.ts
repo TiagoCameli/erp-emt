@@ -38,7 +38,8 @@ export type TipoLancamentoRecorte = "a_pagar" | "a_receber";
  *
  * - `operacao`: natureza operacional ou financeira, o dinheiro da obra;
  * - `investimento`: CAPEX (equipamento, consórcio, terreno);
- * - `socios`: distribuição a sócio e mútuo com empresa ligada;
+ * - `socios`: mútuo com empresa ligada (a distribuição a sócio saiu do fluxo
+ *   em 19/10/2026 e fica fora de todos, como a origem `aplicacao`);
  * - `divida`: empréstimo tomado e amortização (movimentação no centro raiz
  *   financeiro);
  * - `aplicacao`: resgate e aplicação manuais (outra movimentação).
@@ -139,9 +140,9 @@ const ROTULO_GRUPO: Record<GrupoFluxo, Record<SentidoFluxo | "ambos", string>> =
     ambos: "investimento (CAPEX)",
   },
   socios: {
-    entrada: "devolvido por sócios e ligadas",
-    saida: "enviado a sócios e ligadas",
-    ambos: "sócios e mútuo",
+    entrada: "mútuo devolvido pelas ligadas",
+    saida: "mútuo enviado às ligadas",
+    ambos: "mútuo com ligadas",
   },
   divida: {
     entrada: "empréstimos tomados",

@@ -27,8 +27,9 @@ export interface PonteDoResultado {
   /** Da receita bruta ao resultado do período: é o que o DRE soma. */
   resultado: DegrauPonte[];
   /**
-   * Do resultado ao que sobrou depois de investir, distribuir aos sócios e
-   * emprestar às ligadas. Vazio quando nenhum dos três teve lançamento.
+   * Do resultado ao que sobrou depois de investir e emprestar às ligadas.
+   * Vazio quando nenhum dos dois teve lançamento. A distribuição a sócio não
+   * entra (19/10/2026): sócio não aparece em relatório.
    */
   destino: DegrauPonte[];
   /** A mesma régua para as duas partes, para as barras se compararem. */
@@ -115,15 +116,13 @@ export function ponteDoResultado(dre: DrePorNatureza): PonteDoResultado {
   const fimDoResultado = crus.length;
 
   const investimento = saidaLiquida(dre.investimento);
-  const distribuicao = saidaLiquida(dre.distribuicao);
   const mutuo = saidaLiquida(dre.mutuo);
-  if (investimento !== 0 || distribuicao !== 0 || mutuo !== 0) {
+  if (investimento !== 0 || mutuo !== 0) {
     // O destino começa do resultado, sem repetir o patamar: o último degrau da
     // primeira parte já é ele.
     if (investimento !== 0) passo("investimentos", "Investimentos (máquinas e terreno)", -investimento);
-    if (distribuicao !== 0) passo("distribuicoes", "Distribuições a sócios", -distribuicao);
     if (mutuo !== 0) passo("mutuo", "Mútuo líquido com empresas ligadas", -mutuo);
-    total("sobra", "Sobra depois de investir e retirar", nivel);
+    total("sobra", "Sobra depois de investir e emprestar", nivel);
   }
 
   const pontas = crus.flatMap((d) => [d.de, d.ate]);
@@ -186,7 +185,6 @@ export function frasesDaPonte(
   if (sobra && fim) {
     const partes = [
       ["investimentos", "foi para máquinas e terreno"],
-      ["distribuicoes", "para os sócios"],
       ["mutuo", "para as empresas ligadas"],
     ]
       .map(([id, texto]) => {

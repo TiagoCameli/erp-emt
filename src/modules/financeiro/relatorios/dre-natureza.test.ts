@@ -40,7 +40,7 @@ describe("agruparDrePorNatureza", () => {
     ]);
   });
 
-  it("distribuição a sócio e mútuo têm bloco próprio e ficam fora do resultado", () => {
+  it("distribuição a sócio some do DRE; mútuo tem bloco próprio fora do resultado", () => {
     const dre = agruparDrePorNatureza([
       linha("a_receber", "operacional", "Contrato", "100000.00"),
       linha("a_pagar", "operacional", "Combustível", "30000.00"),
@@ -51,7 +51,13 @@ describe("agruparDrePorNatureza", () => {
 
     expect(dre.resultado).toBe(70000);
     expect(dre.operacional.totalDespesas).toBe(30000);
-    expect(dre.distribuicao.totalDespesas).toBe(1585000);
+    // Descartada, e não jogada em operacional (onde viraria custo).
+    expect(dre).not.toHaveProperty("distribuicao");
+    expect(
+      [dre.operacional, dre.financeiro, dre.movimentacao, dre.investimento, dre.mutuo]
+        .flatMap((b) => [...b.receitas, ...b.despesas])
+        .map((l) => l.categoria),
+    ).not.toContain("Distribuição a sócio");
     expect(dre.mutuo.totalDespesas).toBe(1270000);
     expect(dre.mutuo.totalReceitas).toBe(1050000);
     expect(cartoesDoDre(dre).resultadoDoPeriodo).toBe(70000);

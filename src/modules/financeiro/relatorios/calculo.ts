@@ -318,19 +318,13 @@ export interface DrePorNatureza {
    */
   investimento: BlocoDre;
   /**
-   * Retirada de sócio (James e Tiago): não há pró-labore formal, então todo
-   * envio a sócio e despesa pessoal da família é distribuição (D3, 09/10/2026).
-   * Abaixo do resultado.
-   */
-  distribuicao: BlocoDre;
-  /**
    * Mútuo com empresa ligada (Amazônia, Juruá FM): o que a EMT paga por elas é
    * empréstimo a receber, e o que volta abate (D4). Fora do resultado.
    */
   mutuo: BlocoDre;
   /**
-   * Operacional mais financeiro. Movimentação, investimento, distribuição e
-   * mútuo NÃO entram, de propósito.
+   * Operacional mais financeiro. Movimentação, investimento e mútuo NÃO
+   * entram, de propósito.
    */
   resultado: number;
 }
@@ -376,7 +370,11 @@ function montarBloco(
   };
 }
 
-/** As seis naturezas, na ordem em que aparecem no relatório. */
+/**
+ * As seis naturezas do cadastro. A distribuição a sócio é reconhecida aqui só
+ * para ser DESCARTADA (19/10/2026, pedido do Tiago: sócio não aparece em
+ * relatório nenhum). Fora da lista, ela cairia em operacional e viraria custo.
+ */
 export const NATUREZAS = [
   "operacional",
   "financeira",
@@ -419,7 +417,7 @@ export function agruparDrePorNatureza(
   linhas: readonly LinhaDreAgregada[],
 ): DrePorNatureza {
   const gavetas: Record<
-    Natureza,
+    Exclude<Natureza, "distribuicao">,
     {
       receitas: LancamentoCategoria[];
       despesas: LancamentoCategoria[];
@@ -431,12 +429,13 @@ export function agruparDrePorNatureza(
     financeira: { receitas: [], despesas: [], retencao: new Map() },
     movimentacao: { receitas: [], despesas: [], retencao: new Map() },
     investimento: { receitas: [], despesas: [], retencao: new Map() },
-    distribuicao: { receitas: [], despesas: [], retencao: new Map() },
     mutuo: { receitas: [], despesas: [], retencao: new Map() },
   };
 
   for (const linha of linhas) {
-    const gaveta = gavetas[naturezaDe(linha.natureza)];
+    const natureza = naturezaDe(linha.natureza);
+    if (natureza === "distribuicao") continue;
+    const gaveta = gavetas[natureza];
     const item: LancamentoCategoria = {
       categoriaId: linha.categoria_id,
       categoria: linha.categoria,
@@ -456,7 +455,7 @@ export function agruparDrePorNatureza(
     }
   }
 
-  const bloco = (natureza: Natureza) =>
+  const bloco = (natureza: Exclude<Natureza, "distribuicao">) =>
     montarBloco(
       gavetas[natureza].receitas,
       gavetas[natureza].despesas,
@@ -466,7 +465,6 @@ export function agruparDrePorNatureza(
   const financeiro = bloco("financeira");
   const movimentacao = bloco("movimentacao");
   const investimento = bloco("investimento");
-  const distribuicao = bloco("distribuicao");
   const mutuo = bloco("mutuo");
 
   return {
@@ -474,7 +472,6 @@ export function agruparDrePorNatureza(
     financeiro,
     movimentacao,
     investimento,
-    distribuicao,
     mutuo,
     resultado: operacional.resultado + financeiro.resultado,
   };

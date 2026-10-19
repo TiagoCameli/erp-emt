@@ -287,45 +287,6 @@ function montarLinhas(dre: DreGerencial): LinhaDre[] {
     );
   }
 
-  if (blocoTemLinha(dre.distribuicao)) {
-    linhas.push(
-      {
-        tipo: "aviso",
-        id: "aviso-distribuicao",
-        conteudo: (
-          <>
-            Abaixo, distribuições a sócios: o que foi para James e Tiago e as
-            despesas pessoais da família pagas pela EMT. É retirada,{" "}
-            <strong className="font-medium text-foreground">
-              não é custo
-            </strong>{" "}
-            e fica fora do resultado do período acima.
-          </>
-        ),
-      },
-      ...linhasDaSecao({
-        titulo: "Distribuições a sócios",
-        linhas: dre.distribuicao.despesas,
-        total: dre.distribuicao.totalDespesas,
-        rotuloTotal: "Total distribuído",
-        tipo: "a_pagar",
-        natureza: "distribuicao",
-      }),
-    );
-    if (dre.distribuicao.receitas.length > 0) {
-      linhas.push(
-        ...linhasDaSecao({
-          titulo: "Devolvido por sócios",
-          linhas: dre.distribuicao.receitas,
-          total: dre.distribuicao.totalReceitas,
-          rotuloTotal: "Total devolvido",
-          tipo: "a_receber",
-          natureza: "distribuicao",
-        }),
-      );
-    }
-  }
-
   if (blocoTemLinha(dre.mutuo)) {
     linhas.push(
       {

@@ -289,7 +289,10 @@ export interface ContextoDoGrupo {
    */
   categorias: {
     investimento: readonly string[];
+    /** Só mútuo desde 19/10/2026 (a distribuição saiu do fluxo). */
     socios: readonly string[];
+    /** Distribuição a sócio: fora de todos os grupos, como a origem aplicação. */
+    distribuicao: readonly string[];
     movimentacao: readonly string[];
   };
   /**
@@ -312,8 +315,9 @@ export function grupoPorIds(grupo: GrupoFluxo | undefined): boolean {
  * `vw_parcelas_caixa`:
  *
  * - origem `aplicacao` (rendimento, ajuste de abertura): fora de todos;
+ * - natureza distribuição (sócio): fora de todos (19/10/2026);
  * - `investimento`: categoria de natureza investimento;
- * - `socios`: categoria de natureza distribuição ou mútuo;
+ * - `socios`: categoria de natureza mútuo;
  * - `operacao`: o resto que não é movimentação, inclusive sem categoria;
  * - `divida` e `aplicacao`: movimentação, separada pelo rateio, por lista.
  *
@@ -332,14 +336,16 @@ export function aplicarGrupoDoFluxo<T extends ConsultaComEmbed<T>>(
 ): T | null {
   let consulta = consultaInicial.neq("origem", "aplicacao");
   if (sentido) consulta = consulta.eq("tipo", tipoDoSentido(sentido));
-  const { investimento, socios, movimentacao } = contexto.categorias;
-
+  const { investimento, socios, distribuicao, movimentacao } = contexto.categorias;
   switch (grupo) {
     case undefined:
-      return consulta;
+      if (distribuicao.length === 0) return consulta;
+      return consulta.or(
+        `categoria_id.is.null,categoria_id.not.in.(${distribuicao.join(",")})`,
+      );
 
     case "operacao": {
-      const fora = [...investimento, ...socios, ...movimentacao];
+      const fora = [...investimento, ...socios, ...distribuicao, ...movimentacao];
       if (fora.length === 0) return consulta;
       return consulta.or(
         `categoria_id.is.null,categoria_id.not.in.(${fora.join(",")})`,
