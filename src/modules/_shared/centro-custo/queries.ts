@@ -23,6 +23,8 @@ export interface CentroCustoOpcao {
   paiId: string | null;
   /** `obra`, `escritorio`, `manutencao`. Nulo fora da raiz. */
   tipo: string | null;
+  /** Raiz que aceita contrato de dívida na própria obra (hoje só 001 - Carretas EMT). */
+  aceitaContratoDivida?: boolean;
 }
 
 /**
@@ -41,7 +43,7 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
 
   const { data, error } = await supabase
     .from("centros_custo")
-    .select("id, nome, codigo, pai_id, tipo")
+    .select("id, nome, codigo, pai_id, tipo, aceita_contrato_divida")
     .eq("ativo", true)
     .order("codigo", { ascending: true, nullsFirst: false })
     .order("nome");
@@ -56,5 +58,6 @@ export async function listarCentrosCusto(): Promise<CentroCustoOpcao[]> {
     codigo: centro.codigo,
     paiId: centro.pai_id,
     tipo: centro.tipo,
+    aceitaContratoDivida: centro.aceita_contrato_divida,
   }));
 }

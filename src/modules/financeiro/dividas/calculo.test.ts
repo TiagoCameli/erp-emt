@@ -175,6 +175,20 @@ describe("opções de centro", () => {
     ]);
   });
 
+  it("obra que aceita contrato de dívida: a própria obra e as etapas dela entram; outra obra não", () => {
+    const comCarretas = [
+      ...centros,
+      { id: "c", nome: "001 - Carretas EMT", codigo: null, paiId: null, tipo: "obra", aceitaContratoDivida: true },
+      { id: "c1", nome: "Cavalo 03", codigo: null, paiId: "c", tipo: null },
+    ];
+    expect(etapasDeDivida(comCarretas)).toEqual([
+      { id: "c", rotulo: "001 - Carretas EMT" },
+      { id: "c1", rotulo: "001 - Carretas EMT › Cavalo 03" },
+      { id: "f1", rotulo: "Empréstimos › BB 123" },
+      { id: "i1", rotulo: "Imobilizado › Escavadeira" },
+    ]);
+  });
+
   it("bem da carta: a raiz de imobilizado e as etapas dela", () => {
     expect(centrosImobilizado(centros)).toEqual([
       { id: "i", rotulo: "Imobilizado" },
