@@ -72,6 +72,29 @@ describe("temPermissao", () => {
   });
 });
 
+describe("módulo em pausa (Mapa, 19/10/2026)", () => {
+  const usuario = criarUsuario([
+    { recurso: "mapa.mapa", acao: "ver" },
+    { recurso: "mapa.mapa", acao: "editar" },
+    { recurso: "mapa.historico", acao: "ver" },
+    { recurso: "gestao.painel", acao: "ver" },
+  ]);
+
+  it("ninguém tem permissão no Mapa, nem quem a tem gravada", () => {
+    expect(temPermissao(usuario, "mapa.mapa", "ver")).toBe(false);
+    expect(temPermissao(usuario, "mapa.mapa", "editar")).toBe(false);
+    expect(temPermissao(usuario, "mapa.historico", "ver")).toBe(false);
+  });
+
+  it("o Mapa some do menu e da rota inicial; os outros módulos ficam", () => {
+    expect(modulosVisiveis(usuario).map((m) => m.id)).toEqual(["gestao"]);
+    expect(
+      rotaInicial(criarUsuario([{ recurso: "mapa.mapa", acao: "ver" }])),
+    ).toBeNull();
+    expect(temPermissao(usuario, "gestao.painel", "ver")).toBe(true);
+  });
+});
+
 describe("modulosVisiveis", () => {
   it("usuário null não vê nenhum módulo", () => {
     expect(modulosVisiveis(null)).toHaveLength(0);

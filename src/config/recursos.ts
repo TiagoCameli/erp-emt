@@ -773,6 +773,27 @@ export function recursosDoModulo(modulo: ModuloId): readonly RecursoDef[] {
   return RECURSOS.filter((r) => r.modulo === modulo);
 }
 
+/**
+ * Módulos em pausa: ninguém acessa, nem quem tem a permissão (Tiago, 19/10/2026: "quero inativar o
+ * modulo de mapa por enquanto. coloque ele em pausa, niguem deve poder acessalo"). As permissões
+ * gravadas ficam como estão, para voltar sem refazer a matriz. Pausa NO BANCO também: a chave
+ * `<modulo>.em_pausa` em `configuracoes`, lida por `tem_permissao`. Para retomar, tirar daqui E
+ * gravar `false` na chave.
+ */
+export const MODULOS_EM_PAUSA: ReadonlySet<ModuloId> = new Set<ModuloId>([
+  "mapa",
+]);
+
+export function moduloEmPausa(modulo: ModuloId): boolean {
+  return MODULOS_EM_PAUSA.has(modulo);
+}
+
+/** O recurso é de um módulo em pausa? Id desconhecido não está em pausa (não lança). */
+export function recursoEmPausa(id: string): boolean {
+  const recurso = RECURSOS.find((r) => r.id === id);
+  return recurso ? moduloEmPausa(recurso.modulo as ModuloId) : false;
+}
+
 export function recursoPorId(id: RecursoId): RecursoDef {
   const recurso = RECURSOS.find((r) => r.id === id);
   if (!recurso) throw new Error(`Recurso desconhecido: ${id}`);

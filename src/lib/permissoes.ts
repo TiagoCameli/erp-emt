@@ -2,7 +2,11 @@ import "server-only";
 
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import { MODULOS, recursosDoModulo } from "@/config/recursos";
+import {
+  MODULOS,
+  recursoEmPausa,
+  recursosDoModulo,
+} from "@/config/recursos";
 import type {
   Acao,
   ModuloId,
@@ -91,6 +95,8 @@ export function temPermissao(
   acao: Acao,
 ): boolean {
   if (!usuario) return false;
+  // Módulo em pausa: some do menu, a página dá 404 e a action recusa, para todos.
+  if (recursoEmPausa(recurso)) return false;
   return usuario.permissoes.some(
     (p) => p.recurso === recurso && p.acao === acao,
   );
