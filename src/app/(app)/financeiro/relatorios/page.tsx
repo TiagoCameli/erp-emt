@@ -921,7 +921,7 @@ async function ConteudoPosicaoBancaria({
 }
 
 /**
- * Sócios e ligadas: o ano corrente e o acumulado desde o primeiro lançamento.
+ * Empresas ligadas: o ano corrente e o acumulado desde o primeiro lançamento.
  * Sem filtro de período de propósito: o acumulado do mútuo é o que a empresa
  * ligada deve hoje, e é a pergunta que a tela responde.
  */
@@ -934,12 +934,12 @@ function somarMeses(mes: string, n: number): string {
 
 async function ConteudoSociosLigadas() {
   const dados = await relatorioSociosLigadas();
-  if (dados.socios.length === 0 && dados.ligadas.length === 0) {
+  if (dados.ligadas.length === 0) {
     return (
       <EmptyState
         icone={BarChart3}
-        titulo="Nenhum centro de sócio ou de empresa ligada"
-        descricao="Os centros de tipo Sócio e Empresa ligada aparecem aqui, em Cadastros > Centros de custo."
+        titulo="Nenhum centro de empresa ligada"
+        descricao="Os centros de tipo Empresa ligada aparecem aqui, em Cadastros > Centros de custo."
       />
     );
   }
@@ -2156,8 +2156,8 @@ export default async function RelatoriosPage({
       {relatorio === "socios-ligadas" ? (
         <SecaoRelatorio
           relatorio="socios-ligadas"
-          titulo="Sócios e ligadas"
-          descricao="Regime de competência (o mês de referência do lançamento), por centro raiz de tipo Sócio e Empresa ligada, contando o rateio cuja categoria é de natureza distribuição (sócio) ou mútuo (ligada). Distribuição e mútuo ficam fora do resultado e do custo das obras; o total retirado fecha com o bloco de distribuição do DRE. Em aberto é a parte do rateio cujas parcelas ainda não foram pagas. O saldo da ligada é o enviado (a pagar) menos o devolvido (a receber), desde o primeiro lançamento."
+          titulo="Empresas ligadas"
+          descricao="Regime de competência (o mês de referência do lançamento), por centro raiz de tipo Empresa ligada, contando o rateio cuja categoria é de natureza mútuo. O mútuo fica fora do resultado e do custo das obras. Em aberto é a parte do rateio cujas parcelas ainda não foram pagas. O saldo da ligada é o enviado (a pagar) menos o devolvido (a receber), desde o primeiro lançamento."
           exportar="socios-ligadas"
         >
           <ConteudoSociosLigadas />

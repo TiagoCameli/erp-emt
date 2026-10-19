@@ -701,23 +701,15 @@ export function abaExtratoFornecedor(
 }
 
 /* ------------------------------------------------------------------ */
-/* Sócios e ligadas                                                   */
+/* Empresas ligadas                                                   */
 /* ------------------------------------------------------------------ */
 
 /**
- * Duas abas, uma por bloco da tela: distribuição a sócio e mútuo com ligada
- * não se somam, então não dividem a mesma linha de total.
+ * Uma aba: o mútuo com as empresas ligadas. As abas de sócio saíram junto com o
+ * bloco da tela (19/10/2026).
  */
 export function abasSociosLigadas(dados: SociosLigadasRelatorio): EscritaDeAba[] {
   const { ano } = dados;
-  const colunasSocios: ColunaRelatorio<CentroSocioLigada>[] = [
-    { cabecalho: "Sócio", largura: 34, tipo: "texto", celula: (l) => l.centro },
-    { cabecalho: `Retirado em ${ano}`, largura: 18, tipo: "dinheiro", celula: (l) => l.ano.enviado, somar: true },
-    { cabecalho: `Já pago (${ano})`, largura: 18, tipo: "dinheiro", celula: (l) => l.ano.enviadoPago, somar: true },
-    { cabecalho: `Em aberto (${ano})`, largura: 18, tipo: "dinheiro", celula: (l) => l.ano.enviadoAberto, somar: true },
-    { cabecalho: "Retirado desde o início", largura: 20, tipo: "dinheiro", celula: (l) => l.acumulado.enviado, somar: true },
-    { cabecalho: "Em aberto (desde o início)", largura: 20, tipo: "dinheiro", celula: (l) => l.acumulado.enviadoAberto, somar: true },
-  ];
   const colunasLigadas: ColunaRelatorio<CentroSocioLigada>[] = [
     { cabecalho: "Empresa", largura: 34, tipo: "texto", celula: (l) => l.centro },
     { cabecalho: `Enviado em ${ano}`, largura: 18, tipo: "dinheiro", celula: (l) => l.ano.enviado, somar: true },
@@ -729,35 +721,7 @@ export function abasSociosLigadas(dados: SociosLigadasRelatorio): EscritaDeAba[]
     { cabecalho: "Saldo a receber", largura: 18, tipo: "dinheiro", celula: (l) => l.acumulado.saldo, somar: true },
     { cabecalho: "Enviado ainda a pagar", largura: 18, tipo: "dinheiro", celula: (l) => l.acumulado.enviadoAberto, somar: true },
   ];
-  const colunasMeses: ColunaRelatorio<SociosLigadasRelatorio["serieSocios"][number]>[] = [
-    { cabecalho: "Mês", largura: 12, tipo: "texto", celula: (m) => formatarMesAno(`${m.mes}-01`) },
-    ...dados.socios.map(
-      (s): ColunaRelatorio<SociosLigadasRelatorio["serieSocios"][number]> => ({
-        cabecalho: s.centro,
-        largura: 22,
-        tipo: "dinheiro",
-        celula: (m) => m.porCentro[s.centroId] ?? 0,
-        somar: true,
-      }),
-    ),
-    { cabecalho: "Total", largura: 18, tipo: "dinheiro", celula: (m) => m.total, somar: true },
-  ];
-
   return [
-    aba({
-      nome: "Sócios",
-      titulo: `Sócios · distribuição de lucro · competência · ${ano} e desde o início`,
-      colunas: colunasSocios,
-      linhas: dados.socios,
-      rotuloTotal: `Total (${dados.socios.length} sócio(s))`,
-    }),
-    aba({
-      nome: `Sócios mês a mês ${ano}`,
-      titulo: `Sócios · retirado por mês · competência · ${ano}`,
-      colunas: colunasMeses,
-      linhas: dados.serieSocios,
-      rotuloTotal: `Total ${ano}`,
-    }),
     aba({
       nome: "Empresas ligadas",
       titulo: `Empresas ligadas · mútuo · competência · ${ano} e desde o início`,

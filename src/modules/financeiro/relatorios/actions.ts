@@ -393,8 +393,8 @@ async function abaDoRelatorio(
     }
 
     case "socios-ligadas": {
-      // Três abas (sócios, sócios mês a mês, ligadas) numa escrita só: o
-      // contrato desta função é uma escrita por relatório.
+      // Uma escrita só, mesmo que a lista de abas volte a crescer: o contrato
+      // desta função é uma escrita por relatório.
       const abas = abasSociosLigadas(await relatorioSociosLigadas());
       return (workbook) => {
         for (const escrever of abas) escrever(workbook);
