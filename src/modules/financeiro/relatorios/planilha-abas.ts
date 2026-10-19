@@ -78,8 +78,8 @@ const COLUNAS_DOS_GRUPOS: ReadonlyArray<
   ["operacao", "saida", "Operação: saiu"],
   ["investimento", "saida", "CAPEX: pago"],
   ["investimento", "entrada", "CAPEX: vendido"],
-  ["socios", "saida", "Sócios e mútuo: enviado"],
-  ["socios", "entrada", "Sócios e mútuo: devolvido"],
+  ["socios", "saida", "Mútuo: enviado"],
+  ["socios", "entrada", "Mútuo: devolvido"],
   ["divida", "entrada", "Dívida: tomada"],
   ["divida", "saida", "Dívida: amortizada"],
   ["aplicacao", "entrada", "Aplicações: resgatado"],
@@ -209,11 +209,6 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
       natureza: "movimentacao",
       bloco: dados.movimentacao,
     },
-    {
-      rotulo: "Distribuição a sócios",
-      natureza: "distribuicao",
-      bloco: dados.distribuicao,
-    },
     { rotulo: "Mútuo", natureza: "mutuo", bloco: dados.mutuo },
   ];
 
@@ -250,7 +245,7 @@ export function abaDre(dados: DreGerencial, recorte: string): EscritaDeAba {
     // rótulo diz isso, porque a alternativa é alguém subtrair as duas colunas e
     // achar um resultado que a tela nunca mostrou.
     rotuloTotal:
-      "Total dos blocos (investimentos, movimentação, distribuição e mútuo NÃO são resultado)",
+      "Total dos blocos (investimentos, movimentação e mútuo NÃO são resultado)",
   });
 }
 

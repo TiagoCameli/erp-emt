@@ -523,7 +523,7 @@ async function ConteudoFluxoCaixa({
         />
         <KPICard
           idCard="socios"
-          titulo="Sócios e mútuo"
+          titulo="Mútuo com ligadas"
           valor={<ValorAnimado valor={grupos.socios.liquido} />}
           detalhe={
             <DetalheDoGrupo
@@ -2055,7 +2055,7 @@ export default async function RelatoriosPage({
           relatorio="fluxo-caixa"
           exportar={relatorio}
           titulo="Fluxo de caixa"
-          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. O dinheiro se separa pela NATUREZA da categoria em cinco grupos: operação (operacional e financeira), investimento (CAPEX), sócios e mútuo, dívida (empréstimo tomado e amortização) e aplicações (resgate e aplicação manuais). Rendimento e ajuste de abertura de aplicação ficam fora: mudam o saldo da subconta, não passam pela conta corrente. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O disponível projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto; a segunda linha soma o aplicado de hoje nas subcontas de investimento. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
+          descricao="Regime de CAIXA: entradas e saídas pelo mês de pagamento (realizado) e de vencimento (projetado), sem o mês de referência. O dinheiro se separa pela NATUREZA da categoria em cinco grupos: operação (operacional e financeira), investimento (CAPEX), mútuo com as empresas ligadas, dívida (empréstimo tomado e amortização) e aplicações (resgate e aplicação manuais). Distribuição a sócios fica fora do fluxo. Rendimento e ajuste de abertura de aplicação ficam fora: mudam o saldo da subconta, não passam pela conta corrente. A janela padrão é o ano para trás e o ano para frente, porque as prestações dos financiamentos vão até 2031. O disponível projetado parte do saldo de hoje das contas correntes e caixa e soma só o previsto; a segunda linha soma o aplicado de hoje nas subcontas de investimento. Com centro escolhido, cada barra passa a somar a FATIA do rateio daquele centro: um lançamento dividido entre duas obras entra em cada uma pela parte dela."
         >
           <FiltrosFluxoCaixaBarra
             filtros={filtrosFluxo}

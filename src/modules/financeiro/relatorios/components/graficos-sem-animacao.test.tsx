@@ -349,8 +349,8 @@ describe("fluxo de caixa: cor por grupo, tom claro no previsto", () => {
     expect(texto).toContain("Operação");
     expect(texto).toContain("Investimento (CAPEX)");
     expect(texto).toContain("Dívida");
-    // Sócios e aplicações não mexeram na janela: não prometem cor nenhuma.
-    expect(texto).not.toContain("Sócios e mútuo");
+    // Mútuo e aplicações não mexeram na janela: não prometem cor nenhuma.
+    expect(texto).not.toContain("Mútuo com ligadas");
     expect(texto).not.toContain("Aplicações");
     expect(texto).toContain("Disponível mais aplicado");
   });

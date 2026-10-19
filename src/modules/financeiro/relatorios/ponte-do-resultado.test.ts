@@ -80,15 +80,14 @@ describe("ponteDoResultado", () => {
     });
   });
 
-  it("mútuo entra pelo LÍQUIDO, e distribuição e investimento ficam no destino", () => {
+  it("mútuo entra pelo LÍQUIDO, investimento fica no destino e a distribuição a sócio some", () => {
     expect(ponte.resultado.some((d) => d.id === "mutuo")).toBe(false);
     expect(porId("mutuo")?.valor).toBe(-1676206.12);
-    expect(porId("distribuicoes")?.valor).toBe(-4246251.83);
+    expect(porId("distribuicoes")).toBeUndefined();
     expect(porId("investimentos")?.valor).toBe(-10208154.3);
     // Movimentação (resgate de aplicação) não é destino do resultado.
     expect(ponte.destino.map((d) => d.id)).toEqual([
       "investimentos",
-      "distribuicoes",
       "mutuo",
       "sobra",
     ]);
@@ -122,6 +121,7 @@ describe("frasesDaPonte", () => {
     expect(frases.resultado).toContain("ficou de resultado");
     expect(frases.destino).toContain("R$ 10208154.30 foi para máquinas e terreno");
     expect(frases.destino).toContain("R$ 1676206.12 para as empresas ligadas");
+    expect(frases.destino).not.toMatch(/sócio/);
   });
 
   it("sem receita não inventa percentual", () => {

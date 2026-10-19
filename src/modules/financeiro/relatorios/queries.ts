@@ -128,7 +128,7 @@ export interface FluxoCaixa extends FluxoCaixaMontado {
 
 /**
  * Fluxo de caixa mensal em cinco grupos pela natureza (ver `fluxo-caixa.ts`):
- * operação, CAPEX, sócios e mútuo, dívida e aplicações, cada um com entrada e
+ * operação, CAPEX, mútuo, dívida e aplicações, cada um com entrada e
  * saída, separando realizado de projetado. O realizado (parcelas pagas) entra no mês em que o dinheiro de
  * fato se moveu (data_pagamento), refletindo a posição de caixa; o projetado
  * (pendentes/aprovadas) entra no mês de vencimento, pois é quando deve ocorrer.
@@ -253,13 +253,11 @@ export interface DreGerencial {
    * fora da soma dele, como a movimentação.
    */
   investimento: BlocoDre;
-  /** Retirada de sócio (D3, 09/10/2026): abaixo do resultado. */
-  distribuicao: BlocoDre;
   /** Mútuo com empresa ligada (D4, 09/10/2026): fora do resultado. */
   mutuo: BlocoDre;
   /**
-   * Operacional mais financeiro. Movimentação, investimento, distribuição e
-   * mútuo não entram, de propósito.
+   * Operacional mais financeiro. Movimentação, investimento e mútuo não
+   * entram, de propósito.
    */
   resultado: number;
 }

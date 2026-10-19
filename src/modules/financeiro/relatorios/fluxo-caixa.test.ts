@@ -325,7 +325,7 @@ describe("ponteDoCaixa e fraseDoFluxo", () => {
     const frase = fraseDoFluxo(fluxo, formatarBRL);
     expect(frase).toContain(`a operação gerou ${formatarBRL(1_159_379.98)}`);
     expect(frase).toContain(`o CAPEX levou ${formatarBRL(986_447.61)}`);
-    expect(frase).toContain(`sócios e mútuo levaram ${formatarBRL(200_000)} líquidos`);
+    expect(frase).toContain(`o mútuo com as ligadas levou ${formatarBRL(200_000)} líquidos`);
     expect(frase).toContain(`o resgate de aplicações trouxe ${formatarBRL(1_000_000)}`);
     expect(frase).toMatch(/Somando tudo, (sobraram|faltaram)/);
   });

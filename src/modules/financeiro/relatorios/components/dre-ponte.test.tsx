@@ -19,6 +19,7 @@ const dre = agruparDrePorNatureza([
   { tipo: "a_receber", natureza: "operacional", categoria: "Medições de obra", categoria_id: "m", total: "1000.00", retencao: "100.00" },
   { tipo: "a_pagar", natureza: "operacional", categoria: "Materiais", categoria_id: "d", total: "600.00" },
   { tipo: "a_pagar", natureza: "financeira", categoria: "Tarifa Bancária", categoria_id: "t", total: "50.00" },
+  { tipo: "a_pagar", natureza: "mutuo", categoria: "Mútuo concedido", categoria_id: "u", total: "150.00" },
   { tipo: "a_pagar", natureza: "distribuicao", categoria: "Distribuição a sócio", categoria_id: "s", total: "200.00" },
 ]);
 
@@ -36,15 +37,18 @@ describe("DrePonte", () => {
       "Resultado operacional",
       "Resultado financeiro",
       "Resultado do período",
-      "Distribuições a sócios",
-      "Sobra depois de investir e retirar",
+      "Mútuo líquido com empresas ligadas",
+      "Sobra depois de investir e emprestar",
     ]);
     expect(screen.getByText("Para onde foi o resultado")).toBeTruthy();
+    // A distribuição a sócio não vira degrau nem entra na frase.
+    expect(document.body.textContent).not.toMatch(/sócio|distribui/i);
   });
 
-  it("sem investimento, sócio nem mútuo, não abre a parte do destino", () => {
+  it("sem investimento nem mútuo, não abre a parte do destino, mesmo com distribuição", () => {
     const soObra = agruparDrePorNatureza([
       { tipo: "a_receber", natureza: "operacional", categoria: "Medições de obra", categoria_id: "m", total: "1000.00" },
+      { tipo: "a_pagar", natureza: "distribuicao", categoria: "Distribuição a sócio", categoria_id: "s", total: "200.00" },
     ]);
     render(<DrePonte ponte={ponteDoResultado(soObra)} />);
     expect(screen.queryByText("Para onde foi o resultado")).toBeNull();

@@ -136,7 +136,7 @@ function Legenda() {
 
 /**
  * A ponte do resultado: da receita bruta ao resultado do período, degrau a
- * degrau, e depois para onde foi o resultado (investimento, sócios, mútuo).
+ * degrau, e depois para onde foi o resultado (investimento e mútuo).
  *
  * É a mesma conta da tabela abaixo contada em ordem de leitura. A tabela segue
  * sendo a fonte de todas as linhas e do drill; a ponte só mostra as maiores
@@ -170,8 +170,8 @@ export function DrePonte({ ponte }: { ponte: PonteDoResultado }) {
             </h3>
             {frases.destino ? (
               <p className="text-detalhe text-muted-foreground">
-                {frases.destino} Nada disso é custo: máquina vira patrimônio,
-                distribuição é retirada e mútuo é dinheiro a receber.
+                {frases.destino} Nada disso é custo: máquina vira patrimônio
+                e mútuo é dinheiro a receber.
               </p>
             ) : null}
             <ol className="flex flex-col gap-2">

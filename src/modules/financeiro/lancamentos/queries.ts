@@ -827,7 +827,7 @@ async function saldoInicialDaConta(
  * A regra mora na CATEGORIA do lançamento, então o filtro do embed (que é de
  * parcela) não a alcança: ela vira um filtro do pai, por lista de ids de
  * categoria (dezenas), ao contrário da de lançamentos. A operação é o
- * complemento das três listas, inclusive a categoria nula.
+ * complemento das quatro listas, inclusive a categoria nula.
  */
 async function categoriasDosGruposDoFluxo(
   supabase: ClienteSupabase,
@@ -845,6 +845,7 @@ async function categoriasDosGruposDoFluxo(
   const categorias = {
     investimento: [] as string[],
     socios: [] as string[],
+    distribuicao: [] as string[],
     movimentacao: [] as string[],
   };
   for (const categoria of data ?? []) {
@@ -852,6 +853,8 @@ async function categoriasDosGruposDoFluxo(
       categorias.investimento.push(categoria.id);
     } else if (categoria.natureza === "movimentacao") {
       categorias.movimentacao.push(categoria.id);
+    } else if (categoria.natureza === "distribuicao") {
+      categorias.distribuicao.push(categoria.id);
     } else {
       categorias.socios.push(categoria.id);
     }
