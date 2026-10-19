@@ -261,3 +261,139 @@ export function itemDeVolta(
     volta.centroCustoId = antes.centroCustoId;
   return volta;
 }
+
+// ---- Quadro de alocação (v1.30) ----------------------------------------------------------------
+
+/** Sem máquina, sem local e sem obra do Mapa: a pessoa ainda não foi alocada. */
+export function semAlocacao(
+  p: Pick<PessoaMapa, "equipamentoId" | "localidadeId" | "obraMapaId" | "areaId">,
+): boolean {
+  return !p.equipamentoId && !p.localidadeId && !p.obraMapaId && !p.areaId;
+}
+
+/** Valor da opção "nenhum" nas colunas de lista do quadro (a grade não grava texto que não é opção). */
+export const NENHUM = "__nenhum__";
+
+/**
+ * Uma célula editada no quadro de pessoas vira o campo do lote. "Máquina" e "Centro" com NENHUM
+ * limpam (null); "Local/obra" é "local:<id>", "obra:<id>" ou NENHUM (sem local nem obra).
+ */
+export function edicaoDaCelula(
+  colaboradorId: string,
+  coluna: "maquina" | "lugar" | "centro",
+  texto: string,
+): ItemAlocacao | null {
+  const item: ItemAlocacao = { colaboradorId };
+  if (coluna === "maquina") item.equipamentoId = texto === NENHUM ? null : texto;
+  else if (coluna === "centro")
+    item.centroCustoId = texto === NENHUM ? null : texto;
+  else if (texto === NENHUM) {
+    item.localidadeId = null;
+    item.obraId = null;
+  } else {
+    const [tipo, id] = texto.split(":");
+    if (!id) return null;
+    if (tipo === "local") item.localidadeId = id;
+    else if (tipo === "obra") item.obraId = id;
+    else return null;
+  }
+  return item;
+}
+
+/** A pessoa como fica depois das edições pendentes (o que a grade mostra antes de salvar). */
+export function pessoaComPendente<
+  P extends Pick<PessoaMapa, "id" | "equipamentoId" | "localidadeId" | "obraMapaId" | "centroCustoId">,
+>(p: P, pendente: ItemAlocacao | undefined): P {
+  if (!pendente) return p;
+  const novo = { ...p };
+  if (pendente.equipamentoId !== undefined) novo.equipamentoId = pendente.equipamentoId;
+  if (pendente.localidadeId !== undefined) {
+    novo.localidadeId = pendente.localidadeId;
+    if (pendente.obraId !== undefined) novo.obraMapaId = pendente.obraId;
+  } else if (pendente.obraId !== undefined) {
+    novo.localidadeId = null;
+    novo.obraMapaId = pendente.obraId;
+  }
+  if (pendente.centroCustoId !== undefined) novo.centroCustoId = pendente.centroCustoId;
+  return novo;
+}
+
+/**
+ * Quem opera a máquina depois das edições pendentes: quem a pegou no quadro; senão o operador
+ * de agora, a menos que o quadro o tenha tirado dela.
+ */
+export function operadorComPendente(
+  maquina: Pick<EquipamentoMapa, "id" | "operadorId">,
+  pendentes: ReadonlyMap<string, ItemAlocacao>,
+): string | null {
+  for (const item of pendentes.values())
+    if (item.equipamentoId === maquina.id) return item.colaboradorId;
+  if (!maquina.operadorId) return null;
+  const doOperador = pendentes.get(maquina.operadorId);
+  if (doOperador?.equipamentoId !== undefined) return null;
+  return maquina.operadorId;
+}
+
+/**
+ * O texto do toast de uma alocação de uma pessoa, com o que a troca levou junto ("Jacson opera
+ * CB-001 · Ana sai da CB-001"). Lote de várias pessoas é "N pessoas alocadas".
+ */
+export function textoDaAlocacao(
+  itens: readonly ItemAlocacao[],
+  ctx: {
+    pessoa: (id: string) => PessoaAlocavel | undefined;
+    maquina: (id: string) => MaquinaAlocavel | undefined;
+    nomeDoLocal: (id: string) => string | undefined;
+  },
+): string {
+  if (itens.length !== 1)
+    return `${itens.length.toLocaleString("pt-BR")} pessoas alocadas`;
+  const item = itens[0]!;
+  const p = ctx.pessoa(item.colaboradorId);
+  const nome = p?.nome ?? "Pessoa";
+  const partes: string[] = [];
+  if (item.equipamentoId) {
+    const m = ctx.maquina(item.equipamentoId);
+    const atual = p?.equipamentoId ? ctx.maquina(p.equipamentoId) : undefined;
+    partes.push(`${nome} opera ${m?.codigo ?? "a máquina"}`);
+    if (p && m) partes.push(...avisoDaTrocaPelaPessoa(p, m, atual?.codigo ?? null));
+  } else if (item.equipamentoId === null) {
+    const atual = p?.equipamentoId ? ctx.maquina(p.equipamentoId) : undefined;
+    partes.push(`${nome} saiu da ${atual?.codigo ?? "máquina"}`);
+  }
+  if (item.localidadeId)
+    partes.push(
+      `${partes.length ? "trabalha" : `${nome} trabalha`} em ${ctx.nomeDoLocal(item.localidadeId) ?? "local escolhido"}`,
+    );
+  if (item.centroCustoId !== undefined)
+    partes.push(
+      item.centroCustoId === null
+        ? `${partes.length ? "centro" : `Centro de ${nome}`} pela obra`
+        : `${partes.length ? "centro" : `Centro de ${nome}`} trocado`,
+    );
+  return partes.join(" · ") || `${nome}: nada mudou`;
+}
+
+/**
+ * O lote do "Desfazer": cada pessoa do lote volta como estava e, quando a máquina que ela pegou
+ * tinha outro operador, ele volta para a máquina (o banco o soltou na troca). As pessoas vêm
+ * antes: soltam as máquinas que os operadores de antes vão retomar.
+ */
+export function loteDeVolta(
+  itens: readonly ItemAlocacao[],
+  pessoasAntes: ReadonlyMap<string, PessoaAlocavel & { obraMapaId: string | null }>,
+  operadorAntesDe: ReadonlyMap<string, string | null>,
+): ItemAlocacao[] {
+  const noLote = new Set(itens.map((i) => i.colaboradorId));
+  const volta: ItemAlocacao[] = [];
+  const retomadas: ItemAlocacao[] = [];
+  for (const item of itens) {
+    const antes = pessoasAntes.get(item.colaboradorId);
+    if (antes) volta.push(itemDeVolta(antes, item));
+    if (!item.equipamentoId) continue;
+    const operador = operadorAntesDe.get(item.equipamentoId);
+    if (operador && operador !== item.colaboradorId && !noLote.has(operador))
+      retomadas.push({ colaboradorId: operador, equipamentoId: item.equipamentoId });
+  }
+  return [...volta, ...retomadas];
+}

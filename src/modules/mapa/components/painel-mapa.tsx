@@ -56,6 +56,10 @@ export interface PainelMapaProps {
   onEscolherEquipamento: (equipamento: EquipamentoMapa) => void;
   onEscolherPessoa: (pessoa: PessoaMapa) => void;
   onAdicionarAlugada: () => void;
+  /** Quantas pessoas ainda sem máquina, local nem obra no Mapa (v1.30). */
+  pessoasSemAlocacao?: number;
+  /** Abre o quadro de alocação filtrado nelas. */
+  onAlocarSemAlocacao?: () => void;
   temCandidatosDiarista: boolean;
   onAdicionarDiarista: () => void;
   /** Tanques, pilhas e depósitos do Estoque que ainda não têm lugar no mapa. */
@@ -125,6 +129,8 @@ export function PainelMapa({
   onEscolherEquipamento,
   onEscolherPessoa,
   onAdicionarAlugada,
+  pessoasSemAlocacao = 0,
+  onAlocarSemAlocacao,
   temCandidatosDiarista,
   onAdicionarDiarista,
   objetosSemLugar,
@@ -297,6 +303,27 @@ export function PainelMapa({
             </ul>
           )}
         </section>
+
+        {pessoasSemAlocacao > 0 && permissoes.editar && onAlocarSemAlocacao ? (
+          <section className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface px-2 py-1.5">
+            <span className="text-detalhe">
+              <span className="font-medium">
+                {pessoasSemAlocacao.toLocaleString("pt-BR")}
+              </span>{" "}
+              {pessoasSemAlocacao === 1
+                ? "pessoa sem alocação"
+                : "pessoas sem alocação"}
+            </span>
+            <Button
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={onAlocarSemAlocacao}
+            >
+              Alocar
+            </Button>
+          </section>
+        ) : null}
 
         {pessoasNoMapa.length > 0 ? (
           <section>

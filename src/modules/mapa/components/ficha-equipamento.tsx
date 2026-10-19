@@ -22,6 +22,10 @@ import {
 } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { CentrosEquipamento } from "@/modules/mapa/components/centros-equipamento";
+import {
+  BlocoAlocacaoMaquina,
+  type AlocarNaFicha,
+} from "@/modules/mapa/components/bloco-alocacao";
 import { NumerosEquipamento } from "@/modules/mapa/components/numeros-equipamento";
 import { textoDesde } from "@/modules/mapa/desde";
 import { formatarKm } from "@/modules/mapa/geo";
@@ -45,7 +49,8 @@ import {
 /**
  * A ficha da máquina clicada: onde está, em que estado e há quanto tempo, quem opera, a locação
  * (quando alugada) e o que a Manutenção e o Combustível sabem dela. Os botões de estado abrem a
- * confirmação; o operador troca na hora (com toast).
+ * confirmação; o operador troca na hora (com toast). O operador, o local e o centro ficam no
+ * bloco "Alocação" do topo, igual ao da ficha da pessoa (v1.30, 17/10/2026).
  */
 
 export interface FichaEquipamentoProps {
@@ -76,7 +81,10 @@ export interface FichaEquipamentoProps {
   /** Relatório mensal de dias por centro de custo (quem pode ver os relatórios do Mapa). */
   relatorioCentrosHref?: string | null;
   onMarcarEstado: (estado: EstadoMaquina) => void;
-  onAssinalarOperador: (colaboradorId: string | null) => void;
+  /** Operador: grava na hora pelo lote (v1.30), com Desfazer no toast. */
+  onAlocar: AlocarNaFicha;
+  /** Código de cada máquina do mapa (o rótulo "opera RL-003" no Combobox de operador). */
+  codigoDe: ReadonlyMap<string, string>;
   onEncerrarLocacao: () => void;
   /** Gira a máquina: graus a somar ao rumo atual; null volta a seguir a pista. */
   onGirar: (delta: number | null) => void;
@@ -125,7 +133,8 @@ export function FichaEquipamento({
   historicoHref = null,
   relatorioCentrosHref = null,
   onMarcarEstado,
-  onAssinalarOperador,
+  onAlocar,
+  codigoDe,
   onEncerrarLocacao,
   onGirar,
   implementos,
@@ -135,14 +144,6 @@ export function FichaEquipamento({
   const { acoplados, opcoes: opcoesImplemento } = implementosDoCard(
     implementos,
     e.id,
-  );
-  const opcoesOperador = React.useMemo(
-    () =>
-      pessoas.map((p) => ({
-        valor: p.id,
-        rotulo: p.funcao ? `${p.nome} · ${p.funcao}` : p.nome,
-      })),
-    [pessoas],
   );
   const podeEditar = permissoes.editar;
   const desde =
@@ -203,6 +204,16 @@ export function FichaEquipamento({
           </Button>
         </div>
       </header>
+
+      <BlocoAlocacaoMaquina
+        maquina={e}
+        pessoas={pessoas}
+        codigoDe={codigoDe}
+        podeEditar={podeEditar}
+        salvando={salvando}
+        onAlocar={onAlocar}
+        onTransferir={onTransferirParaObra ?? onPosicionar}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge
@@ -482,30 +493,6 @@ export function FichaEquipamento({
           ) : null}
         </div>
       ) : null}
-
-      <div className="flex flex-col gap-1.5">
-        <span className="text-legenda font-medium text-muted-foreground">
-          Operador
-        </span>
-        {podeEditar ? (
-          <Combobox
-            valor={e.operadorId ?? ""}
-            onValorChange={(v) => onAssinalarOperador(v || null)}
-            opcoes={opcoesOperador}
-            rotuloDoValor={e.operadorNome || undefined}
-            placeholder="Sem operador assinalado"
-            buscaPlaceholder="Nome ou função"
-            limpavel
-            size="sm"
-            disabled={salvando}
-            ariaLabel="Operador"
-          />
-        ) : (
-          <p className="text-detalhe">
-            {e.operadorNome || "Sem operador assinalado"}
-          </p>
-        )}
-      </div>
 
       {e.locacao ? (
         <div className="flex flex-col gap-1.5 rounded-md border border-border bg-surface p-2.5">

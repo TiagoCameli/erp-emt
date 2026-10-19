@@ -45,11 +45,9 @@ function renderizar(
       posicionando={false}
       onFechar={vi.fn()}
       onFocar={vi.fn()}
-      onTrocarLocal={vi.fn()}
+      onAlocar={vi.fn(async () => true)}
       onTrocarObra={vi.fn()}
-      onOperar={vi.fn()}
       onPosicionar={vi.fn()}
-      onTrocarCentro={vi.fn()}
     />,
   );
 }

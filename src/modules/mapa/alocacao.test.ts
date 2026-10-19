@@ -1,16 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  NENHUM,
   avisoDaTrocaPelaMaquina,
   avisoDaTrocaPelaPessoa,
+  edicaoDaCelula,
+  operadorComPendente,
+  pessoaComPendente,
+  semAlocacao,
   itemDeVolta,
   itemParaRpc,
+  loteDeVolta,
   maquinaRepetida,
   montarLote,
   opcoesMaquinaParaPessoa,
   opcoesOperadorParaMaquina,
   sugestaoDaMaquina,
   sugestaoDoLocal,
+  textoDaAlocacao,
 } from "@/modules/mapa/alocacao";
 import { alocarSchema } from "@/modules/mapa/schemas";
 
@@ -235,6 +242,92 @@ describe("sugestões de um clique", () => {
   });
 });
 
+describe("quadro de alocação", () => {
+  const base = {
+    id: P1,
+    equipamentoId: null,
+    localidadeId: null,
+    obraMapaId: null,
+    centroCustoId: null,
+    areaId: null,
+  };
+
+  it("sem alocação: nem máquina, nem local, nem obra do mapa, nem área", () => {
+    expect(semAlocacao(base)).toBe(true);
+    expect(semAlocacao({ ...base, obraMapaId: OBRA })).toBe(false);
+    expect(semAlocacao({ ...base, equipamentoId: M1 })).toBe(false);
+  });
+
+  it("célula vira campo do lote; nenhum limpa", () => {
+    expect(edicaoDaCelula(P1, "maquina", M1)).toEqual({ colaboradorId: P1, equipamentoId: M1 });
+    expect(edicaoDaCelula(P1, "maquina", NENHUM)).toEqual({ colaboradorId: P1, equipamentoId: null });
+    expect(edicaoDaCelula(P1, "lugar", `obra:${OBRA}`)).toEqual({ colaboradorId: P1, obraId: OBRA });
+    expect(edicaoDaCelula(P1, "lugar", `local:${SILO}`)).toEqual({ colaboradorId: P1, localidadeId: SILO });
+    expect(edicaoDaCelula(P1, "lugar", NENHUM)).toEqual({
+      colaboradorId: P1,
+      localidadeId: null,
+      obraId: null,
+    });
+    expect(edicaoDaCelula(P1, "lugar", "lixo")).toBeNull();
+    expect(edicaoDaCelula(P1, "centro", NENHUM)).toEqual({ colaboradorId: P1, centroCustoId: null });
+  });
+
+  it("a linha mostra o pendente: obra como local zera o local", () => {
+    const comLocal = { ...base, localidadeId: SILO };
+    expect(pessoaComPendente(comLocal, { colaboradorId: P1, obraId: OBRA })).toMatchObject({
+      localidadeId: null,
+      obraMapaId: OBRA,
+    });
+    expect(pessoaComPendente(comLocal, undefined)).toBe(comLocal);
+  });
+
+  it("operador da máquina com o pendente: quem pegou, ou ninguém se o de agora saiu", () => {
+    const cb = { id: M1, operadorId: P2 };
+    expect(operadorComPendente(cb, new Map())).toBe(P2);
+    expect(
+      operadorComPendente(cb, new Map([[P1, { colaboradorId: P1, equipamentoId: M1 }]])),
+    ).toBe(P1);
+    expect(
+      operadorComPendente(cb, new Map([[P2, { colaboradorId: P2, equipamentoId: null }]])),
+    ).toBeNull();
+    expect(
+      operadorComPendente(cb, new Map([[P2, { colaboradorId: P2, centroCustoId: C1 }]])),
+    ).toBe(P2);
+  });
+});
+
+describe("textoDaAlocacao", () => {
+  const ana = pessoa(P2, "Ana", { equipamentoId: M1 });
+  const joao = pessoa(P1, "João", { equipamentoId: "rl" });
+  const ctx = {
+    pessoa: (id: string) => [ana, joao].find((p) => p.id === id),
+    maquina: (id: string) =>
+      [
+        maquina(M1, "CB-001", { operadorId: P2, operadorNome: "Ana" }),
+        maquina("rl", "RL-003", { operadorId: P1, operadorNome: "João" }),
+      ].find((m) => m.id === id),
+    nomeDoLocal: () => "Silo",
+  };
+
+  it("troca de máquina diz quem sai de onde", () => {
+    expect(textoDaAlocacao([{ colaboradorId: P1, equipamentoId: M1 }], ctx)).toBe(
+      "João opera CB-001 · Ana sai da CB-001 · João deixa a RL-003",
+    );
+    expect(textoDaAlocacao([{ colaboradorId: P2, equipamentoId: null }], ctx)).toBe(
+      "Ana saiu da CB-001",
+    );
+  });
+
+  it("local e centro, e lote de várias", () => {
+    expect(
+      textoDaAlocacao([{ colaboradorId: P1, localidadeId: SILO, centroCustoId: null }], ctx),
+    ).toBe("João trabalha em Silo · centro pela obra");
+    expect(textoDaAlocacao([{ colaboradorId: P1 }, { colaboradorId: P2 }], ctx)).toBe(
+      "2 pessoas alocadas",
+    );
+  });
+});
+
 describe("itemDeVolta", () => {
   const antes = {
     ...pessoa(P1, "João", { localidadeId: SILO, centroCustoId: C1 }),
@@ -252,6 +345,28 @@ describe("itemDeVolta", () => {
       localidadeId: SILO,
       obraId: OBRA,
     });
+  });
+
+  it("lote de volta: a pessoa volta e o operador de antes retoma a máquina", () => {
+    const joao = { ...pessoa(P1, "João"), obraMapaId: null };
+    expect(
+      loteDeVolta(
+        [{ colaboradorId: P1, equipamentoId: M1 }],
+        new Map([[P1, joao]]),
+        new Map([[M1, P2]]),
+      ),
+    ).toEqual([
+      { colaboradorId: P1, equipamentoId: null, obraId: null },
+      { colaboradorId: P2, equipamentoId: M1 },
+    ]);
+    // máquina que estava livre, ou cujo operador também está no lote: ninguém retoma
+    expect(
+      loteDeVolta(
+        [{ colaboradorId: P1, equipamentoId: M1 }],
+        new Map([[P1, joao]]),
+        new Map([[M1, null]]),
+      ),
+    ).toHaveLength(1);
   });
 
   it("sem local antes, volta para a obra como local (ou nenhuma)", () => {
