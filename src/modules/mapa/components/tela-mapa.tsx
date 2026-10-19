@@ -4,6 +4,8 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
+  CalendarClock,
+  CheckSquare,
   ChevronDown,
   ChevronUp,
   Compass,
@@ -35,7 +37,9 @@ import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { dataHojeISO, formatarData } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
+import { registrarChegada } from "@/modules/frete/fretes/actions";
 import {
   acoplarImplemento,
   ajustarRaioLocal,
@@ -83,8 +87,17 @@ import {
   DialogoConcluirDesenho,
   type PedidoColocar,
 } from "@/modules/mapa/components/dialogos-adicionar";
+import {
+  AlertasMapa,
+  LegendaMapa,
+} from "@/modules/mapa/components/alertas-mapa";
 import { DrawerDiarista } from "@/modules/mapa/components/drawer-diarista";
 import { DrawerLocacao } from "@/modules/mapa/components/drawer-locacao";
+import {
+  LocalizarNoMapa,
+  normalizarBusca,
+  type ItemLocalizavel,
+} from "@/modules/mapa/components/localizar-no-mapa";
 import { FichaEquipamento } from "@/modules/mapa/components/ficha-equipamento";
 import { FichaLocal } from "@/modules/mapa/components/ficha-local";
 import { FichaObjeto } from "@/modules/mapa/components/ficha-objeto";
@@ -159,6 +172,7 @@ import { ORDEM_ESTADOS, rotuloTipoLocalidade } from "@/modules/mapa/rotulos";
 import {
   ROTULO_ESTADO,
   ROTULO_TIPO_AREA,
+  type AlertaMapa,
   type ConfigGoogle,
   type AlvoObjeto,
   type CentroCustoOpcaoMapa,
@@ -316,6 +330,8 @@ export interface TelaMapaProps {
   movimentarPilha?: PermissoesMovimentoPilha;
   /** Centros de custo para a ficha da pessoa (vazio para quem não edita). */
   centrosCusto?: readonly CentroCustoOpcaoMapa[];
+  /** frete.fretes/editar: a ficha da carreta em frete registra a chegada sem sair do mapa. */
+  podeRegistrarChegada?: boolean;
 }
 
 export function TelaMapa({
@@ -326,6 +342,7 @@ export function TelaMapa({
   valoresEstoque = null,
   movimentarPilha = { entrada: false, saida: false },
   centrosCusto = [],
+  podeRegistrarChegada = false,
 }: TelaMapaProps) {
   const router = useRouter();
   const [estado, setEstado] = React.useState(inicial);
@@ -342,11 +359,15 @@ export function TelaMapa({
   }
 
   // Relógio do mapa: a carreta em frete ou na volta anda no traçado a cada minuto (estimativa).
+  // Sem frete aberto nem carreta voltando, o relógio fica parado: cada passo refaz a cena inteira.
   const [agora, setAgora] = React.useState(() => Date.now());
+  const temCarretaAndando =
+    estado.fretesEmRota.length > 0 || estado.carretasRetorno.length > 0;
   React.useEffect(() => {
+    if (!temCarretaAndando) return;
     const t = setInterval(() => setAgora(Date.now()), 60_000);
     return () => clearInterval(t);
-  }, []);
+  }, [temCarretaAndando]);
   // A frota como a tela mostra: a carreta com frete aberto vai para o ponto estimado da rota, e a
   // que já chegou, para o caminho de volta à pedreira.
   const {
@@ -449,7 +470,6 @@ export function TelaMapa({
     lerPainel,
     () => true,
   );
-  const [hover, setHover] = React.useState<string | null>(null);
   const fundo = React.useSyncExternalStore(
     assinarFundo,
     lerFundo,
@@ -461,6 +481,17 @@ export function TelaMapa({
   const [mostrarRotulos, setMostrarRotulos] = React.useState(true);
   const [mostrarAreas, setMostrarAreas] = React.useState(true);
   const [filtros, setFiltros] = React.useState<FiltrosMapa>(FILTROS_VAZIOS);
+  // "Mudou hoje": só o que teve movimentação desde 0h (lida em fn_mapa_avisos).
+  const [soHoje, setSoHoje] = React.useState(false);
+  const idsMudaramHoje = React.useMemo(
+    () => new Set((estado.avisos?.mudancasHoje ?? []).map((m) => m.alvoId)),
+    [estado.avisos],
+  );
+  // Frete cuja chegada espera a confirmação (ficha da carreta).
+  const [chegada, setChegada] = React.useState<{
+    freteId: string;
+    placa: string;
+  } | null>(null);
   const [posicionando, setPosicionando] = React.useState<string | null>(null);
   // Pessoa esperando o toque no mapa (quem ainda não tem lugar não tem o que arrastar).
   const [posicionandoPessoa, setPosicionandoPessoa] = React.useState<
@@ -573,6 +604,7 @@ export function TelaMapa({
     const termo = normalizar(filtros.busca.trim());
     return equipamentosVistos.filter((e) => {
       if (filtros.obraId && e.obraId !== filtros.obraId) return false;
+      if (soHoje && !idsMudaramHoje.has(e.id)) return false;
       if (!termo) return true;
       return normalizar(
         [
@@ -586,7 +618,7 @@ export function TelaMapa({
         ].join(" "),
       ).includes(termo);
     });
-  }, [equipamentosVistos, filtros.busca, filtros.obraId]);
+  }, [equipamentosVistos, filtros.busca, filtros.obraId, soHoje, idsMudaramHoje]);
 
   const contagens = React.useMemo(() => {
     const c = Object.fromEntries(ORDEM_ESTADOS.map((k) => [k, 0])) as Record<
@@ -793,6 +825,13 @@ export function TelaMapa({
     const idsNaCena = new Set(equipamentos.map((e) => e.id));
     const pessoas = estado.pessoas.flatMap((p) => {
       const pos = posicoesPendentes.get(p.id) ?? p.pos;
+      // "Mudou hoje": a pessoa que mudou, ou que opera máquina que mudou.
+      if (
+        soHoje &&
+        !idsMudaramHoje.has(p.id) &&
+        !(p.equipamentoId && idsMudaramHoje.has(p.equipamentoId))
+      )
+        return [];
       // Operador de máquina filtrada para fora some junto com ela.
       if (
         p.equipamentoId &&
@@ -911,6 +950,8 @@ export function TelaMapa({
     mostrarPessoas,
     mostrarRotulos,
     mostrarAreas,
+    soHoje,
+    idsMudaramHoje,
   ]);
 
   const semPosicao = React.useMemo(
@@ -1947,6 +1988,173 @@ export function TelaMapa({
     if (aviso) toast.warning(aviso);
   }, []);
 
+  /** O que o "Localizar" acha: máquinas, pessoas, obras e locais (com ou sem lugar no mapa). */
+  const itensLocalizaveis = React.useMemo<ItemLocalizavel[]>(() => {
+    const itens: ItemLocalizavel[] = [];
+    for (const e of equipamentosVistos)
+      itens.push({
+        tipo: "equipamento",
+        id: e.id,
+        rotulo: `${e.codigo || "s/ código"} · ${e.descricao}`,
+        detalhe: [
+          ROTULO_ESTADO[e.estado],
+          e.obraNome,
+          e.pos ? "" : "sem lugar no mapa",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        busca: normalizarBusca(
+          [e.codigo, e.descricao, e.placa, e.tipo, e.modelo, e.operadorNome]
+            .filter(Boolean)
+            .join(" "),
+        ),
+      });
+    for (const q of estado.pessoas)
+      itens.push({
+        tipo: "pessoa",
+        id: q.id,
+        rotulo: q.nome,
+        detalhe: [q.funcao, q.pos ? "" : "sem lugar no mapa"]
+          .filter(Boolean)
+          .join(" · "),
+        busca: normalizarBusca([q.nome, q.funcao].filter(Boolean).join(" ")),
+      });
+    for (const o of rotulosObra)
+      itens.push({
+        tipo: "obra",
+        id: o.id,
+        rotulo: o.nome,
+        detalhe: "",
+        busca: normalizarBusca(o.nome),
+      });
+    for (const l of estado.localidades)
+      itens.push({
+        tipo: "local",
+        id: l.id,
+        rotulo: l.nome,
+        detalhe: rotuloTipoLocalidade(l.tipo),
+        busca: normalizarBusca(`${l.nome} ${rotuloTipoLocalidade(l.tipo)}`),
+      });
+    return itens;
+  }, [equipamentosVistos, estado.pessoas, estado.localidades, rotulosObra]);
+
+  /** Some o que esconderia o item escolhido (filtros, "Mudou hoje", seleção múltipla). */
+  const mostrarTudo = React.useCallback(() => {
+    setFiltros(FILTROS_VAZIOS);
+    setSoHoje(false);
+    setMulti(false);
+  }, []);
+
+  const irParaEquipamento = React.useCallback(
+    (id: string): boolean => {
+      const e = equipamentosVistos.find((x) => x.id === id);
+      if (!e) return false;
+      if (!filtrados.some((x) => x.id === id)) mostrarTudo();
+      // A ficha não abre na seleção múltipla.
+      setMulti(false);
+      setSelecao(new Set([id]));
+      abrirFicha({ tipo: "equipamento", id });
+      if (e.pos) focar(e.pos, 16);
+      else
+        toast.info(
+          `${e.codigo || e.descricao} ainda não tem lugar no mapa: use Posicionar na ficha.`,
+        );
+      return true;
+    },
+    [equipamentosVistos, filtrados, mostrarTudo, abrirFicha, focar],
+  );
+
+  const escolherLocalizado = React.useCallback(
+    (item: ItemLocalizavel) => {
+      if (item.tipo === "equipamento") {
+        irParaEquipamento(item.id);
+        return;
+      }
+      if (item.tipo === "pessoa") {
+        const q = estado.pessoas.find((x) => x.id === item.id);
+        if (!q) return;
+        mostrarTudo();
+        setSelecao(new Set([q.id]));
+        abrirFicha({ tipo: "pessoa", id: q.id });
+        if (q.pos) focar(q.pos, 17);
+        return;
+      }
+      if (item.tipo === "obra") {
+        clicarObra(item.id);
+        const r = rotulosObra.find((o) => o.id === item.id);
+        if (r) focar(r.pos, 13);
+        return;
+      }
+      clicarLocal(item.id);
+      const l = estado.localidades.find((x) => x.id === item.id);
+      if (l) focar(l.pos, 16);
+    },
+    [
+      irParaEquipamento,
+      estado.pessoas,
+      estado.localidades,
+      rotulosObra,
+      mostrarTudo,
+      abrirFicha,
+      focar,
+      clicarObra,
+      clicarLocal,
+    ],
+  );
+
+  /** Alerta tocado: a máquina, o tanque ou a carreta do frete. */
+  const irParaAlerta = React.useCallback(
+    (a: AlertaMapa): boolean => {
+      const naoAchou = () => {
+        toast.info("Esse item não está no mapa agora.");
+        return false;
+      };
+      if (!a.alvoId) return naoAchou();
+      if (a.alvo === "equipamento")
+        return irParaEquipamento(a.alvoId) || naoAchou();
+      if (a.alvo === "frete") {
+        const f = estado.fretesEmRota.find((x) => x.id === a.alvoId);
+        return (
+          (f?.equipamentoId ? irParaEquipamento(f.equipamentoId) : false) ||
+          naoAchou()
+        );
+      }
+      if (a.alvo === "tanque") {
+        const o = objetos.find((x) => x.id === a.alvoId);
+        if (!o) return naoAchou();
+        clicarObjeto(o.id);
+        if (o.pos) focar(o.pos, 16);
+        return true;
+      }
+      return naoAchou();
+    },
+    [irParaEquipamento, estado.fretesEmRota, objetos, clicarObjeto, focar],
+  );
+
+  /** "Selecionar as N do filtro" na seleção múltipla: as máquinas no mapa que o filtro mostra. */
+  const selecionarFiltradas = React.useCallback(() => {
+    setFicha(null);
+    setSelecao(new Set(noMapa.map((e) => e.id)));
+  }, [noMapa]);
+
+  const confirmarChegada = React.useCallback(async (): Promise<boolean> => {
+    if (!chegada) return false;
+    setSalvando(true);
+    try {
+      const r = await registrarChegada(chegada.freteId, dataHojeISO());
+      if ("erro" in r) {
+        toast.error(r.erro);
+        return false;
+      }
+      toast.success(`Chegada da carreta ${chegada.placa} registrada`);
+      setChegada(null);
+      await atualizar();
+      return true;
+    } finally {
+      setSalvando(false);
+    }
+  }, [chegada, atualizar]);
+
   /**
    * Barra de filtros canônica (a mesma das tabelas: menu "Filtros", persistência por usuário e
    * o "Limpar filtros"): busca, obra e estado. Os chips do painel mexem no mesmo `estado`.
@@ -2079,6 +2287,12 @@ export function TelaMapa({
       onAssinalarOperador={assinalar}
       implementos={estado.implementos}
       onAcoplar={acoplar}
+      onRegistrarChegada={(() => {
+        const f = freteDe.get(equipamentoFicha.id);
+        return podeRegistrarChegada && f
+          ? () => setChegada({ freteId: f.id, placa: f.placa || equipamentoFicha.codigo })
+          : null;
+      })()}
       onEncerrarLocacao={() => {
         setFimLocacao(estado.hoje);
         setEncerrando(equipamentoFicha);
@@ -2281,28 +2495,34 @@ export function TelaMapa({
         filtros={filtrosDaBarra}
         onLimparFiltros={() => setFiltros(FILTROS_VAZIOS)}
         acoes={
-          permissoes.editar ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setAdicionando("obra")}
-              >
-                <HardHat />
-                Adicionar obra
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setAdicionando("local")}
-              >
-                <MapPinPlus />
-                Adicionar localização
-              </Button>
-            </>
-          ) : undefined
+          <>
+            <LocalizarNoMapa
+              itens={itensLocalizaveis}
+              onEscolher={escolherLocalizado}
+            />
+            {permissoes.editar ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAdicionando("obra")}
+                >
+                  <HardHat />
+                  Adicionar obra
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAdicionando("local")}
+                >
+                  <MapPinPlus />
+                  Adicionar localização
+                </Button>
+              </>
+            ) : null}
+          </>
         }
       />
       <div className="flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
@@ -2315,7 +2535,6 @@ export function TelaMapa({
             google={google}
             cena={cena}
             selecao={selecao}
-            hover={hover}
             posicoesPendentes={null}
             fundo={fundo}
             inclinado={inclinado}
@@ -2334,7 +2553,6 @@ export function TelaMapa({
             inclinacaoMapa={inclinacaoMapa}
             centroInicial={centroInicial}
             onSelecionar={selecionar}
-            onHover={setHover}
             onSoltar={soltar}
             onClicarMapa={clicarMapa}
             onClicarLocal={clicarLocal}
@@ -2349,6 +2567,27 @@ export function TelaMapa({
             }}
             cartao={cartao}
           />
+          {multi && equipamentosDoLote.length + pessoasDoLote.length === 0 ? (
+            <div className="pointer-events-none absolute inset-x-2 bottom-3 flex justify-center">
+              <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md backdrop-blur">
+                <span className="text-detalhe text-muted-foreground">
+                  Toque nas máquinas e pessoas para selecionar
+                </span>
+                {noMapa.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={selecionarFiltradas}
+                    title="Seleciona as máquinas no mapa que a busca e os filtros mostram"
+                  >
+                    <CheckSquare />
+                    Selecionar as {noMapa.length} do filtro
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {multi && equipamentosDoLote.length + pessoasDoLote.length > 0 ? (
             <div className="pointer-events-none absolute inset-x-2 bottom-3 flex justify-center">
               <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 px-3 py-2 shadow-md backdrop-blur">
@@ -2375,6 +2614,18 @@ export function TelaMapa({
                   <ArrowRightLeft />
                   Transferir
                 </Button>
+                {noMapa.some((e) => !selecao.has(e.id)) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={selecionarFiltradas}
+                    title="Seleciona as máquinas no mapa que a busca e os filtros mostram"
+                  >
+                    <CheckSquare />
+                    Todas do filtro ({noMapa.length})
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"
@@ -2469,8 +2720,24 @@ export function TelaMapa({
               {botaoAlternar(mostrarAreas, "Áreas", Layers, () =>
                 setMostrarAreas((v) => !v),
               )}
+              {estado.avisos
+                ? botaoAlternar(
+                    soHoje,
+                    `Mudou hoje (${idsMudaramHoje.size})`,
+                    CalendarClock,
+                    () => setSoHoje((v) => !v),
+                    "Mostra só as máquinas e pessoas com movimentação desde 0h",
+                  )
+                : null}
+              <LegendaMapa />
             </div>
             <div className="flex gap-1.5">
+              {estado.avisos ? (
+                <AlertasMapa
+                  alertas={estado.avisos.alertas}
+                  onIrPara={irParaAlerta}
+                />
+              ) : null}
               <Button
                 type="button"
                 size="xs"
@@ -2813,6 +3080,18 @@ export function TelaMapa({
           onCancelar={() => setAdicionando(null)}
           onEscolherNoMapa={escolherNoMapa}
           onLigar={ligarAoLocal}
+        />
+      ) : null}
+      {chegada ? (
+        <ConfirmDialog
+          aberto
+          onAbertoChange={(aberto) => {
+            if (!aberto) setChegada(null);
+          }}
+          titulo={`Registrar a chegada da carreta ${chegada.placa}?`}
+          descricao={`O frete fica com chegada em ${formatarData(dataHojeISO())} e a carreta sai da rota no mapa. Para outra data, edite no Frete.`}
+          textoConfirmar="Registrar chegada"
+          onConfirmar={confirmarChegada}
         />
       ) : null}
       {colocando && pontoColocar ? (

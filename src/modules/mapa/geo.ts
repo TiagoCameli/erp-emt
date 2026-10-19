@@ -135,15 +135,28 @@ export function passoDosMarcos(zoom: number): number {
   return 10;
 }
 
-/** Marcos de 1 em 1 km filtrados pelo passo do zoom (km inteiro múltiplo do passo). */
+/**
+ * Marcos de 1 em 1 km filtrados pelo passo do zoom (km inteiro múltiplo do passo). Devolve a mesma
+ * lista (não uma cópia) no passo 1 e a mesma lista filtrada para o mesmo passo: o deck.gl compara
+ * `data` pela referência, e lista nova a cada redesenho refazia o texto de todos os marcos.
+ */
+const marcosPorPasso = new WeakMap<readonly object[], Map<number, unknown>>();
 export function marcosNoZoom<T extends { km: number }>(
   marcos: readonly T[],
   zoom: number,
-): T[] {
+): readonly T[] {
   const passo = passoDosMarcos(zoom);
-  return passo === 1
-    ? [...marcos]
-    : marcos.filter((m) => Math.abs(m.km % passo) < 1e-9);
+  if (passo === 1) return marcos;
+  let porPasso = marcosPorPasso.get(marcos);
+  if (!porPasso) {
+    porPasso = new Map();
+    marcosPorPasso.set(marcos, porPasso);
+  }
+  const guardado = porPasso.get(passo) as readonly T[] | undefined;
+  if (guardado) return guardado;
+  const filtrados = marcos.filter((m) => Math.abs(m.km % passo) < 1e-9);
+  porPasso.set(passo, filtrados);
+  return filtrados;
 }
 
 export interface ColagemTrecho {

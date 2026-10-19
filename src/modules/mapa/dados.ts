@@ -1,6 +1,8 @@
 import { ESTADOS_MAQUINA, type EstadoMaquina } from "@/modules/mapa/tipos";
 import type {
+  AlertaMapa,
   AreaMapa,
+  AvisosMapa,
   CarretaRetorno,
   DepositoMapa,
   EquipamentoForaDoMapa,
@@ -13,6 +15,7 @@ import type {
   LocacaoMapa,
   LocalidadeMapa,
   Modelo3d,
+  MudancaHoje,
   PessoaMapa,
   TanqueMapa,
   Posicao,
@@ -590,4 +593,41 @@ export function paraFichaNumeros(bruto: unknown): FichaNumeros | null {
       data: textoOuNulo(aquisicao.data),
     },
   };
+}
+
+/**
+ * JSON de `fn_mapa_avisos()` → alertas e mudanças de hoje. Registro sem id ou sem alvo sai; o
+ * resto vira vazio. Formato inesperado inteiro devolve null (a tela segue sem a faixa).
+ */
+export function paraAvisosMapa(data: unknown): AvisosMapa | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data))
+    return null;
+  const d = data as Linha;
+  const alertas: AlertaMapa[] = lista(d.alertas).flatMap((a) => {
+    const id = textoOuNulo(a.id);
+    if (!id) return [];
+    return [
+      {
+        id,
+        tipo: texto(a.tipo),
+        alvo: texto(a.alvo),
+        alvoId: textoOuNulo(a.alvo_id),
+        mensagem: texto(a.mensagem),
+        criadoEm: texto(a.criado_em),
+      },
+    ];
+  });
+  const mudancasHoje: MudancaHoje[] = lista(d.mudancas_hoje).flatMap((m) => {
+    const alvoId = textoOuNulo(m.alvo_id);
+    if (!alvoId) return [];
+    return [
+      {
+        alvo: texto(m.alvo),
+        alvoId,
+        tipo: texto(m.tipo),
+        criadoEm: texto(m.criado_em),
+      },
+    ];
+  });
+  return { hoje: texto(d.hoje), alertas, mudancasHoje };
 }

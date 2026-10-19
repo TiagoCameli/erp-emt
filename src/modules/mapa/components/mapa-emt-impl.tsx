@@ -69,10 +69,16 @@ export interface ArrasteSolto {
   itens: ItemSolto[];
 }
 
-/** A parte da cena que vem do pai (o que desenhar); seleção, hover e arraste entram aqui. */
+/** A parte da cena que vem do pai (o que desenhar); seleção, hover, arraste e giro entram aqui. */
 export type CenaBase = Omit<
   Cena,
-  "selecao" | "hover" | "posicoes" | "tick" | "zoom"
+  | "selecao"
+  | "hover"
+  | "posicoes"
+  | "versaoPosicoes"
+  | "rumos"
+  | "versaoRumos"
+  | "zoom"
 >;
 
 export interface Foco {
@@ -118,7 +124,6 @@ export interface MapaEmtProps {
   google: ConfigGoogle;
   cena: CenaBase;
   selecao: ReadonlySet<string>;
-  hover: string | null;
   /** Posições de um arraste solto à espera da confirmação (o pai guarda; cancelar = null). */
   posicoesPendentes: ReadonlyMap<string, Posicao> | null;
   fundo: ModoFundo;
@@ -131,7 +136,6 @@ export interface MapaEmtProps {
   inclinacaoMapa: InclinacaoMapa | null;
   centroInicial: { pos: Posicao; zoom: number };
   onSelecionar: (alvo: Alvo | null, multi: boolean) => void;
-  onHover: (id: string | null) => void;
   onSoltar: (arraste: ArrasteSolto) => void;
   onClicarMapa: (pos: Posicao) => void;
   /** Toque no nome de um local (abre a ficha do local). */
@@ -140,7 +144,10 @@ export interface MapaEmtProps {
   onClicarObra: (id: string) => void;
   /** Toque no nome de um tanque, pilha ou depósito (abre a ficha dele). */
   onClicarObjeto: (id: string) => void;
-  /** Arrastando o anel de giro: o rumo apontado (prévia). */
+  /**
+   * Arrastando o anel de giro: o rumo apontado (prévia para a ficha). O mapa gira a máquina sozinho
+   * a cada quadro; o pai é avisado no máximo a cada 150 ms.
+   */
   onGirarPrevia: (id: string, rumo: number) => void;
   /** Soltou o anel de giro: grava o rumo. */
   onGirarFim: (id: string, rumo: number) => void;
@@ -155,7 +162,13 @@ export interface MapaEmtProps {
 interface Motor {
   tipo: TipoMotor;
   setLayers(layers: Layer[]): void;
-  pegar(x: number, y: number, ids: string[]): PickingInfo[];
+  /** `profundidade`: quantos objetos empilhados no ponto (6 no toque, 2 no passar do mouse). */
+  pegar(
+    x: number,
+    y: number,
+    ids: string[],
+    profundidade?: number,
+  ): PickingInfo[];
   pixelParaCoord(x: number, y: number): Posicao | null;
   /** Ponto do mapa em pixels do container (null enquanto o motor não tem projeção). */
   coordParaPixel(pos: Posicao): [number, number] | null;
@@ -308,13 +321,13 @@ function criarMotorTiles(
       camadas = layers;
       aplicar();
     },
-    pegar(x, y, ids) {
+    pegar(x, y, ids, profundidade = 6) {
       return (
         deck.pickMultipleObjects({
           x,
           y,
           radius: 10,
-          depth: 6,
+          depth: profundidade,
           layerIds: ids,
         }) ?? []
       );
@@ -512,13 +525,13 @@ async function criarMotorGoogle(
       camadas = layers;
       overlay?.setProps({ layers });
     },
-    pegar(x, y, ids) {
+    pegar(x, y, ids, profundidade = 6) {
       return (
         overlay?.pickMultipleObjects({
           x,
           y,
           radius: 10,
-          depth: 6,
+          depth: profundidade,
           layerIds: ids,
         }) ?? []
       );
@@ -579,6 +592,21 @@ async function criarMotorGoogle(
   };
 }
 
+/** Camadas clicáveis (uma por modelo + pessoas), guardadas pela lista da frota da cena. */
+const cacheIdsClicaveis = new WeakMap<readonly EquipamentoMapa[], string[]>();
+function idsClicaveisDe(equipamentos: readonly EquipamentoMapa[]): string[] {
+  let ids = cacheIdsClicaveis.get(equipamentos);
+  if (!ids) {
+    const chaves = new Set(equipamentos.map((e) => e.modelo3d));
+    ids = [...chaves].map((c) => `${PREFIXO_MAQUINA}${c}`).concat([ID_PESSOAS]);
+    cacheIdsClicaveis.set(equipamentos, ids);
+  }
+  return ids;
+}
+
+/** Intervalo mínimo entre avisos de prévia do giro ao pai (a ficha mostra o rumo). */
+const INTERVALO_PREVIA_GIRO_MS = 150;
+
 export function MapaEmtImpl(props: MapaEmtProps) {
   const { centroInicial, className } = props;
   // Strings, não o objeto: o pai monta `google` a cada renderização e o motor só pode ser
@@ -605,8 +633,16 @@ export function MapaEmtImpl(props: MapaEmtProps) {
   const ignorarCliqueRef = React.useRef(false);
   // Onde o ponteiro desceu: soltar depois de arrastar o mapa ainda dispara `click` no mouse.
   const descidaRef = React.useRef<{ x: number; y: number } | null>(null);
-  const tickRef = React.useRef(0);
+  // Item sob o mouse: fica aqui (não sobe para a tela), só o anel redesenha (17/10/2026, fluidez).
+  const hoverRef = React.useRef<string | null>(null);
+  // Versões que disparam o recálculo de posição e de rumo no deck.gl (ver Cena).
+  const versaoPosicoesRef = React.useRef(0);
+  const rumosRef = React.useRef<ReadonlyMap<string, number> | null>(null);
+  const versaoRumosRef = React.useRef(0);
+  // Redesenho agendado para o próximo quadro (vários eventos no mesmo quadro viram um só).
+  const quadroRef = React.useRef(0);
   const [dica, setDica] = React.useState<{
+    id: string;
     titulo: string;
     detalhe: string;
   } | null>(null);
@@ -617,22 +653,43 @@ export function MapaEmtImpl(props: MapaEmtProps) {
 
   /** Monta as camadas com a cena atual e manda para o motor (sem passar pelo React). */
   const redesenhar = React.useCallback(() => {
+    if (quadroRef.current) {
+      cancelAnimationFrame(quadroRef.current);
+      quadroRef.current = 0;
+    }
     const motor = motorRef.current;
     if (!motor) return;
     const p = propsRef.current;
-    tickRef.current += 1;
     const posicoes = arrastoRef.current?.posicoes ?? p.posicoesPendentes;
     motor.setLayers(
       montarCamadas({
         ...p.cena,
         selecao: p.selecao,
-        hover: p.hover,
+        hover: hoverRef.current,
         posicoes,
-        tick: tickRef.current,
+        versaoPosicoes: versaoPosicoesRef.current,
+        rumos: rumosRef.current,
+        versaoRumos: versaoRumosRef.current,
         zoom: zoomRef.current,
       }),
     );
   }, []);
+
+  /** Redesenha no próximo quadro: o ponteiro chega mais rápido que a tela (120 Hz no iPad). */
+  const agendarRedesenho = React.useCallback(() => {
+    if (quadroRef.current) return;
+    quadroRef.current = requestAnimationFrame(() => {
+      quadroRef.current = 0;
+      redesenhar();
+    });
+  }, [redesenhar]);
+  React.useEffect(
+    () => () => {
+      if (quadroRef.current) cancelAnimationFrame(quadroRef.current);
+      quadroRef.current = 0;
+    },
+    [],
+  );
 
   /** Zoom mudou: só redesenha quando cruza um degrau de meio nível (é o que liga/desliga nomes). */
   const aoZoom = React.useCallback(
@@ -640,9 +697,9 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const degrau = Math.floor(zoom * 2) / 2;
       if (degrau === zoomRef.current) return;
       zoomRef.current = degrau;
-      redesenhar();
+      agendarRedesenho();
     },
-    [redesenhar],
+    [agendarRedesenho],
   );
 
   // Motor: Google quando há chave, tiles quando não. Recriado só se a chave/Map ID mudarem.
@@ -718,11 +775,20 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     };
   }, [chaveGoogle, mapIdGoogle, centroInicial, redesenhar, aoZoom]);
 
-  // Qualquer mudança no que desenhar redesenha; o arraste em curso tem prioridade (ref).
-  const { cena, selecao, hover, posicoesPendentes } = props;
+  // Posições pendentes novas (soltou e espera o OK, cancelou, confirmou): posição recalcula.
+  const { cena, selecao, posicoesPendentes } = props;
   React.useEffect(() => {
-    redesenhar();
-  }, [cena, selecao, hover, posicoesPendentes, redesenhar]);
+    versaoPosicoesRef.current += 1;
+  }, [posicoesPendentes]);
+  // Qualquer mudança no que desenhar redesenha; o arraste em curso tem prioridade (ref). A cena
+  // nova já traz o rumo gravado: a prévia do giro só sai depois de soltar (sem piscar o rumo velho).
+  React.useEffect(() => {
+    if (!giroRef.current && rumosRef.current) {
+      rumosRef.current = null;
+      versaoRumosRef.current += 1;
+    }
+    agendarRedesenho();
+  }, [cena, selecao, posicoesPendentes, agendarRedesenho]);
 
   const { fundo, inclinado, foco, giroMapa, inclinacaoMapa } = props;
   React.useEffect(() => {
@@ -790,18 +856,19 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     const el = containerRef.current;
     if (!el) return;
 
-    const idsClicaveis = () => {
-      const chaves = new Set(
-        propsRef.current.cena.equipamentos.map((e) => e.modelo3d),
-      );
-      return [...chaves]
-        .map((c) => `${PREFIXO_MAQUINA}${c}`)
-        .concat([ID_PESSOAS]);
-    };
-    const pegar = (x: number, y: number): PickingInfo | null => {
+    const pegar = (
+      x: number,
+      y: number,
+      profundidade = 6,
+    ): PickingInfo | null => {
       const motor = motorRef.current;
       if (!motor) return null;
-      const infos = motor.pegar(x, y, idsClicaveis());
+      const infos = motor.pegar(
+        x,
+        y,
+        idsClicaveisDe(propsRef.current.cena.equipamentos),
+        profundidade,
+      );
       // Máquina ganha da pessoa: o operador fica "dentro" da máquina.
       return (
         infos.find((i) => i.layer?.id.startsWith(PREFIXO_MAQUINA)) ??
@@ -823,26 +890,36 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const r = el.getBoundingClientRect();
       return [e.clientX - r.left, e.clientY - r.top];
     };
-    const mostrarDica = (e: PointerEvent, info: PickingInfo | null) => {
+    // A dica só passa pelo React quando muda de objeto; seguir o mouse é só o style.
+    let idDica: string | null = null;
+    const limparDica = () => {
+      if (idDica === null) return;
+      idDica = null;
+      setDica(null);
+    };
+    const mostrarDica = (x: number, y: number, info: PickingInfo | null) => {
       const tt = tooltipRef.current;
       if (!tt) return;
-      if (!info) {
-        setDica(null);
+      const alvo = info ? alvoDe(info) : null;
+      if (!info || !alvo) {
+        limparDica();
         return;
       }
-      const alvo = alvoDe(info);
-      const [x, y] = relativo(e);
       tt.style.left = `${x + 14}px`;
       tt.style.top = `${y + 14}px`;
-      if (alvo?.tipo === "equipamento") {
+      if (alvo.id === idDica) return;
+      idDica = alvo.id;
+      if (alvo.tipo === "equipamento") {
         const d = info.object as EquipamentoMapa;
         setDica({
+          id: d.id,
           titulo: `${d.codigo} · ${d.descricao}`,
           detalhe: `${ROTULO_ESTADO[d.estado]}${d.km !== null ? ` · km ${d.km.toFixed(1).replace(".", ",")}` : ""}${d.localidadeNome ? ` · ${d.localidadeNome}` : ""}`,
         });
-      } else if (alvo?.tipo === "pessoa") {
+      } else {
         const q = info.object as PessoaMapa;
         setDica({
+          id: q.id,
           titulo: q.nome,
           detalhe: [q.funcao, q.equipeNome].filter(Boolean).join(" · "),
         });
@@ -871,6 +948,7 @@ export function MapaEmtImpl(props: MapaEmtProps) {
             pointerId: e.pointerId,
             rumo: null,
           };
+          ultimaPreviaGiro = 0;
           motor.travar(true);
           try {
             el.setPointerCapture(e.pointerId);
@@ -927,6 +1005,24 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       e.stopPropagation();
     };
 
+    // Passar do mouse: um picking por quadro, com o último ponto (não um por evento).
+    let quadroHover = 0;
+    let pontoHover: [number, number] | null = null;
+    const pegarHover = () => {
+      quadroHover = 0;
+      const ponto = pontoHover;
+      if (!ponto || arrastoRef.current || giroRef.current) return;
+      const info = pegar(ponto[0], ponto[1], 2);
+      const alvo = info ? alvoDe(info) : null;
+      const id = alvo?.id ?? null;
+      if (id !== hoverRef.current) {
+        hoverRef.current = id;
+        agendarRedesenho();
+      }
+      mostrarDica(ponto[0], ponto[1], info);
+    };
+    let ultimaPreviaGiro = 0;
+
     const aoMover = (e: PointerEvent) => {
       const motor = motorRef.current;
       if (!motor) return;
@@ -936,7 +1032,15 @@ export function MapaEmtImpl(props: MapaEmtProps) {
         const c = motor.pixelParaCoord(x, y);
         if (!c) return;
         g.rumo = rumo(g.centro, c);
-        propsRef.current.onGirarPrevia(g.id, g.rumo);
+        // O mapa gira a máquina sozinho; o pai (a ficha) recebe a prévia de vez em quando.
+        rumosRef.current = new Map([[g.id, g.rumo]]);
+        versaoRumosRef.current += 1;
+        agendarRedesenho();
+        const agora = performance.now();
+        if (agora - ultimaPreviaGiro >= INTERVALO_PREVIA_GIRO_MS) {
+          ultimaPreviaGiro = agora;
+          propsRef.current.onGirarPrevia(g.id, g.rumo);
+        }
         e.preventDefault();
         return;
       }
@@ -953,17 +1057,15 @@ export function MapaEmtImpl(props: MapaEmtProps) {
           a.posicoes.set(it.alvo.id, [it.pos0[0] + dx, it.pos0[1] + dy]);
         for (const s of a.seguidores)
           a.posicoes.set(s.id, [s.pos0[0] + dx, s.pos0[1] + dy]);
-        setDica(null);
-        redesenhar();
+        versaoPosicoesRef.current += 1;
+        limparDica();
+        agendarRedesenho();
         e.preventDefault();
         return;
       }
       if (e.pointerType === "mouse") {
-        const info = pegar(x, y);
-        const alvo = info ? alvoDe(info) : null;
-        const id = alvo?.id ?? null;
-        if (id !== propsRef.current.hover) propsRef.current.onHover(id);
-        mostrarDica(e, info);
+        pontoHover = [x, y];
+        if (!quadroHover) quadroHover = requestAnimationFrame(pegarHover);
       }
     };
 
@@ -984,6 +1086,9 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       const a = arrastoRef.current;
       if (!a) return;
       arrastoRef.current = null;
+      // As posições voltam a vir das pendentes (ou do banco): recalcula no próximo desenho.
+      versaoPosicoesRef.current += 1;
+      agendarRedesenho();
       const motor = motorRef.current;
       motor?.travar(false);
       try {
@@ -1045,8 +1150,12 @@ export function MapaEmtImpl(props: MapaEmtProps) {
     };
 
     const aoSair = () => {
-      setDica(null);
-      if (propsRef.current.hover !== null) propsRef.current.onHover(null);
+      pontoHover = null;
+      limparDica();
+      if (hoverRef.current !== null) {
+        hoverRef.current = null;
+        agendarRedesenho();
+      }
     };
 
     el.addEventListener("pointerdown", aoPressionar);
@@ -1062,8 +1171,9 @@ export function MapaEmtImpl(props: MapaEmtProps) {
       el.removeEventListener("pointercancel", soltar);
       el.removeEventListener("click", aoClicarChao);
       el.removeEventListener("pointerleave", aoSair);
+      if (quadroHover) cancelAnimationFrame(quadroHover);
     };
-  }, [redesenhar]);
+  }, [agendarRedesenho]);
 
   return (
     <div
