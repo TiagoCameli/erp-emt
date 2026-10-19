@@ -15,6 +15,7 @@ export type EstadoPessoa = (typeof ESTADOS_PESSOA)[number];
 export const ROTULO_MOTIVO_PESSOA: Record<string, string> = {
   obra: "Trabalhando na obra",
   escolhido: "Centro escolhido na ficha",
+  carreta_emt: "Motorista da carreta",
   sem_obra: "Trabalhando sem obra",
   obra_sem_centro: "Obra sem centro de custo",
   obra_inativa: "Obra inativa",
