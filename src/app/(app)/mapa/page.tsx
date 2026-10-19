@@ -97,6 +97,11 @@ export default async function PaginaMapa({
           editar,
           criar: temPermissao(usuario, "mapa.mapa", "criar"),
           historico: temPermissao(usuario, "mapa.historico", "ver"),
+          cadastrarColaborador: temPermissao(
+            usuario,
+            "cadastros.colaboradores",
+            "criar",
+          ),
         }}
         movimentarPilha={{
           entrada: temPermissao(usuario, "estoque.entradas", "criar"),
