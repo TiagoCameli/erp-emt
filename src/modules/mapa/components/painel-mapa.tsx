@@ -60,6 +60,8 @@ export interface PainelMapaProps {
   pessoasSemAlocacao?: number;
   /** Abre o quadro de alocação filtrado nelas. */
   onAlocarSemAlocacao?: () => void;
+  temCandidatosDiarista: boolean;
+  onAdicionarDiarista: () => void;
   /** Tanques, pilhas e depósitos do Estoque que ainda não têm lugar no mapa. */
   objetosSemLugar: { id: string; nome: string; tipo: string }[];
   onEscolherObjeto: (id: string) => void;
@@ -129,6 +131,8 @@ export function PainelMapa({
   onAdicionarAlugada,
   pessoasSemAlocacao = 0,
   onAlocarSemAlocacao,
+  temCandidatosDiarista,
+  onAdicionarDiarista,
   objetosSemLugar,
   onEscolherObjeto,
   children,
@@ -433,6 +437,19 @@ export function PainelMapa({
         >
           <Plus />
           Adicionar máquina alugada
+        </Button>
+      ) : null}
+      {permissoes.editar ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onAdicionarDiarista}
+          className="shrink-0"
+          disabled={!temCandidatosDiarista && !permissoes.cadastrarColaborador}
+        >
+          <Plus />
+          Adicionar diarista
         </Button>
       ) : null}
     </aside>

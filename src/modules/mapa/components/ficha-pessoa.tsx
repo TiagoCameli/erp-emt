@@ -1,6 +1,6 @@
 "use client";
 
-import { Crosshair, LocateFixed, X } from "lucide-react";
+import { Crosshair, LocateFixed, LogOut, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +61,7 @@ export function FichaPessoa({
   onTrocarObra,
   onPosicionar,
   relatorioDiasHref = null,
+  onTirarDoMapa,
 }: {
   pessoa: PessoaMapa;
   /** Código da máquina que a pessoa opera (null = nenhuma). */
@@ -84,6 +85,8 @@ export function FichaPessoa({
   onPosicionar: () => void;
   /** Relatório "Dias de pessoa por centro"; nulo sem permissão de ver os relatórios do Mapa. */
   relatorioDiasHref?: string | null;
+  /** Só diarista: sai do mapa (entra de novo por "Adicionar diarista"). */
+  onTirarDoMapa?: () => void;
 }) {
   // O centro escolhido também muda o centro do dia: entra na chave que relê os dias.
   const diasPessoa = useDiasPessoa(
@@ -179,6 +182,18 @@ export function FichaPessoa({
               Também dá para arrastar a pessoa até uma máquina (vira operador)
               ou até um local.
             </p>
+          ) : null}
+          {onTirarDoMapa ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onTirarDoMapa}
+              disabled={salvando}
+            >
+              <LogOut />
+              Tirar do mapa
+            </Button>
           ) : null}
         </>
       ) : null}

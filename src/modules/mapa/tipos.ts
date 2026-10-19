@@ -172,6 +172,22 @@ export interface PessoaMapa {
   centroCustoNome: string;
 }
 
+/**
+ * Diarista ativo do RH que não está no mapa: candidato a "Adicionar diarista". Diarista só entra
+ * e sai pelo Mapa, igual máquina alugada (17/10/2026).
+ */
+export interface DiaristaForaDoMapa {
+  id: string;
+  nome: string;
+  funcao: string;
+}
+
+/** Função ativa do cadastro, para o diarista novo. */
+export interface FuncaoOpcao {
+  id: string;
+  nome: string;
+}
+
 /** Centro de custo ativo para escolher na ficha da pessoa. */
 export interface CentroCustoOpcaoMapa {
   id: string;
@@ -423,7 +439,10 @@ export interface EstadoMapa {
   modelos: Modelo3d[];
   equipamentos: EquipamentoMapa[];
   foraDoMapa: EquipamentoForaDoMapa[];
+  /** CLT e terceiro ativos sempre; diarista só depois de "Adicionar diarista". */
   pessoas: PessoaMapa[];
+  diaristasFora: DiaristaForaDoMapa[];
+  funcoes: FuncaoOpcao[];
   trechos: TrechoMapa[];
   areas: AreaMapa[];
   localidades: LocalidadeMapa[];
@@ -488,6 +507,8 @@ export interface PermissoesMapa {
   criar: boolean;
   /** mapa.historico/ver: a ficha mostra o link para o histórico de movimentações. */
   historico?: boolean;
+  /** cadastros.colaboradores/criar: "Adicionar diarista" pode cadastrar um diarista novo. */
+  cadastrarColaborador?: boolean;
 }
 
 /** Chave da configuração do Google Maps que chega ao cliente (as duas são NEXT_PUBLIC). */

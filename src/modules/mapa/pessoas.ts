@@ -76,3 +76,18 @@ export function pessoaNoFiltro(
     [p.nome, p.funcao, p.equipeNome, p.vinculo].join(" "),
   ).includes(termo);
 }
+
+/**
+ * A pessoa vai para a lista "Pessoas sem posição"? Quem opera uma máquina que está no mapa não vai:
+ * aparece ao lado dela, mesmo sem posição própria. É o caso da carreta EMT em frete ou na volta,
+ * que só ganha ponto na tela, pela rota (Tiago, 17/10/2026: "motorista das carretas ainda nao
+ * estao do lado de suas carretas").
+ */
+export function pessoaSemPosicaoNaTela(
+  p: PessoaMapa,
+  posicaoPendente: boolean,
+  maquinasNoMapa: ReadonlySet<string>,
+): boolean {
+  if (p.pos !== null || posicaoPendente) return false;
+  return !(p.equipamentoId && maquinasNoMapa.has(p.equipamentoId));
+}
