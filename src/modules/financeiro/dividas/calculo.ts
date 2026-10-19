@@ -207,6 +207,7 @@ export interface CentroOpcao {
   codigo: string | null;
   paiId: string | null;
   tipo: string | null;
+  aceitaContratoDivida?: boolean;
 }
 
 export interface EtapaOpcao {
@@ -221,20 +222,24 @@ function rotular(raiz: CentroOpcao, etapa: CentroOpcao): string {
 
 /**
  * A etapa do contrato: nível 2, debaixo de uma raiz de tipo `financeiro`
- * (Empréstimos) ou `imobilizado` (o bem financiado). É a mesma regra que
- * `fn_salvar_contrato_divida` cobra; aqui só para não oferecer o que o banco
- * recusaria.
+ * (Empréstimos) ou `imobilizado` (o bem financiado); e, na raiz marcada com
+ * `aceitaContratoDivida` (001 - Carretas EMT), a própria obra e as etapas dela.
+ * É a mesma regra que `fn_salvar_contrato_divida` cobra; aqui só para não
+ * oferecer o que o banco recusaria.
  */
 export function etapasDeDivida(centros: readonly CentroOpcao[]): EtapaOpcao[] {
   const raizes = new Map(
     centros
-      .filter((c) => c.paiId === null && (c.tipo === "financeiro" || c.tipo === "imobilizado"))
+      .filter((c) => c.paiId === null && (c.tipo === "financeiro" || c.tipo === "imobilizado" || c.aceitaContratoDivida))
       .map((c) => [c.id, c]),
   );
-  return centros
-    .filter((c) => c.paiId !== null && raizes.has(c.paiId))
-    .map((c) => ({ id: c.id, rotulo: rotular(raizes.get(c.paiId!)!, c) }))
-    .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  const obras = centros.filter((c) => c.paiId === null && c.aceitaContratoDivida).map((c) => ({ id: c.id, rotulo: c.nome }));
+  return [
+    ...obras,
+    ...centros
+      .filter((c) => c.paiId !== null && raizes.has(c.paiId))
+      .map((c) => ({ id: c.id, rotulo: rotular(raizes.get(c.paiId!)!, c) })),
+  ].sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
 }
 
 /**

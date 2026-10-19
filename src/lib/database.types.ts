@@ -920,6 +920,7 @@ export type Database = {
       };
       centros_custo: {
         Row: {
+          aceita_contrato_divida: boolean;
           ativo: boolean;
           codigo: string | null;
           created_at: string;
@@ -937,6 +938,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          aceita_contrato_divida?: boolean;
           ativo?: boolean;
           codigo?: string | null;
           created_at?: string;
@@ -954,6 +956,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          aceita_contrato_divida?: boolean;
           ativo?: boolean;
           codigo?: string | null;
           created_at?: string;
