@@ -22,7 +22,7 @@ import { enderecoParaColocar } from "@/modules/mapa/colocar-na-criacao";
  */
 
 const RECURSO = "estoque.pilhas" as const;
-const ROTAS = ["/estoque/pilhas", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
+const ROTAS = ["/estoque/pilhas", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/movimentacoes"];
 
 /** `id` e `mapa` só na criação: o endereço que abre o /mapa para marcar o lugar da pilha. */
 export type ResultadoAcao = { ok: true; id?: string; mapa?: string | null } | { erro: string };

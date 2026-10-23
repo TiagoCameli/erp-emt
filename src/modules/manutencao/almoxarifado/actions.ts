@@ -48,7 +48,7 @@ const ROTA_ENTRADAS = `${ROTA}/entradas`;
 const ROTA_DEPOSITOS = `${ROTA}/depositos`;
 const ROTA_PECAS = `${ROTA}/pecas`;
 const RECURSO_DEPOSITOS = "estoque.depositos" as const;
-const ROTAS_ESTOQUE = ["/estoque/depositos", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao"];
+const ROTAS_ESTOQUE = ["/estoque/depositos", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/movimentacoes"];
 
 /** `id` e `mapa` só na criação de depósito: o endereço que abre o /mapa para marcar o lugar. */
 export type ResultadoAcao = { ok: true; id?: string; mapa?: string | null } | { erro: string };

@@ -317,6 +317,15 @@ export const RECURSOS = [
     rota: "/estoque/posicao",
     acoes: ["ver"],
   },
+  // Movimentações (23/10/2026): o extrato de tudo o que entrou e saiu de cada local, com o
+  // saldo depois de cada movimento. Mesmas fontes da Posição, só leitura.
+  {
+    id: "estoque.movimentacoes",
+    nome: "Movimentações",
+    modulo: "estoque",
+    rota: "/estoque/movimentacoes",
+    acoes: ["ver"],
+  },
   {
     id: "estoque.entradas",
     nome: "Entradas",

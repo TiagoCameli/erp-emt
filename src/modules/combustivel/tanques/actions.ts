@@ -52,7 +52,7 @@ async function temAcao(acao: "criar" | "editar" | "excluir"): Promise<boolean> {
 
 /** Depois do commit nada vira falha. */
 function revalidar(...extras: string[]) {
-  for (const rota of [ROTA, "/combustivel", "/estoque/tanques", "/estoque/posicao", ...extras]) {
+  for (const rota of [ROTA, "/combustivel", "/estoque/tanques", "/estoque/posicao", "/estoque/movimentacoes", ...extras]) {
     try {
       revalidatePath(rota);
     } catch {
