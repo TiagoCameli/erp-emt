@@ -10761,6 +10761,26 @@ export type Database = {
           valor: number;
         }[];
       };
+      fn_estoque_movimentacoes: {
+        Args: never;
+        Returns: {
+          data: string;
+          id: string;
+          insumo_id: string | null;
+          insumo_nome: string | null;
+          lancado_em: string;
+          local_id: string;
+          local_nome: string;
+          local_tipo: string;
+          momento: string;
+          origem: string;
+          quantidade: number;
+          referencia: string | null;
+          saldo: number;
+          tipo: string;
+          unidade: string | null;
+        }[];
+      };
       fn_estoque_recalcular_peps: {
         Args: { p_deposito: string; p_insumo: string };
         Returns: undefined;

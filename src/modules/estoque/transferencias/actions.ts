@@ -17,7 +17,7 @@ import { transferenciaSchema, type TransferenciaInput } from "@/modules/estoque/
  */
 
 const RECURSO = "estoque.transferencias" as const;
-const ROTAS = ["/estoque/transferencias", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/pilhas"];
+const ROTAS = ["/estoque/transferencias", "/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/movimentacoes", "/estoque/pilhas"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 

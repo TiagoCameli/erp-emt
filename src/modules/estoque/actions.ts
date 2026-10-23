@@ -22,7 +22,7 @@ import { entradaSchema, saidaSchema, type EntradaInput, type SaidaInput } from "
 type Aba = "estoque.entradas" | "estoque.saidas";
 type Tabela = "estoque_entradas" | "estoque_saidas";
 
-const ROTAS = ["/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/pilhas", "/mapa"];
+const ROTAS = ["/estoque/entradas", "/estoque/saidas", "/estoque/posicao", "/estoque/movimentacoes", "/estoque/pilhas", "/mapa"];
 
 export type ResultadoAcao = { ok: true } | { erro: string };
 
