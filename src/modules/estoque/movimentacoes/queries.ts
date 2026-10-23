@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import type { OrigemPosicao } from "@/modules/estoque/queries";
 
 /**
@@ -45,13 +46,19 @@ export interface MovimentoLinha {
  * Todas as movimentações de depósitos, tanques e pilhas, da mais nova para a mais velha.
  * A RPC junta Estoque, Combustível e Peças pela regra de saldo de cada módulo: o último saldo
  * de cada local é o da Posição (prova `supabase/provas/estoque_movimentacoes.sql`).
+ *
+ * Paginada: o PostgREST corta a RPC em 1.000 linhas sem avisar, e na primeira versão a tela
+ * recebia só os abastecimentos de dois tanques (23/10/2026). O `id` é único, então ordenar por
+ * ele deixa as páginas estáveis; a ordem da tela vem depois, no `sort`.
  */
 export async function listarMovimentacoes(): Promise<MovimentoLinha[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_estoque_movimentacoes");
-  if (error) throw new Error("Não foi possível carregar as movimentações do estoque");
+  const { linhas, erro } = await todasAsLinhas((de, ate) =>
+    supabase.rpc("fn_estoque_movimentacoes").order("id").range(de, ate),
+  );
+  if (erro) throw new Error("Não foi possível carregar as movimentações do estoque");
 
-  return (data ?? [])
+  return linhas
     .map(
       (linha): MovimentoLinha => ({
         id: linha.id,
