@@ -69,7 +69,23 @@ export function saldosAtuais(movimentos: readonly MovimentoParaSaldo[]): SaldoAt
       linha.origem === "combustivel" && linha.saldo === 0 ? { ...linha, insumoNome: "Vazio" } : linha,
     )
     .sort(
-      (a, b) =>
-        a.localNome.localeCompare(b.localNome, "pt-BR") || a.insumoNome.localeCompare(b.insumoNome, "pt-BR"),
+      (a, b) => a.localNome.localeCompare(b.localNome, "pt-BR") || a.insumoNome.localeCompare(b.insumoNome, "pt-BR"),
     );
+}
+
+export interface ResumoDoLocal {
+  entrou: number;
+  saiu: number;
+  movimentos: number;
+}
+
+/** Quanto entrou e saiu nos movimentos dados. A saída volta positiva, para o card. */
+export function resumoDoLocal(movimentos: readonly { quantidade: number }[]): ResumoDoLocal {
+  let entrou = 0;
+  let saiu = 0;
+  for (const movimento of movimentos) {
+    if (movimento.quantidade > 0) entrou += movimento.quantidade;
+    else saiu -= movimento.quantidade;
+  }
+  return { entrou, saiu, movimentos: movimentos.length };
 }
