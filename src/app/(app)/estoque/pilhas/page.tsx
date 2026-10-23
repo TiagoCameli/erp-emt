@@ -45,6 +45,7 @@ export default async function PaginaPilhasEstoque() {
         localidades={localidades}
         podeEditar={podeEditar}
         podeExcluir={temPermissao(usuario, RECURSO, "excluir")}
+        podeVerMovimentacoes={temPermissao(usuario, "estoque.movimentacoes", "ver")}
       />
     </>
   );

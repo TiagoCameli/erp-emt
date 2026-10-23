@@ -42,6 +42,22 @@ export interface TanquesListaProps {
    * não vê o Combustível recebe o card sem link, em vez de um link que dá 404.
    */
   abreDetalhe?: boolean;
+  /**
+   * Para onde o card leva. No Combustível, o detalhe do tanque (só o de combustível). No
+   * Estoque (23/10/2026), as movimentações do tanque, o de material também.
+   */
+  detalheEm?: "combustivel" | "movimentacoes";
+}
+
+function rotaDoDetalhe(
+  tanque: Pick<TanqueLinha, "id" | "uso">,
+  abreDetalhe: boolean,
+  detalheEm: "combustivel" | "movimentacoes",
+  externo: boolean,
+): string | null {
+  if (!abreDetalhe) return null;
+  if (detalheEm === "movimentacoes") return `/estoque/movimentacoes?local=${encodeURIComponent(tanque.id)}`;
+  return externo || tanque.uso === "combustivel" ? `/combustivel/tanques/${tanque.id}` : null;
 }
 
 /**
@@ -101,6 +117,7 @@ export function TanquesLista({
   titulo = "Tanques de Combustível",
   descricao,
   abreDetalhe = true,
+  detalheEm = "combustivel",
 }: TanquesListaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativos", ["ativos", "inativos", "todos"]);
@@ -233,9 +250,9 @@ export function TanquesLista({
                     className="relative rounded-xl border bg-card p-4 shadow-sm transition-colors hover:border-primary focus-within:border-primary"
                   >
                     {/* O card inteiro leva ao detalhe; o rodapé fica por cima do link. */}
-                    {abreDetalhe && tanque.uso === "combustivel" ? (
+                    {rotaDoDetalhe(tanque, abreDetalhe, detalheEm, false) ? (
                       <Link
-                        href={`/combustivel/tanques/${tanque.id}`}
+                        href={rotaDoDetalhe(tanque, abreDetalhe, detalheEm, false) ?? ""}
                         aria-label={`Abrir o tanque ${tanque.nome}`}
                         className="absolute inset-0 rounded-xl foco-anel-dentro"
                       />
@@ -296,9 +313,9 @@ export function TanquesLista({
                     key={tanque.id}
                     className="relative flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
                   >
-                    {abreDetalhe ? (
+                    {rotaDoDetalhe(tanque, abreDetalhe, detalheEm, true) ? (
                       <Link
-                        href={`/combustivel/tanques/${tanque.id}`}
+                        href={rotaDoDetalhe(tanque, abreDetalhe, detalheEm, true) ?? ""}
                         aria-label={`Abrir o tanque ${tanque.nome}`}
                         className="absolute inset-0 foco-anel-dentro"
                       />

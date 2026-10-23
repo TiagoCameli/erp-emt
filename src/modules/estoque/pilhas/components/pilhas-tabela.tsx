@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Mountain, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeftRight, Mountain, Pencil, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import {
   CelulaVazia,
@@ -59,6 +60,13 @@ export interface PilhasTabelaProps {
   localidades: { id: string; nome: string }[];
   podeEditar: boolean;
   podeExcluir: boolean;
+  /** `estoque.movimentacoes`/ver: o clique na pilha abre o extrato dela. */
+  podeVerMovimentacoes?: boolean;
+}
+
+/** O extrato da pilha na aba Movimentações. */
+export function rotaMovimentacoesDoLocal(localId: string): string {
+  return `/estoque/movimentacoes?local=${encodeURIComponent(localId)}`;
 }
 
 /**
@@ -66,7 +74,15 @@ export interface PilhasTabelaProps {
  * ativa se a saída que a zerou for excluída). Excluir vai para a lixeira; pilha com
  * movimento está em uso e a FK recusa.
  */
-export function PilhasTabela({ pilhas, insumos, localidades, podeEditar, podeExcluir }: PilhasTabelaProps) {
+export function PilhasTabela({
+  pilhas,
+  insumos,
+  localidades,
+  podeEditar,
+  podeExcluir,
+  podeVerMovimentacoes = false,
+}: PilhasTabelaProps) {
+  const router = useRouter();
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [status, setStatus] = useFiltroSessao<FiltroStatus>("status", "ativas", ["ativas", "inativas", "todas"]);
   const [editando, setEditando] = React.useState<PilhaLinha | null>(null);
@@ -201,6 +217,7 @@ export function PilhasTabela({ pilhas, insumos, localidades, podeEditar, podeExc
         idTabela="estoque.pilhas"
         columns={colunas}
         data={filtradas}
+        onRowClick={podeVerMovimentacoes ? (pilha) => router.push(rotaMovimentacoesDoLocal(pilha.id)) : undefined}
         filtros={[
           {
             id: "busca",
@@ -227,9 +244,15 @@ export function PilhasTabela({ pilhas, insumos, localidades, podeEditar, podeExc
           },
         ]}
         acoesLinha={
-          podeEditar || podeExcluir
+          podeEditar || podeExcluir || podeVerMovimentacoes
             ? (pilha) => (
                 <>
+                  {podeVerMovimentacoes ? (
+                    <DropdownMenuItem onSelect={() => router.push(rotaMovimentacoesDoLocal(pilha.id))}>
+                      <ArrowLeftRight />
+                      Ver movimentações
+                    </DropdownMenuItem>
+                  ) : null}
                   {podeEditar ? (
                     <DropdownMenuItem
                       onSelect={() => {

@@ -23,6 +23,7 @@ export default async function PaginaTanquesEstoque() {
   const podeCriar = temPermissao(usuario, RECURSO, "criar");
   const podeEditar = temPermissao(usuario, RECURSO, "editar");
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
+  const verMovimentacoes = temPermissao(usuario, "estoque.movimentacoes", "ver");
 
   // O dono só aparece no formulário: quem não cria nem edita não paga a leitura dos fornecedores.
   const [tanques, fornecedores] = await Promise.all([
@@ -38,8 +39,10 @@ export default async function PaginaTanquesEstoque() {
       podeEditar={podeEditar}
       podeExcluir={podeExcluir}
       titulo="Tanques"
-      descricao="O nível muda pelas entradas e abastecimentos do módulo Combustível"
-      abreDetalhe={temPermissao(usuario, "combustivel.tanques", "ver")}
+      descricao="O nível muda pelas entradas e abastecimentos do módulo Combustível. Clique no tanque para ver as movimentações dele"
+      // O card abre as movimentações do tanque; sem essa permissão, o detalhe do Combustível.
+      abreDetalhe={verMovimentacoes || temPermissao(usuario, "combustivel.tanques", "ver")}
+      detalheEm={verMovimentacoes ? "movimentacoes" : "combustivel"}
     />
   );
 }

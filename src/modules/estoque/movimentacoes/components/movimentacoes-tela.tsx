@@ -2,23 +2,28 @@
 
 import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowLeftRight, Boxes } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Boxes } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   colunaData,
+  Combobox,
   DataTable,
   EmptyState,
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
+  GradeKpis,
+  KPICard,
 } from "@/components/canonicos";
 import { useFiltroSessao } from "@/components/canonicos/use-filtro-sessao";
+import { Button } from "@/components/ui/button";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { cn } from "@/lib/utils";
 import { filtrarFacetado, selecao } from "@/modules/_shared/filtros-facetados";
 import { ROTULO_ORIGEM } from "@/modules/estoque/components/posicao-tabela";
-import { saldosAtuais, type SaldoAtualLinha } from "@/modules/estoque/movimentacoes/calculo";
+import { resumoDoLocal, saldosAtuais, type SaldoAtualLinha } from "@/modules/estoque/movimentacoes/calculo";
 import type { MovimentoLinha, TipoMovimento } from "@/modules/estoque/movimentacoes/queries";
 import type { OrigemPosicao } from "@/modules/estoque/queries";
 
@@ -41,6 +46,9 @@ export const ROTULO_TIPO: Record<TipoMovimento, string> = {
 
 const SITUACOES_SALDO = ["com_saldo", "todos"] as const;
 type SituacaoSaldo = (typeof SITUACOES_SALDO)[number];
+
+/** O local aberto vive na URL: o link da aba Pilhas e da aba Tanques cai direto nele. */
+const PARAM_LOCAL = "local";
 
 function Quantidade({ valor, unidade, sinal = false }: { valor: number; unidade: string | null; sinal?: boolean }) {
   return (
@@ -81,12 +89,29 @@ export interface MovimentacoesTelaProps {
 }
 
 /**
- * Estoque > Movimentações: o saldo atual de cada depósito, tanque e pilha e, embaixo, o
- * extrato de tudo o que entrou e saiu, com o saldo do local depois de cada movimento.
- * Clicar num saldo filtra o extrato por aquele local.
+ * Estoque > Movimentações. Escolhe-se o local (pilha, depósito ou tanque) no topo, ou
+ * clicando no saldo dele, e a tela mostra o saldo de agora, quanto entrou e saiu, e o
+ * extrato só daquele local, com o saldo depois de cada movimento. Sem local escolhido,
+ * mostra o saldo de todos e o extrato geral.
  */
 export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
-  // Saldo atual
+  // O local é navegação, não filtro: fica na URL, fora do "Limpar filtros".
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const localAberto = searchParams.get(PARAM_LOCAL) ?? "";
+  const abrirLocal = React.useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (id === "") params.delete(PARAM_LOCAL);
+      else params.set(PARAM_LOCAL, id);
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
+  // Saldo atual (só sem local aberto)
   const [buscaSaldo, setBuscaSaldo] = useFiltroSessao("saldo_busca", "");
   const [tipoLocalSaldo, setTipoLocalSaldo] = useFiltroSessao("saldo_tipo_local", "");
   const [situacaoSaldo, setSituacaoSaldo] = useFiltroSessao<SituacaoSaldo>(
@@ -98,17 +123,41 @@ export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
   const [busca, setBusca] = useFiltroSessao("busca", "");
   const [de, setDe] = useFiltroSessao("de", "");
   const [ate, setAte] = useFiltroSessao("ate", "");
-  const [local, setLocal] = useFiltroSessao("local", "");
   const [tipo, setTipo] = useFiltroSessao("tipo", "");
   const [origem, setOrigem] = useFiltroSessao("origem", "");
 
   const saldos = React.useMemo(() => saldosAtuais(movimentos), [movimentos]);
 
+  const locais = React.useMemo(() => {
+    const vistos = new Map<string, { valor: string; rotulo: string }>();
+    for (const linha of saldos) {
+      vistos.set(linha.localId, {
+        valor: linha.localId,
+        rotulo: `${linha.localNome} (${ROTULO_LOCAL[linha.localTipo].toLowerCase()})`,
+      });
+    }
+    return [...vistos.values()].sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
+  }, [saldos]);
+
+  const saldosDoLocal = React.useMemo(
+    () => saldos.filter((linha) => linha.localId === localAberto),
+    [saldos, localAberto],
+  );
+  const doLocal = React.useMemo(
+    () => (localAberto === "" ? movimentos : movimentos.filter((movimento) => movimento.localId === localAberto)),
+    [movimentos, localAberto],
+  );
+
   const saldosFiltrados = React.useMemo(
     () =>
       filtrarFacetado(
         saldos,
-        { tipoLocal: { selecionados: selecao(tipoLocalSaldo), chave: (linha) => linha.localTipo } },
+        {
+          tipoLocal: {
+            selecionados: selecao(tipoLocalSaldo),
+            chave: (linha) => linha.localTipo,
+          },
+        },
         [
           (linha) => situacaoSaldo === "todos" || linha.saldo !== 0,
           (linha) =>
@@ -132,11 +181,16 @@ export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
   const { linhas: filtrados, opcoes } = React.useMemo(
     () =>
       filtrarFacetado(
-        movimentos,
+        doLocal,
         {
-          local: { selecionados: selecao(local), chave: (movimento) => movimento.localId },
-          tipo: { selecionados: selecao(tipo), chave: (movimento) => movimento.tipo },
-          origem: { selecionados: selecao(origem), chave: (movimento) => movimento.origem },
+          tipo: {
+            selecionados: selecao(tipo),
+            chave: (movimento) => movimento.tipo,
+          },
+          origem: {
+            selecionados: selecao(origem),
+            chave: (movimento) => movimento.origem,
+          },
         },
         [
           (movimento) => (de === "" || movimento.data >= de) && (ate === "" || movimento.data <= ate),
@@ -155,18 +209,12 @@ export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
             ),
         ],
       ),
-    [movimentos, local, tipo, origem, de, ate, busca],
+    [doLocal, tipo, origem, de, ate, busca],
   );
 
-  const locais = React.useMemo(() => {
-    const vistos = new Map<string, string>();
-    for (const movimento of movimentos) {
-      vistos.set(movimento.localId, `${movimento.localNome} (${ROTULO_LOCAL[movimento.localTipo].toLowerCase()})`);
-    }
-    return [...vistos]
-      .map(([valor, rotulo]) => ({ valor, rotulo }))
-      .sort((a, b) => a.rotulo.localeCompare(b.rotulo, "pt-BR"));
-  }, [movimentos]);
+  // Entrou e saiu no período e nos filtros escolhidos; o saldo é sempre o de agora.
+  const resumo = React.useMemo(() => resumoDoLocal(filtrados), [filtrados]);
+  const temFiltroNoExtrato = busca !== "" || de !== "" || ate !== "" || tipo !== "" || origem !== "";
 
   const colunasSaldo = React.useMemo<ColumnDef<SaldoAtualLinha, unknown>[]>(
     () => [
@@ -253,175 +301,255 @@ export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
     [],
   );
 
+  const primeiroSaldo = saldosDoLocal[0];
+  const nomeAberto = primeiroSaldo
+    ? `${primeiroSaldo.localNome} (${ROTULO_LOCAL[primeiroSaldo.localTipo].toLowerCase()})`
+    : "";
+
   return (
     <>
-      <TituloSecao titulo="Saldo atual" descricao="Um saldo por local e insumo; clique na linha para ver as movimentações do local" />
-      <DataTable
-        idTabela="estoque.movimentacoes.saldos"
-        columns={colunasSaldo}
-        data={saldosFiltrados.linhas}
-        onRowClick={(linha) => setLocal(linha.localId)}
-        filtros={[
-          {
-            id: "saldo_busca",
-            rotulo: "Busca",
-            fixo: true,
-            temValor: buscaSaldo !== "",
-            onLimpar: () => setBuscaSaldo(""),
-            elemento: <FiltroBusca valor={buscaSaldo} onValorChange={setBuscaSaldo} placeholder="Local, insumo ou tipo" />,
-          },
-          {
-            id: "saldo_tipo_local",
-            rotulo: "Local",
-            temValor: tipoLocalSaldo !== "",
-            onLimpar: () => setTipoLocalSaldo(""),
-            elemento: (
-              <FiltroSelect
-                valor={tipoLocalSaldo}
-                onValorChange={setTipoLocalSaldo}
-                opcoes={saldosFiltrados.opcoes(
-                  "tipoLocal",
-                  (Object.keys(ROTULO_LOCAL) as MovimentoLinha["localTipo"][]).map((valor) => ({
-                    valor,
-                    rotulo: ROTULO_LOCAL[valor],
-                  })),
-                )}
-                placeholder="Depósito, tanque ou pilha"
-                todosRotulo="Todos os locais"
-              />
-            ),
-          },
-          {
-            id: "saldo_situacao",
-            rotulo: "Saldo",
-            temValor: situacaoSaldo !== "com_saldo",
-            onLimpar: () => setSituacaoSaldo("com_saldo"),
-            elemento: (
-              <FiltroSelect
-                valor={situacaoSaldo}
-                onValorChange={(valor) => setSituacaoSaldo(valor === "todos" ? "todos" : "com_saldo")}
-                opcoes={[
-                  { valor: "com_saldo", rotulo: "Com saldo" },
-                  { valor: "todos", rotulo: "Com saldo e zerados" },
-                ]}
-                obrigatorio
-              />
-            ),
-          },
-        ]}
-        emptyState={
-          <EmptyState
-            icone={Boxes}
-            titulo={saldos.length === 0 ? "Nada em estoque" : "Nenhum saldo encontrado"}
-            descricao={saldos.length === 0 ? "Os saldos aparecem com a primeira entrada" : "Ajuste a busca ou os filtros"}
-            className="border-none bg-transparent"
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="flex w-full max-w-md flex-col gap-1">
+          <span className="text-legenda font-semibold tracking-wide text-muted-foreground uppercase">
+            Pilha, depósito ou tanque
+          </span>
+          <Combobox
+            valor={localAberto}
+            onValorChange={abrirLocal}
+            opcoes={locais}
+            limpavel
+            placeholder="Todos os locais"
+            buscaPlaceholder="Buscar local"
+            vazioTexto="Nenhum local com movimentação"
           />
-        }
-      />
+        </div>
+        {localAberto !== "" ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => abrirLocal("")}>
+            <ArrowLeft />
+            Todos os locais
+          </Button>
+        ) : null}
+      </div>
 
-      <TituloSecao
-        titulo="Movimentações"
-        descricao="Tudo o que entrou e saiu, da mais nova para a mais velha, com o saldo do local depois de cada uma"
-      />
-      <DataTable
-        idTabela="estoque.movimentacoes"
-        columns={colunas}
-        data={filtrados}
-        filtros={[
-          {
-            id: "busca",
-            rotulo: "Busca",
-            fixo: true,
-            temValor: busca !== "",
-            onLimpar: () => setBusca(""),
-            elemento: (
-              <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Local, insumo, referência ou data" />
-            ),
-          },
-          {
-            id: "periodo",
-            rotulo: "Período",
-            temValor: de !== "" || ate !== "",
-            onLimpar: () => {
-              setDe("");
-              setAte("");
-            },
-            elemento: (
-              <FiltroPeriodo
-                de={de}
-                ate={ate}
-                onPeriodoChange={(novoDe, novoAte) => {
-                  setDe(novoDe);
-                  setAte(novoAte);
-                }}
+      {localAberto !== "" ? (
+        primeiroSaldo ? (
+          <>
+            <TituloSecao
+              titulo={nomeAberto}
+              descricao={`${ROTULO_ORIGEM[primeiroSaldo.origem]} · último movimento em ${formatarData(primeiroSaldo.ultimoMovimento)}`}
+            />
+            <GradeKpis id="estoque.movimentacoes.local" titulo="Resumo do local" className="mb-4">
+              {saldosDoLocal.map((linha) => (
+                <KPICard
+                  key={linha.chave}
+                  idCard={`saldo-${linha.chave}`}
+                  titulo={`Saldo atual · ${linha.insumoNome}`}
+                  valor={<Quantidade valor={linha.saldo} unidade={linha.unidade} />}
+                />
+              ))}
+              {/* Entrou e saiu só somam com um insumo só: num depósito com vários, misturaria unidades. */}
+              {saldosDoLocal.length === 1 ? (
+                <>
+                  <KPICard
+                    idCard="entrou"
+                    titulo={temFiltroNoExtrato ? "Entrou (nos filtros)" : "Entrou"}
+                    valor={<Quantidade valor={resumo.entrou} unidade={primeiroSaldo.unidade} />}
+                  />
+                  <KPICard
+                    idCard="saiu"
+                    titulo={temFiltroNoExtrato ? "Saiu (nos filtros)" : "Saiu"}
+                    valor={<Quantidade valor={resumo.saiu} unidade={primeiroSaldo.unidade} />}
+                  />
+                </>
+              ) : null}
+              <KPICard
+                idCard="movimentos"
+                titulo={temFiltroNoExtrato ? "Movimentos (nos filtros)" : "Movimentos"}
+                valor={<span className="tabular-nums">{formatarQuantidade(resumo.movimentos)}</span>}
               />
-            ),
-          },
-          {
-            id: "local",
-            rotulo: "Local",
-            temValor: local !== "",
-            onLimpar: () => setLocal(""),
-            elemento: (
-              <FiltroSelect
-                valor={local}
-                onValorChange={setLocal}
-                opcoes={opcoes("local", locais)}
-                placeholder="Local"
-                todosRotulo="Todos os locais"
-              />
-            ),
-          },
-          {
-            id: "tipo",
-            rotulo: "Movimento",
-            temValor: tipo !== "",
-            onLimpar: () => setTipo(""),
-            elemento: (
-              <FiltroSelect
-                valor={tipo}
-                onValorChange={setTipo}
-                opcoes={opcoes(
-                  "tipo",
-                  (Object.keys(ROTULO_TIPO) as TipoMovimento[]).map((valor) => ({ valor, rotulo: ROTULO_TIPO[valor] })),
-                )}
-                placeholder="Movimento"
-                todosRotulo="Todos os movimentos"
-              />
-            ),
-          },
-          {
-            id: "origem",
-            rotulo: "Tipo",
-            temValor: origem !== "",
-            onLimpar: () => setOrigem(""),
-            elemento: (
-              <FiltroSelect
-                valor={origem}
-                onValorChange={setOrigem}
-                opcoes={opcoes(
-                  "origem",
-                  (Object.keys(ROTULO_ORIGEM) as OrigemPosicao[]).map((valor) => ({ valor, rotulo: ROTULO_ORIGEM[valor] })),
-                )}
-                placeholder="Tipo"
-                todosRotulo="Todos os tipos"
-              />
-            ),
-          },
-        ]}
-        emptyState={
+            </GradeKpis>
+          </>
+        ) : (
           <EmptyState
             icone={ArrowLeftRight}
-            titulo={movimentos.length === 0 ? "Nenhuma movimentação" : "Nenhuma movimentação encontrada"}
-            descricao={
-              movimentos.length === 0
-                ? "Entradas, saídas e transferências aparecem aqui"
-                : "Ajuste a busca, o período ou os filtros"
-            }
-            className="border-none bg-transparent"
+            titulo="Nenhuma movimentação neste local"
+            descricao="O local ainda não teve entrada nem saída. Escolha outro ou volte para todos os locais"
+            className="mb-4"
           />
-        }
-      />
+        )
+      ) : (
+        <>
+          <TituloSecao
+            titulo="Saldo atual"
+            descricao="Um saldo por local e insumo; clique na linha para abrir o local"
+          />
+          <DataTable
+            idTabela="estoque.movimentacoes.saldos"
+            columns={colunasSaldo}
+            data={saldosFiltrados.linhas}
+            onRowClick={(linha) => abrirLocal(linha.localId)}
+            filtros={[
+              {
+                id: "saldo_busca",
+                rotulo: "Busca",
+                fixo: true,
+                temValor: buscaSaldo !== "",
+                onLimpar: () => setBuscaSaldo(""),
+                elemento: (
+                  <FiltroBusca valor={buscaSaldo} onValorChange={setBuscaSaldo} placeholder="Local, insumo ou tipo" />
+                ),
+              },
+              {
+                id: "saldo_tipo_local",
+                rotulo: "Local",
+                temValor: tipoLocalSaldo !== "",
+                onLimpar: () => setTipoLocalSaldo(""),
+                elemento: (
+                  <FiltroSelect
+                    valor={tipoLocalSaldo}
+                    onValorChange={setTipoLocalSaldo}
+                    opcoes={saldosFiltrados.opcoes(
+                      "tipoLocal",
+                      (Object.keys(ROTULO_LOCAL) as MovimentoLinha["localTipo"][]).map((valor) => ({
+                        valor,
+                        rotulo: ROTULO_LOCAL[valor],
+                      })),
+                    )}
+                    placeholder="Depósito, tanque ou pilha"
+                    todosRotulo="Todos os locais"
+                  />
+                ),
+              },
+              {
+                id: "saldo_situacao",
+                rotulo: "Saldo",
+                temValor: situacaoSaldo !== "com_saldo",
+                onLimpar: () => setSituacaoSaldo("com_saldo"),
+                elemento: (
+                  <FiltroSelect
+                    valor={situacaoSaldo}
+                    onValorChange={(valor) => setSituacaoSaldo(valor === "todos" ? "todos" : "com_saldo")}
+                    opcoes={[
+                      { valor: "com_saldo", rotulo: "Com saldo" },
+                      { valor: "todos", rotulo: "Com saldo e zerados" },
+                    ]}
+                    obrigatorio
+                  />
+                ),
+              },
+            ]}
+            emptyState={
+              <EmptyState
+                icone={Boxes}
+                titulo={saldos.length === 0 ? "Nada em estoque" : "Nenhum saldo encontrado"}
+                descricao={
+                  saldos.length === 0 ? "Os saldos aparecem com a primeira entrada" : "Ajuste a busca ou os filtros"
+                }
+                className="border-none bg-transparent"
+              />
+            }
+          />
+        </>
+      )}
+
+      {localAberto === "" || primeiroSaldo ? (
+        <>
+          <TituloSecao
+            titulo={localAberto === "" ? "Movimentações de todos os locais" : "Movimentações do local"}
+            descricao="Da mais nova para a mais velha, com o saldo do local depois de cada uma"
+          />
+          <DataTable
+            idTabela="estoque.movimentacoes"
+            columns={colunas}
+            data={filtrados}
+            filtros={[
+              {
+                id: "busca",
+                rotulo: "Busca",
+                fixo: true,
+                temValor: busca !== "",
+                onLimpar: () => setBusca(""),
+                elemento: (
+                  <FiltroBusca valor={busca} onValorChange={setBusca} placeholder="Insumo, referência ou data" />
+                ),
+              },
+              {
+                id: "periodo",
+                rotulo: "Período",
+                temValor: de !== "" || ate !== "",
+                onLimpar: () => {
+                  setDe("");
+                  setAte("");
+                },
+                elemento: (
+                  <FiltroPeriodo
+                    de={de}
+                    ate={ate}
+                    onPeriodoChange={(novoDe, novoAte) => {
+                      setDe(novoDe);
+                      setAte(novoAte);
+                    }}
+                  />
+                ),
+              },
+              {
+                id: "tipo",
+                rotulo: "Movimento",
+                temValor: tipo !== "",
+                onLimpar: () => setTipo(""),
+                elemento: (
+                  <FiltroSelect
+                    valor={tipo}
+                    onValorChange={setTipo}
+                    opcoes={opcoes(
+                      "tipo",
+                      (Object.keys(ROTULO_TIPO) as TipoMovimento[]).map((valor) => ({
+                        valor,
+                        rotulo: ROTULO_TIPO[valor],
+                      })),
+                    )}
+                    placeholder="Movimento"
+                    todosRotulo="Todos os movimentos"
+                  />
+                ),
+              },
+              {
+                id: "origem",
+                rotulo: "Tipo",
+                temValor: origem !== "",
+                onLimpar: () => setOrigem(""),
+                elemento: (
+                  <FiltroSelect
+                    valor={origem}
+                    onValorChange={setOrigem}
+                    opcoes={opcoes(
+                      "origem",
+                      (Object.keys(ROTULO_ORIGEM) as OrigemPosicao[]).map((valor) => ({
+                        valor,
+                        rotulo: ROTULO_ORIGEM[valor],
+                      })),
+                    )}
+                    placeholder="Tipo"
+                    todosRotulo="Todos os tipos"
+                  />
+                ),
+              },
+            ]}
+            emptyState={
+              <EmptyState
+                icone={ArrowLeftRight}
+                titulo={doLocal.length === 0 ? "Nenhuma movimentação" : "Nenhuma movimentação encontrada"}
+                descricao={
+                  doLocal.length === 0
+                    ? "Entradas, saídas e transferências aparecem aqui"
+                    : "Ajuste a busca, o período ou os filtros"
+                }
+                className="border-none bg-transparent"
+              />
+            }
+          />
+        </>
+      ) : null}
     </>
   );
 }
