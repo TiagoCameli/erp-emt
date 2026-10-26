@@ -2,7 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
-import { paraEstadoMapa } from "@/modules/mapa/dados";
+import { paraAvisosMapa, paraEstadoMapa } from "@/modules/mapa/dados";
 import type { CentroCustoOpcaoMapa, EstadoMapa } from "@/modules/mapa/tipos";
 
 /**
@@ -16,7 +16,14 @@ export async function carregarEstadoMapa(): Promise<{
   erro: string | null;
 }> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("fn_mapa_estado");
+  // Os avisos vêm em paralelo e não derrubam o mapa: falhou (ou a função ainda não existe no
+  // banco), a tela segue sem a faixa de alertas.
+  const [{ data, error }, avisos] = await Promise.all([
+    supabase.rpc("fn_mapa_estado"),
+    supabase
+      .rpc("fn_mapa_avisos")
+      .then((r) => (r.error ? null : paraAvisosMapa(r.data))),
+  ]);
   if (error)
     return {
       estado: null,
@@ -28,7 +35,7 @@ export async function carregarEstadoMapa(): Promise<{
       estado: null,
       erro: "O banco devolveu o mapa num formato inesperado.",
     };
-  return { estado, erro: null };
+  return { estado: { ...estado, avisos }, erro: null };
 }
 
 /**

@@ -11538,6 +11538,7 @@ export type Database = {
         Returns: undefined;
       };
       fn_mapa_estado: { Args: never; Returns: Json };
+      fn_mapa_avisos: { Args: never; Returns: Json };
       fn_mapa_centro_custo_pessoa: {
         Args: { p_centro_custo: string | null; p_colaborador: string };
         Returns: undefined;
