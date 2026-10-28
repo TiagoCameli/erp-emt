@@ -7,6 +7,7 @@ import {
   PageHeader,
 } from "@/components/canonicos";
 import { getUsuarioLogado, temPermissao } from "@/lib/permissoes";
+import { RescisoesAcoesCabecalho } from "@/modules/rh/rescisoes/components/rescisoes-acoes-cabecalho";
 import { RescisoesTabela } from "@/modules/rh/rescisoes/components/rescisoes-tabela";
 import {
   listarColaboradoresParaRescisao,
@@ -46,6 +47,11 @@ export default async function PaginaRescisoes() {
         modulo="RH"
         titulo="Rescisões"
         descricao="Rescisão do contrato CLT: o sistema calcula as verbas, você confere e edita o que precisar, e a aprovação desliga o colaborador e gera a conta a pagar."
+        acoes={
+          podeCriar ? (
+            <RescisoesAcoesCabecalho colaboradores={colaboradores} />
+          ) : undefined
+        }
       />
 
       {/* Sem rescisão nenhuma não há número para mostrar: o estado vazio da
