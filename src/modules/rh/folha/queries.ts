@@ -66,6 +66,8 @@ export interface FolhaItem {
   colaboradorNome: string;
   /** Nome da função, vindo do join com `funcoes` (Bloco 3, Task 3). */
   colaboradorFuncao: string | null;
+  /** Id da função no cadastro, para o editor de cadastro pela folha. */
+  colaboradorFuncaoId: string | null;
   /**
    * Vínculo do colaborador (`clt` | `terceiro` | `diarista`). A folha deixou de
    * ser só CLT: a coluna existe porque com os três misturados na mesma tabela
@@ -445,7 +447,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
        encargos_percentual, descontos, desconto_horas,
        provisoes, adiantamentos, custo_total,
        valor_liquido, editado_manualmente, lancamento_id,
-       colaboradores(nome, vinculo, funcoes(nome)),
+       colaboradores(nome, vinculo, funcao_id, funcoes(nome)),
        centros_custo(nome, codigo),
        folha_item_encargos(nome, valor),
        folha_item_provisoes(nome, valor_principal, valor_encargos)`,
@@ -494,6 +496,7 @@ export async function buscarFolha(id: string): Promise<FolhaDetalhe | null> {
       colaboradorId: item.colaborador_id,
       colaboradorNome: item.colaboradores?.nome ?? "Colaborador removido",
       colaboradorFuncao: item.colaboradores?.funcoes?.nome ?? null,
+      colaboradorFuncaoId: item.colaboradores?.funcao_id ?? null,
       // Colaborador apagado não deixa o vínculo legível: cai em "clt", o
       // vínculo que a folha sempre teve, para a tabela não quebrar por causa
       // de uma linha órfã.
@@ -728,4 +731,41 @@ export async function trilhaFolha(id: string): Promise<EventoTrilha[]> {
     entidade: "Folha",
     genero: "f",
   });
+}
+
+/** Colaborador que pode ser incluído numa folha (o seletor de "Adicionar"). */
+export interface ColaboradorParaIncluir {
+  id: string;
+  nome: string;
+  vinculo: string;
+  ativo: boolean;
+  /** ISO (yyyy-mm-dd) ou null. */
+  dataDemissao: string | null;
+}
+
+/**
+ * Todos os colaboradores, ativos e inativos, para o "Adicionar colaborador" da
+ * folha. Quem já está nela é filtrado na tela, que tem os itens na mão. São
+ * menos de cem linhas, então vem tudo de uma vez.
+ */
+export async function listarColaboradoresParaIncluir(): Promise<
+  ColaboradorParaIncluir[]
+> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("colaboradores")
+    .select("id, nome, vinculo, ativo, data_demissao")
+    .order("nome");
+
+  if (error) {
+    throw new Error("Não foi possível carregar os colaboradores");
+  }
+
+  return (data ?? []).map((linha) => ({
+    id: linha.id,
+    nome: linha.nome,
+    vinculo: linha.vinculo,
+    ativo: linha.ativo,
+    dataDemissao: linha.data_demissao,
+  }));
 }

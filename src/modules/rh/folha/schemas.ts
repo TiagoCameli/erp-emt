@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { CASAS_DINHEIRO } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
+import { VINCULOS } from "@/modules/cadastros/colaboradores/schemas";
 import { casasDecimais, paraNumero } from "@/modules/rh/percentual";
 
 /* ------------------------------------------------------------------ */
@@ -265,3 +266,24 @@ export const vencimentoFolhaSchema = z.object({
 });
 
 export type VencimentoFolhaInput = z.input<typeof vencimentoFolhaSchema>;
+
+/**
+ * Cadastro do colaborador editado pela folha: nome, vínculo e função. Grava em
+ * `colaboradores` (fn_folha_atualizar_colaborador). Mesmas regras do cadastro
+ * para estes três campos: nome com 2+ caracteres, vínculo do catálogo, função
+ * opcional.
+ */
+export const atualizarColaboradorNaFolhaSchema = z.object({
+  folhaId: idSchemaCom("Folha inválida"),
+  colaboradorId: idSchemaCom("Colaborador inválido"),
+  nome: z
+    .string()
+    .trim()
+    .min(2, { error: "O nome precisa ter pelo menos 2 caracteres" }),
+  vinculo: z.enum(VINCULOS, { error: "Selecione um vínculo" }),
+  funcaoId: idSchemaCom("Função inválida").nullable(),
+});
+
+export type AtualizarColaboradorNaFolhaInput = z.infer<
+  typeof atualizarColaboradorNaFolhaSchema
+>;

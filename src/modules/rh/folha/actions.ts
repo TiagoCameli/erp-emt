@@ -32,9 +32,11 @@ import {
   nomeDoArquivo,
 } from "@/modules/rh/folha/resumo-pdf";
 import {
+  atualizarColaboradorNaFolhaSchema,
   editarItemFolhaSchema,
   gerarFolhaSchema,
   vencimentoFolhaSchema,
+  type AtualizarColaboradorNaFolhaInput,
   type EditarItemFolhaInput,
   type GerarFolhaInput,
   type VencimentoFolhaInput,
@@ -866,4 +868,105 @@ export async function voltarParaFolha(
   revalidatePath(ROTA);
   revalidatePath(rotaDetalhe(idFolha.data));
   return { ok: true };
+}
+
+/**
+ * Inclui um colaborador nesta folha, ATIVO OU NÃO (29/10/2026).
+ *
+ * Desde a mesma data o inativo não entra mais sozinho na folha: a rescisão vinha
+ * sendo lançada com o saldo de salário dentro, e a folha pagava os mesmos dias
+ * de novo. Quem tiver de receber pela folha mesmo desligado entra por aqui, e a
+ * inclusão dura enquanto for esta folha (sobrevive ao Regerar), igual à exclusão
+ * de `tirarDaFolha`.
+ *
+ * Regenera a folha pelo mesmo motivo de tirar: só `fn_gerar_folha` sabe montar
+ * item. Se a pessoa não gerar linha (sem salário, diarista sem diária no mês,
+ * desligado antes da competência), a RPC recusa dizendo por quê.
+ */
+export async function incluirNaFolha(
+  folhaId: string,
+  colaboradorId: string,
+): Promise<ResultadoAcao> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+
+  const idFolha = idSchema.safeParse(folhaId);
+  if (!idFolha.success) return { erro: "Folha inválida" };
+  const idColab = idSchema.safeParse(colaboradorId);
+  if (!idColab.success) return { erro: "Colaborador inválido" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_incluir_na_folha", {
+    p_folha_id: idFolha.data,
+    p_colaborador_id: idColab.data,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.incluirNaFolha",
+      error,
+      mensagemDeNegocio(
+        error,
+        "Não foi possível incluir o colaborador na folha. Tente novamente",
+      ),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(idFolha.data));
+  return { ok: true };
+}
+
+export type ResultadoCadastroNaFolha =
+  | { ok: true; continuaNaFolha: boolean }
+  | { erro: string };
+
+/**
+ * Altera nome, vínculo e função do colaborador A PARTIR da folha. Grava no
+ * CADASTRO (`colaboradores`), não só nesta folha: é o mesmo dado que a tela de
+ * Cadastros > Colaboradores mostra.
+ *
+ * Exige as duas permissões: editar a folha e editar colaboradores. Mudar o
+ * vínculo regenera a folha (a conta do item depende dele), e a RPC devolve se a
+ * pessoa continuou nela, para a tela avisar em vez de sumir com a linha.
+ */
+export async function atualizarColaboradorNaFolha(
+  dados: AtualizarColaboradorNaFolhaInput,
+): Promise<ResultadoCadastroNaFolha> {
+  if (!(await checarPermissao("editar"))) {
+    return { erro: "Sem permissão para editar a folha" };
+  }
+  try {
+    await exigirPermissao("cadastros.colaboradores", "editar");
+  } catch {
+    return { erro: "Sem permissão para editar o cadastro de colaboradores" };
+  }
+
+  const validado = atualizarColaboradorNaFolhaSchema.safeParse(dados);
+  if (!validado.success) {
+    return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_folha_atualizar_colaborador", {
+    p_folha_id: validado.data.folhaId,
+    p_colaborador_id: validado.data.colaboradorId,
+    p_nome: validado.data.nome,
+    p_vinculo: validado.data.vinculo,
+    p_funcao_id: validado.data.funcaoId,
+  });
+
+  if (error) {
+    return erroAcao(
+      "rh.folha.atualizarColaborador",
+      error,
+      mensagemDeNegocio(error, "Não foi possível atualizar o cadastro"),
+    );
+  }
+
+  revalidatePath(ROTA);
+  revalidatePath(rotaDetalhe(validado.data.folhaId));
+  revalidatePath("/cadastros/colaboradores");
+  return { ok: true, continuaNaFolha: data === true };
 }

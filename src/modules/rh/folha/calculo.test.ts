@@ -18,6 +18,7 @@ function criarItem(overrides: Partial<FolhaItem> & { id: string }): FolhaItem {
     colaboradorId: `colab-${overrides.id}`,
     colaboradorNome: `Colaborador ${overrides.id}`,
     colaboradorFuncao: null,
+    colaboradorFuncaoId: null,
     colaboradorVinculo: "clt",
     centroCustoId: null,
     centroCustoNome: null,

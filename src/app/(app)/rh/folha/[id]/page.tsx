@@ -10,9 +10,11 @@ import {
 import { FolhaDetalheView } from "@/modules/rh/folha/components/folha-detalhe";
 import {
   buscarFolha,
+  listarColaboradoresParaIncluir,
   listarLancamentosDaFolha,
   trilhaFolha,
 } from "@/modules/rh/folha/queries";
+import { listarFuncoesAtivas } from "@/modules/cadastros/funcoes/queries";
 import { buscarParametros } from "@/modules/rh/parametros-folha/queries";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
 import { listarContasParaAprovacaoRh } from "@/modules/rh/_shared/contas-aprovacao";
@@ -83,6 +85,17 @@ export default async function PaginaFolhaDetalhe({
 
   const podeCriar = temPermissao(usuario, "rh.folha", "criar");
   const podeEditar = temPermissao(usuario, "rh.folha", "editar");
+  const podeEditarCadastro = temPermissao(
+    usuario,
+    "cadastros.colaboradores",
+    "editar",
+  );
+  // Adicionar colaborador e editar o cadastro pela linha só existem no
+  // rascunho, para quem edita a folha: as outras visitas não pagam as leituras.
+  const rascunhoEditavel = podeEditar && folha.status === "rascunho";
+  const [funcoes, colaboradores] = rascunhoEditavel
+    ? await Promise.all([listarFuncoesAtivas(), listarColaboradoresParaIncluir()])
+    : [[], []];
   const podeAprovar = temPermissao(usuario, "rh.folha", "aprovar");
   const podeDesaprovar = temPermissao(usuario, "rh.folha", "desaprovar");
   const podeVerLancamento = temPermissao(usuario, "financeiro.lancamentos", "ver");
@@ -117,6 +130,9 @@ export default async function PaginaFolhaDetalhe({
       }
       trilha={trilha}
       centrosCusto={centrosCusto}
+      funcoes={funcoes.map((funcao) => ({ valor: funcao.id, rotulo: funcao.nome }))}
+      colaboradores={colaboradores}
+      podeEditarCadastro={podeEditarCadastro}
       podeCriar={podeCriar}
       podeEditar={podeEditar}
       podeAprovar={podeAprovar}
