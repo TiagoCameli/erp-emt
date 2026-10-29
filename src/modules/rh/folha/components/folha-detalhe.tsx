@@ -20,6 +20,8 @@ import { semDerrubarSucesso } from "@/components/canonicos/acao-sem-silencio";
 import {
   ApprovalBar,
   CelulaVazia,
+  Combobox,
+  type ComboboxOpcao,
   ConfirmDialog,
   DataTable,
   GradeKpis,
@@ -55,6 +57,7 @@ import {
   enviarFolhaParaAprovacao,
   gerarResumoFolhaPdf,
   mandarFolhaParaRevisao,
+  incluirNaFolha,
   tirarDaFolha,
   voltarFolhaParaRascunho,
   voltarParaFolha,
@@ -71,6 +74,7 @@ import type {
   FolhaItem,
   ResumoEncargo,
   ResumoProvisao,
+  ColaboradorParaIncluir,
 } from "@/modules/rh/folha/queries";
 import { podeTransicionar } from "@/modules/rh/folha/transicoes";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
@@ -170,6 +174,15 @@ export interface FolhaDetalheViewProps {
    * campo piscar vazio bem na hora de escolher.
    */
   centrosCusto: readonly CentroCustoOpcao[];
+  /** Funções ativas, para o editor de cadastro pela folha. */
+  funcoes: ComboboxOpcao[];
+  /**
+   * Todos os colaboradores (ativos e inativos), para "Adicionar colaborador".
+   * Quem já está na folha é filtrado aqui, a partir dos itens.
+   */
+  colaboradores: ColaboradorParaIncluir[];
+  /** cadastros.colaboradores:editar: libera nome, vínculo e função no editor. */
+  podeEditarCadastro: boolean;
   podeCriar: boolean;
   podeEditar: boolean;
   podeAprovar: boolean;
@@ -197,6 +210,9 @@ export function FolhaDetalheView({
   gruposRetido,
   trilha,
   centrosCusto,
+  funcoes,
+  colaboradores,
+  podeEditarCadastro,
   podeCriar,
   podeEditar,
   podeAprovar,
@@ -284,6 +300,33 @@ export function FolhaDetalheView({
    * (ela regenera a folha inteira).
    */
   const [voltandoId, setVoltandoId] = React.useState<string | null>(null);
+  const [dialogIncluir, setDialogIncluir] = React.useState(false);
+  const [colaboradorParaIncluir, setColaboradorParaIncluir] =
+    React.useState("");
+
+  /**
+   * Quem pode entrar: todo mundo que ainda não tem linha nesta folha, ativo ou
+   * não. O inativo aparece marcado, com a data de desligamento, porque incluir
+   * um desligado é decisão de dinheiro (a rescisão pode já pagar o saldo).
+   */
+  const opcoesIncluir = React.useMemo<ComboboxOpcao[]>(() => {
+    const naFolha = new Set(folha.itens.map((item) => item.colaboradorId));
+    return colaboradores
+      .filter((colaborador) => !naFolha.has(colaborador.id))
+      .map((colaborador) => {
+        const vinculo =
+          ROTULO_VINCULO[colaborador.vinculo as Vinculo] ?? colaborador.vinculo;
+        const situacao = colaborador.ativo
+          ? ""
+          : colaborador.dataDemissao
+            ? ` · inativo, desligado em ${formatarData(colaborador.dataDemissao)}`
+            : " · inativo";
+        return {
+          valor: colaborador.id,
+          rotulo: `${colaborador.nome} (${vinculo}${situacao})`,
+        };
+      });
+  }, [colaboradores, folha.itens]);
 
   /**
    * Clicar na LINHA abre o editor daquela pessoa (pedido do Tiago, 29/08/2026).
@@ -774,6 +817,24 @@ export function FolhaDetalheView({
     toast.success(`${fora.nome} voltou para esta folha`);
   }
 
+  async function aoIncluirNaFolha(): Promise<boolean> {
+    if (colaboradorParaIncluir === "") {
+      toast.error("Escolha o colaborador");
+      return false;
+    }
+    const nome =
+      colaboradores.find((c) => c.id === colaboradorParaIncluir)?.nome ??
+      "Colaborador";
+    const resultado = await incluirNaFolha(folha.id, colaboradorParaIncluir);
+    if ("erro" in resultado) {
+      toast.error(resultado.erro);
+      return false;
+    }
+    toast.success(`${nome} entrou nesta folha`);
+    setColaboradorParaIncluir("");
+    return true;
+  }
+
   async function aoEnviarParaAprovacao() {
     const resultado = await enviarFolhaParaAprovacao(folha.id);
     if ("erro" in resultado) {
@@ -1100,13 +1161,30 @@ export function FolhaDetalheView({
       {/* As tabelas são cards da grade: cada pessoa muda o tamanho, a ordem e tira
           da tela; com altura escolhida a tabela rola por dentro. */}
       <GradeKpis id="rh.folha.detalhe.tabelas" titulo="Tabelas" vao="amplo">
-        <Secao larguraPadrao={12} titulo="Itens por colaborador">
+        <Secao
+          larguraPadrao={12}
+          titulo="Itens por colaborador"
+          acao={
+            podeEditarLinha && podeCriar ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDialogIncluir(true)}
+              >
+                <UserPlus />
+                Adicionar colaborador
+              </Button>
+            ) : null
+          }
+        >
           {folha.itens.length === 0 ? (
             <p className="text-detalhe text-muted-foreground">
-              Nenhum colaborador nesta folha. Entram os colaboradores ativos de
-              vínculo CLT, terceiro e diarista: CLT e terceiro pelo salário do
-              cadastro, diarista pela soma das diárias em aberto do mês. Confira o
-              cadastro e regere a folha.
+              Nenhum colaborador nesta folha. Entram sozinhos os colaboradores
+              ativos de vínculo CLT, terceiro e diarista: CLT e terceiro pelo
+              salário do cadastro, diarista pela soma das diárias em aberto do
+              mês. Confira o cadastro e regere a folha, ou use Adicionar
+              colaborador.
             </p>
           ) : (
             <DataTable
@@ -1131,7 +1209,7 @@ export function FolhaDetalheView({
         {folha.foraDaFolha.length > 0 ? (
           <Secao larguraPadrao={12} idCard="fora-da-folha" titulo={`Fora desta folha (${folha.foraDaFolha.length})`}>
             <p className="mb-2 text-detalhe text-muted-foreground">
-              Estes colaboradores continuam ativos na empresa e entram
+              Tirar da folha não desliga ninguém: quem está ativo entra
               normalmente na folha da próxima competência. Eles só não entram
               nesta, nem nos totais acima.
             </p>
@@ -1257,6 +1335,8 @@ export function FolhaDetalheView({
           item={itemEmEdicao}
           folhaId={folha.id}
           centros={centrosCusto}
+          funcoes={funcoes}
+          podeEditarCadastro={podeEditarCadastro}
           onSalvo={() => router.refresh()}
         />
       ) : null}
@@ -1301,6 +1381,36 @@ export function FolhaDetalheView({
           variante="destrutivo"
           exigeMotivo
           onConfirmar={aoTirarDaFolha}
+        />
+      ) : null}
+
+      {/*
+        Incluir regenera a folha, como tirar: exige rascunho, editar e criar.
+        Inativo entra mesmo assim (a inclusão vale só para esta folha), e os
+        dias pagos seguem a data de desligamento do cadastro.
+      */}
+      {podeEditarLinha && podeCriar ? (
+        <ConfirmDialog
+          aberto={dialogIncluir}
+          onAbertoChange={(aberto) => {
+            setDialogIncluir(aberto);
+            if (!aberto) setColaboradorParaIncluir("");
+          }}
+          titulo="Adicionar colaborador a esta folha"
+          descricao="Vale só para esta folha e sobrevive ao Regerar. Quem está inativo entra pelos dias até o desligamento: confira se a rescisão já não paga o saldo de salário."
+          textoConfirmar="Adicionar à folha"
+          conteudo={
+            <Combobox
+              valor={colaboradorParaIncluir}
+              onValorChange={setColaboradorParaIncluir}
+              opcoes={opcoesIncluir}
+              placeholder="Escolha o colaborador"
+              buscaPlaceholder="Buscar pelo nome"
+              vazioTexto="Todo mundo já está nesta folha"
+              ariaLabel="Colaborador"
+            />
+          }
+          onConfirmar={aoIncluirNaFolha}
         />
       ) : null}
 
