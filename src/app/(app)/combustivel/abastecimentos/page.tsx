@@ -12,7 +12,7 @@ import {
 import {
   facetasAbastecimentos,
   listarAbastecimentos,
-  listarCombustivelDaUltimaEntrada,
+  listarCombustivelDosTanques,
   listarEquipamentos,
   listarTransportadoras,
 } from "@/modules/combustivel/abastecimentos/queries";
@@ -59,7 +59,7 @@ export default async function PaginaAbastecimentos({
     listarTransportadoras(),
     listarInsumosCombustivel(),
     listarCentrosCusto(),
-    carregaFormulario ? listarCombustivelDaUltimaEntrada() : Promise.resolve<Record<string, string>>({}),
+    carregaFormulario ? listarCombustivelDosTanques() : Promise.resolve<Record<string, string>>({}),
   ]);
 
   const inativo = (rotulo: string, ativo: boolean) => (ativo ? rotulo : `${rotulo} (inativo)`);

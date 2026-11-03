@@ -143,8 +143,25 @@ export function acharDieselS10<T extends { id: string; nome: string }>(insumos: 
 }
 
 /**
+ * Combustível de cada tanque, na ordem de `fn_comb_combustivel_na_data`: o da entrada
+ * viva mais nova; sem entrada, o da transferência recebida mais nova. Tanque que só
+ * recebeu por transferência ficava sem combustível e a saída não lançava (30/10/2026).
+ * As duas listas chegam da mais nova para a mais velha.
+ */
+export function combustivelPorTanque(
+  entradas: readonly { tanqueId: string; insumoId: string }[],
+  transferenciasRecebidas: readonly { tanqueId: string; insumoId: string }[],
+): Record<string, string> {
+  const porTanque: Record<string, string> = {};
+  for (const linha of [...entradas, ...transferenciasRecebidas]) {
+    if (!(linha.tanqueId in porTanque)) porTanque[linha.tanqueId] = linha.insumoId;
+  }
+  return porTanque;
+}
+
+/**
  * Tipo de combustível do tanque escolhido, como a origem: externo = Diesel S10 (editável);
- * da EMT = o da entrada viva mais nova do tanque; sem entrada, "".
+ * da EMT = o de `combustivelPorTanque`; sem fonte, "".
  */
 export function tipoCombustivelDoTanque(p: {
   noTanque: boolean;
