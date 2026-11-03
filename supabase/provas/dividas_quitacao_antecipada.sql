@@ -1,7 +1,8 @@
 -- Prova (quitacao antecipada paga pelo lancamento): o caso do BB 023.409.504,
 -- quitado em 22/10/2026 pela parcela 42 do LAN-2026-6867 (vencia 05/11).
--- Usa o contrato real enquanto ele ainda estiver ativo; depois que a
--- quitacao for registrada pela tela, esta prova para no "ja quitado".
+-- Usa o contrato real enquanto ele estava ativo: rodada em 03/11/2026 antes
+-- de 20261103160719_dividas_quitacao_automatica, que quitou o contrato; dai
+-- em diante para no "ja quitado" (a continuacao e dividas_quitacao_automatica.sql).
 -- Rodar em begin/rollback depois das migrations; termina com raise 'PROVA OK'.
 
 select set_config('request.jwt.claims', '{"sub":"c66fca9f-5428-4fb9-855f-dcff548764df","role":"authenticated"}', true);

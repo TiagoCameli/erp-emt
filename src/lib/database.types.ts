@@ -2380,6 +2380,7 @@ export type Database = {
       };
       contrato_divida_eventos: {
         Row: {
+          automatico: boolean;
           contrato_id: string;
           created_at: string;
           created_by: string | null;
@@ -2392,6 +2393,7 @@ export type Database = {
           versao_nova: number;
         };
         Insert: {
+          automatico?: boolean;
           contrato_id: string;
           created_at?: string;
           created_by?: string | null;
@@ -2404,6 +2406,7 @@ export type Database = {
           versao_nova: number;
         };
         Update: {
+          automatico?: boolean;
           contrato_id?: string;
           created_at?: string;
           created_by?: string | null;
