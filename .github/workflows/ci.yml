@@ -32,8 +32,12 @@ jobs:
     # Era 10. Em 08/10/2026 a suíte (~5.950 testes) passou a levar 8 minutos só
     # nos testes, e o job inteiro estourava os 10 com tudo verde: a main e vários
     # PRs foram cancelados seguidos (o #411 quatro vezes, 467 de 476 arquivos
-    # passando no corte). 15 dá folga sem deixar travamento correr solto.
-    timeout-minutes: 15
+    # passando no corte). Subiu para 15. Em 03/11/2026 a suíte (~6.700 testes)
+    # deixou o job em 14 a 15 minutos, e o PR #559 foi cortado no Build aos 15
+    # com tudo verde (a reexecução passou em 11). Os Testes oscilam de 7 a 10
+    # minutos entre rodadas iguais, e é essa oscilação que estoura o teto. 25 dá
+    # folga para ela sem deixar travamento correr solto.
+    timeout-minutes: 25
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
