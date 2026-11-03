@@ -17,6 +17,7 @@ import { CotaFormDrawer } from "@/modules/financeiro/dividas/components/cota-for
 import { SeloContrato, SeloCota } from "@/modules/financeiro/dividas/components/selos";
 import {
   FILTROS_STATUS_CONTRATO,
+  cetDaTaxaZero,
   filtrarContratosPorStatus,
   valorPagoDaCota,
   type ConsorcioRelatorio,
@@ -92,8 +93,17 @@ export const colunasContratos: ColumnDef<ContratoRelatorio, unknown>[] = [
     header: "Taxa",
     size: 140,
     meta: { alinharDireita: true, atomico: true },
-    cell: ({ row }) =>
-      `${formatarPercentual(row.original.taxaAm, 4)} a.m. · ${rotulo(ROTULO_SISTEMA, row.original.sistema)}`,
+    cell: ({ row }) => {
+      const taxa = `${formatarPercentual(row.original.taxaAm, 4)} a.m. · ${rotulo(ROTULO_SISTEMA, row.original.sistema)}`;
+      const cet = cetDaTaxaZero(row.original);
+      if (cet === null) return taxa;
+      return (
+        <span className="flex flex-col items-end">
+          <span>{taxa}</span>
+          <span className="text-legenda text-muted-foreground">CET {formatarPercentual(cet * 100, 2)} a.a.</span>
+        </span>
+      );
+    },
   },
   {
     id: "cronograma",
