@@ -214,6 +214,19 @@ describe("consultas do formulário", () => {
     await expect(consultarCombustivelNaData(ORIGEM, DADOS.dataHora)).resolves.toEqual({ ok: true, nome: null });
   });
 
+  it("na edição, o combustível na data não conta a própria transferência", async () => {
+    // Transferência que leva a origem inteira: contando ela, o estoque na data é
+    // zero e o banco devolve null (bug de 30/10/2026).
+    estado.resposta = { data: "44444444-4444-4444-8444-444444444444", error: null };
+    await consultarCombustivelNaData(ORIGEM, DADOS.dataHora, ID);
+    expect(estado.chamadas.at(-1)).toEqual({
+      fn: "fn_comb_combustivel_na_data",
+      args: { p_tanque: ORIGEM, p_data: DADOS.dataHora, p_excluir: ID },
+    });
+    await consultarCombustivelNaData(ORIGEM, DADOS.dataHora, null);
+    expect(estado.chamadas.at(-1)?.args).not.toHaveProperty("p_excluir");
+  });
+
   it("sem ver, não consulta", async () => {
     estado.permitido = false;
     await expect(consultarPrecoMedioTanque(ORIGEM)).resolves.toHaveProperty("erro");
