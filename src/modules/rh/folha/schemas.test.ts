@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  atualizarColaboradorNaFolhaSchema,
   editarItemFolhaSchema,
   vencimentoFolhaSchema,
 } from "@/modules/rh/folha/schemas";
@@ -402,5 +403,35 @@ describe("editarItemFolhaSchema — horas trabalhadas e extras", () => {
     );
     expect(cheio.success).toBe(true);
     if (cheio.success) expect(cheio.data.valorExtras).toBe(1350.4);
+  });
+});
+
+describe("atualizarColaboradorNaFolhaSchema", () => {
+  const cadastro = {
+    folhaId: ITEM,
+    colaboradorId: CENTRO,
+    nome: "  JOAO DA SILVA  ",
+    vinculo: "terceiro",
+    funcaoId: null,
+  };
+
+  it("aceita função vazia e corta os espaços do nome", () => {
+    const r = atualizarColaboradorNaFolhaSchema.safeParse(cadastro);
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.nome).toBe("JOAO DA SILVA");
+  });
+
+  it("recusa vínculo fora do catálogo do cadastro", () => {
+    expect(
+      atualizarColaboradorNaFolhaSchema.safeParse({ ...cadastro, vinculo: "pj" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("recusa nome com menos de 2 caracteres depois do corte", () => {
+    expect(
+      atualizarColaboradorNaFolhaSchema.safeParse({ ...cadastro, nome: " J " })
+        .success,
+    ).toBe(false);
   });
 });

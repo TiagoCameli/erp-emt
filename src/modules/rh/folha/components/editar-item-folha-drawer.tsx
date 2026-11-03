@@ -7,6 +7,8 @@ import { toast } from "@/components/canonicos/toast";
 import {
   CampoFormulario,
   classesFormulario,
+  Combobox,
+  type ComboboxOpcao,
   FormDrawer,
   InputHoras,
   InputMoeda,
@@ -17,12 +19,17 @@ import {
 } from "@/components/canonicos";
 import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatarBRL } from "@/lib/formatadores";
 import {
   ROTULO_VINCULO,
+  VINCULOS,
   type Vinculo,
 } from "@/modules/cadastros/colaboradores/schemas";
-import { editarItemFolha } from "@/modules/rh/folha/actions";
+import {
+  atualizarColaboradorNaFolha,
+  editarItemFolha,
+} from "@/modules/rh/folha/actions";
 import type { FolhaItem } from "@/modules/rh/folha/queries";
 import {
   HORAS_MES,
@@ -41,6 +48,24 @@ const ID_FORM = "form-editar-item-folha";
  * escala de trabalho. O mesmo número está no schema e na `fn_editar_item_folha`.
  */
 const HORAS_MAX = 744;
+
+const OPCOES_VINCULO: ComboboxOpcao[] = VINCULOS.map((vinculo) => ({
+  valor: vinculo,
+  rotulo: ROTULO_VINCULO[vinculo],
+}));
+
+/** O cadastro como ele está, para saber se a pessoa mexeu nele. */
+function cadastroDoItem(item: FolhaItem): {
+  nome: string;
+  vinculo: string;
+  funcaoId: string;
+} {
+  return {
+    nome: item.colaboradorNome,
+    vinculo: item.colaboradorVinculo,
+    funcaoId: item.colaboradorFuncaoId ?? "",
+  };
+}
 
 /** Número do banco no formato que o InputMoeda edita. */
 function paraCampo(valor: number | null): string {
@@ -86,6 +111,13 @@ export interface EditarItemFolhaDrawerProps {
   folhaId: string;
   /** Raízes e etapas ativas, para o seletor de centro de custo. */
   centros: readonly CentroCustoOpcao[];
+  /** Funções ativas, para o seletor de função do cadastro. */
+  funcoes: ComboboxOpcao[];
+  /**
+   * Pode mexer no CADASTRO (cadastros.colaboradores:editar). Sem isso a seção
+   * de cadastro aparece só para leitura: a RPC recusaria de qualquer jeito.
+   */
+  podeEditarCadastro: boolean;
   /** Chamado depois de salvar com sucesso. */
   onSalvo?: () => void;
 }
@@ -122,8 +154,13 @@ export function EditarItemFolhaDrawer({
   item,
   folhaId,
   centros,
+  funcoes,
+  podeEditarCadastro,
   onSalvo,
 }: EditarItemFolhaDrawerProps) {
+  const [nome, setNome] = React.useState("");
+  const [vinculoCadastro, setVinculoCadastro] = React.useState("");
+  const [funcaoId, setFuncaoId] = React.useState("");
   const [salarioBase, setSalarioBase] = React.useState("");
   const [gratificacao, setGratificacao] = React.useState("");
   const [desconto, setDesconto] = React.useState("");
@@ -153,6 +190,10 @@ export function EditarItemFolhaDrawer({
       setHorasNormais(iniciais.horasNormais);
       setHorasExtras(iniciais.horasExtras);
       setValorExtras(iniciais.valorExtras);
+      const cadastro = cadastroDoItem(item);
+      setNome(cadastro.nome);
+      setVinculoCadastro(cadastro.vinculo);
+      setFuncaoId(cadastro.funcaoId);
     }
   }
 
@@ -186,8 +227,32 @@ export function EditarItemFolhaDrawer({
   // Linha zerada não existe na folha: a mesma trava está no schema e no banco.
   const temValor =
     baseValida && gratValida && (baseNumero > 0 || gratNumero > 0);
-  const podeSalvar =
-    item !== null &&
+
+  // Substitui o `formState.isDirty` do React Hook Form: compara cada campo com o
+  // valor que ele ganhou quando a linha foi aberta. Item e cadastro separados,
+  // porque vão para RPCs diferentes: salvar só o cadastro NÃO pode marcar a
+  // linha como editada à mão (isso congelaria os valores dela no Regerar).
+  const iniciais = item ? camposDoItem(item) : null;
+  const itemAlterado =
+    iniciais !== null &&
+    (salarioBase !== iniciais.salarioBase ||
+      gratificacao !== iniciais.gratificacao ||
+      desconto !== iniciais.desconto ||
+      horas !== iniciais.horas ||
+      centroCusto !== iniciais.centroCusto ||
+      horasNormais !== iniciais.horasNormais ||
+      horasExtras !== iniciais.horasExtras ||
+      valorExtras !== iniciais.valorExtras);
+  const cadastroInicial = item ? cadastroDoItem(item) : null;
+  const cadastroAlterado =
+    cadastroInicial !== null &&
+    (nome.trim() !== cadastroInicial.nome ||
+      vinculoCadastro !== cadastroInicial.vinculo ||
+      funcaoId !== cadastroInicial.funcaoId);
+  const alterado = itemAlterado || cadastroAlterado;
+  const nomeValido = nome.trim().length >= 2;
+
+  const itemValido =
     baseValida &&
     gratValida &&
     descontoValido &&
@@ -199,6 +264,11 @@ export function EditarItemFolhaDrawer({
     extrasValido &&
     horasTrabalhadasValidas &&
     temValor;
+  const podeSalvar =
+    item !== null &&
+    alterado &&
+    (!itemAlterado || itemValido) &&
+    (!cadastroAlterado || nomeValido);
 
   /**
    * Digitou HORAS: preenche o valor com a conversão (salário base ÷ 200 × horas).
@@ -258,86 +328,122 @@ export function EditarItemFolhaDrawer({
     evento.preventDefault();
     if (!item || salvando) return;
 
+    if (cadastroAlterado && !nomeValido) {
+      toast.error("O nome precisa ter pelo menos 2 caracteres");
+      return;
+    }
+    if (itemAlterado && !validarItem()) return;
+
+    setSalvando(true);
+    // Item ANTES do cadastro: mudar o vínculo regenera a folha e troca o id do
+    // item. Na ordem contrária, a edição da linha mirava um item que não existe
+    // mais. A edição manual gravada primeiro sobrevive ao Regerar pelo snapshot.
+    if (itemAlterado) {
+      const resultado = await editarItemFolha(folhaId, {
+        itemId: item.id,
+        centroCustoId: centroCusto,
+        salarioBase: baseNumero,
+        gratificacao: gratNumero,
+        horasNormais: hnNumero,
+        horasExtras: heNumero,
+        valorExtras: extrasNumero,
+        desconto: descontoNumero,
+        descontoHoras: horasNumero,
+      });
+      if ("erro" in resultado) {
+        setSalvando(false);
+        toast.error(resultado.erro);
+        return;
+      }
+    }
+
+    if (cadastroAlterado) {
+      const resultado = await atualizarColaboradorNaFolha({
+        folhaId,
+        colaboradorId: item.colaboradorId,
+        nome: nome.trim(),
+        vinculo: vinculoCadastro as Vinculo,
+        funcaoId: funcaoId === "" ? null : funcaoId,
+      });
+      if ("erro" in resultado) {
+        setSalvando(false);
+        toast.error(
+          itemAlterado
+            ? `Os valores da linha foram salvos, mas o cadastro não: ${resultado.erro}`
+            : resultado.erro,
+        );
+        onSalvo?.();
+        return;
+      }
+      if (!resultado.continuaNaFolha) {
+        setSalvando(false);
+        toast.warning(
+          `${nome.trim()} saiu desta folha com o vínculo novo: não tem valor a pagar no mês (diarista entra pelas diárias em aberto). Use "Adicionar colaborador" depois de lançar o valor.`,
+        );
+        onAbertoChange(false);
+        onSalvo?.();
+        return;
+      }
+    }
+    setSalvando(false);
+
+    toast.success(
+      cadastroAlterado && itemAlterado
+        ? "Linha e cadastro atualizados"
+        : cadastroAlterado
+          ? "Cadastro do colaborador atualizado"
+          : "Linha da folha atualizada",
+    );
+    onAbertoChange(false);
+    onSalvo?.();
+  }
+
+  /** As travas dos valores da linha, cada uma com o toast que diz o que corrigir. */
+  function validarItem(): boolean {
     if (!baseValida) {
       toast.error("Informe o salário base como número (ex: 2.500,00)");
-      return;
+      return false;
     }
     if (!gratValida) {
       toast.error("Informe a gratificação como número (ex: 500,00)");
-      return;
+      return false;
     }
     if (!descontoValido) {
       toast.error("Informe o desconto como número (ex: 121,57)");
-      return;
+      return false;
     }
     if (!horasValidas) {
       toast.error(
         `Informe as horas não trabalhadas entre 0 e ${HORAS_MES} (o mês inteiro)`,
       );
-      return;
+      return false;
     }
     if (!temValor) {
       toast.error(
         "Salário base e gratificação não podem ser os dois zero. Se a pessoa não entra nesta folha, ajuste o cadastro dela e regere",
       );
-      return;
+      return false;
     }
 
     if (centroCusto === "") {
       toast.error("Escolha o centro de custo desta linha");
-      return;
+      return false;
     }
     if (!extrasValido) {
       toast.error("Informe o valor de extras como número (ex: 350,00)");
-      return;
+      return false;
     }
     if (!horasTrabalhadasValidas) {
       toast.error(`Informe as horas entre 0 e ${HORAS_MAX}`);
-      return;
+      return false;
     }
-
-    setSalvando(true);
-    const resultado = await editarItemFolha(folhaId, {
-      itemId: item.id,
-      centroCustoId: centroCusto,
-      salarioBase: baseNumero,
-      gratificacao: gratNumero,
-      horasNormais: hnNumero,
-      horasExtras: heNumero,
-      valorExtras: extrasNumero,
-      desconto: descontoNumero,
-      descontoHoras: horasNumero,
-    });
-    setSalvando(false);
-
-    if ("erro" in resultado) {
-      toast.error(resultado.erro);
-      return;
-    }
-
-    toast.success("Linha da folha atualizada");
-    onAbertoChange(false);
-    onSalvo?.();
+    return true;
   }
 
   const vinculo = item
     ? (ROTULO_VINCULO[item.colaboradorVinculo as Vinculo] ??
       item.colaboradorVinculo)
     : "";
-
-  // Substitui o `formState.isDirty` do React Hook Form: compara cada campo com o
-  // valor que ele ganhou quando a linha foi aberta.
-  const iniciais = item ? camposDoItem(item) : null;
-  const alterado =
-    iniciais !== null &&
-    (salarioBase !== iniciais.salarioBase ||
-      gratificacao !== iniciais.gratificacao ||
-      desconto !== iniciais.desconto ||
-      horas !== iniciais.horas ||
-      centroCusto !== iniciais.centroCusto ||
-      horasNormais !== iniciais.horasNormais ||
-      horasExtras !== iniciais.horasExtras ||
-      valorExtras !== iniciais.valorExtras);
 
   return (
     <FormDrawer
@@ -346,7 +452,7 @@ export function EditarItemFolhaDrawer({
       titulo={item ? item.colaboradorNome : "Linha da folha"}
       descricao={
         item
-          ? `${vinculo} · ajuste o que esta folha paga a esta pessoa. Regerar a folha preserva tudo o que você mudar aqui.`
+          ? `${vinculo} · ajuste o cadastro da pessoa e o que esta folha paga a ela. Regerar a folha preserva tudo o que você mudar aqui.`
           : undefined
       }
       temAlteracoesNaoSalvas={alterado && !salvando}
@@ -389,7 +495,7 @@ export function EditarItemFolhaDrawer({
                   Salvando...
                 </>
               ) : (
-                "Salvar valores"
+                "Salvar"
               )}
             </Button>
           </div>
@@ -402,6 +508,77 @@ export function EditarItemFolhaDrawer({
         className={classesFormulario}
         noValidate
       >
+        {/* O cadastro vem primeiro porque o vínculo decide como a linha é
+            calculada (diarista pelas diárias, INSS/IRRF só CLT). Grava em
+            Cadastros > Colaboradores, não só nesta folha. */}
+        <SecaoFormulario titulo="Cadastro do colaborador">
+          <CampoFormulario
+            id="item-folha-nome"
+            rotulo="Nome"
+            obrigatorio
+            erro={
+              cadastroAlterado && !nomeValido
+                ? "O nome precisa ter pelo menos 2 caracteres"
+                : undefined
+            }
+          >
+            <Input
+              id="item-folha-nome"
+              value={nome}
+              onChange={(evento) => setNome(evento.target.value)}
+              disabled={salvando || !podeEditarCadastro}
+            />
+          </CampoFormulario>
+          <LinhaCampos>
+            <CampoFormulario
+              id="item-folha-vinculo"
+              rotulo="Vínculo"
+              obrigatorio
+              largura="medio"
+              ajuda={
+                item && vinculoCadastro !== item.colaboradorVinculo
+                  ? "Mudar o vínculo recalcula a folha. O que você editou à mão nesta linha continua valendo."
+                  : undefined
+              }
+            >
+              <Combobox
+                id="item-folha-vinculo"
+                valor={vinculoCadastro}
+                onValorChange={setVinculoCadastro}
+                opcoes={OPCOES_VINCULO}
+                disabled={salvando || !podeEditarCadastro}
+              />
+            </CampoFormulario>
+            <CampoFormulario
+              id="item-folha-funcao"
+              rotulo="Função"
+              largura="medio"
+            >
+              <Combobox
+                id="item-folha-funcao"
+                valor={funcaoId}
+                onValorChange={setFuncaoId}
+                opcoes={funcoes}
+                rotuloDoValor={item?.colaboradorFuncao ?? undefined}
+                limpavel
+                placeholder="Sem função"
+                disabled={salvando || !podeEditarCadastro}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+          {podeEditarCadastro ? (
+            <p className="text-legenda text-muted-foreground">
+              Estes três campos mudam o cadastro da pessoa, e valem para as
+              próximas folhas também.
+            </p>
+          ) : (
+            <p className="text-legenda text-muted-foreground">
+              Para mudar o cadastro daqui é preciso permissão de editar
+              colaboradores.
+            </p>
+          )}
+        </SecaoFormulario>
+
         {/* Centro de custo primeiro: é a pergunta "de quem é este custo", e é
             o único campo aqui que, faltando, impede a folha inteira de ser
             aprovada. */}

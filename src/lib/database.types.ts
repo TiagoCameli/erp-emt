@@ -3843,6 +3843,52 @@ export type Database = {
           },
         ];
       };
+      folha_inclusoes: {
+        Row: {
+          colaborador_id: string;
+          created_at: string;
+          created_by: string | null;
+          folha_id: string;
+          motivo: string | null;
+        };
+        Insert: {
+          colaborador_id: string;
+          created_at?: string;
+          created_by?: string | null;
+          folha_id: string;
+          motivo?: string | null;
+        };
+        Update: {
+          colaborador_id?: string;
+          created_at?: string;
+          created_by?: string | null;
+          folha_id?: string;
+          motivo?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "folha_inclusoes_colaborador_id_fkey";
+            columns: ["colaborador_id"];
+            isOneToOne: false;
+            referencedRelation: "colaboradores";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folha_inclusoes_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "usuarios";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "folha_inclusoes_folha_id_fkey";
+            columns: ["folha_id"];
+            isOneToOne: false;
+            referencedRelation: "folhas";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       folha_guias: {
         Row: {
           created_at: string;
@@ -10849,6 +10895,16 @@ export type Database = {
         };
         Returns: string;
       };
+      fn_folha_atualizar_colaborador: {
+        Args: {
+          p_colaborador_id: string;
+          p_folha_id: string;
+          p_funcao_id: string | null;
+          p_nome: string;
+          p_vinculo: string;
+        };
+        Returns: boolean;
+      };
       fn_fornecedor_apelido_remover: {
         Args: { p_id: string };
         Returns: undefined;
@@ -11296,6 +11352,15 @@ export type Database = {
         Returns: undefined;
       };
       fn_excluir_diaria: { Args: { p_id: string }; Returns: undefined };
+      fn_incluir_na_folha: {
+        // `p_motivo` opcional no banco (default null), como em fn_tirar_da_folha.
+        Args: {
+          p_colaborador_id: string;
+          p_folha_id: string;
+          p_motivo?: string | null;
+        };
+        Returns: undefined;
+      };
       fn_lancamentos_do_fluxo: {
         Args: {
           p_grupo?: string;
