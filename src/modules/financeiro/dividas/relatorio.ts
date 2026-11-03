@@ -93,6 +93,17 @@ export function filtrarContratosPorStatus<T extends { status: string }>(
   return contratos.filter((c) => (c.status === "quitado") === (filtro === "quitados"));
 }
 
+/**
+ * O CET anual (fração) para mostrar junto da taxa quando o juro nominal é
+ * zero: "0% a.m." sozinho diz que o dinheiro saiu de graça, e o IOF e as
+ * tarifas financiados (Komatsu CCB 6348/26: 3,33% a.a.) dizem que não.
+ * Null quando o contrato tem taxa, não tem cronograma ou não custa nada.
+ */
+export function cetDaTaxaZero(contrato: Pick<ContratoRelatorio, "taxaAm" | "cet">): number | null {
+  if (contrato.taxaAm !== 0 || !contrato.cet || contrato.cet.anual <= 0) return null;
+  return contrato.cet.anual;
+}
+
 /** NUMERIC chega do PostgREST como string em algumas rotas. */
 export function numero(valor: unknown): number {
   const n = typeof valor === "string" ? Number(valor) : typeof valor === "number" ? valor : 0;
