@@ -8,7 +8,7 @@ import { AbastecimentoDetalheView } from "@/modules/combustivel/abastecimentos/c
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
 import {
   buscarAbastecimento,
-  listarCombustivelDaUltimaEntrada,
+  listarCombustivelDosTanques,
   listarEquipamentos,
   listarTransportadoras,
   type EquipamentoOpcao,
@@ -45,7 +45,7 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
     podeEditar ? listarTransportadoras() : Promise.resolve<TransportadoraOpcao[]>([]),
     podeEditar ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     podeEditar ? listarCentrosCusto() : Promise.resolve([]),
-    podeEditar ? listarCombustivelDaUltimaEntrada() : Promise.resolve<Record<string, string>>({}),
+    podeEditar ? listarCombustivelDosTanques() : Promise.resolve<Record<string, string>>({}),
     // Fotos e arquivos (os migrados da origem também): a RLS dos vínculos pede "ver".
     listarAnexosDoDocumento("combustivel_saida", id),
   ]);

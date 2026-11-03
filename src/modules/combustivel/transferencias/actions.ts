@@ -202,11 +202,14 @@ export async function consultarPrecoMedioTanque(
 
 /**
  * Combustível do tanque na data (o que vai ser transferido), pelo nome. Null
- * quando o tanque não tem fonte rastreável nessa data.
+ * quando o tanque não tem fonte rastreável nessa data. Na edição, sem contar a
+ * própria transferência: se ela leva a origem inteira, contá-la zera o estoque
+ * na data e o combustível some.
  */
 export async function consultarCombustivelNaData(
   tanqueId: string,
   dataHora: string,
+  excluirId: string | null = null,
 ): Promise<{ ok: true; nome: string | null } | { erro: string }> {
   return semLancar("combustivel.transferencias.combustivel_na_data", async () => {
     if (!(await temAcao("ver"))) return { erro: "Sem permissão para ver transferências" };
@@ -214,11 +217,14 @@ export async function consultarCombustivelNaData(
     const tanque = idSchema.safeParse(tanqueId);
     const data = dataHoraIso.safeParse(dataHora);
     if (!tanque.success || !data.success) return { erro: "Tanque ou data inválidos" };
+    const excluir = excluirId === null ? null : idSchema.safeParse(excluirId);
+    if (excluir && !excluir.success) return { erro: "Transferência inválida" };
 
     const supabase = await createClient();
     const { data: insumoId, error } = await supabase.rpc("fn_comb_combustivel_na_data", {
       p_tanque: tanque.data,
       p_data: data.data,
+      ...(excluir ? { p_excluir: excluir.data } : {}),
     });
     if (error) {
       return erroAcao("combustivel.transferencias.combustivel_na_data", error, "Não foi possível consultar o combustível");

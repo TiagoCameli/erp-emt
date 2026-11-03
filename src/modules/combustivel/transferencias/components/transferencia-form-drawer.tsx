@@ -187,9 +187,9 @@ export function TransferenciaFormDrawer({
     return "erro" in r ? null : r.preco;
   });
   const estadoCombustivel = useConsulta(
-    aberto && origemId && dataIso ? `combustivel|${origemId}|${dataIso}` : null,
+    aberto && origemId && dataIso ? `combustivel|${origemId}|${dataIso}|${idEmEdicao ?? ""}` : null,
     async () => {
-      const r = await consultarCombustivelNaData(origemId, dataIso ?? "");
+      const r = await consultarCombustivelNaData(origemId, dataIso ?? "", idEmEdicao);
       return "erro" in r ? null : { nome: r.nome };
     },
   );

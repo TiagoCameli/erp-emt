@@ -27,6 +27,7 @@ import {
   type FacetasPresentes,
 } from "@/modules/_shared/filtros-facetados";
 import { ehEquipamentoSentinela } from "@/modules/combustivel/anomalias/base";
+import { combustivelPorTanque } from "@/modules/combustivel/abastecimentos/formulario";
 import type { AlocacaoOriginal } from "@/modules/combustivel/abastecimentos/schemas";
 import { rotuloTanque } from "@/modules/combustivel/entradas/queries";
 import {
@@ -678,26 +679,40 @@ export async function lerMovimentosFifoDoTanque(tanqueId: string): Promise<Movim
 }
 
 /**
- * Combustível de cada tanque como a origem mostra no formulário: o da entrada viva mais
- * nova do tanque (`tipoCombustivelDoTanque`). Tanque sem entrada não aparece.
+ * Combustível de cada tanque para o formulário (`tipoCombustivelDoTanque`): o da entrada
+ * viva mais nova e, sem entrada, o da transferência recebida mais nova
+ * (`combustivelPorTanque`). Tanque sem nenhuma das duas não aparece.
  */
-export async function listarCombustivelDaUltimaEntrada(): Promise<Record<string, string>> {
+export async function listarCombustivelDosTanques(): Promise<Record<string, string>> {
   const supabase = await createClient();
-  const { linhas, erro } = await todasAsLinhas((de, ate) =>
-    supabase
-      .from("combustivel_entradas")
-      .select("tanque_id, insumo_id")
-      .is("excluido_em", null)
-      .order("data_hora", { ascending: false })
-      .order("id")
-      .range(de, ate),
+  const [entradas, transferencias] = await Promise.all([
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_entradas")
+        .select("tanque_id, insumo_id")
+        .is("excluido_em", null)
+        .order("data_hora", { ascending: false })
+        .order("id")
+        .range(de, ate),
+    ),
+    todasAsLinhas((de, ate) =>
+      supabase
+        .from("combustivel_transferencias")
+        .select("tanque_destino_id, insumo_id")
+        .is("excluido_em", null)
+        .not("insumo_id", "is", null)
+        .order("data_hora", { ascending: false })
+        .order("id")
+        .range(de, ate),
+    ),
+  ]);
+  if (entradas.erro || transferencias.erro) throw new Error("Não foi possível carregar o combustível dos tanques");
+  return combustivelPorTanque(
+    entradas.linhas.map((l) => ({ tanqueId: l.tanque_id, insumoId: l.insumo_id })),
+    transferencias.linhas.flatMap((l) =>
+      l.insumo_id ? [{ tanqueId: l.tanque_destino_id, insumoId: l.insumo_id }] : [],
+    ),
   );
-  if (erro) throw new Error("Não foi possível carregar o combustível dos tanques");
-  const porTanque: Record<string, string> = {};
-  for (const linha of linhas) {
-    if (!(linha.tanque_id in porTanque)) porTanque[linha.tanque_id] = linha.insumo_id;
-  }
-  return porTanque;
 }
 
 /** O que a edição precisa da saída salva para a regra do snapshot da origem. */

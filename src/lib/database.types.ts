@@ -10578,7 +10578,7 @@ export type Database = {
         Returns: number;
       };
       fn_comb_combustivel_na_data: {
-        Args: { p_data: string; p_tanque: string };
+        Args: { p_data: string; p_excluir?: string; p_tanque: string };
         Returns: string;
       };
       fn_comb_conferir_anomalia: {
