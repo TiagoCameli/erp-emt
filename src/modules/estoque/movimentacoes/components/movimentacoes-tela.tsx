@@ -493,6 +493,22 @@ export function MovimentacoesTela({ movimentos }: MovimentacoesTelaProps) {
                 ),
               },
               {
+                // O mesmo local do seletor do topo (fica na URL): escolher aqui abre o local.
+                id: "local",
+                rotulo: "Local",
+                temValor: localAberto !== "",
+                onLimpar: () => abrirLocal(""),
+                elemento: (
+                  <FiltroSelect
+                    valor={localAberto}
+                    onValorChange={abrirLocal}
+                    opcoes={locais}
+                    placeholder="Local"
+                    todosRotulo="Todos os locais"
+                  />
+                ),
+              },
+              {
                 id: "tipo",
                 rotulo: "Movimento",
                 temValor: tipo !== "",
