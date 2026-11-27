@@ -15,11 +15,13 @@ import {
   FiltroBusca,
   FiltroPeriodo,
   FiltroSelect,
+  InputQuantidade,
   MoneyText,
   StatusBadge,
   useFiltrosUrl,
 } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
+import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { casaBusca, textoPesquisavel } from "@/lib/busca";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -36,6 +38,7 @@ import {
 import { linkDaSaida } from "@/modules/combustivel/anomalias/links";
 import type { AnomaliaLista, SaidaDaAnomalia } from "@/modules/combustivel/anomalias/queries";
 import { MAXIMO_MOTIVO, type Situacao } from "@/modules/combustivel/anomalias/schemas";
+import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 /** Severidade no selo canônico: crítica no vermelho, atenção no âmbar, informação no cinza. */
 const STATUS_DA_SEVERIDADE: Record<Severidade, string> = {
@@ -50,7 +53,7 @@ const OPCOES_SITUACAO = [
 ];
 
 const OPCOES_SEVERIDADE = (["critical", "warning", "info"] as const).map((s) => ({ valor: s, rotulo: SEVERITY_LABEL[s] }));
-const OPCOES_DETECTOR = (["D1", "D2", "D3", "D4", "D5"] as const).map((d) => ({
+const OPCOES_DETECTOR = (["D1", "D2", "D3", "D4", "D5", "D6", "D7"] as const).map((d) => ({
   valor: d,
   rotulo: `${d} ${DETECTOR_LABEL[d]}`,
 }));
@@ -198,8 +201,18 @@ export function AnomaliasTabela({
     setConferindoLote(false);
   }
 
+  // Leitura do painel de cada saída na atribuição (opcional).
+  const [leiturasLote, setLeiturasLote] = React.useState<Record<string, LeituraDigitada>>({});
+  function leiturasDe(saidaIds: readonly string[]) {
+    return saidaIds.map((saidaId) => ({
+      saidaId,
+      odometroKm: paraLeitura(leiturasLote[saidaId]?.km),
+      horimetroH: paraLeitura(leiturasLote[saidaId]?.h),
+    }));
+  }
+
   async function atribuir(saidaIds: string[], equipamentoId: string): Promise<boolean> {
-    const resultado = await atribuirEquipamento({ saidaIds, equipamentoId });
+    const resultado = await atribuirEquipamento({ saidaIds, equipamentoId, leituras: leiturasDe(saidaIds) });
     if ("erro" in resultado) {
       toast.error(resultado.erro);
       return false;
@@ -228,6 +241,7 @@ export function AnomaliasTabela({
     if (passou) {
       setSelecionados([]);
       setEquipamentoLote("");
+      setLeiturasLote({});
     }
   }
 
@@ -241,7 +255,10 @@ export function AnomaliasTabela({
       atribuindoUma.saidas.map((s) => s.id),
       equipamentoUma,
     );
-    if (passou) setAtribuindoUma(null);
+    if (passou) {
+      setAtribuindoUma(null);
+      setLeiturasLote({});
+    }
   }
 
   const colunas = React.useMemo<ColumnDef<AnomaliaLista, unknown>[]>(() => {
@@ -603,7 +620,7 @@ export function AnomaliasTabela({
             titulo="Confirmar atribuição"
             descricao={`${plural(saidasMarcadas.length, "saída receberá", "saídas receberão")} o equipamento ${rotuloEquipamentoLote}. A troca fica registrada na auditoria.`}
             textoConfirmar="Confirmar e salvar"
-            conteudo={<ListaSaidas saidas={saidasMarcadas} />}
+            conteudo={<ListaSaidas saidas={saidasMarcadas} leituras={leiturasLote} onLeituras={setLeiturasLote} />}
             onConfirmar={aoConfirmarLote}
           />
           <ConfirmDialog
@@ -627,7 +644,9 @@ export function AnomaliasTabela({
                     buscaPlaceholder="Buscar por código ou nome"
                   />
                 </div>
-                {atribuindoUma ? <ListaSaidas saidas={atribuindoUma.saidas} /> : null}
+                {atribuindoUma ? (
+                  <ListaSaidas saidas={atribuindoUma.saidas} leituras={leiturasLote} onLeituras={setLeiturasLote} />
+                ) : null}
               </div>
             }
             onConfirmar={aoConfirmarUma}
@@ -638,22 +657,66 @@ export function AnomaliasTabela({
   );
 }
 
-/** As saídas afetadas, como a SaidasAfetadasList da origem (compacta). */
-function ListaSaidas({ saidas }: { saidas: readonly SaidaDaAnomalia[] }) {
+interface LeituraDigitada {
+  km: string;
+  h: string;
+}
+
+function paraLeitura(texto: string | undefined): number | null {
+  if (!texto || texto.trim() === "") return null;
+  const n = textoParaNumero(texto, CASAS_TAXA);
+  return n !== null && n >= 0 ? n : null;
+}
+
+/**
+ * As saídas afetadas, como a SaidasAfetadasList da origem (compacta). Na atribuição, cada
+ * uma aceita a leitura do painel (km e h), que o banco confere contra a anterior.
+ */
+function ListaSaidas({
+  saidas,
+  leituras,
+  onLeituras,
+}: {
+  saidas: readonly SaidaDaAnomalia[];
+  leituras?: Record<string, LeituraDigitada>;
+  onLeituras?: (proximas: Record<string, LeituraDigitada>) => void;
+}) {
   if (saidas.length === 0) return null;
+  const mudar = (id: string, campo: keyof LeituraDigitada, valor: string) =>
+    onLeituras?.({ ...leituras, [id]: { km: leituras?.[id]?.km ?? "", h: leituras?.[id]?.h ?? "", [campo]: valor } });
   return (
     <ul className="divide-y divide-border rounded-md border border-border text-detalhe">
       {saidas.map((s) => (
-        <li key={s.id} className="flex flex-wrap items-baseline justify-between gap-x-3 px-3 py-2">
-          <span className="flex flex-col">
-            <span className="tabular-nums">{dataHoraDeParede(s.data)}</span>
-            <span className="text-legenda text-muted-foreground">
-              {[s.tanque ?? "Sem tanque", s.obra ?? "Sem obra"].join(" · ")}
+        <li key={s.id} className="flex flex-col gap-2 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="flex flex-col">
+              <span className="tabular-nums">{dataHoraDeParede(s.data)}</span>
+              <span className="text-legenda text-muted-foreground">
+                {[s.tanque ?? "Sem tanque", s.obra ?? "Sem obra"].join(" · ")}
+              </span>
             </span>
-          </span>
-          <span className="text-right tabular-nums">
-            {formatarLitros(s.litros)} · <MoneyText valor={s.valorTotal} />
-          </span>
+            <span className="text-right tabular-nums">
+              {formatarLitros(s.litros)} · <MoneyText valor={s.valorTotal} />
+            </span>
+          </div>
+          {onLeituras ? (
+            <div className="grid grid-cols-2 gap-2">
+              <InputQuantidade
+                id={`atribuir-km-${s.id}`}
+                ariaLabel="Odômetro (km)"
+                placeholder="Odômetro (km)"
+                valor={leituras?.[s.id]?.km ?? ""}
+                onValorChange={(v) => mudar(s.id, "km", v)}
+              />
+              <InputQuantidade
+                id={`atribuir-h-${s.id}`}
+                ariaLabel="Horímetro (h)"
+                placeholder="Horímetro (h)"
+                valor={leituras?.[s.id]?.h ?? ""}
+                onValorChange={(v) => mudar(s.id, "h", v)}
+              />
+            </div>
+          ) : null}
         </li>
       ))}
     </ul>

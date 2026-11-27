@@ -9,7 +9,7 @@ const rpc = vi.fn();
 const lerAlocacoesDaSaida = vi.fn();
 const lerMovimentosFifoDoTanque = vi.fn();
 const lerSnapshotDaSaida = vi.fn();
-const buscarUltimaLeitura = vi.fn();
+const buscarUltimasLeituras = vi.fn();
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/permissoes", () => ({
@@ -22,14 +22,13 @@ vi.mock("@/modules/combustivel/abastecimentos/queries", () => ({
   lerAlocacoesDaSaida: (...args: unknown[]) => lerAlocacoesDaSaida(...args),
   lerMovimentosFifoDoTanque: (...args: unknown[]) => lerMovimentosFifoDoTanque(...args),
   lerSnapshotDaSaida: (...args: unknown[]) => lerSnapshotDaSaida(...args),
-}));
-vi.mock("@/modules/manutencao/medicoes/queries", () => ({
-  buscarUltimaLeitura: (...args: unknown[]) => buscarUltimaLeitura(...args),
+  buscarUltimasLeituras: (...args: unknown[]) => buscarUltimasLeituras(...args),
 }));
 
 import {
   calcularPrecoFifo,
   consultarEstoqueNaData,
+  consultarUltimaLeitura,
   excluirAbastecimento,
   restaurarAbastecimento,
   salvarAbastecimento,
@@ -60,8 +59,10 @@ const DADOS: SaidaInput = {
   precoUnitario: null,
   pago: false,
   pagoEm: null,
-  medicao: null,
-  tipoMedicao: null,
+  odometroKm: null,
+  horimetroH: null,
+  virada: false,
+  motivoVirada: null,
   dataHora: "2026-09-20T14:30:00-05:00",
   obraId: OBRA,
   manterAlocacoes: false,
@@ -342,5 +343,33 @@ describe("excluir, restaurar e estoque na data", () => {
       p_excluir: ID,
     });
     await expect(consultarEstoqueNaData(TANQUE, "20/09/2026", null)).resolves.toEqual({ erro: "Data inválida" });
+  });
+});
+
+describe("última leitura do veículo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    exigirPermissao.mockResolvedValue(undefined);
+  });
+
+  it("sem veículo identificado não consulta o banco", async () => {
+    await expect(
+      consultarUltimaLeitura({ equipamentoId: null, transportadoraId: TRANSP, placa: null, antes: null, excluir: null }),
+    ).resolves.toEqual({ ok: true, leituras: { km: null, h: null } });
+    expect(buscarUltimasLeituras).not.toHaveBeenCalled();
+  });
+
+  it("equipamento ou transportadora + placa vão ao banco com a data e o abastecimento a excluir", async () => {
+    const leituras = { km: { valor: 11100, data: "2025-01-05T13:00:00Z", origem: "abastecimento" }, h: null };
+    buscarUltimasLeituras.mockResolvedValue(leituras);
+    const veiculo = { equipamentoId: null, transportadoraId: TRANSP, placa: "PRV0A00", antes: "2026-09-20T14:30:00-05:00", excluir: ID };
+    await expect(consultarUltimaLeitura(veiculo)).resolves.toEqual({ ok: true, leituras });
+    expect(buscarUltimasLeituras).toHaveBeenCalledWith(veiculo);
+  });
+
+  it("recusa id inválido", async () => {
+    await expect(
+      consultarUltimaLeitura({ equipamentoId: "x", transportadoraId: null, placa: null, antes: null, excluir: null }),
+    ).resolves.toEqual({ erro: "Veículo inválido" });
   });
 });

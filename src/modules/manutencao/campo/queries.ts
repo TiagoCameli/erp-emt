@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { classeConsumoDe, type ClasseConsumo } from "@/modules/combustivel/_shared/leituras";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { precoFifoDaSaida, relogioRioBranco } from "@/modules/combustivel/_shared/fifo-ts";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
@@ -44,6 +45,8 @@ export interface EquipamentoCampo {
   controlePor: TipoMedicao | null;
   /** Alugado não tem etapa: a OS pede a obra onde ele trabalha. */
   temEtapa: boolean;
+  /** Carro, moto e cavalo exigem o odômetro no abastecimento. */
+  classeConsumo: ClasseConsumo;
   ultimaLeitura: UltimaLeitura | null;
   osEmAberto: OsResumoCampo[];
 }
@@ -66,7 +69,7 @@ export async function obterEquipamentoCampo(id: string): Promise<EquipamentoCamp
 
   const { data: equipamento, error } = await supabase
     .from("equipamentos")
-    .select("id, codigo, descricao, tipo, marca, modelo, placa, ativo, status, controle_por")
+    .select("id, codigo, descricao, tipo, marca, modelo, placa, ativo, status, controle_por, classe_consumo")
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error("Não foi possível carregar o equipamento");
@@ -98,6 +101,7 @@ export async function obterEquipamentoCampo(id: string): Promise<EquipamentoCamp
     tipo: equipamento.tipo,
     marcaModelo: marcaModelo || null,
     placa: equipamento.placa,
+    classeConsumo: classeConsumoDe(equipamento.classe_consumo),
     ativo: equipamento.ativo,
     status: statusEquipamento(equipamento.status),
     controlePor:

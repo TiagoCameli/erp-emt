@@ -19,7 +19,10 @@ export const abastecimentoCampoSchema = z.strictObject({
     .max(9999999999.9999)
     .refine((v) => Math.round(v * 1e4) / 1e4 === v, { error: "Litros com até 4 casas" }),
   data: z.iso.datetime({ offset: true, error: "Data inválida" }),
-  medicao: z.number().nonnegative({ error: "Leitura inválida" }).nullable(),
+  odometroKm: z.number().nonnegative({ error: "Odômetro inválido" }).nullable(),
+  horimetroH: z.number().nonnegative({ error: "Horímetro inválido" }).nullable(),
+  virada: z.boolean(),
+  motivoVirada: z.string().trim().max(500).nullable(),
   /** Obra do abastecimento, sempre obrigatória (a origem pede obra e etapa; vai a 100%). */
   centroCustoId: idSchemaCom("Escolha a obra"),
   observacoes: z.string().trim().max(500),

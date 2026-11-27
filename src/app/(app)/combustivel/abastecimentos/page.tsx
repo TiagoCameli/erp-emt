@@ -12,6 +12,7 @@ import {
 import {
   facetasAbastecimentos,
   listarAbastecimentos,
+  buscarTransportadoraEmt,
   listarCombustivelDosTanques,
   listarEquipamentos,
   listarTransportadoras,
@@ -52,7 +53,7 @@ export default async function PaginaAbastecimentos({
   const tanques = await listarTanques();
   const contexto = { idsTanquesExternos: tanques.filter((t) => t.ehExterno).map((t) => t.id) };
 
-  const [lista, facetas, equipamentos, transportadoras, insumos, centros, combustivelPorTanque] = await Promise.all([
+  const [lista, facetas, equipamentos, transportadoras, insumos, centros, combustivelPorTanque, transportadoraEmtId] = await Promise.all([
     listarAbastecimentos(filtros, contexto),
     facetasAbastecimentos(filtros, contexto),
     listarEquipamentos(),
@@ -60,6 +61,7 @@ export default async function PaginaAbastecimentos({
     listarInsumosCombustivel(),
     listarCentrosCusto(),
     carregaFormulario ? listarCombustivelDosTanques() : Promise.resolve<Record<string, string>>({}),
+    carregaFormulario ? buscarTransportadoraEmt() : Promise.resolve(null),
   ]);
 
   const inativo = (rotulo: string, ativo: boolean) => (ativo ? rotulo : `${rotulo} (inativo)`);
@@ -82,7 +84,7 @@ export default async function PaginaAbastecimentos({
         podeRestaurar={podeRestaurar}
         opcoesFormulario={
           carregaFormulario
-            ? { tanques, equipamentos, transportadoras, insumos, obras, combustivelPorTanque }
+            ? { tanques, equipamentos, transportadoras, insumos, obras, combustivelPorTanque, transportadoraEmtId }
             : null
         }
         opcoesFiltro={{

@@ -12,6 +12,7 @@ import {
 } from "@/lib/importacao";
 import { exigirPermissao } from "@/lib/permissoes";
 import { createClient } from "@/lib/supabase/server";
+import type { ClasseConsumo } from "@/modules/combustivel/_shared/leituras";
 import {
   listarAnexosPorDocumento,
   type AnexoDoDocumento,
@@ -63,6 +64,7 @@ function paraRegistro(dados: EquipamentoInput) {
     ano: dados.ano ?? null,
     placa: dados.placa ?? null,
     controle_por: dados.controlePor,
+    classe_consumo: dados.classeConsumo,
     propriedade: dados.propriedade,
     status: dados.status,
     medicao_inicial: dados.medicaoInicial ?? null,
@@ -448,7 +450,19 @@ interface LinhaEquipamento {
   ano: number | null;
   placa: string | null;
   controlePor: ControlePor;
+  classeConsumo: ClasseConsumo | null;
 }
+
+const ROTULO_CLASSE: Record<string, ClasseConsumo> = {
+  carreta: "carreta",
+  cavalo: "carreta",
+  "veículo leve": "veiculo_leve",
+  "veiculo leve": "veiculo_leve",
+  carro: "veiculo_leve",
+  moto: "veiculo_leve",
+  "máquina": "maquina",
+  maquina: "maquina",
+};
 
 const ANO_MINIMO = 1950;
 const ANO_MAXIMO = new Date().getFullYear() + 1;
@@ -530,6 +544,16 @@ const COLUNAS: ColunaImportacao<LinhaEquipamento>[] = [
       valor === null || CONTROLE_POR.includes(valor as ControlePor)
         ? null
         : "use horímetro, km ou nenhum",
+  },
+  {
+    chave: "classeConsumo",
+    rotulo: "Classe no combustível",
+    exemplo: "Máquina",
+    transformar: (valor) => {
+      const classe = ROTULO_CLASSE[String(valor).trim().toLowerCase()];
+      if (!classe) throw new Error("use carreta, veículo leve ou máquina");
+      return classe;
+    },
   },
 ];
 
@@ -614,6 +638,7 @@ export async function importarEquipamentos(
     ano: dados.ano ?? null,
     placa: dados.placa ?? null,
     controle_por: dados.controlePor ?? "horimetro",
+    classe_consumo: dados.classeConsumo ?? "maquina",
     ativo: true,
   }));
 

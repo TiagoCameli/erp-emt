@@ -42,7 +42,13 @@ export const GRUPOS_ABAS: readonly GrupoAbas[] = [
       { rota: "/combustivel/anomalias", rotulo: "Anomalias", recurso: "combustivel.anomalias" },
     ],
   },
-  { rotulo: null, abas: [{ rota: "/combustivel/relatorios", rotulo: "Relatórios", recurso: "combustivel.relatorios" }] },
+  {
+    rotulo: null,
+    abas: [
+      { rota: "/combustivel/relatorios", rotulo: "Relatórios", recurso: "combustivel.relatorios" },
+      { rota: "/combustivel/relatorios/consumo", rotulo: "Consumo", recurso: "combustivel.relatorios" },
+    ],
+  },
   { rotulo: null, abas: [{ rota: "/combustivel/lixeira", rotulo: "Lixeira", recurso: "combustivel.saidas" }] },
 ];
 

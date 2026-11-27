@@ -10,7 +10,7 @@ import { idSchema } from "@/lib/id";
  * chave que nenhuma anomalia jamais vai ter.
  */
 
-const CHAVE_ANOMALIA = /^D[1-5]-[0-9a-f-]+$/i;
+const CHAVE_ANOMALIA = /^D[1-7]-[0-9a-f-]+$/i;
 
 export const MAXIMO_MOTIVO = 500;
 
@@ -68,6 +68,17 @@ export const atribuirEquipamentoSchema = z.strictObject({
     .min(1, { error: "Selecione ao menos uma saída" })
     .max(MAXIMO_SAIDAS_ATRIBUICAO, { error: `No máximo ${MAXIMO_SAIDAS_ATRIBUICAO} saídas por vez` }),
   equipamentoId: idSchema,
+  /** Leitura do painel de cada saída (opcional): vira leitura do equipamento, com as travas do banco. */
+  leituras: z
+    .array(
+      z.strictObject({
+        saidaId: idSchema,
+        odometroKm: z.number().nonnegative({ error: "Odômetro inválido" }).nullable(),
+        horimetroH: z.number().nonnegative({ error: "Horímetro inválido" }).nullable(),
+      }),
+    )
+    .max(MAXIMO_SAIDAS_ATRIBUICAO)
+    .default([]),
 });
 export type AtribuirEquipamentoInput = z.input<typeof atribuirEquipamentoSchema>;
 

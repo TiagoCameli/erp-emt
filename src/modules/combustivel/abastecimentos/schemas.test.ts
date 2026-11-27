@@ -6,7 +6,6 @@ import {
   linhasImpacto,
   taxaPadraoDaTransportadora,
   tipoCombustivelDoTanque,
-  tipoMedicaoDoControle,
   valoresDoAbastecimento,
   valoresNovoAbastecimento,
 } from "@/modules/combustivel/abastecimentos/formulario";
@@ -58,8 +57,10 @@ function entrada(troca: Partial<SaidaInput> = {}): SaidaInput {
     precoUnitario: null,
     pago: false,
     pagoEm: null,
-    medicao: null,
-    tipoMedicao: null,
+    odometroKm: null,
+    horimetroH: null,
+    virada: false,
+    motivoVirada: null,
     dataHora: DATA,
     obraId: OBRA,
     manterAlocacoes: false,
@@ -91,7 +92,7 @@ describe("montarDadosSaida: a matriz consumidor × origem da origem", () => {
       taxa_litro: 0.15,
       preco_unitario: 6.95,
       preco_medio_tanque: 6.2,
-      medicao: null,
+      odometro_km: null,
       alocacoes: [{ centro_custo_id: OBRA, percentual: 100 }],
     });
     expect(valorSaida(d, 6.2)).toBeCloseTo(695, 10);
@@ -105,7 +106,7 @@ describe("montarDadosSaida: a matriz consumidor × origem da origem", () => {
   });
 
   it("equipamento próprio + tanque: preço = o FIFO em TS (a taxa não conta, nem digitada)", () => {
-    const d = entrada({ taxaLitro: 0.5, medicao: 1200, tipoMedicao: "horimetro" });
+    const d = entrada({ taxaLitro: 0.5, horimetroH: 1200 });
     const dados = montarDadosSaida(d, { tanqueExterno: false, precoMedioTanque: 6.3947 });
     expect(dados).toMatchObject({
       tanque_id: TANQUE,
@@ -117,8 +118,10 @@ describe("montarDadosSaida: a matriz consumidor × origem da origem", () => {
       taxa_litro: 0,
       preco_unitario: 6.3947,
       preco_medio_tanque: 6.3947,
-      medicao: 1200,
-      tipo_medicao: "horimetro",
+      odometro_km: null,
+      horimetro_h: 1200,
+      virada: false,
+      motivo_virada: null,
     });
     expect(valorSaida(d, 6.3947)).toBeCloseTo(639.47, 10);
   });
@@ -396,11 +399,17 @@ describe("schemas: 4 casas e formulário", () => {
 });
 
 describe("valores iniciais e opções", () => {
-  it("tipo de medição só para horímetro e km", () => {
-    expect(tipoMedicaoDoControle("horimetro")).toBe("horimetro");
-    expect(tipoMedicaoDoControle("km")).toBe("km");
-    expect(tipoMedicaoDoControle("nenhum")).toBe("");
-    expect(tipoMedicaoDoControle(null)).toBe("");
+  it("virada exige leitura e motivo; sem virada o motivo não vai ao banco", () => {
+    expect(regrasSaida(entrada({ virada: true, motivoVirada: "Troca" })).map((p) => p.campo)).toEqual(["odometroKm"]);
+    expect(regrasSaida(entrada({ virada: true, odometroKm: 50, motivoVirada: "ok" })).map((p) => p.campo)).toEqual([
+      "motivoVirada",
+    ]);
+    expect(regrasSaida(entrada({ virada: true, odometroKm: 50, motivoVirada: "Troca do painel" }))).toEqual([]);
+    const semVirada = montarDadosSaida(entrada({ odometroKm: 10, motivoVirada: "sobrou" }), {
+      tanqueExterno: false,
+      precoMedioTanque: 6,
+    });
+    expect(semVirada).toMatchObject({ odometro_km: 10, virada: false, motivo_virada: null });
   });
 
   it("editar volta ao formulário com os preços salvos e a obra única, ou mantendo várias", () => {
@@ -432,8 +441,10 @@ describe("valores iniciais e opções", () => {
         valorTotal: 695,
         pago: false,
         pagoEm: null,
-        medicao: null,
-        tipoMedicao: null,
+        odometroKm: null,
+        horimetroH: null,
+        virada: false,
+        motivoVirada: null,
         centroCustoNome: null,
         canal: "computador",
         observacoes: null,

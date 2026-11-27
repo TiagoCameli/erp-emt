@@ -36,8 +36,10 @@ import type {
 } from "@/modules/cadastros/equipamentos/queries";
 import {
   AJUDA_PROPRIEDADE,
+  CLASSES_CONSUMO,
   CONTROLE_POR,
   CONTROLE_POR_CONFIG,
+  ROTULO_CLASSE_CONSUMO,
   documentoFormSchema,
   equipamentoFormSchema,
   medicaoParaNumero,
@@ -80,6 +82,7 @@ function valoresIniciais(
         : "",
     placa: equipamento?.placa ?? "",
     controlePor: equipamento?.controlePor ?? "horimetro",
+    classeConsumo: equipamento?.classeConsumo ?? "maquina",
     propriedade: equipamento?.propriedade ?? "propria",
     status: equipamento?.status ?? "ativa",
     medicaoInicial:
@@ -166,6 +169,7 @@ export function EquipamentosFormDrawer({
       ano,
       placa: valores.placa,
       controlePor: valores.controlePor,
+      classeConsumo: valores.classeConsumo,
       propriedade: valores.propriedade,
       status: valores.status,
       medicaoInicial: medicaoParaNumero(valores.medicaoInicial),
@@ -366,6 +370,29 @@ export function EquipamentosFormDrawer({
               }))}
               disabled={salvando}
               id="equipamento-controle"
+            />
+          </CampoFormulario>
+        </LinhaCampos>
+
+        <LinhaCampos colunas={2}>
+          <CampoFormulario
+            id="equipamento-classe"
+            rotulo="Classe no combustível"
+            obrigatorio
+            ajuda="Carreta e veículo leve exigem o odômetro em todo abastecimento"
+            erro={form.formState.errors.classeConsumo?.message}
+          >
+            <Combobox
+              valor={form.watch("classeConsumo")}
+              onValorChange={(valor) =>
+                form.setValue("classeConsumo", valor as EquipamentoFormInput["classeConsumo"], {
+                  shouldValidate: true,
+                  shouldDirty: true,
+                })
+              }
+              opcoes={CLASSES_CONSUMO.map((classe) => ({ valor: classe, rotulo: ROTULO_CLASSE_CONSUMO[classe] }))}
+              disabled={salvando}
+              id="equipamento-classe"
             />
           </CampoFormulario>
         </LinhaCampos>

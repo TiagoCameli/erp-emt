@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CASAS_DINHEIRO, CASAS_TAXA } from "@/lib/casas-decimais";
 import { idSchemaCom } from "@/lib/id";
 import { normalizarNumeroDigitado } from "@/lib/numero-digitado";
+import { CLASSES_CONSUMO as CLASSES_CONSUMO_LOCAL } from "@/modules/combustivel/_shared/leituras";
 
 /** Como o equipamento controla uso/horas. Igual ao default/check do banco. */
 export const CONTROLE_POR = ["horimetro", "km", "nenhum"] as const;
@@ -15,6 +16,13 @@ export const CONTROLE_POR_CONFIG: Record<ControlePor, string> = {
   km: "Quilometragem",
   nenhum: "Sem controle",
 };
+
+/**
+ * Classe de consumo de combustível (27/11/2026). Decide se o odômetro é obrigatório no
+ * abastecimento: cavalo da EMT TRANSPORTES (carreta) e carro/moto (veículo leve) exigem;
+ * máquina não trava. Também agrupa as médias do relatório de Consumo.
+ */
+export { CLASSES_CONSUMO, ROTULO_CLASSE_CONSUMO, type ClasseConsumo } from "@/modules/combustivel/_shared/leituras";
 
 /**
  * De quem é o equipamento. Decide ONDE mora a etapa dele no centro de custo (o
@@ -101,6 +109,7 @@ export const equipamentoSchema = z.object({
     .optional(),
   placa: textoOpcional(10),
   controlePor: z.enum(CONTROLE_POR, { error: "Forma de controle inválida" }),
+  classeConsumo: z.enum(CLASSES_CONSUMO_LOCAL, { error: "Classe de consumo inválida" }),
   propriedade: z.enum(PROPRIEDADES, { error: "Escolha de quem é o equipamento" }),
   status: z.enum(STATUS_EQUIPAMENTO, { error: "Situação inválida" }),
   medicaoInicial: z
@@ -156,6 +165,7 @@ export const equipamentoFormSchema = z.object({
     ),
   placa: z.string().trim().max(10, { error: "Máximo de 10 caracteres" }),
   controlePor: z.enum(CONTROLE_POR, { error: "Forma de controle inválida" }),
+  classeConsumo: z.enum(CLASSES_CONSUMO_LOCAL, { error: "Classe de consumo inválida" }),
   propriedade: z.enum(PROPRIEDADES, { error: "Escolha de quem é o equipamento" }),
   status: z.enum(STATUS_EQUIPAMENTO, { error: "Situação inválida" }),
   medicaoInicial: z

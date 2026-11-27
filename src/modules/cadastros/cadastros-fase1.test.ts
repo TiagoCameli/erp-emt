@@ -69,6 +69,7 @@ const EQUIP_FORM = {
   ano: "",
   placa: "",
   controlePor: "km" as const,
+  classeConsumo: "maquina" as const,
   propriedade: "colorado" as const,
   status: "ativa" as const,
   medicaoInicial: "125.430,5",
@@ -94,7 +95,7 @@ describe("equipamento: propriedade, situação, medição e datas", () => {
     expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "" }).success).toBe(true);
     expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "385.000,00" }).success).toBe(true);
     expect(equipamentoFormSchema.safeParse({ ...EQUIP_FORM, valorAquisicao: "12,3,4" }).success).toBe(false);
-    const base = { descricao: "X de teste", controlePor: "km", propriedade: "propria", status: "ativa", ativo: true };
+    const base = { descricao: "X de teste", controlePor: "km", classeConsumo: "maquina", propriedade: "propria", status: "ativa", ativo: true };
     expect(equipamentoSchema.safeParse({ ...base, valorAquisicao: 385000 }).success).toBe(true);
     expect(equipamentoSchema.safeParse({ ...base, valorAquisicao: -1 }).success).toBe(false);
   });
@@ -114,6 +115,7 @@ describe("equipamento: propriedade, situação, medição e datas", () => {
     const servidor = equipamentoSchema.safeParse({
       descricao: "X de teste",
       controlePor: "km",
+      classeConsumo: "maquina",
       propriedade: "propria",
       status: "ativa",
       dataAquisicao: "2026-03-19",

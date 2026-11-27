@@ -63,8 +63,13 @@ export const saidaSchema = z.strictObject({
   precoUnitario: precoOpcional("Preço por litro"),
   pago: z.boolean(),
   pagoEm: z.string().regex(DATA_ISO, { error: "Data do pagamento inválida" }).nullable(),
-  medicao: numeroSchema(CASAS_TAXA, "Medição", "naoNegativo").nullable(),
-  tipoMedicao: z.enum(TIPOS_MEDICAO).nullable(),
+  /** Odômetro no abastecimento (km). Obrigatório em carreta da EMT e veículo leve: o banco trava. */
+  odometroKm: numeroSchema(CASAS_TAXA, "Odômetro", "naoNegativo").nullable(),
+  /** Horímetro no abastecimento (h). Opcional em todos. */
+  horimetroH: numeroSchema(CASAS_TAXA, "Horímetro", "naoNegativo").nullable(),
+  /** Troca de painel ou virada: a leitura reinicia a contagem. Exige motivo. */
+  virada: z.boolean(),
+  motivoVirada: z.string().trim().max(500, { error: "Motivo com no máximo 500 caracteres" }).nullable(),
   dataHora: dataHoraIsoSchema,
   /** Obra (centro raiz) da alocação a 100%. */
   obraId: z.guid({ error: "Obra inválida" }).nullable(),
@@ -104,8 +109,11 @@ export function regrasSaida(d: SaidaInput): ProblemaSaida[] {
   if (carreta && noTanque && !((d.precoCombustivel ?? 0) > 0)) {
     problemas.push({ campo: "precoCombustivel", mensagem: "Informe o preço cobrado da transportadora, maior que zero" });
   }
-  if (d.medicao !== null && !carreta && d.tipoMedicao === null) {
-    problemas.push({ campo: "medicao", mensagem: "Este equipamento não tem horímetro nem hodômetro" });
+  if (d.virada && d.odometroKm === null && d.horimetroH === null) {
+    problemas.push({ campo: "odometroKm", mensagem: "Informe a leitura nova do painel" });
+  }
+  if (d.virada && (d.motivoVirada ?? "").trim().length < 3) {
+    problemas.push({ campo: "motivoVirada", mensagem: "Informe o motivo da troca de painel ou virada" });
   }
   return problemas;
 }
@@ -144,8 +152,10 @@ export interface DadosSaidaRpc {
   preco_medio_tanque: number | null;
   pago: boolean;
   pago_em: string | null;
-  medicao: number | null;
-  tipo_medicao: TipoMedicao | null;
+  odometro_km: number | null;
+  horimetro_h: number | null;
+  virada: boolean;
+  motivo_virada: string | null;
   data: string;
   canal: "computador";
   observacoes: string | null;
@@ -247,8 +257,10 @@ export function montarDadosSaida(d: SaidaInput, ctx: ContextoDadosSaida): DadosS
     preco_medio_tanque: noTanque ? ctx.precoMedioTanque : null,
     pago: requisicao ? d.pago : false,
     pago_em: requisicao && d.pagoEm ? d.pagoEm : null,
-    medicao: carreta ? null : d.medicao,
-    tipo_medicao: carreta || d.medicao === null ? null : d.tipoMedicao,
+    odometro_km: d.odometroKm,
+    horimetro_h: d.horimetroH,
+    virada: d.virada,
+    motivo_virada: d.virada ? d.motivoVirada : null,
     data: d.dataHora,
     canal: "computador",
     observacoes: d.observacoes,
@@ -349,9 +361,10 @@ const CAMPOS_FORM = z.object({
   precoUnitario: numeroOpcionalTexto(`Preço com até ${CASAS_TAXA} casas`),
   pago: z.boolean(),
   pagoEm: z.string().trim().refine((v) => v === "" || DATA_ISO.test(v), { error: "Data do pagamento inválida" }),
-  medicao: numeroOpcionalTexto(`Medição com até ${CASAS_TAXA} casas`),
-  /** Vem do equipamento (controle por horímetro ou km). "" quando não controla. */
-  tipoMedicao: z.string(),
+  odometroKm: numeroOpcionalTexto(`Odômetro com até ${CASAS_TAXA} casas`),
+  horimetroH: numeroOpcionalTexto(`Horímetro com até ${CASAS_TAXA} casas`),
+  virada: z.boolean(),
+  motivoVirada: z.string().trim().max(500, { error: "Motivo com no máximo 500 caracteres" }),
   dataHora: dataHoraFormSchema,
   obraId: z.string().trim(),
   manterAlocacoes: z.boolean(),
@@ -372,9 +385,6 @@ function numeroOuNulo(valor: string): number | null {
 
 /** Formulário -> o que a action recebe. */
 export function saidaDoForm(form: SaidaFormInput): SaidaInput {
-  const tipoMedicao = (TIPOS_MEDICAO as readonly string[]).includes(form.tipoMedicao)
-    ? (form.tipoMedicao as TipoMedicao)
-    : null;
   return {
     origem: form.origem,
     tipoConsumidor: form.tipoConsumidor,
@@ -391,8 +401,10 @@ export function saidaDoForm(form: SaidaFormInput): SaidaInput {
     precoUnitario: numeroOuNulo(form.precoUnitario),
     pago: form.pago,
     pagoEm: textoOuNulo(form.pagoEm),
-    medicao: numeroOuNulo(form.medicao),
-    tipoMedicao,
+    odometroKm: numeroOuNulo(form.odometroKm),
+    horimetroH: numeroOuNulo(form.horimetroH),
+    virada: form.virada,
+    motivoVirada: form.virada ? textoOuNulo(form.motivoVirada) : null,
     dataHora: dataHoraLocalParaIso(form.dataHora) ?? "",
     obraId: textoOuNulo(form.obraId),
     manterAlocacoes: form.manterAlocacoes,

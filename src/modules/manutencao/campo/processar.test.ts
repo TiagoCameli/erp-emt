@@ -140,7 +140,7 @@ describe("processarEnvioCampo", () => {
     const resposta = await processarEnvioCampo({
       tipo: "abastecimento",
       idCliente: ID_CLIENTE,
-      dados: { equipamentoId: EQUIP, tanqueId: TANQUE, litros: 120.5, data: "2026-09-23T14:00:00-05:00", medicao: 5000,
+      dados: { equipamentoId: EQUIP, tanqueId: TANQUE, litros: 120.5, data: "2026-09-23T14:00:00-05:00", odometroKm: 5000, horimetroH: 1200, virada: false, motivoVirada: null,
         centroCustoId: OBRA, observacoes: "" },
     });
     expect(resposta).toEqual({ ok: true, id: "s1" });
@@ -149,6 +149,7 @@ describe("processarEnvioCampo", () => {
       p_dados: expect.objectContaining({ origem: "tanque", tipo_consumidor: "equipamento_proprio", tanque_id: TANQUE,
         equipamento_id: EQUIP, litros: 120.5, canal: "celular", motorista: "Operador Teste",
         preco_medio_tanque: 6.3745, insumo_id: "55555555-5555-4555-8555-555555555555",
+        odometro_km: 5000, horimetro_h: 1200, virada: false, motivo_virada: null,
         observacoes: "Saída via mobile · Operador Teste", alocacoes: [{ centro_custo_id: OBRA, percentual: 100 }] }),
     });
   });
@@ -158,7 +159,7 @@ describe("processarEnvioCampo", () => {
     const resposta = await processarEnvioCampo({
       tipo: "abastecimento",
       idCliente: ID_CLIENTE,
-      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", odometroKm: null, horimetroH: null, virada: false, motivoVirada: null,
         centroCustoId: null, observacoes: "" },
     });
     expect(resposta).toMatchObject({ ok: false, definitivo: true });
@@ -170,7 +171,7 @@ describe("processarEnvioCampo", () => {
     const resposta = await processarEnvioCampo({
       tipo: "abastecimento",
       idCliente: ID_CLIENTE,
-      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", odometroKm: null, horimetroH: null, virada: false, motivoVirada: null,
         centroCustoId: EQUIP, observacoes: "" },
     });
     expect(resposta).toMatchObject({ ok: false, definitivo: true });
@@ -183,7 +184,7 @@ describe("processarEnvioCampo", () => {
     const resposta = await processarEnvioCampo({
       tipo: "abastecimento",
       idCliente: ID_CLIENTE,
-      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", medicao: null,
+      dados: { equipamentoId: EQUIP, tanqueId: EQUIP, litros: 10, data: "2026-09-23T14:00:00-05:00", odometroKm: null, horimetroH: null, virada: false, motivoVirada: null,
         centroCustoId: EQUIP, observacoes: "" },
     });
     expect(resposta).toMatchObject({ ok: false, definitivo: false });

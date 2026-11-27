@@ -255,15 +255,20 @@ export function montarSaidaBase(
     centroRaizId: raizDoCentro(a.centro_custo_id, centros)?.id ?? null,
     percentual: numero(a.percentual),
   }));
+  // Carreta continua sendo da placa nas telas da origem (ranking, D3, D4, D5), mesmo a da
+  // EMT TRANSPORTES, que desde 27/11/2026 grava o cavalo em equipamento_id para o consumo.
+  const equipamentoDoConsumidor = linha.tipo_consumidor === "carreta_transportadora" ? null : linha.equipamento_id;
   const equipamentoId =
-    linha.equipamento_id !== null && sentinelas.has(linha.equipamento_id) ? EQUIPAMENTO_DESCONHECIDO : linha.equipamento_id;
+    equipamentoDoConsumidor !== null && sentinelas.has(equipamentoDoConsumidor)
+      ? EQUIPAMENTO_DESCONHECIDO
+      : equipamentoDoConsumidor;
   return {
     id: linha.id,
     data: relogioDeParede(linha.data),
     instante: linha.data,
     tipoConsumidor: linha.tipo_consumidor,
     equipamentoId,
-    equipamentoIdReal: linha.equipamento_id,
+    equipamentoIdReal: equipamentoDoConsumidor,
     placa: linha.placa,
     obraId: obraDaSaida(alocacoes),
     tipoCombustivel: linha.insumo_id,

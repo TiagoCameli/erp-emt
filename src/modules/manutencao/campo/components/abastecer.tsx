@@ -7,6 +7,7 @@ import { Fuel, Loader2 } from "lucide-react";
 import { CampoFormulario, Combobox, InputQuantidade, SeletorCentroCusto } from "@/components/canonicos";
 import { toast } from "@/components/canonicos/toast";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { CASAS_TAXA } from "@/lib/casas-decimais";
 import { formatarBRL } from "@/lib/formatadores";
@@ -19,6 +20,14 @@ import {
   subirFilaCombustivel,
   type FilaCombustivel,
 } from "@/modules/combustivel/_shared/components/anexos-combustivel";
+import {
+  anterioresParaTrava,
+  odometroObrigatorio,
+  problemasDeLeitura,
+  textoUltimaLeitura,
+  type ClasseConsumo,
+  type UltimasLeituras,
+} from "@/modules/combustivel/_shared/leituras";
 import { formatarLitros } from "@/modules/combustivel/_shared/rotulos";
 import { calcularPrecoFifo } from "@/modules/combustivel/abastecimentos/actions";
 import { enviarPelaRede } from "@/modules/manutencao/campo/fila";
@@ -27,6 +36,9 @@ import { textoParaNumero } from "@/modules/manutencao/servicos/numero";
 
 interface Props {
   equipamentoId: string;
+  /** Carro, moto e cavalo exigem o odômetro. */
+  classeConsumo: ClasseConsumo;
+  ultimasLeituras: UltimasLeituras;
   tanques: TanqueCampo[];
   centros: CentroCustoOpcao[];
   onFeito: () => void;
@@ -42,13 +54,24 @@ interface Props {
  * depois que a saída foi lançada, penduradas no id que a rota devolveu. Foto que não sobe
  * não desfaz o abastecimento: vira aviso com o nome dela.
  */
-export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
+export function Abastecer({ equipamentoId, classeConsumo, ultimasLeituras, tanques, centros, onFeito }: Props) {
   const [tanqueId, setTanqueId] = React.useState(tanques.length === 1 ? tanques[0]!.id : "");
   const [litros, setLitros] = React.useState("");
-  const [medicao, setMedicao] = React.useState("");
+  const [odometro, setOdometro] = React.useState("");
+  const [horimetro, setHorimetro] = React.useState("");
+  const [virada, setVirada] = React.useState(false);
+  const [motivoVirada, setMotivoVirada] = React.useState("");
   const [centroCustoId, setCentroCustoId] = React.useState("");
   const [observacoes, setObservacoes] = React.useState("");
-  const [erros, setErros] = React.useState<{ tanque?: string; litros?: string; centro?: string; medicao?: string }>({});
+  const [erros, setErros] = React.useState<{
+    tanque?: string;
+    litros?: string;
+    centro?: string;
+    odometroKm?: string;
+    horimetroH?: string;
+    motivoVirada?: string;
+  }>({});
+  const kmObrigatorio = odometroObrigatorio(classeConsumo);
   const [enviando, setEnviando] = React.useState(false);
   const [fotos, setFotos] = React.useState<FilaCombustivel>(FILA_VAZIA);
   const [enviandoFotos, setEnviandoFotos] = React.useState(false);
@@ -83,7 +106,8 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
   async function salvar(evento: React.FormEvent) {
     evento.preventDefault();
     const numero = textoParaNumero(litros, CASAS_TAXA);
-    const leitura = medicao.trim() === "" ? null : textoParaNumero(medicao, CASAS_TAXA);
+    const km = odometro.trim() === "" ? null : textoParaNumero(odometro, CASAS_TAXA);
+    const horas = horimetro.trim() === "" ? null : textoParaNumero(horimetro, CASAS_TAXA);
     const novos: typeof erros = {};
     if (!tanque) novos.tanque = "Escolha o tanque";
     if (numero === null || numero <= 0) novos.litros = "Informe os litros";
@@ -93,7 +117,19 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
     }
     // A origem pede obra e etapa sempre; aqui a etapa é a obra (centro de custo) a 100%.
     if (centroCustoId === "") novos.centro = "Escolha a obra";
-    if (medicao.trim() !== "" && leitura === null) novos.medicao = "Leitura inválida";
+    if (odometro.trim() !== "" && km === null) novos.odometroKm = "Odômetro inválido";
+    if (horimetro.trim() !== "" && horas === null) novos.horimetroH = "Horímetro inválido";
+    // As travas do banco (odômetro obrigatório, leitura menor que a anterior, virada com motivo).
+    for (const p of problemasDeLeitura({
+      classe: classeConsumo,
+      odometroKm: km,
+      horimetroH: horas,
+      virada,
+      motivoVirada: motivoVirada.trim() || null,
+      anteriores: anterioresParaTrava(ultimasLeituras, null, { odometroKm: km, horimetroH: horas }),
+    })) {
+      novos[p.campo] ??= p.mensagem;
+    }
     setErros(novos);
     if (Object.keys(novos).length > 0 || numero === null) return;
     if (!navigator.onLine) {
@@ -111,7 +147,10 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
           tanqueId,
           litros: numero,
           data: new Date().toISOString(),
-          medicao: leitura,
+          odometroKm: km,
+          horimetroH: horas,
+          virada,
+          motivoVirada: virada ? motivoVirada.trim() || null : null,
           centroCustoId,
           observacoes: observacoes.trim(),
         },
@@ -189,9 +228,46 @@ export function Abastecer({ equipamentoId, tanques, centros, onFeito }: Props) {
       ) : null}
       <SeletorCentroCusto idBase="abast-centro" centros={centros} valor={centroCustoId}
         onValorChange={setCentroCustoId} obrigatorio erro={erros.centro} />
-      <CampoFormulario id="abast-medicao" rotulo="Horímetro ou km agora" erro={erros.medicao}>
-        <InputQuantidade id="abast-medicao" valor={medicao} onValorChange={setMedicao} className="h-12" />
+      <CampoFormulario
+        id="abast-odometro"
+        rotulo="Odômetro agora (km)"
+        obrigatorio={kmObrigatorio}
+        ajuda={erros.odometroKm ? undefined : textoUltimaLeitura(ultimasLeituras.km, "km")}
+        erro={erros.odometroKm}
+      >
+        <InputQuantidade id="abast-odometro" valor={odometro} onValorChange={setOdometro} className="h-12" />
       </CampoFormulario>
+      <CampoFormulario
+        id="abast-horimetro"
+        rotulo="Horímetro agora (h)"
+        ajuda={erros.horimetroH ? undefined : textoUltimaLeitura(ultimasLeituras.h, "h")}
+        erro={erros.horimetroH}
+      >
+        <InputQuantidade id="abast-horimetro" valor={horimetro} onValorChange={setHorimetro} className="h-12" />
+      </CampoFormulario>
+      <div className="flex items-center gap-3">
+        <Switch id="abast-virada" checked={virada} onCheckedChange={setVirada} />
+        <label htmlFor="abast-virada" className="text-corpo">
+          Trocou o painel ou virou o odômetro/horímetro
+        </label>
+      </div>
+      {virada ? (
+        <CampoFormulario
+          id="abast-motivo-virada"
+          rotulo="Motivo da troca ou virada"
+          obrigatorio
+          ajuda="A leitura reinicia a contagem"
+          erro={erros.motivoVirada}
+        >
+          <Textarea
+            id="abast-motivo-virada"
+            value={motivoVirada}
+            maxLength={500}
+            onChange={(e) => setMotivoVirada(e.target.value)}
+            rows={2}
+          />
+        </CampoFormulario>
+      ) : null}
       <CampoFormulario id="abast-obs" rotulo="Observação">
         <Textarea id="abast-obs" value={observacoes} placeholder="Opcional" maxLength={500} onChange={(e) => setObservacoes(e.target.value)} rows={2} />
       </CampoFormulario>

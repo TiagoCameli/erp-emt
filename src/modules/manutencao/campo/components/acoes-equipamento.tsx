@@ -9,6 +9,7 @@ import type { CentroCustoOpcao } from "@/modules/_shared/centro-custo/queries";
 import { Abastecer } from "@/modules/manutencao/campo/components/abastecer";
 import { AbrirOs } from "@/modules/manutencao/campo/components/abrir-os";
 import { LancarLeitura } from "@/modules/manutencao/campo/components/lancar-leitura";
+import type { ClasseConsumo, UltimasLeituras } from "@/modules/combustivel/_shared/leituras";
 import type { TanqueCampo } from "@/modules/manutencao/campo/queries";
 import { ROTULO_TIPO_MEDICAO, type TipoMedicao } from "@/modules/manutencao/medicoes/schemas";
 
@@ -22,6 +23,8 @@ interface Props {
   podeLancarLeitura: boolean;
   podeAbrirOs: boolean;
   podeAbastecer: boolean;
+  classeConsumo: ClasseConsumo;
+  ultimasLeituras: UltimasLeituras;
 }
 
 type Aberto = "leitura" | "os" | "abastecer" | null;
@@ -43,6 +46,8 @@ export function AcoesEquipamento({
   podeLancarLeitura,
   podeAbrirOs,
   podeAbastecer,
+  classeConsumo,
+  ultimasLeituras,
 }: Props) {
   const router = useRouter();
   const [aberto, setAberto] = React.useState<Aberto>(null);
@@ -71,7 +76,14 @@ export function AcoesEquipamento({
         {aberto === "leitura" && controlePor ? (
           <LancarLeitura equipamentoId={equipamentoId} tipo={controlePor} ultima={ultimaLeitura} onFeito={feito} />
         ) : aberto === "abastecer" ? (
-          <Abastecer equipamentoId={equipamentoId} tanques={tanques} centros={centros} onFeito={feito} />
+          <Abastecer
+            equipamentoId={equipamentoId}
+            classeConsumo={classeConsumo}
+            ultimasLeituras={ultimasLeituras}
+            tanques={tanques}
+            centros={centros}
+            onFeito={feito}
+          />
         ) : (
           <AbrirOs equipamentoId={equipamentoId} temEtapa={temEtapa} centros={centros} onFeito={feito} />
         )}
