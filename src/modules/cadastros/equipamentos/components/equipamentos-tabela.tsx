@@ -22,6 +22,7 @@ import type {
 import {
   CONTROLE_POR,
   CONTROLE_POR_CONFIG,
+  ROTULO_CLASSE_CONSUMO,
   PROPRIEDADES,
   ROTULO_PROPRIEDADE,
 } from "@/modules/cadastros/equipamentos/schemas";
@@ -97,6 +98,12 @@ const colunas: ColumnDef<EquipamentoLista, unknown>[] = [
     header: "De quem é",
     size: 170,
     cell: ({ row }) => ROTULO_PROPRIEDADE[row.original.propriedade],
+  },
+  {
+    accessorKey: "classeConsumo",
+    header: "Classe no combustível",
+    size: 150,
+    cell: ({ row }) => ROTULO_CLASSE_CONSUMO[row.original.classeConsumo],
   },
   {
     accessorKey: "ativo",

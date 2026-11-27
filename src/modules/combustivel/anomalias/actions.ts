@@ -153,6 +153,9 @@ export async function atribuirEquipamento(dados: AtribuirEquipamentoInput): Prom
   if (!validado.success) return { erro: validado.error.issues[0]?.message ?? "Dados inválidos" };
   const saidaIds = [...new Set(validado.data.saidaIds)];
   const { equipamentoId } = validado.data;
+  const leituras = validado.data.leituras
+    .filter((l) => saidaIds.includes(l.saidaId) && (l.odometroKm !== null || l.horimetroH !== null))
+    .map((l) => ({ saida_id: l.saidaId, odometro_km: l.odometroKm, horimetro_h: l.horimetroH }));
 
   let atualizadas: number;
   try {
@@ -160,6 +163,7 @@ export async function atribuirEquipamento(dados: AtribuirEquipamentoInput): Prom
     const { data, error } = await supabase.rpc("fn_comb_atribuir_equipamento", {
       p_saidas: saidaIds,
       p_equipamento: equipamentoId,
+      p_leituras: leituras,
     });
     if (error) {
       return erroDaRpc("combustivel.anomalias.atribuirEquipamento", error, "Não foi possível atribuir o equipamento");

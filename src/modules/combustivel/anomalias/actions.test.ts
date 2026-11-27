@@ -178,9 +178,28 @@ describe("atribuirEquipamento", () => {
     expect(rpc).toHaveBeenCalledWith("fn_comb_atribuir_equipamento", {
       p_saidas: [SAIDA, OUTRA],
       p_equipamento: EQUIPAMENTO,
+      p_leituras: [],
     });
     // A RPC pula a excluída ou a de carreta: o número é o dela, não o pedido.
     expect(resultado).toEqual({ ok: true, atualizadas: 1 });
+  });
+
+  it("leva a leitura digitada de cada saída; sem leitura ou de saída fora da lista não vai", async () => {
+    exigirPermissao.mockResolvedValue(undefined);
+    rpc.mockResolvedValue({ data: 2, error: null });
+    await atribuirEquipamento({
+      saidaIds: [SAIDA, OUTRA],
+      equipamentoId: EQUIPAMENTO,
+      leituras: [
+        { saidaId: SAIDA, odometroKm: 1200, horimetroH: null },
+        { saidaId: OUTRA, odometroKm: null, horimetroH: null },
+      ],
+    });
+    expect(rpc).toHaveBeenCalledWith("fn_comb_atribuir_equipamento", {
+      p_saidas: [SAIDA, OUTRA],
+      p_equipamento: EQUIPAMENTO,
+      p_leituras: [{ saida_id: SAIDA, odometro_km: 1200, horimetro_h: null }],
+    });
   });
 
   it("a trava do banco (P0001) sobe com o texto dela", async () => {
