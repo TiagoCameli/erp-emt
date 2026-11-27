@@ -14,7 +14,7 @@ declare
   v_cs005 constant uuid := '0084906e-2ecf-43f3-9518-0d8fbab4626c';    -- cavalo SQU9D14
   v_aloc jsonb := jsonb_build_array(jsonb_build_object('centro_custo_id', 'a39e45c0-aea5-4d98-aebd-814616b8551c', 'percentual', 100));
   v_tanque uuid; v_carro uuid; v_maq uuid; v_maqkm uuid; v_forn uuid;
-  v_s uuid; v_c1 uuid; v_c2 uuid; v_c3 uuid; v_c4 uuid; v_c5 uuid; v_c6 uuid; v_m2 uuid; v_cv uuid;
+  v_x uuid; v_s uuid; v_c1 uuid; v_c2 uuid; v_c3 uuid; v_c4 uuid; v_c5 uuid; v_c6 uuid; v_m2 uuid; v_cv uuid;
   v_lanc0 bigint; v_txt text; v_n bigint; v_a numeric; v_b numeric; r jsonb := '{}'::jsonb;
 
 begin
@@ -163,6 +163,34 @@ begin
     jsonb_build_array(jsonb_build_object('saida_id', v_m2, 'horimetro_h', 110))));
   r := r || jsonb_build_object('9b_trecho_agora_inteiro', (select jsonb_agg(h_trecho order by data)
     from public.fn_comb_consumo_trechos('2025-01-01', '2025-02-01', 'eq:' || v_maq)));
+
+  -- 12. Máquina de horímetro com km e h: a Manutenção só recebe o horímetro (o tipo que ela controla).
+  v_x := public.fn_comb_salvar_saida(null, jsonb_build_object('origem', 'tanque', 'tipo_consumidor', 'equipamento_proprio',
+    'tanque_id', v_tanque, 'equipamento_id', v_maq, 'litros', 10, 'data', '2025-01-05 09:00-05', 'horimetro_h', 140,
+    'odometro_km', 152000, 'alocacoes', v_aloc));
+  r := r || jsonb_build_object('12_maquina_horimetro_so_grava_h', (select jsonb_agg(tipo order by tipo)
+    from public.equipamento_medicoes where combustivel_saida_id = v_x and excluido_em is null));
+
+  -- 13. Restaurar da lixeira passa pela trava: X (1.500 km em 05/01) excluída, Y (1.450 em 06/01) lançada,
+  --     restaurar X deixaria 1.500 antes de 1.450.
+  v_x := public.fn_comb_salvar_saida(null, jsonb_build_object('origem', 'tanque', 'tipo_consumidor', 'equipamento_proprio',
+    'tanque_id', v_tanque, 'equipamento_id', v_maqkm, 'litros', 10, 'data', '2025-01-05 11:00-05', 'odometro_km', 1500, 'alocacoes', v_aloc));
+  perform public.fn_comb_excluir('combustivel_saidas', v_x, 'teste da prova');
+  perform public.fn_comb_salvar_saida(null, jsonb_build_object('origem', 'tanque', 'tipo_consumidor', 'equipamento_proprio',
+    'tanque_id', v_tanque, 'equipamento_id', v_maqkm, 'litros', 10, 'data', '2025-01-06 11:00-05', 'odometro_km', 1450, 'alocacoes', v_aloc));
+  begin perform public.fn_comb_restaurar('combustivel_saidas', v_x); v_txt := 'PASSOU (errado)';
+  exception when others then v_txt := 'recusou: ' || left(sqlerrm, 70); end;
+  r := r || jsonb_build_object('13_restaurar_fora_de_ordem', v_txt);
+
+  -- 14. Placa do cavalo com hífen no cadastro continua achando o cavalo.
+  reset role;
+  update public.equipamentos set placa = 'SQU-9D14' where id = v_cs005;
+  set local role authenticated;
+  v_x := public.fn_comb_salvar_saida(null, jsonb_build_object('origem', 'tanque', 'tipo_consumidor', 'carreta_transportadora',
+    'tanque_id', v_tanque, 'transportadora_id', v_emt, 'placa', 'SQU9D14', 'preco_combustivel', 6, 'litros', 50,
+    'data', '2025-01-02 12:00-05', 'odometro_km', 5600, 'alocacoes', v_aloc));
+  r := r || jsonb_build_object('14_cadastro_com_hifen_acha_o_cavalo',
+    (select equipamento_id = v_cs005 from public.combustivel_saidas where id = v_x));
 
   -- 10. RLS: quem não tem permissão não lê trecho nem leitura.
   reset role;

@@ -35,6 +35,7 @@ import {
 } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import type { FIFOResult } from "@/modules/combustivel/_shared/fifo-ts";
 import {
+  anterioresParaTrava,
   normalizarPlaca,
   odometroObrigatorio,
   problemasDeLeitura,
@@ -212,7 +213,7 @@ export function AbastecimentoFormDrawer({
   // Carreta da EMT TRANSPORTES: a placa é a de um cavalo (equipamento da classe carreta).
   const carretaEmt = carreta && !!opcoes.transportadoraEmtId && valores.transportadoraId === opcoes.transportadoraEmtId;
   const cavalos = React.useMemo(
-    () => opcoes.equipamentos.filter((e) => e.classeConsumo === "carreta" && e.placa && e.ativo),
+    () => opcoes.equipamentos.filter((e) => e.classeConsumo === "carreta" && e.placa),
     [opcoes.equipamentos],
   );
   const cavalo = carretaEmt ? (cavalos.find((e) => normalizarPlaca(e.placa) === normalizarPlaca(valores.placa)) ?? null) : null;
@@ -386,7 +387,12 @@ export function AbastecimentoFormDrawer({
     definir("horimetroH", "", false);
   }
 
-  const opcoesCavalos = cavalos.map((e) => ({ valor: e.placa ?? "", rotulo: `${e.placa} · ${e.rotulo}` }));
+  // Cavalo inativo só aparece para a edição do abastecimento que já era dele.
+  const opcoesCavalos = cavalos
+    .filter((e) => e.ativo || normalizarPlaca(e.placa) === normalizarPlaca(saida?.placa))
+    .map((e) => ({ valor: e.placa ?? "", rotulo: `${normalizarPlaca(e.placa)} · ${e.rotulo}${e.ativo ? "" : " (inativo)"}` }));
+  // Abastecimento antigo da EMT com placa que não é de cavalo (ou sem placa): edita sem trocar a placa.
+  const placaOriginal = editando && normalizarPlaca(valores.placa) === normalizarPlaca(saida?.placa);
 
   const opcoesTanques = React.useMemo(
     () =>
@@ -473,14 +479,14 @@ export function AbastecimentoFormDrawer({
     horimetroH: dados.horimetroH,
     virada: dados.virada,
     motivoVirada: dados.motivoVirada,
-    anteriores,
+    anteriores: anterioresParaTrava(anteriores, saida, dados),
   });
   const erroLeitura = (campo: "odometroKm" | "horimetroH" | "motivoVirada") =>
     erros[campo]?.message ??
     (campo === "odometroKm" && !valores.odometroKm && kmObrigatorio ? undefined : problemasLeitura.find((p) => p.campo === campo)?.mensagem);
 
   async function aoEnviar(dadosForm: SaidaFormInput) {
-    if (carretaEmt && !cavalo) {
+    if (carretaEmt && !cavalo && !placaOriginal) {
       form.setError("placa", { message: "Escolha a placa de um cavalo da EMT TRANSPORTES" });
       return;
     }
@@ -645,6 +651,7 @@ export function AbastecimentoFormDrawer({
                   <Combobox
                     id="abast-placa"
                     valor={cavalo?.placa ?? ""}
+                    rotuloDoValor={!cavalo && saida?.placa ? saida.placa : undefined}
                     onValorChange={aoEscolherCavalo}
                     opcoes={opcoesCavalos}
                     placeholder="Escolha a placa do cavalo"

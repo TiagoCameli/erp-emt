@@ -19,7 +19,7 @@
 --   4. Regras de leitura num gatilho BEFORE (valem para RPC, celular, lote e edição):
 --      km obrigatório em carreta EMT e veículo leve no lançamento novo; leitura menor que
 --      a anterior (ou maior que a seguinte) recusada, salvo virada com motivo.
---   5. A leitura do abastecimento vira até duas leituras do equipamento (km e h).
+--   5. A leitura do abastecimento do tipo do controle_por vira leitura do equipamento.
 --   6. fn_comb_ultima_leitura, fn_comb_consumo_trechos e a configuração dos limites.
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -135,7 +135,10 @@ begin
   select coalesce(sum(valor_total), 0) into v_valor0 from public.combustivel_saidas;
   select coalesce(sum(valor), 0) into v_mov0 from public.transportadora_movimentos where origem_tabela = 'combustivel_saidas';
 
-  -- 3a. A única leitura antiga (migração) vai para a coluna do tipo dela.
+  -- 3a. A única leitura antiga (migração) vai para a coluna do tipo dela. Leitura sem tipo
+  --     seria apagada pelo gatilho novo na próxima edição: trava se existir.
+  select count(*) into v_n from public.combustivel_saidas where medicao is not null and tipo_medicao is null;
+  if v_n <> 0 then raise exception 'Trava: % saída(s) com medição sem tipo', v_n; end if;
   update public.combustivel_saidas set horimetro_h = medicao where medicao is not null and tipo_medicao = 'horimetro';
   update public.combustivel_saidas set odometro_km = medicao where medicao is not null and tipo_medicao = 'km';
 
@@ -153,7 +156,7 @@ begin
   update public.combustivel_saidas s set equipamento_id = e.id
     from public.equipamentos e
    where s.transportadora_id = v_emt and s.tipo_consumidor = 'carreta_transportadora'
-     and e.classe_consumo = 'carreta' and e.placa = s.placa;
+     and e.classe_consumo = 'carreta' and public.fn_comb_placa_norm(e.placa) = s.placa;
   get diagnostics v_n = row_count;
   -- 599 abastecimentos da EMT TRANSPORTES em 27/11: 596 com placa de cavalo (593 + 3
   -- corrigidas), 1 QXN7424 e 2 sem placa. Pode ter entrado abastecimento novo depois.
@@ -191,7 +194,8 @@ begin
     if new.transportadora_id = v_emt then
       new.placa := nullif(public.fn_comb_placa_norm(new.placa), '');
       new.equipamento_id := (select id from public.equipamentos
-                              where classe_consumo = 'carreta' and placa = new.placa order by ativo desc limit 1);
+                              where classe_consumo = 'carreta' and public.fn_comb_placa_norm(placa) = new.placa
+                              order by ativo desc limit 1);
       if new.equipamento_id is null and (tg_op = 'INSERT' or new.placa is distinct from old.placa) then
         raise exception 'Escolha a placa de um cavalo da EMT TRANSPORTES';
       end if;
@@ -236,7 +240,7 @@ begin
     foreach v_tipo in array array['km', 'h'] loop
       v_novo := case v_tipo when 'km' then new.odometro_km else new.horimetro_h end;
       continue when v_novo is null;
-      v_mudou := tg_op = 'INSERT'
+      v_mudou := tg_op = 'INSERT' or old.excluido_em is not null
         or v_novo is distinct from (case v_tipo when 'km' then old.odometro_km else old.horimetro_h end)
         or new.data is distinct from old.data or new.virada is distinct from old.virada
         or new.equipamento_id is distinct from old.equipamento_id or v_placa is distinct from public.fn_comb_placa_norm(old.placa);
@@ -295,22 +299,27 @@ create trigger trg_comb_saida_leitura
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. Leitura do abastecimento vira leitura do equipamento (km e h)
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Só a leitura do tipo que o equipamento controla (`controle_por`), como antes: a Manutenção
+-- lê a última leitura sem olhar o tipo, e km numa máquina de horímetro viraria "152.000 h".
+-- O consumo não depende disto: lê o abastecimento.
 create or replace function public.fn_comb_trg_medicao()
 returns trigger
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare v_controle text;
 begin
   if public.fn_comb_em_carga() then return null; end if;
   if tg_op = 'DELETE' then return null; end if;
+  v_controle := (select controle_por from public.equipamentos where id = new.equipamento_id);
   update public.equipamento_medicoes set excluido_em = coalesce(excluido_em, now())
    where combustivel_saida_id = new.id and excluido_em is null
-     and (new.excluido_em is not null or new.equipamento_id is null
+     and (new.excluido_em is not null or new.equipamento_id is null or tipo is distinct from v_controle
           or (tipo = 'km' and new.odometro_km is null) or (tipo = 'horimetro' and new.horimetro_h is null));
   if new.excluido_em is not null or new.equipamento_id is null then return null; end if;
 
-  if new.odometro_km is not null then
+  if v_controle = 'km' and new.odometro_km is not null then
     insert into public.equipamento_medicoes (equipamento_id, data, tipo, valor, origem, combustivel_saida_id, observacoes,
                                              reinicia_contagem, created_by)
     values (new.equipamento_id, (new.data at time zone 'America/Rio_Branco')::date, 'km', new.odometro_km, 'abastecimento',
@@ -319,7 +328,7 @@ begin
       set equipamento_id = excluded.equipamento_id, data = excluded.data, valor = excluded.valor,
           reinicia_contagem = excluded.reinicia_contagem, excluido_em = null;
   end if;
-  if new.horimetro_h is not null then
+  if v_controle = 'horimetro' and new.horimetro_h is not null then
     insert into public.equipamento_medicoes (equipamento_id, data, tipo, valor, origem, combustivel_saida_id, observacoes,
                                              reinicia_contagem, created_by)
     values (new.equipamento_id, (new.data at time zone 'America/Rio_Branco')::date, 'horimetro', new.horimetro_h, 'abastecimento',
@@ -598,7 +607,7 @@ begin
          t.dh, case when t.dh is not null then t.litros end, case when t.dh is not null then t.valor_total end,
          case when t.dh is not null then t.dias end,
          t.dh is not null and t.dh / greatest(t.dias, 1) > c_h_dia,
-         t.dh is not null and t.litros > 0 and (t.dh = 0 or t.litros / t.dh > c_max_l_h)
+         t.dh is not null and t.litros > 0 and (case when t.dh = 0 then true else t.litros / t.dh > c_max_l_h end)
     from t
    union all
   -- Abastecimento sem veículo identificável (carreta sem placa) aparece só como "sem leitura".

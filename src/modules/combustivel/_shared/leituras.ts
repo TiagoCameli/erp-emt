@@ -104,6 +104,23 @@ export function problemasDeLeitura(entrada: {
   return problemas;
 }
 
+/**
+ * As leituras com que a trava compara: só as de abastecimento (o banco compara só com
+ * abastecimento; a leitura avulsa da Manutenção aparece, mas não trava). Na edição, a leitura
+ * que não mudou não é conferida de novo (o banco também pula).
+ */
+export function anterioresParaTrava(
+  anteriores: UltimasLeituras,
+  edicao: { odometroKm: number | null; horimetroH: number | null } | null,
+  atual: { odometroKm: number | null; horimetroH: number | null },
+): UltimasLeituras {
+  const doAbastecimento = (l: LeituraConhecida | null) => (l && l.origem === "abastecimento" ? l : null);
+  return {
+    km: edicao && edicao.odometroKm === atual.odometroKm ? null : doAbastecimento(anteriores.km),
+    h: edicao && edicao.horimetroH === atual.horimetroH ? null : doAbastecimento(anteriores.h),
+  };
+}
+
 /** "Última: 12.345 km em 05/01/2025" para a ajuda do campo. */
 export function textoUltimaLeitura(leitura: LeituraConhecida | null, unidade: "km" | "h"): string {
   return leitura ? `Última: ${numero(leitura.valor)} ${unidade} em ${dataCurta(leitura.data)}` : "Sem leitura anterior";

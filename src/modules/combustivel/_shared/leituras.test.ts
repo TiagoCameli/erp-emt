@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  anterioresParaTrava,
   classeConsumoDe,
   normalizarPlaca,
   odometroObrigatorio,
@@ -49,5 +50,20 @@ describe("leituras do painel", () => {
     expect(classeConsumoDe("caminhão")).toBe("maquina");
     expect(textoUltimaLeitura(anteriores.km, "km")).toBe("Última: 11.100 km em 05/01/2025");
     expect(textoUltimaLeitura(null, "h")).toBe("Sem leitura anterior");
+  });
+});
+
+describe("o que a trava compara", () => {
+  const manual = { valor: 10500, data: "2025-01-05T17:00:00Z", origem: "manual" };
+  const abast = { valor: 10000, data: "2025-01-04T13:00:00Z", origem: "abastecimento" };
+
+  it("leitura avulsa da Manutenção aparece mas não trava (o banco só compara com abastecimento)", () => {
+    expect(anterioresParaTrava({ km: manual, h: abast }, null, { odometroKm: 10400, horimetroH: 1 })).toEqual({ km: null, h: abast });
+  });
+
+  it("na edição, a leitura que não mudou não é conferida de novo", () => {
+    const edicao = { odometroKm: 10400, horimetroH: null };
+    expect(anterioresParaTrava({ km: abast, h: null }, edicao, { odometroKm: 10400, horimetroH: null }).km).toBeNull();
+    expect(anterioresParaTrava({ km: abast, h: null }, edicao, { odometroKm: 9000, horimetroH: null }).km).toEqual(abast);
   });
 });

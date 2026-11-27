@@ -21,6 +21,7 @@ import {
   type FilaCombustivel,
 } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import {
+  anterioresParaTrava,
   odometroObrigatorio,
   problemasDeLeitura,
   textoUltimaLeitura,
@@ -125,7 +126,7 @@ export function Abastecer({ equipamentoId, classeConsumo, ultimasLeituras, tanqu
       horimetroH: horas,
       virada,
       motivoVirada: motivoVirada.trim() || null,
-      anteriores: ultimasLeituras,
+      anteriores: anterioresParaTrava(ultimasLeituras, null, { odometroKm: km, horimetroH: horas }),
     })) {
       novos[p.campo] ??= p.mensagem;
     }
