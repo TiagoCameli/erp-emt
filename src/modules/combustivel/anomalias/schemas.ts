@@ -10,7 +10,7 @@ import { idSchema } from "@/lib/id";
  * chave que nenhuma anomalia jamais vai ter.
  */
 
-const CHAVE_ANOMALIA = /^D[1-5]-[0-9a-f-]+$/i;
+const CHAVE_ANOMALIA = /^D[1-7]-[0-9a-f-]+$/i;
 
 export const MAXIMO_MOTIVO = 500;
 

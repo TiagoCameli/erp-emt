@@ -122,6 +122,19 @@ describe("montagem da saída no formato da origem", () => {
   });
 });
 
+describe("carreta com cavalo", () => {
+  it("o cavalo da EMT gravado na carreta não muda a identidade dela nas telas da origem (continua a placa)", () => {
+    const s = montarSaidaBase(
+      linha({ tipo_consumidor: "carreta_transportadora", equipamento_id: "cavalo-cs005", placa: "SQU9D14" }),
+      new Set(),
+      CENTROS,
+    );
+    expect(s.equipamentoId).toBeNull();
+    expect(s.equipamentoIdReal).toBeNull();
+    expect(s.placa).toBe("SQU9D14");
+  });
+});
+
 describe("recorte da tela", () => {
   it("modo pelo tipo de consumidor e período pelo dia do relógio de parede, as duas pontas inclusivas", () => {
     const base = [

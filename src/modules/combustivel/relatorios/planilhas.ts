@@ -33,7 +33,7 @@ import { somarValoresOperacionais } from "@/modules/manutencao/servicos/formato"
  * **Módulo de servidor**: puxa o exceljs. A action o carrega por `await import`.
  */
 
-export type TipoColuna = "texto" | "inteiro" | "litros" | "dinheiro" | "preco" | "data";
+export type TipoColuna = "texto" | "inteiro" | "litros" | "dinheiro" | "preco" | "data" | "decimal" | "leitura";
 
 export interface Coluna<L> {
   cabecalho: string;
@@ -50,6 +50,10 @@ const FORMATOS: Partial<Record<TipoColuna, string>> = {
   dinheiro: '"R$" #,##0.00',
   preco: '"R$" #,##0.0000',
   data: "dd/mm/yyyy",
+  /** L/km, km/L, L/h (Consumo). */
+  decimal: "#,##0.000",
+  /** Odômetro, horímetro, km e h rodados (Consumo). */
+  leitura: "#,##0.0",
 };
 
 const MESES_CURTOS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];

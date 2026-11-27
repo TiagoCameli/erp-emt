@@ -38,7 +38,11 @@
 export const EQUIPAMENTO_DESCONHECIDO = "desconhecido";
 
 export type Severidade = "info" | "warning" | "critical";
-export type DetectorId = "D1" | "D2" | "D3" | "D4" | "D5";
+/**
+ * D6 e D7 não são da origem: nasceram com o odômetro (27/11/2026) e são calculados fora
+ * deste detector (`combustivel/consumo/calculo.ts`, sobre os trechos do banco).
+ */
+export type DetectorId = "D1" | "D2" | "D3" | "D4" | "D5" | "D6" | "D7";
 
 export interface Anomalia {
   /**
@@ -391,6 +395,8 @@ export const DETECTOR_LABEL: Record<DetectorId, string> = {
   D3: "Volume atípico",
   D4: "Duplicatas (5min)",
   D5: "Gap operacional (60d)",
+  D6: "Salto de leitura",
+  D7: "Consumo fora do padrão",
 };
 
 export const SEVERITY_LABEL: Record<Severidade, string> = {

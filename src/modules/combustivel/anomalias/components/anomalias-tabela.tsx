@@ -53,7 +53,7 @@ const OPCOES_SITUACAO = [
 ];
 
 const OPCOES_SEVERIDADE = (["critical", "warning", "info"] as const).map((s) => ({ valor: s, rotulo: SEVERITY_LABEL[s] }));
-const OPCOES_DETECTOR = (["D1", "D2", "D3", "D4", "D5"] as const).map((d) => ({
+const OPCOES_DETECTOR = (["D1", "D2", "D3", "D4", "D5", "D6", "D7"] as const).map((d) => ({
   valor: d,
   rotulo: `${d} ${DETECTOR_LABEL[d]}`,
 }));

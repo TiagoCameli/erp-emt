@@ -18,8 +18,16 @@ import {
   type LinhaSaidaBanco,
   type Modo,
 } from "@/modules/combustivel/anomalias/base";
-import { DETECTOR_LABEL, type Anomalia } from "@/modules/combustivel/anomalias/detect";
-import type { Periodo } from "@/modules/combustivel/relatorios/periodo";
+import { DETECTOR_LABEL, SEVERITY_ORDER, type Anomalia } from "@/modules/combustivel/anomalias/detect";
+import { anomaliasDeLeitura } from "@/modules/combustivel/consumo/calculo";
+import { carregarTrechos } from "@/modules/combustivel/consumo/queries";
+import {
+  diaEmRioBranco,
+  fimExclusivoDoDia,
+  inicioDoDia,
+  somarDias,
+  type Periodo,
+} from "@/modules/combustivel/relatorios/periodo";
 import { paraNumeroDoBanco, rotuloEquipamento } from "@/modules/manutencao/servicos/formato";
 
 const SELECT_SAIDA =
@@ -184,12 +192,45 @@ async function lerConferidas(): Promise<Map<string, Conferencia>> {
 }
 
 /**
+ * D6 (salto de leitura) e D7 (consumo fora do padrão) das saídas do recorte. O trecho que a
+ * saída fecha pode ter começado antes do período: a janela dos trechos abre 90 dias antes.
+ */
+async function anomaliasDoOdometro(
+  base: BaseCombustivel,
+  recorte: readonly { id: string }[],
+  periodo: Periodo,
+): Promise<Anomalia[]> {
+  if (recorte.length === 0) return [];
+  const aberto = periodo.de <= "0001-01-01";
+  const trechos = await carregarTrechos({
+    de: aberto ? null : inicioDoDia(somarDias(periodo.de, -JANELA_ANTES_DIAS)),
+    ate: periodo.ate >= "9999-01-01" ? null : fimExclusivoDoDia(periodo.ate),
+  });
+  const noRecorte = new Set(recorte.map((s) => s.id));
+  const equipamentoPorId = new Map(base.equipamentos.map((e) => [e.id, e]));
+  return anomaliasDeLeitura(
+    trechos.filter((t) => noRecorte.has(t.saidaId)),
+    (t) => {
+      const equipamento = t.equipamentoId ? equipamentoPorId.get(t.equipamentoId) : undefined;
+      return equipamento ? rotuloEquipamento(equipamento) : t.placa || "Sem placa";
+    },
+    diaEmRioBranco,
+  );
+}
+
+const JANELA_ANTES_DIAS = 90;
+
+/**
  * A aba Anomalias da origem: `saidasNoPeriodo` = saídas do modo (próprios ou carretas)
  * no período, `saidasTodas` = o banco inteiro.
  */
 export async function carregarAnomalias(periodo: Periodo, modo: Modo): Promise<ResultadoAnomalias> {
   const [base, porChave] = await Promise.all([carregarBaseCombustivel(), lerConferidas()]);
-  const anomalias = detectarNaBase(base, saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate));
+  const recorte = saidasDoRecorte(base.saidas, modo, periodo.de, periodo.ate);
+  const doOdometro = await anomaliasDoOdometro(base, recorte, periodo);
+  const anomalias = [...detectarNaBase(base, recorte), ...doOdometro].sort(
+    (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || b.data.localeCompare(a.data),
+  );
 
   const saidaPorId = new Map(base.saidas.map((s) => [s.id, s]));
   const equipamentoPorId = new Map(base.equipamentos.map((e) => [e.id, e]));
