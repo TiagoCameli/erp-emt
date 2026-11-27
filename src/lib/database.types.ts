@@ -1481,6 +1481,10 @@ export type Database = {
           insumo_id: string;
           litros: number;
           medicao: number | null;
+          motivo_virada: string | null;
+          odometro_km: number | null;
+          horimetro_h: number | null;
+          virada: boolean;
           motivo_exclusao: string | null;
           motorista: string | null;
           observacoes: string | null;
@@ -1513,6 +1517,10 @@ export type Database = {
           insumo_id: string;
           litros: number;
           medicao?: number | null;
+          motivo_virada?: string | null;
+          odometro_km?: number | null;
+          horimetro_h?: number | null;
+          virada?: boolean;
           motivo_exclusao?: string | null;
           motorista?: string | null;
           observacoes?: string | null;
@@ -1545,6 +1553,10 @@ export type Database = {
           insumo_id?: string;
           litros?: number;
           medicao?: number | null;
+          motivo_virada?: string | null;
+          odometro_km?: number | null;
+          horimetro_h?: number | null;
+          virada?: boolean;
           motivo_exclusao?: string | null;
           motorista?: string | null;
           observacoes?: string | null;
@@ -2885,6 +2897,7 @@ export type Database = {
           observacoes: string | null;
           ordem_servico_id: string | null;
           origem: string;
+          reinicia_contagem: boolean;
           tipo: string;
           updated_at: string;
           valor: number;
@@ -2902,6 +2915,7 @@ export type Database = {
           observacoes?: string | null;
           ordem_servico_id?: string | null;
           origem?: string;
+          reinicia_contagem?: boolean;
           tipo: string;
           updated_at?: string;
           valor: number;
@@ -2919,6 +2933,7 @@ export type Database = {
           observacoes?: string | null;
           ordem_servico_id?: string | null;
           origem?: string;
+          reinicia_contagem?: boolean;
           tipo?: string;
           updated_at?: string;
           valor?: number;
@@ -3020,6 +3035,7 @@ export type Database = {
         Row: {
           ano: number | null;
           ativo: boolean;
+          classe_consumo: string;
           codigo: string | null;
           controle_por: string;
           created_at: string;
@@ -3042,6 +3058,7 @@ export type Database = {
         Insert: {
           ano?: number | null;
           ativo?: boolean;
+          classe_consumo?: string;
           codigo?: string | null;
           controle_por?: string;
           created_at?: string;
@@ -3064,6 +3081,7 @@ export type Database = {
         Update: {
           ano?: number | null;
           ativo?: boolean;
+          classe_consumo?: string;
           codigo?: string | null;
           controle_por?: string;
           created_at?: string;
@@ -10574,8 +10592,37 @@ export type Database = {
       };
       fn_chave_nome: { Args: { p_texto: string }; Returns: string };
       fn_comb_atribuir_equipamento: {
-        Args: { p_equipamento: string; p_saidas: string[] };
+        Args: { p_equipamento: string; p_leituras?: Json; p_saidas: string[] };
         Returns: number;
+      };
+      fn_comb_consumo_trechos: {
+        Args: { p_ate?: string; p_de?: string; p_veiculo?: string };
+        Returns: {
+          classe: string;
+          consumo_fora_h: boolean;
+          consumo_fora_km: boolean;
+          data: string;
+          dias_h: number | null;
+          dias_km: number | null;
+          equipamento_id: string | null;
+          h_trecho: number | null;
+          horimetro_h: number | null;
+          km_trecho: number | null;
+          litros: number;
+          litros_h: number | null;
+          litros_km: number | null;
+          odometro_km: number | null;
+          placa: string;
+          saida_id: string;
+          salto_h: boolean;
+          salto_km: boolean;
+          transportadora_id: string | null;
+          valor_h: number | null;
+          valor_km: number | null;
+          valor_total: number;
+          veiculo_chave: string | null;
+          virada: boolean;
+        }[];
       };
       fn_comb_combustivel_na_data: {
         Args: { p_data: string; p_excluir?: string; p_tanque: string };
@@ -10586,6 +10633,17 @@ export type Database = {
         Returns: undefined;
       };
       fn_comb_em_carga: { Args: never; Returns: boolean };
+      fn_comb_placa_norm: { Args: { p: string }; Returns: string };
+      fn_comb_ultima_leitura: {
+        Args: {
+          p_antes?: string;
+          p_equipamento: string | null;
+          p_excluir?: string;
+          p_placa?: string;
+          p_transportadora?: string;
+        };
+        Returns: { data: string; origem: string; tipo: string; valor: number }[];
+      };
       fn_comb_estoque_na_data: {
         Args: { p_data: string; p_excluir?: string; p_tanque: string };
         Returns: number;

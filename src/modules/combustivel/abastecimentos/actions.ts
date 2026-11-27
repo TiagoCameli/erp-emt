@@ -14,6 +14,7 @@ import {
   type FIFOResult,
 } from "@/modules/combustivel/_shared/fifo-ts";
 import {
+  buscarUltimasLeituras,
   lerAlocacoesDaSaida,
   lerMovimentosFifoDoTanque,
   lerSnapshotDaSaida,
@@ -28,7 +29,7 @@ import {
 } from "@/modules/combustivel/abastecimentos/schemas";
 import { traduzirErroCombustivel } from "@/modules/combustivel/entradas/erros";
 import { dataHoraIsoSchema } from "@/modules/combustivel/entradas/schemas";
-import { buscarUltimaLeitura } from "@/modules/manutencao/medicoes/queries";
+import { SEM_LEITURAS, type UltimasLeituras } from "@/modules/combustivel/_shared/leituras";
 import type { Json } from "@/lib/database.types";
 
 /**
@@ -52,7 +53,15 @@ export type ResultadoSalvar = { ok: true; id: string } | { erro: string };
 export type ResultadoAcao = { ok: true } | { erro: string };
 export type ResultadoEstoque = { ok: true; litros: number } | { erro: string };
 export type ResultadoFifo = ({ ok: true } & FIFOResult) | { erro: string };
-export type ResultadoLeitura = { ok: true; valor: number | null } | { erro: string };
+export type ResultadoLeitura = { ok: true; leituras: UltimasLeituras } | { erro: string };
+
+const veiculoLeituraSchema = z.strictObject({
+  equipamentoId: idSchema.nullable(),
+  transportadoraId: idSchema.nullable(),
+  placa: z.string().trim().max(20).nullable(),
+  antes: dataHoraIsoSchema.nullable(),
+  excluir: idSchema.nullable(),
+});
 export type ResultadoCiclo = { ok: true; inicio: string | null } | { erro: string };
 
 const motivoSchema = z.string().trim().min(1);
@@ -290,13 +299,26 @@ export async function calcularPrecoFifo(
   });
 }
 
-/** Última leitura (horímetro ou km) do equipamento, para o aviso de leitura menor da origem. */
-export async function consultarUltimaLeitura(equipamentoId: string): Promise<ResultadoLeitura> {
+/**
+ * Última leitura de km e de h do veículo, com a data: o equipamento (próprio ou cavalo da
+ * EMT), ou a carreta de terceiro pela transportadora + placa. Na edição, compara com o
+ * abastecimento de antes deste.
+ */
+export async function consultarUltimaLeitura(veiculo: {
+  equipamentoId: string | null;
+  transportadoraId: string | null;
+  placa: string | null;
+  antes: string | null;
+  excluir: string | null;
+}): Promise<ResultadoLeitura> {
   return semLancar("combustivel.saidas.leitura", async () => {
-    if (!(await temAcao("ver"))) return { erro: "Sem permissão para ver abastecimentos" };
-    if (!idSchema.safeParse(equipamentoId).success) return { erro: "Equipamento inválido" };
-    const leitura = await buscarUltimaLeitura(equipamentoId);
-    return { ok: true, valor: leitura?.valor ?? null };
+    if (!(await temAcao("ver")) && !(await temAcao("criar"))) return { erro: "Sem permissão para ver abastecimentos" };
+    const dados = veiculoLeituraSchema.safeParse(veiculo);
+    if (!dados.success) return { erro: "Veículo inválido" };
+    if (!dados.data.equipamentoId && !(dados.data.transportadoraId && dados.data.placa)) {
+      return { ok: true, leituras: SEM_LEITURAS };
+    }
+    return { ok: true, leituras: await buscarUltimasLeituras(dados.data) };
   });
 }
 

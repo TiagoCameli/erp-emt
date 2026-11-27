@@ -183,17 +183,25 @@ export function AbastecimentoDetalheConteudo({ abastecimento }: { abastecimento:
             <>
               <Dado rotulo="Equipamento">{saida.equipamentoNome ?? <CelulaVazia />}</Dado>
               <Dado rotulo="Centro de custo">{saida.centroCustoNome ?? <CelulaVazia />}</Dado>
-              <Dado rotulo={saida.tipoMedicao === "km" ? "Hodômetro" : "Horímetro"}>
-                {saida.medicao !== null ? (
-                  <span className="tabular-nums">
-                    {formatarQuantidade(saida.medicao)} {saida.tipoMedicao === "km" ? "km" : "h"}
-                  </span>
-                ) : (
-                  <CelulaVazia />
-                )}
-              </Dado>
             </>
           )}
+          <Dado rotulo="Odômetro">
+            {saida.odometroKm !== null ? (
+              <span className="tabular-nums">{formatarQuantidade(saida.odometroKm)} km</span>
+            ) : (
+              <CelulaVazia />
+            )}
+          </Dado>
+          <Dado rotulo="Horímetro">
+            {saida.horimetroH !== null ? (
+              <span className="tabular-nums">{formatarQuantidade(saida.horimetroH)} h</span>
+            ) : (
+              <CelulaVazia />
+            )}
+          </Dado>
+          {saida.virada ? (
+            <Dado rotulo="Troca de painel ou virada">{saida.motivoVirada ?? <CelulaVazia />}</Dado>
+          ) : null}
           <Dado rotulo="Litros">
             <span className="tabular-nums">{formatarLitros(saida.litros)}</span>
           </Dado>

@@ -1,6 +1,11 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  classeConsumoDe,
+  type ClasseConsumo,
+  type UltimasLeituras,
+} from "@/modules/combustivel/_shared/leituras";
 import { todasAsLinhas } from "@/lib/supabase/todas-as-linhas";
 import { contarAnexosPorDocumento } from "@/modules/_shared/anexos/queries";
 import {
@@ -301,8 +306,10 @@ export interface SaidaDetalhe {
   valorTotal: number;
   pago: boolean;
   pagoEm: string | null;
-  medicao: number | null;
-  tipoMedicao: string | null;
+  odometroKm: number | null;
+  horimetroH: number | null;
+  virada: boolean;
+  motivoVirada: string | null;
   centroCustoNome: string | null;
   canal: Canal;
   observacoes: string | null;
@@ -359,7 +366,7 @@ export async function buscarAbastecimento(id: string): Promise<AbastecimentoComp
     .select(
       `id, data, origem, tipo_consumidor, tanque_id, equipamento_id, transportadora_id, placa, motorista,
        insumo_id, litros, preco_combustivel, preco_proprietario, taxa_litro, preco_unitario,
-       preco_medio_tanque, valor_total, pago, pago_em, medicao, tipo_medicao, canal, observacoes,
+       preco_medio_tanque, valor_total, pago, pago_em, odometro_km, horimetro_h, virada, motivo_virada, canal, observacoes,
        tanques(nome, apelido, eh_externo), equipamentos(codigo, descricao, placa, controle_por),
        fornecedores(razao_social, nome_fantasia), insumos(nome), centros_custo(codigo, nome)`,
     )
@@ -443,8 +450,10 @@ export async function buscarAbastecimento(id: string): Promise<AbastecimentoComp
     valorTotal: paraNumeroDoBanco(data.valor_total),
     pago: data.pago,
     pagoEm: data.pago_em,
-    medicao: paraNumeroOuNulo(data.medicao),
-    tipoMedicao: data.tipo_medicao,
+    odometroKm: paraNumeroOuNulo(data.odometro_km),
+    horimetroH: paraNumeroOuNulo(data.horimetro_h),
+    virada: data.virada,
+    motivoVirada: data.motivo_virada,
     centroCustoNome: data.centros_custo ? nomeCentro(data.centros_custo) : null,
     canal: data.canal as Canal,
     observacoes: data.observacoes,
@@ -514,7 +523,55 @@ export interface EquipamentoOpcao {
   /** Tem etapa no centro de custo (próprio, Colorado). Alugado não tem. */
   temEtapa: boolean;
   controlePor: string;
+  /** carreta (cavalo da EMT Transportes), veiculo_leve ou maquina: decide se o odômetro é obrigatório. */
+  classeConsumo: ClasseConsumo;
+  placa: string | null;
   ativo: boolean;
+}
+
+/**
+ * Última leitura conhecida de km e de h do veículo (`fn_comb_ultima_leitura`): do cadastro
+ * pelo equipamento, da carreta de terceiro pela transportadora + placa. `antes` e `excluir`
+ * fazem a edição comparar com o abastecimento de antes dela, não com ela mesma.
+ */
+export async function buscarUltimasLeituras(veiculo: {
+  equipamentoId: string | null;
+  transportadoraId: string | null;
+  placa: string | null;
+  antes: string | null;
+  excluir: string | null;
+}): Promise<UltimasLeituras> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_comb_ultima_leitura", {
+    p_equipamento: veiculo.equipamentoId,
+    ...(veiculo.transportadoraId ? { p_transportadora: veiculo.transportadoraId } : {}),
+    ...(veiculo.placa ? { p_placa: veiculo.placa } : {}),
+    ...(veiculo.antes ? { p_antes: veiculo.antes } : {}),
+    ...(veiculo.excluir ? { p_excluir: veiculo.excluir } : {}),
+  });
+  if (error) throw new Error("Não foi possível consultar a última leitura");
+  const leituras: UltimasLeituras = { km: null, h: null };
+  for (const l of data ?? []) {
+    const leitura = { valor: paraNumeroDoBanco(l.valor), data: l.data, origem: l.origem };
+    if (l.tipo === "km") leituras.km = leitura;
+    else if (l.tipo === "h") leituras.h = leitura;
+  }
+  return leituras;
+}
+
+/**
+ * Fornecedor EMT TRANSPORTES (`configuracoes.mapa.transportadora_emt`): o abastecimento
+ * dela escolhe a placa na lista dos cavalos e exige o odômetro.
+ */
+export async function buscarTransportadoraEmt(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "mapa.transportadora_emt")
+    .maybeSingle();
+  if (error) throw new Error("Não foi possível carregar a transportadora da EMT");
+  return typeof data?.valor === "string" ? data.valor : null;
 }
 
 /**
@@ -528,7 +585,7 @@ export async function listarEquipamentos(): Promise<EquipamentoOpcao[]> {
     todasAsLinhas((de, ate) =>
       supabase
         .from("equipamentos")
-        .select("id, codigo, descricao, placa, propriedade, controle_por, ativo")
+        .select("id, codigo, descricao, placa, propriedade, controle_por, classe_consumo, ativo")
         .order("codigo", { ascending: true, nullsFirst: false })
         .order("descricao")
         .order("id")
@@ -552,6 +609,8 @@ export async function listarEquipamentos(): Promise<EquipamentoOpcao[]> {
     propriedade: e.propriedade,
     temEtapa: comEtapa.has(e.id),
     controlePor: e.controle_por,
+    classeConsumo: classeConsumoDe(e.classe_consumo),
+    placa: e.placa,
     ativo: e.ativo,
   }));
 }

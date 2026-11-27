@@ -35,6 +35,14 @@ import {
 } from "@/modules/combustivel/_shared/components/anexos-combustivel";
 import type { FIFOResult } from "@/modules/combustivel/_shared/fifo-ts";
 import {
+  normalizarPlaca,
+  odometroObrigatorio,
+  problemasDeLeitura,
+  SEM_LEITURAS,
+  textoUltimaLeitura,
+  type ClasseConsumo,
+} from "@/modules/combustivel/_shared/leituras";
+import {
   dataHoraLocalParaIso,
   formatarLitros,
   ORIGENS_SAIDA,
@@ -56,7 +64,6 @@ import {
   linhasImpacto,
   taxaPadraoDaTransportadora,
   tipoCombustivelDoTanque,
-  tipoMedicaoDoControle,
   valoresDoAbastecimento,
   valoresNovoAbastecimento,
 } from "@/modules/combustivel/abastecimentos/formulario";
@@ -98,6 +105,8 @@ export interface OpcoesAbastecimento {
   obras: CentroCustoOpcao[];
   /** Tanque -> combustível da entrada viva mais nova (o tipo do tanque na origem). */
   combustivelPorTanque?: Record<string, string>;
+  /** EMT TRANSPORTES: a placa sai da lista dos cavalos e o odômetro é obrigatório. */
+  transportadoraEmtId?: string | null;
 }
 
 export interface AbastecimentoFormDrawerProps {
@@ -199,6 +208,16 @@ export function AbastecimentoFormDrawer({
   const externo = tanque?.ehExterno ?? false;
   const equipamento = opcoes.equipamentos.find((e) => e.id === valores.equipamentoId) ?? null;
   const dados = saidaDoForm(valores);
+
+  // Carreta da EMT TRANSPORTES: a placa é a de um cavalo (equipamento da classe carreta).
+  const carretaEmt = carreta && !!opcoes.transportadoraEmtId && valores.transportadoraId === opcoes.transportadoraEmtId;
+  const cavalos = React.useMemo(
+    () => opcoes.equipamentos.filter((e) => e.classeConsumo === "carreta" && e.placa && e.ativo),
+    [opcoes.equipamentos],
+  );
+  const cavalo = carretaEmt ? (cavalos.find((e) => normalizarPlaca(e.placa) === normalizarPlaca(valores.placa)) ?? null) : null;
+  const classeVeiculo: ClasseConsumo | null = carreta ? (carretaEmt ? "carreta" : null) : (equipamento?.classeConsumo ?? null);
+  const kmObrigatorio = odometroObrigatorio(classeVeiculo);
   const dataIso = dataHoraLocalParaIso(valores.dataHora ?? "");
 
   const dieselS10 = acharDieselS10(opcoes.insumos);
@@ -236,17 +255,24 @@ export function AbastecimentoFormDrawer({
   );
   const precoMedioTanque = usaSnapshot ? (saida?.precoMedioTanque ?? 0) : precoMedioTanqueCorrente;
 
-  // Última leitura do equipamento (aviso de leitura menor, só na saída nova).
-  const chaveLeitura = !carreta && equipamento ? equipamento.id : null;
-  const ultimaLeitura = useConsulta(
-    chaveLeitura,
-    async () => {
-      if (!equipamento) return null;
-      const r = await consultarUltimaLeitura(equipamento.id);
-      return "erro" in r ? null : r.valor;
-    },
-    0,
-  );
+  // Última leitura de km e de h do veículo, com a data (antes deste abastecimento).
+  const veiculoEquipamentoId = carreta ? (cavalo?.id ?? null) : (equipamento?.id ?? null);
+  const placaTerceiro = carreta && !carretaEmt ? normalizarPlaca(valores.placa) : "";
+  const chaveLeitura =
+    veiculoEquipamentoId || (placaTerceiro && valores.transportadoraId)
+      ? `${veiculoEquipamentoId ?? `${valores.transportadoraId}:${placaTerceiro}`}|${dataIso ?? ""}`
+      : null;
+  const anteriores =
+    useConsulta(chaveLeitura, async () => {
+      const r = await consultarUltimaLeitura({
+        equipamentoId: veiculoEquipamentoId,
+        transportadoraId: veiculoEquipamentoId ? null : valores.transportadoraId || null,
+        placa: veiculoEquipamentoId ? null : placaTerceiro || null,
+        antes: dataIso,
+        excluir: saida?.id ?? null,
+      });
+      return "erro" in r ? null : r.leituras;
+    }) ?? SEM_LEITURAS;
 
   // Ciclo fechado: na edição de saída de tanque antes do ciclo aberto, trava tanque,
   // litros e data (o banco recusa também).
@@ -301,9 +327,10 @@ export function AbastecimentoFormDrawer({
     } else {
       // Limpa os campos do equipamento próprio.
       definir("equipamentoId", "", false);
-      definir("medicao", "", false);
-      definir("tipoMedicao", "", false);
     }
+    // A leitura é do veículo de antes.
+    definir("odometroKm", "", false);
+    definir("horimetroH", "", false);
   }
 
   function aoEscolherOrigem(valor: string) {
@@ -348,11 +375,18 @@ export function AbastecimentoFormDrawer({
   }
 
   function aoEscolherEquipamento(id: string) {
-    const escolhido = opcoes.equipamentos.find((e) => e.id === id);
     definir("equipamentoId", id);
-    definir("tipoMedicao", tipoMedicaoDoControle(escolhido?.controlePor), false);
-    definir("medicao", "", false);
+    definir("odometroKm", "", false);
+    definir("horimetroH", "", false);
   }
+
+  function aoEscolherCavalo(placa: string) {
+    definir("placa", placa);
+    definir("odometroKm", "", false);
+    definir("horimetroH", "", false);
+  }
+
+  const opcoesCavalos = cavalos.map((e) => ({ valor: e.placa ?? "", rotulo: `${e.placa} · ${e.rotulo}` }));
 
   const opcoesTanques = React.useMemo(
     () =>
@@ -431,12 +465,29 @@ export function AbastecimentoFormDrawer({
     taxa,
   });
 
-  const medicaoAlerta =
-    !editando && dados.medicao !== null && ultimaLeitura !== null && dados.medicao < ultimaLeitura
-      ? `A última leitura registrada foi ${ultimaLeitura.toLocaleString("pt-BR")} ${valores.tipoMedicao === "km" ? "km" : "h"}. Confirme se o valor está correto`
-      : null;
+  // Leituras: as travas do banco, avisadas antes de mandar. Na edição de um abastecimento
+  // antigo sem leitura, o odômetro só é exigido se ele já tinha.
+  const problemasLeitura = problemasDeLeitura({
+    classe: editando && saida?.odometroKm === null ? null : classeVeiculo,
+    odometroKm: dados.odometroKm,
+    horimetroH: dados.horimetroH,
+    virada: dados.virada,
+    motivoVirada: dados.motivoVirada,
+    anteriores,
+  });
+  const erroLeitura = (campo: "odometroKm" | "horimetroH" | "motivoVirada") =>
+    erros[campo]?.message ??
+    (campo === "odometroKm" && !valores.odometroKm && kmObrigatorio ? undefined : problemasLeitura.find((p) => p.campo === campo)?.mensagem);
 
   async function aoEnviar(dadosForm: SaidaFormInput) {
+    if (carretaEmt && !cavalo) {
+      form.setError("placa", { message: "Escolha a placa de um cavalo da EMT TRANSPORTES" });
+      return;
+    }
+    if (problemasLeitura.length > 0) {
+      for (const p of problemasLeitura) form.setError(p.campo, { message: p.mensagem });
+      return;
+    }
     if (mensagemIncompativel) {
       toast.error(mensagemIncompativel);
       return;
@@ -503,7 +554,7 @@ export function AbastecimentoFormDrawer({
         {cicloFechado ? (
           <p className="rounded-md border border-status-pendente/40 bg-status-pendente/10 px-3 py-2 text-detalhe">
             Ciclo fechado: este tanque já zerou e recebeu combustível novo depois desta saída. Para não bagunçar o
-            saldo, tanque, litros e data ficam travados. Você ainda pode ajustar equipamento, obra, observação, medição e anexos.
+            saldo, tanque, litros e data ficam travados. Você ainda pode ajustar equipamento, obra, observação, leituras e anexos.
           </p>
         ) : null}
 
@@ -589,9 +640,23 @@ export function AbastecimentoFormDrawer({
               />
             </CampoFormulario>
             <LinhaCampos>
-              <CampoFormulario id="abast-placa" rotulo="Placa da carreta" erro={erros.placa?.message}>
-                <Input id="abast-placa" autoComplete="off" className="uppercase" disabled={salvando} {...form.register("placa")} />
-              </CampoFormulario>
+              {carretaEmt ? (
+                <CampoFormulario id="abast-placa" rotulo="Cavalo" obrigatorio erro={erros.placa?.message}>
+                  <Combobox
+                    id="abast-placa"
+                    valor={cavalo?.placa ?? ""}
+                    onValorChange={aoEscolherCavalo}
+                    opcoes={opcoesCavalos}
+                    placeholder="Escolha a placa do cavalo"
+                    vazioTexto="Nenhum cavalo com placa no cadastro de equipamentos"
+                    disabled={salvando}
+                  />
+                </CampoFormulario>
+              ) : (
+                <CampoFormulario id="abast-placa" rotulo="Placa da carreta" erro={erros.placa?.message}>
+                  <Input id="abast-placa" autoComplete="off" className="uppercase" disabled={salvando} {...form.register("placa")} />
+                </CampoFormulario>
+              )}
               <CampoFormulario id="abast-motorista" rotulo="Motorista" erro={erros.motorista?.message}>
                 <Input id="abast-motorista" autoComplete="off" disabled={salvando} {...form.register("motorista")} />
               </CampoFormulario>
@@ -616,31 +681,66 @@ export function AbastecimentoFormDrawer({
                 disabled={salvando}
               />
             </CampoFormulario>
-            {equipamento && valores.tipoMedicao ? (
-              <CampoFormulario
-                id="abast-medicao"
-                rotulo={valores.tipoMedicao === "km" ? "Hodômetro no abastecimento (km)" : "Horímetro no abastecimento (h)"}
-                ajuda={
-                  medicaoAlerta
-                    ? undefined
-                    : ultimaLeitura !== null && !(valores.medicao ?? "").trim()
-                      ? `Última leitura registrada: ${ultimaLeitura.toLocaleString("pt-BR")} ${valores.tipoMedicao === "km" ? "km" : "h"}`
-                      : undefined
-                }
-                erro={erros.medicao?.message ?? medicaoAlerta ?? undefined}
-              >
-                <InputQuantidade
-                  id="abast-medicao"
-                  valor={valores.medicao ?? ""}
-                  placeholder={ultimaLeitura !== null ? `Última: ${ultimaLeitura.toLocaleString("pt-BR")}` : "Leitura atual do painel"}
-                  onValorChange={(v) => definir("medicao", v, false)}
-                  onBlur={() => void form.trigger("medicao")}
-                  disabled={salvando}
-                />
-              </CampoFormulario>
-            ) : null}
           </LinhaCampos>
         )}
+
+        <SecaoFormulario titulo="Leituras do painel">
+          <LinhaCampos>
+            <CampoFormulario
+              id="abast-odometro"
+              rotulo="Odômetro (km)"
+              obrigatorio={kmObrigatorio}
+              ajuda={erroLeitura("odometroKm") ? undefined : textoUltimaLeitura(anteriores.km, "km")}
+              erro={erroLeitura("odometroKm")}
+            >
+              <InputQuantidade
+                id="abast-odometro"
+                valor={valores.odometroKm ?? ""}
+                placeholder="Leitura do painel"
+                onValorChange={(v) => definir("odometroKm", v, false)}
+                onBlur={() => void form.trigger("odometroKm")}
+                disabled={salvando}
+              />
+            </CampoFormulario>
+            <CampoFormulario
+              id="abast-horimetro"
+              rotulo="Horímetro (h)"
+              ajuda={erroLeitura("horimetroH") ? undefined : textoUltimaLeitura(anteriores.h, "h")}
+              erro={erroLeitura("horimetroH")}
+            >
+              <InputQuantidade
+                id="abast-horimetro"
+                valor={valores.horimetroH ?? ""}
+                placeholder="Leitura do painel"
+                onValorChange={(v) => definir("horimetroH", v, false)}
+                onBlur={() => void form.trigger("horimetroH")}
+                disabled={salvando}
+              />
+            </CampoFormulario>
+          </LinhaCampos>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="abast-virada"
+              checked={valores.virada ?? false}
+              onCheckedChange={(v) => definir("virada", v)}
+              disabled={salvando}
+            />
+            <label htmlFor="abast-virada" className="text-detalhe">
+              Troca de painel ou virada do odômetro/horímetro
+            </label>
+          </div>
+          {valores.virada ? (
+            <CampoFormulario
+              id="abast-motivo-virada"
+              rotulo="Motivo da troca ou virada"
+              obrigatorio
+              ajuda="A leitura reinicia a contagem. O trecho até aqui fica fora do consumo"
+              erro={erroLeitura("motivoVirada")}
+            >
+              <Textarea id="abast-motivo-virada" rows={2} maxLength={500} disabled={salvando} {...form.register("motivoVirada")} />
+            </CampoFormulario>
+          ) : null}
+        </SecaoFormulario>
 
         <LinhaCampos>
           {noTanque ? (

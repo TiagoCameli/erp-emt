@@ -1,6 +1,6 @@
 import { agoraDataHoraLocal, isoParaDataHoraLocal } from "@/modules/combustivel/_shared/rotulos";
 import type { AbastecimentoCompleto } from "@/modules/combustivel/abastecimentos/queries";
-import { TIPOS_MEDICAO, type SaidaFormInput } from "@/modules/combustivel/abastecimentos/schemas";
+import type { SaidaFormInput } from "@/modules/combustivel/abastecimentos/schemas";
 import { numeroParaCampo } from "@/modules/manutencao/servicos/numero";
 
 /**
@@ -24,19 +24,16 @@ export function valoresNovoAbastecimento(agora: Date = new Date()): SaidaFormInp
     precoUnitario: "",
     pago: false,
     pagoEm: "",
-    medicao: "",
-    tipoMedicao: "",
+    odometroKm: "",
+    horimetroH: "",
+    virada: false,
+    motivoVirada: "",
     dataHora: agoraDataHoraLocal(agora),
     obraId: "",
     manterAlocacoes: false,
     observacoes: "",
     tanqueExterno: false,
   };
-}
-
-/** Tipo de medição do equipamento: só horímetro e km viram medição. */
-export function tipoMedicaoDoControle(controlePor: string | null | undefined): string {
-  return controlePor && (TIPOS_MEDICAO as readonly string[]).includes(controlePor) ? controlePor : "";
 }
 
 /**
@@ -65,8 +62,10 @@ export function valoresDoAbastecimento(completo: AbastecimentoCompleto): SaidaFo
     precoUnitario: noTanque ? "" : numeroParaCampo(s.precoUnitario),
     pago: s.pago,
     pagoEm: s.pagoEm ?? "",
-    medicao: numeroParaCampo(s.medicao),
-    tipoMedicao: s.tipoMedicao ?? tipoMedicaoDoControle(s.equipamentoControlePor),
+    odometroKm: numeroParaCampo(s.odometroKm),
+    horimetroH: numeroParaCampo(s.horimetroH),
+    virada: s.virada,
+    motivoVirada: s.motivoVirada ?? "",
     dataHora: isoParaDataHoraLocal(s.data),
     obraId: !varias && completo.alocacoes.length === 1 ? completo.alocacoes[0].centroCustoId : "",
     manterAlocacoes: varias,

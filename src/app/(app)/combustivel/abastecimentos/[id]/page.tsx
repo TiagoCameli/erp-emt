@@ -8,6 +8,7 @@ import { AbastecimentoDetalheView } from "@/modules/combustivel/abastecimentos/c
 import { obrasParaAlocacao } from "@/modules/combustivel/abastecimentos/opcoes";
 import {
   buscarAbastecimento,
+  buscarTransportadoraEmt,
   listarCombustivelDosTanques,
   listarEquipamentos,
   listarTransportadoras,
@@ -39,13 +40,14 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
   const podeExcluir = temPermissao(usuario, RECURSO, "excluir");
 
   // As opções do formulário só servem a quem pode editar.
-  const [tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque, anexos] = await Promise.all([
+  const [tanques, equipamentos, transportadoras, insumos, centros, combustivelPorTanque, transportadoraEmtId, anexos] = await Promise.all([
     podeEditar ? listarTanques() : Promise.resolve<TanqueOpcao[]>([]),
     podeEditar ? listarEquipamentos() : Promise.resolve<EquipamentoOpcao[]>([]),
     podeEditar ? listarTransportadoras() : Promise.resolve<TransportadoraOpcao[]>([]),
     podeEditar ? listarInsumosCombustivel() : Promise.resolve<InsumoCombustivel[]>([]),
     podeEditar ? listarCentrosCusto() : Promise.resolve([]),
     podeEditar ? listarCombustivelDosTanques() : Promise.resolve<Record<string, string>>({}),
+    podeEditar ? buscarTransportadoraEmt() : Promise.resolve(null),
     // Fotos e arquivos (os migrados da origem também): a RLS dos vínculos pede "ver".
     listarAnexosDoDocumento("combustivel_saida", id),
   ]);
@@ -63,6 +65,7 @@ export default async function PaginaAbastecimento({ params }: { params: Promise<
         insumos,
         obras: obrasParaAlocacao(centros),
         combustivelPorTanque,
+        transportadoraEmtId,
       }}
     />
   );
