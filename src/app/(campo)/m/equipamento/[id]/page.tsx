@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { formatarData, formatarQuantidade } from "@/lib/formatadores";
 import { getUsuarioLogado } from "@/lib/permissoes";
 import { listarCentrosCusto } from "@/modules/_shared/centro-custo/queries";
+import { SEM_LEITURAS } from "@/modules/combustivel/_shared/leituras";
+import { buscarUltimasLeituras } from "@/modules/combustivel/abastecimentos/queries";
 import { FichaTecnicaResumo } from "@/modules/cadastros/equipamentos/components/ficha-tecnica-resumo";
 import { obterFichaTecnica } from "@/modules/cadastros/equipamentos/queries";
 import { ROTULO_STATUS_EQUIPAMENTO } from "@/modules/cadastros/equipamentos/schemas";
@@ -62,11 +64,17 @@ export default async function EquipamentoCampoPage({ params }: { params: Promise
   }
 
   const permissoes = permissoesCampo(usuario);
-  const [ficha, centros, tanques] = await Promise.all([
+  const [ficha, centros, tanques, ultimasLeituras] = await Promise.all([
     obterFichaTecnica(equipamento.id),
     // A OS só pede obra ao alugado (sem etapa); o abastecimento pede sempre, igual à origem.
     permissoes.abastecer || (permissoes.abrirOs && !equipamento.temEtapa) ? listarCentrosCusto() : Promise.resolve([]),
     permissoes.abastecer ? listarTanquesCampo() : Promise.resolve([]),
+    // Última leitura de km e de h, com a data, ao lado dos campos do Abastecer.
+    permissoes.abastecer
+      ? buscarUltimasLeituras({ equipamentoId: equipamento.id, transportadoraId: null, placa: null, antes: null, excluir: null }).catch(
+          () => SEM_LEITURAS,
+        )
+      : Promise.resolve(SEM_LEITURAS),
   ]);
   const unidade = equipamento.controlePor ? UNIDADE_MEDICAO[equipamento.controlePor] : "";
 
@@ -123,6 +131,8 @@ export default async function EquipamentoCampoPage({ params }: { params: Promise
           podeAbrirOs={permissoes.abrirOs}
           tanques={tanques}
           podeAbastecer={permissoes.abastecer && tanques.length > 0}
+          classeConsumo={equipamento.classeConsumo}
+          ultimasLeituras={ultimasLeituras}
         />
       ) : null}
 

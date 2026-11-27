@@ -35,6 +35,7 @@ vi.mock("@/modules/_shared/anexos/enviar-do-navegador", () => ({ enviarAnexoDoNa
 
 import { toast } from "@/components/canonicos/toast";
 import { enviarAnexoDoNavegador } from "@/modules/_shared/anexos/enviar-do-navegador";
+import { SEM_LEITURAS } from "@/modules/combustivel/_shared/leituras";
 import { Abastecer } from "@/modules/manutencao/campo/components/abastecer";
 import { enviarPelaRede } from "@/modules/manutencao/campo/fila";
 
@@ -65,7 +66,7 @@ afterEach(() => {
 
 describe("Abastecer pelo celular: fotos", () => {
   it("só fotos, com a câmera; sem seção de arquivos", () => {
-    render(<Abastecer equipamentoId="e" tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />);
+    render(<Abastecer equipamentoId="e" classeConsumo="maquina" ultimasLeituras={SEM_LEITURAS} tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Tirar foto" })).toBeInTheDocument();
     expect(screen.getByText("Fotos (0/8)")).toBeInTheDocument();
     expect(screen.queryByText(/Arquivos \(/)).toBeNull();
@@ -74,7 +75,7 @@ describe("Abastecer pelo celular: fotos", () => {
   it("sobe as fotos no id da saída que a rota devolveu", async () => {
     vi.mocked(enviarAnexoDoNavegador).mockResolvedValue({ ok: true });
     const onFeito = vi.fn();
-    render(<Abastecer equipamentoId="e" tanques={[TANQUE]} centros={[]} onFeito={onFeito} />);
+    render(<Abastecer equipamentoId="e" classeConsumo="maquina" ultimasLeituras={SEM_LEITURAS} tanques={[TANQUE]} centros={[]} onFeito={onFeito} />);
     const bomba = new File(["x"], "bomba.jpg", { type: "image/jpeg" });
     fireEvent.change(galeria(), { target: { files: [bomba] } });
     await screen.findByText("bomba.jpg");
@@ -88,7 +89,7 @@ describe("Abastecer pelo celular: fotos", () => {
   it("foto que falha vira aviso; o abastecimento continua lançado", async () => {
     vi.mocked(enviarAnexoDoNavegador).mockResolvedValue({ erro: "O envio do arquivo falhou. Tente de novo" });
     const onFeito = vi.fn();
-    render(<Abastecer equipamentoId="e" tanques={[TANQUE]} centros={[]} onFeito={onFeito} />);
+    render(<Abastecer equipamentoId="e" classeConsumo="maquina" ultimasLeituras={SEM_LEITURAS} tanques={[TANQUE]} centros={[]} onFeito={onFeito} />);
     fireEvent.change(galeria(), { target: { files: [new File(["x"], "hodometro.jpg", { type: "image/jpeg" })] } });
     await screen.findByText("hodometro.jpg");
 
@@ -100,11 +101,47 @@ describe("Abastecer pelo celular: fotos", () => {
 
   it("recusa na rota não sobe foto nenhuma", async () => {
     vi.mocked(enviarPelaRede).mockResolvedValue({ ok: false, erro: "Saldo insuficiente", definitivo: true });
-    render(<Abastecer equipamentoId="e" tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />);
+    render(<Abastecer equipamentoId="e" classeConsumo="maquina" ultimasLeituras={SEM_LEITURAS} tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />);
     fireEvent.change(galeria(), { target: { files: [new File(["x"], "a.jpg", { type: "image/jpeg" })] } });
     await screen.findByText("a.jpg");
     await lancar();
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Saldo insuficiente"));
     expect(enviarAnexoDoNavegador).not.toHaveBeenCalled();
+  });
+});
+
+describe("Abastecer pelo celular: leituras do painel", () => {
+  const anteriores = {
+    km: { valor: 11100, data: "2025-01-05T13:00:00Z", origem: "abastecimento" },
+    h: null,
+  };
+
+  it("carro sem odômetro não vai à rota; a última leitura aparece com a data", async () => {
+    render(
+      <Abastecer equipamentoId="e" classeConsumo="veiculo_leve" ultimasLeituras={anteriores} tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />,
+    );
+    expect(screen.getByText("Última: 11.100 km em 05/01/2025")).toBeInTheDocument();
+    await lancar();
+    expect(await screen.findByText(/Informe o odômetro: é obrigatório para carros e motos/)).toBeInTheDocument();
+    expect(enviarPelaRede).not.toHaveBeenCalled();
+  });
+
+  it("leitura menor que a anterior trava; com a virada e o motivo, vai com as quatro leituras", async () => {
+    render(
+      <Abastecer equipamentoId="e" classeConsumo="veiculo_leve" ultimasLeituras={anteriores} tanques={[TANQUE]} centros={[]} onFeito={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText(/Odômetro agora/), { target: { value: "50" } });
+    await lancar();
+    expect(await screen.findByText(/Menor que a anterior \(11\.100 km em 05\/01\/2025\)/)).toBeInTheDocument();
+    expect(enviarPelaRede).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("switch", { name: /Trocou o painel/ }));
+    fireEvent.change(screen.getByLabelText(/Motivo da troca/), { target: { value: "Painel novo" } });
+    fireEvent.click(screen.getByRole("button", { name: /Lançar abastecimento/ }));
+    await waitFor(() => expect(enviarPelaRede).toHaveBeenCalled());
+    expect(vi.mocked(enviarPelaRede).mock.calls[0]![0]).toMatchObject({
+      tipo: "abastecimento",
+      dados: { odometroKm: 50, horimetroH: null, virada: true, motivoVirada: "Painel novo" },
+    });
   });
 });

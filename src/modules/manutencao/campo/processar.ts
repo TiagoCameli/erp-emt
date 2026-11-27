@@ -117,7 +117,10 @@ export async function processarEnvioCampo(corpo: unknown): Promise<RespostaEnvio
             insumo_id: fifo.insumoId,
             preco_medio_tanque: fifo.preco,
             data: dados.data,
-            medicao: dados.medicao,
+            odometro_km: dados.odometroKm,
+            horimetro_h: dados.horimetroH,
+            virada: dados.virada,
+            motivo_virada: dados.virada ? dados.motivoVirada : null,
             canal: "celular",
             // Igual à origem: motorista é quem lança e a observação vazia diz de onde veio.
             motorista: usuario.nome,
